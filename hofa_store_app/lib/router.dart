@@ -1,0 +1,66 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'core/go_router_refresh_stream.dart';
+import 'providers/auth_provider.dart';
+import 'screens/auth/login_screen.dart';
+import 'screens/onboarding/create_store_screen.dart';
+import 'screens/dashboard/dashboard_shell.dart';
+import 'screens/products/products_list_screen.dart';
+import 'screens/products/product_form_screen.dart';
+import 'screens/orders/orders_list_screen.dart';
+import 'screens/orders/order_detail_screen.dart';
+import 'screens/inventory/inventory_screen.dart';
+import 'screens/settings/branch_settings_screen.dart';
+
+final routerProvider = Provider<GoRouter>((ref) {
+  return GoRouter(
+    initialLocation: '/products',
+    refreshListenable: GoRouterRefreshStream(Supabase.instance.client.auth.onAuthStateChange),
+    redirect: (context, state) async {
+      final session = Supabase.instance.client.auth.currentSession;
+      final loggingIn = state.matchedLocation == '/login';
+      final onOnboarding = state.matchedLocation == '/onboarding';
+
+      if (session == null) return loggingIn ? null : '/login';
+      if (loggingIn) return '/products';
+
+      try {
+        final profile = await ref.read(userProfileProvider.future);
+        // Chưa có hồ sơ public.users — xảy ra khi đăng ký xong nhưng phải xác nhận
+        // email rồi mới đăng nhập lại (lúc đăng ký session=null nên chưa gọi được
+        // auth.syncProfile). Gom chung với "chưa có cửa hàng": CreateStoreScreen lo cả 2.
+        if (profile == null) return onOnboarding ? null : '/onboarding';
+
+        final merchant = await ref.read(myMerchantProvider.future);
+        if (merchant == null && !onOnboarding) return '/onboarding';
+        if (merchant != null && onOnboarding) return '/products';
+      } catch (_) {
+        // lỗi mạng tạm thời — đừng khoá cứng người dùng
+      }
+      return null;
+    },
+    routes: [
+      GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
+      GoRoute(path: '/onboarding', builder: (context, state) => const CreateStoreScreen()),
+      ShellRoute(
+        builder: (context, state, child) => DashboardShell(child: child),
+        routes: [
+          GoRoute(path: '/products', builder: (context, state) => const ProductsListScreen()),
+          GoRoute(path: '/products/new', builder: (context, state) => const ProductFormScreen()),
+          GoRoute(
+            path: '/products/:id/edit',
+            builder: (context, state) => ProductFormScreen(productId: state.pathParameters['id']),
+          ),
+          GoRoute(path: '/orders', builder: (context, state) => const OrdersListScreen()),
+          GoRoute(
+            path: '/orders/:id',
+            builder: (context, state) => OrderDetailScreen(orderId: state.pathParameters['id']!),
+          ),
+          GoRoute(path: '/inventory', builder: (context, state) => const InventoryScreen()),
+          GoRoute(path: '/settings', builder: (context, state) => const BranchSettingsScreen()),
+        ],
+      ),
+    ],
+  );
+});
