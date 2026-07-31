@@ -2,7 +2,7 @@ const router = require('express').Router();
 const db = require('../db');
 const asyncHandler = require('../asyncHandler');
 const { ApiError } = require('../errors');
-const { requireFields, pagination, requireAuth, requireMerchantAccess, requireOrderAccess } = require('../utils');
+const { requireFields, pagination, requireAuth, requireRole, requireMerchantAccess, requireOrderAccess } = require('../utils');
 
 /** roles cho phép đổi SANG từng trạng thái; state machine chi tiết nằm trong RPC update_order_status. */
 const ORDER_STATUS_ROLES = {
@@ -56,6 +56,31 @@ router.get('/orders/mine', asyncHandler(async (req, res) => {
   params.push(limit, offset);
   const rows = await db.query(
     `SELECT * FROM orders WHERE ${clauses.join(' AND ')} ORDER BY created_at DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
+    params
+  );
+  res.json({ ok: true, data: rows });
+}));
+
+/** Toàn bộ đơn của mọi cửa hàng — chỉ admin. Kèm tên cửa hàng + tên khách để hiển thị
+ * thẳng trong bảng, khỏi phải gọi thêm API cho từng dòng. */
+router.get('/admin/orders', asyncHandler(async (req, res) => {
+  requireRole(req.ctx, ['admin']);
+  const { limit, offset } = pagination(req.query);
+  const clauses = [];
+  const params = [];
+  if (req.query.status) { params.push(req.query.status); clauses.push(`o.status = $${params.length}`); }
+  if (req.query.merchant_id) { params.push(req.query.merchant_id); clauses.push(`o.merchant_id = $${params.length}`); }
+  if (req.query.q) { params.push(`%${req.query.q}%`); clauses.push(`(o.order_code ILIKE $${params.length} OR o.ship_recipient_name ILIKE $${params.length})`); }
+  const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+  params.push(limit, offset);
+  const rows = await db.query(
+    `SELECT o.*, m.name AS merchant_name, u.full_name AS customer_name
+       FROM orders o
+       JOIN merchants m ON m.id = o.merchant_id
+       JOIN users u ON u.id = o.customer_id
+       ${where}
+      ORDER BY o.created_at DESC
+      LIMIT $${params.length - 1} OFFSET $${params.length}`,
     params
   );
   res.json({ ok: true, data: rows });
