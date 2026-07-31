@@ -30,7 +30,7 @@ Không dùng Blueprint? Tạo thủ công: **New > Web Service**, trỏ vào rep
 | Biến | Lấy ở đâu |
 |---|---|
 | `DATABASE_URL` | Supabase > Project Settings > Database > Connection string > mục **Session pooler** (cổng 5432). Nhớ thay `[YOUR-PASSWORD]` bằng mật khẩu database thật. |
-| `SUPABASE_JWT_SECRET` | Supabase > Project Settings > API > JWT Settings > JWT Secret |
+| `SUPABASE_URL` | Supabase > Project Settings > General > Project ID → ghép thành `https://<project-id>.supabase.co`. Không phải bí mật, chỉ là địa chỉ project (dùng để lấy khoá công khai xác minh JWT). |
 | `PAYMENT_WEBHOOK_SECRET` | Tự đặt 1 chuỗi dài ngẫu nhiên (vd: mở terminal gõ `openssl rand -hex 32`) |
 
 **Vì sao dùng "Session pooler" chứ không phải kết nối trực tiếp cổng 5432 gốc?**
@@ -165,6 +165,10 @@ với access token vừa nhận, để tạo dòng hồ sơ tương ứng.
   trả phí (hoặc dịch vụ ping định kỳ) nếu cần phản hồi tức thời cho người dùng thật.
 - Test thử toàn luồng: `POST /me/sync` → tạo cửa hàng → thêm sản phẩm → `POST /orders` →
   xác nhận → gán tài xế → lấy hàng (OTP) → giao hàng (OTP) → đánh giá.
+- **Về xác minh JWT**: Supabase đang dần chuyển các project sang hệ thống "JWT Signing Keys"
+  (ký bất đối xứng, vd ES256) thay cho secret HS256 dùng chung kiểu cũ. Server này verify
+  bằng JWKS (khoá công khai, tự tải qua `SUPABASE_URL`) nên tương thích với cả 2 kiểu —
+  không cần biết project của bạn đang ở kiểu nào.
 
 ---
 
