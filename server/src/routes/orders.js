@@ -1,0 +1,117 @@
+const router = require('express').Router();
+const db = require('../db');
+const asyncHandler = require('../asyncHandler');
+const { ApiError } = require('../errors');
+const { requireFields, pagination, requireAuth, requireMerchantAccess, requireOrderAccess } = require('../utils');
+
+/** roles cho phép đổi SANG từng trạng thái; state machine chi tiết nằm trong RPC update_order_status. */
+const ORDER_STATUS_ROLES = {
+  confirmed: ['merchant_owner', 'merchant_staff', 'admin'],
+  preparing: ['merchant_owner', 'merchant_staff', 'admin'],
+  ready_for_pickup: ['merchant_owner', 'merchant_staff', 'admin'],
+  cancelled: ['customer', 'merchant_owner', 'merchant_staff', 'admin'],
+  completed: ['admin'],
+  refunded: ['admin']
+};
+
+router.post('/orders', asyncHandler(async (req, res) => {
+  requireAuth(req.ctx);
+  const body = req.body;
+  requireFields(body, ['merchant_id', 'branch_id', 'items', 'ship_recipient_name', 'ship_recipient_phone', 'ship_line1', 'ship_province']);
+  if (!Array.isArray(body.items) || body.items.length === 0) {
+    throw new ApiError('BAD_REQUEST', 'items phải là mảng và có ít nhất 1 món', 400);
+  }
+
+  const order = await db.callRpc('create_order', {
+    p_customer_id: req.ctx.userId,
+    p_merchant_id: body.merchant_id,
+    p_branch_id: body.branch_id,
+    p_sales_model: body.sales_model || 'instant',
+    p_items: body.items, // [{variant_id, quantity, note}]
+    p_ship_recipient_name: body.ship_recipient_name,
+    p_ship_recipient_phone: body.ship_recipient_phone,
+    p_ship_line1: body.ship_line1,
+    p_ship_province: body.ship_province,
+    p_ship_ward: body.ship_ward || null,
+    p_ship_district: body.ship_district || null,
+    p_ship_latitude: body.ship_latitude || null,
+    p_ship_longitude: body.ship_longitude || null,
+    p_ship_note: body.ship_note || null,
+    p_payment_method: body.payment_method || 'cod',
+    p_delivery_fee: body.delivery_fee || 0,
+    p_tax_amount: body.tax_amount || 0,
+    p_voucher_code: body.voucher_code || null,
+    p_scheduled_for: body.scheduled_for || null,
+    p_customer_note: body.customer_note || null
+  });
+  res.status(201).json({ ok: true, data: order });
+}));
+
+router.get('/orders/mine', asyncHandler(async (req, res) => {
+  requireAuth(req.ctx);
+  const { limit, offset } = pagination(req.query);
+  const clauses = ['customer_id = $1'];
+  const params = [req.ctx.userId];
+  if (req.query.status) { params.push(req.query.status); clauses.push(`status = $${params.length}`); }
+  params.push(limit, offset);
+  const rows = await db.query(
+    `SELECT * FROM orders WHERE ${clauses.join(' AND ')} ORDER BY created_at DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
+    params
+  );
+  res.json({ ok: true, data: rows });
+}));
+
+router.get('/merchants/:merchantId/orders', asyncHandler(async (req, res) => {
+  await requireMerchantAccess(req.ctx, req.params.merchantId);
+  const { limit, offset } = pagination(req.query);
+  const clauses = ['merchant_id = $1'];
+  const params = [req.params.merchantId];
+  if (req.query.status) { params.push(req.query.status); clauses.push(`status = $${params.length}`); }
+  if (req.query.branch_id) { params.push(req.query.branch_id); clauses.push(`branch_id = $${params.length}`); }
+  params.push(limit, offset);
+  const rows = await db.query(
+    `SELECT * FROM orders WHERE ${clauses.join(' AND ')} ORDER BY created_at DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
+    params
+  );
+  res.json({ ok: true, data: rows });
+}));
+
+router.get('/orders/:id', asyncHandler(async (req, res) => {
+  const order = await requireOrderAccess(req.ctx, req.params.id);
+  const items = await db.query('SELECT * FROM order_items WHERE order_id = $1', [req.params.id]);
+  res.json({ ok: true, data: { ...order, items } });
+}));
+
+router.get('/orders/:id/history', asyncHandler(async (req, res) => {
+  await requireOrderAccess(req.ctx, req.params.id);
+  const rows = await db.query('SELECT * FROM order_status_history WHERE order_id = $1 ORDER BY created_at ASC', [req.params.id]);
+  res.json({ ok: true, data: rows });
+}));
+
+router.patch('/orders/:id/status', asyncHandler(async (req, res) => {
+  requireAuth(req.ctx);
+  requireFields(req.body, ['status']);
+  const order = await requireOrderAccess(req.ctx, req.params.id);
+
+  if (req.ctx.role !== 'admin') {
+    const allowedRoles = ORDER_STATUS_ROLES[req.body.status];
+    if (!allowedRoles || !allowedRoles.includes(req.ctx.role)) {
+      throw new ApiError('FORBIDDEN', 'Vai trò của bạn không được đổi đơn sang trạng thái này', 403);
+    }
+    if (req.body.status === 'cancelled' && req.ctx.role === 'customer' && order.customer_id !== req.ctx.userId) {
+      throw new ApiError('FORBIDDEN', 'Không phải đơn của bạn', 403);
+    }
+  }
+
+  const updated = await db.callRpc('update_order_status', {
+    p_order_id: req.params.id,
+    p_new_status: req.body.status,
+    p_changed_by: req.ctx.userId,
+    p_actor_role: req.ctx.role,
+    p_note: req.body.note || null,
+    p_force: req.ctx.role === 'admin'
+  });
+  res.json({ ok: true, data: updated });
+}));
+
+module.exports = router;

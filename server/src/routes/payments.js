@@ -1,0 +1,92 @@
+const router = require('express').Router();
+const db = require('../db');
+const config = require('../config');
+const asyncHandler = require('../asyncHandler');
+const { ApiError } = require('../errors');
+const { requireFields, requireAuth, requireRole, requireMerchantAccess, requireOrderAccess } = require('../utils');
+
+router.get('/orders/:orderId/payments', asyncHandler(async (req, res) => {
+  await requireOrderAccess(req.ctx, req.params.orderId);
+  const rows = await db.query(
+    'SELECT * FROM payments WHERE order_id = $1 ORDER BY created_at DESC',
+    [req.params.orderId]
+  );
+  res.json({ ok: true, data: rows });
+}));
+
+/**
+ * Ai được ghi nhận thanh toán:
+ * - driver: chỉ khi COD và chính là tài xế phụ trách đơn đó (thu tiền tận nơi)
+ * - merchant_owner/merchant_staff/admin: chuyển khoản, QR, ghi tay
+ */
+router.post('/payments', asyncHandler(async (req, res) => {
+  requireAuth(req.ctx);
+  requireFields(req.body, ['order_id', 'method', 'amount']);
+  const order = await db.findById('orders', req.body.order_id);
+  if (!order) throw new ApiError('NOT_FOUND', 'Không tìm thấy đơn hàng', 404);
+
+  if (req.ctx.role === 'driver') {
+    const delivery = await db.queryOne('SELECT driver_id FROM deliveries WHERE order_id = $1', [req.body.order_id]);
+    const driver = await db.queryOne('SELECT id FROM drivers WHERE user_id = $1', [req.ctx.userId]);
+    if (!delivery || !driver || delivery.driver_id !== driver.id) {
+      throw new ApiError('FORBIDDEN', 'Bạn không phụ trách đơn này', 403);
+    }
+  } else {
+    await requireMerchantAccess(req.ctx, order.merchant_id);
+  }
+
+  const payment = await db.callRpc('record_payment', {
+    p_order_id: req.body.order_id,
+    p_method: req.body.method,
+    p_amount: req.body.amount,
+    p_gateway: req.body.gateway || null,
+    p_transaction_code: req.body.transaction_code || null,
+    p_collected_by: req.ctx.userId,
+    p_gateway_response: req.body.gateway_response || null
+  });
+  res.status(201).json({ ok: true, data: payment });
+}));
+
+router.post('/payments/:id/refund', asyncHandler(async (req, res) => {
+  requireRole(req.ctx, ['admin', 'merchant_owner', 'merchant_staff']);
+  requireFields(req.body, ['amount']);
+  if (req.ctx.role !== 'admin') {
+    const payment = await db.findById('payments', req.params.id);
+    if (!payment) throw new ApiError('NOT_FOUND', 'Không tìm thấy giao dịch', 404);
+    const order = await db.findById('orders', payment.order_id);
+    await requireMerchantAccess(req.ctx, order.merchant_id);
+  }
+  const refunded = await db.callRpc('refund_payment', {
+    p_payment_id: req.params.id,
+    p_amount: req.body.amount,
+    p_note: req.body.note || null
+  });
+  res.json({ ok: true, data: refunded });
+}));
+
+/**
+ * Webhook nhận callback từ cổng thanh toán (MoMo/VNPay/ZaloPay) — không có JWT vì
+ * cổng thanh toán không đăng nhập được, thay vào đó kiểm 1 khoá bí mật riêng.
+ *
+ * QUAN TRỌNG: đây chỉ là khung sườn. Trước khi dùng thật, PHẢI thay đoạn kiểm tra bằng
+ * đúng thuật toán ký số của từng cổng, nếu không ai cũng gọi được webhook này để giả
+ * thanh toán thành công.
+ */
+router.post('/payments/webhook', asyncHandler(async (req, res) => {
+  if (!config.paymentWebhookSecret || req.body.webhook_secret !== config.paymentWebhookSecret) {
+    throw new ApiError('UNAUTHORIZED', 'Webhook secret sai hoặc chưa cấu hình PAYMENT_WEBHOOK_SECRET', 401);
+  }
+  requireFields(req.body, ['order_id', 'method', 'amount', 'transaction_code']);
+  const payment = await db.callRpc('record_payment', {
+    p_order_id: req.body.order_id,
+    p_method: req.body.method,
+    p_amount: req.body.amount,
+    p_gateway: req.body.gateway || null,
+    p_transaction_code: req.body.transaction_code,
+    p_collected_by: null,
+    p_gateway_response: req.body.raw || null
+  });
+  res.json({ ok: true, data: payment });
+}));
+
+module.exports = router;

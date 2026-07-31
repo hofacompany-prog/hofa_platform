@@ -1,0 +1,22 @@
+# Render "Blueprint" — cho phép bấm "New > Blueprint" trên Render, trỏ vào repo này,
+# Render tự đọc file này và tạo đúng service. Các giá trị đánh dấu sync:false thì
+# bạn phải tự nhập tay trong Render Dashboard > Environment (không lưu trong git).
+services:
+  - type: web
+    name: hofa-api
+    runtime: node
+    plan: free
+    region: singapore
+    rootDir: server
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: SUPABASE_JWT_SECRET
+        sync: false
+      - key: PAYMENT_WEBHOOK_SECRET
+        sync: false

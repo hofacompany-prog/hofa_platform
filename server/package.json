@@ -1,0 +1,23 @@
+{
+  "name": "hofa-api",
+  "version": "1.0.0",
+  "private": true,
+  "description": "API HOFA — Node.js/Express, chạy trên Render, kết nối thẳng Postgres (Supabase) qua pg",
+  "main": "src/index.js",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "helmet": "^7.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "morgan": "^1.10.0",
+    "pg": "^8.12.0"
+  }
+}
