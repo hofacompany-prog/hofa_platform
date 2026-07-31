@@ -107,7 +107,8 @@ với access token vừa nhận, để tạo dòng hồ sơ tương ứng.
 | | `GET/PATCH /admin/users...` | admin | |
 | | `GET/POST/PATCH/DELETE /addresses` | chủ địa chỉ | |
 | | `GET/POST /devices` | đã đăng nhập | |
-| **Merchant** | `GET /merchants`, `GET /merchants/:id` | công khai | |
+| **Merchant** | `GET /merchants`, `GET /merchants/:id` | công khai | list chỉ trả `active` cho người ngoài |
+| | `GET /merchants/mine` | đã đăng nhập | cửa hàng của chính mình, mọi trạng thái |
 | | `POST/PATCH /merchants...` | chủ/nhân viên/admin | |
 | | `POST /merchants/:id/submit-for-review` | chủ/nhân viên | |
 | | `POST /merchants/:id/review` | admin | duyệt/từ chối |
