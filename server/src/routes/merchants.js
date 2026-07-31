@@ -36,6 +36,18 @@ router.get('/merchants', asyncHandler(async (req, res) => {
   res.json({ ok: true, data: rows });
 }));
 
+/** Cửa hàng của chính user hiện tại — bất kể trạng thái (draft/pending_review/active...),
+ * khác với GET /merchants (chỉ trả active cho người ngoài). Phải đặt TRƯỚC route /merchants/:id
+ * để Express không hiểu nhầm "mine" là 1 giá trị :id. */
+router.get('/merchants/mine', asyncHandler(async (req, res) => {
+  requireAuth(req.ctx);
+  const rows = await db.query(
+    'SELECT * FROM merchants WHERE owner_id = $1 AND deleted_at IS NULL ORDER BY created_at DESC',
+    [req.ctx.userId]
+  );
+  res.json({ ok: true, data: rows });
+}));
+
 router.get('/merchants/:id', asyncHandler(async (req, res) => {
   const row = await db.queryOne('SELECT * FROM merchants WHERE id = $1 AND deleted_at IS NULL', [req.params.id]);
   if (!row) throw new ApiError('NOT_FOUND', 'Không tìm thấy cửa hàng', 404);
