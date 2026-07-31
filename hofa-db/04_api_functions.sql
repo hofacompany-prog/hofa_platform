@@ -212,7 +212,7 @@ BEGIN
     payment_method, payment_status, scheduled_for, customer_note
   ) VALUES (
     p_customer_id, p_merchant_id, p_branch_id, p_sales_model,
-    CASE WHEN p_payment_method = 'cod' THEN 'placed' ELSE 'pending_payment' END,
+    (CASE WHEN p_payment_method = 'cod' THEN 'placed' ELSE 'pending_payment' END)::order_status,
     p_ship_recipient_name, p_ship_recipient_phone, p_ship_line1, p_ship_ward, p_ship_district,
     p_ship_province, p_ship_latitude, p_ship_longitude, p_ship_note,
     v_subtotal, p_delivery_fee, v_discount, p_tax_amount, v_subtotal + p_delivery_fee + p_tax_amount - v_discount,
@@ -470,7 +470,7 @@ BEGIN
    WHERE order_id = p_order_id AND status = 'paid';
 
   UPDATE orders SET
-    payment_status = CASE WHEN v_total_paid >= total_amount THEN 'paid' ELSE 'pending' END
+    payment_status = (CASE WHEN v_total_paid >= total_amount THEN 'paid' ELSE 'pending' END)::payment_status
   WHERE id = p_order_id;
 
   IF (SELECT status FROM orders WHERE id = p_order_id) = 'pending_payment'
@@ -503,13 +503,13 @@ BEGIN
   UPDATE payments SET
     refunded_amount = refunded_amount + p_amount,
     refunded_at = now(),
-    status = CASE WHEN refunded_amount + p_amount >= amount THEN 'refunded' ELSE 'partially_refunded' END,
+    status = (CASE WHEN refunded_amount + p_amount >= amount THEN 'refunded' ELSE 'partially_refunded' END)::payment_status,
     note = COALESCE(p_note, note)
   WHERE id = p_payment_id
   RETURNING * INTO v_payment;
 
   UPDATE orders SET payment_status =
-    CASE WHEN v_payment.status = 'refunded' THEN 'refunded' ELSE 'partially_refunded' END
+    (CASE WHEN v_payment.status = 'refunded' THEN 'refunded' ELSE 'partially_refunded' END)::payment_status
   WHERE id = v_payment.order_id;
 
   RETURN v_payment;
