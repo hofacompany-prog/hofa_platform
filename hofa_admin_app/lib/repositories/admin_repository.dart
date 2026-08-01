@@ -66,6 +66,9 @@ class AdminRepository {
   Future<Merchant> setMerchantPaused(String id, bool paused) async =>
       Merchant.fromJson(await _api.patch('/merchants/$id/pause', body: {'paused': paused}) as Map<String, dynamic>);
 
+  Future<Merchant> setMerchantStatus(String id, String status) async =>
+      Merchant.fromJson(await _api.patch('/merchants/$id/status', body: {'status': status}) as Map<String, dynamic>);
+
   Future<Merchant> merchantDetail(String id) async =>
       Merchant.fromJson(await _api.get('/merchants/$id') as Map<String, dynamic>);
 

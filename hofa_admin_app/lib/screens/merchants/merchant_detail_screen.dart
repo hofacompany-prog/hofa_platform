@@ -129,6 +129,38 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
         }));
   }
 
+  Future<void> _changeStatus(Merchant m) async {
+    var selected = m.status;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setInner) => AlertDialog(
+          title: Text('Đổi trạng thái — ${m.name}'),
+          content: RadioGroup<String>(
+            groupValue: selected,
+            onChanged: (v) => setInner(() => selected = v ?? selected),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: merchantStatusLabels.entries
+                  .map((e) => RadioListTile<String>(
+                        contentPadding: EdgeInsets.zero,
+                        value: e.key,
+                        title: Text(e.value),
+                      ))
+                  .toList(),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Huỷ')),
+            FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Lưu')),
+          ],
+        ),
+      ),
+    );
+    if (ok != true || selected == m.status) return;
+    await _run(() => ref.read(adminRepoProvider).setMerchantStatus(m.id, selected).then((_) {}));
+  }
+
   Future<void> _review(Merchant m, bool approve) async {
     var certify = false;
     final ok = await showDialog<bool>(
@@ -298,6 +330,11 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
                                   onPressed: _busy ? null : () => _editInfo(m),
                                   icon: const Icon(Icons.edit),
                                   label: const Text('Sửa thông tin'),
+                                ),
+                                OutlinedButton.icon(
+                                  onPressed: _busy ? null : () => _changeStatus(m),
+                                  icon: const Icon(Icons.sync_alt),
+                                  label: const Text('Đổi trạng thái'),
                                 ),
                                 if (m.status == 'pending_review') ...[
                                   FilledButton(onPressed: _busy ? null : () => _review(m, true), child: const Text('Duyệt')),

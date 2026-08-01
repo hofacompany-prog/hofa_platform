@@ -113,6 +113,15 @@ router.post('/merchants/:id/review', asyncHandler(async (req, res) => {
   res.json({ ok: true, data: updated });
 }));
 
+/** Đổi thẳng sang bất kỳ trạng thái nào (kể cả draft/rejected/closed) — chỉ admin.
+ * Các route review/pause ở trên vẫn giữ nguyên làm lối tắt cho 2 luồng phổ biến nhất. */
+router.patch('/merchants/:id/status', asyncHandler(async (req, res) => {
+  requireRole(req.ctx, ['admin']);
+  requireFields(req.body, ['status']);
+  const updated = await db.updateById('merchants', req.params.id, { status: req.body.status });
+  res.json({ ok: true, data: updated });
+}));
+
 router.patch('/merchants/:id/pause', asyncHandler(async (req, res) => {
   await requireMerchantAccess(req.ctx, req.params.id);
   requireFields(req.body, ['paused']);
