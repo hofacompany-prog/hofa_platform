@@ -114,6 +114,23 @@ class BranchSettingsScreen extends ConsumerWidget {
                                         color: b.isOpen ? Colors.green : Colors.grey,
                                       ),
                                     ),
+                                    SwitchListTile(
+                                      title: const Text('Tự động nhận đơn'),
+                                      subtitle: const Text(
+                                          'Bật: đơn mới tự xác nhận ngay.\nTắt: có 2 phút để bấm "Nhận đơn" trước khi đơn tự huỷ.'),
+                                      value: b.autoAcceptOrders,
+                                      onChanged: (val) async {
+                                        try {
+                                          await MerchantRepository().setAutoAcceptOrders(b.id, val);
+                                          ref.invalidate(_branchesProvider);
+                                        } catch (e) {
+                                          if (context.mounted) {
+                                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+                                          }
+                                        }
+                                      },
+                                      secondary: const Icon(Icons.bolt_outlined),
+                                    ),
                                     Padding(
                                       padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
                                       child: Wrap(

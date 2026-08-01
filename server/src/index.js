@@ -7,6 +7,7 @@ const config = require('./config');
 const { attachContext } = require('./middleware/auth');
 const { ApiError } = require('./errors');
 const dispatch = require('./dispatch');
+const orderOffer = require('./orderOffer');
 
 const app = express();
 app.use(helmet());
@@ -55,4 +56,10 @@ app.listen(config.port, () => {
 // để gọi tay/debug khi cần.
 setInterval(() => {
   dispatch.sweepExpiredOffers().catch((e) => console.error('[sweep-expired-offers]', e));
+}, 10_000);
+
+// Tương tự nhưng cho đơn hàng chờ cửa hàng xác nhận (accept_deadline 120s) — quá hạn
+// mà không bấm "Nhận đơn" thì tự huỷ, vì không có "cửa hàng khác" để chuyển sang.
+setInterval(() => {
+  orderOffer.sweepExpiredOrderOffers().catch((e) => console.error('[sweep-expired-order-offers]', e));
 }, 10_000);

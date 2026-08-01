@@ -11,6 +11,7 @@ class Branch {
   final double longitude;
   final bool isMain;
   final bool isOpen;
+  final bool autoAcceptOrders;
   final num deliveryRadiusKm;
 
   Branch({
@@ -26,6 +27,7 @@ class Branch {
     required this.longitude,
     required this.isMain,
     required this.isOpen,
+    required this.autoAcceptOrders,
     required this.deliveryRadiusKm,
   });
 
@@ -42,6 +44,7 @@ class Branch {
         longitude: double.tryParse('${json['longitude']}') ?? 0,
         isMain: json['is_main'] as bool? ?? false,
         isOpen: json['is_open'] as bool? ?? true,
+        autoAcceptOrders: json['auto_accept_orders'] as bool? ?? false,
         deliveryRadiusKm: num.tryParse('${json['delivery_radius_km']}') ?? 5,
       );
 

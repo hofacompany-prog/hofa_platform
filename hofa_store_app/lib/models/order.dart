@@ -45,6 +45,7 @@ class Order {
   final String paymentMethod;
   final String paymentStatus;
   final DateTime createdAt;
+  final DateTime? acceptDeadline;
   final List<OrderItem> items;
 
   Order({
@@ -64,6 +65,7 @@ class Order {
     required this.paymentMethod,
     required this.paymentStatus,
     required this.createdAt,
+    this.acceptDeadline,
     required this.items,
   });
 
@@ -84,6 +86,7 @@ class Order {
         paymentMethod: json['payment_method'] as String? ?? 'cod',
         paymentStatus: json['payment_status'] as String? ?? 'pending',
         createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ?? DateTime.now(),
+        acceptDeadline: json['accept_deadline'] != null ? DateTime.tryParse(json['accept_deadline'].toString()) : null,
         items: (json['items'] as List?)?.map((e) => OrderItem.fromJson(e as Map<String, dynamic>)).toList() ?? [],
       );
 }

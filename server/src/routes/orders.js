@@ -4,6 +4,7 @@ const asyncHandler = require('../asyncHandler');
 const { ApiError } = require('../errors');
 const { requireFields, pagination, requireAuth, requireRole, requireMerchantAccess, requireOrderAccess } = require('../utils');
 const dispatch = require('../dispatch');
+const orderOffer = require('../orderOffer');
 
 /** roles cho phép đổi SANG từng trạng thái; state machine chi tiết nằm trong RPC update_order_status. */
 const ORDER_STATUS_ROLES = {
@@ -45,6 +46,14 @@ router.post('/orders', asyncHandler(async (req, res) => {
     p_scheduled_for: body.scheduled_for || null,
     p_customer_note: body.customer_note || null
   });
+
+  // Báo ngay cho cửa hàng (push + màn xác nhận có đếm ngược), giống luồng offer bên
+  // tài xế — không tìm được cấu hình cửa hàng thì bỏ qua lặng lẽ, cửa hàng vẫn thấy
+  // đơn trong danh sách "Chờ xác nhận" như bình thường.
+  orderOffer.offerOrderToMerchant(order.id).catch((err) => {
+    console.error('[orderOffer] Không báo được cửa hàng cho đơn', order.id, err.message);
+  });
+
   res.status(201).json({ ok: true, data: order });
 }));
 
@@ -129,6 +138,11 @@ router.patch('/orders/:id/status', asyncHandler(async (req, res) => {
     }
   }
 
+  if (req.body.status === 'confirmed' && order.accept_deadline && new Date(order.accept_deadline) < new Date()) {
+    await orderOffer.autoCancelExpiredOrder(req.params.id);
+    throw new ApiError('OFFER_EXPIRED', 'Đã quá hạn xác nhận — đơn đã tự huỷ', 409);
+  }
+
   const updated = await db.callRpc('update_order_status', {
     p_order_id: req.params.id,
     p_new_status: req.body.status,
@@ -137,6 +151,9 @@ router.patch('/orders/:id/status', asyncHandler(async (req, res) => {
     p_note: req.body.note || null,
     p_force: req.ctx.role === 'admin'
   });
+  if (req.body.status === 'confirmed') {
+    await db.query('UPDATE orders SET accept_deadline = NULL WHERE id = $1', [req.params.id]);
+  }
 
   // Đơn đã sẵn sàng lấy hàng — tự tìm tài xế online gần nhất, không bắt cửa hàng
   // phải tự chọn tài xế (giống Grab/Shopee). Không tìm được ai thì bỏ qua lặng lẽ,

@@ -10,6 +10,7 @@ import 'screens/products/products_list_screen.dart';
 import 'screens/products/product_form_screen.dart';
 import 'screens/orders/orders_list_screen.dart';
 import 'screens/orders/order_detail_screen.dart';
+import 'screens/orders/order_offer_screen.dart';
 import 'screens/inventory/inventory_screen.dart';
 import 'screens/settings/branch_settings_screen.dart';
 import 'screens/settings/store_profile_edit_screen.dart';
@@ -17,9 +18,11 @@ import 'screens/settings/branch_edit_screen.dart';
 import 'screens/settings/branch_hours_screen.dart';
 import 'models/merchant.dart';
 import 'models/branch.dart';
+import 'main.dart' show navigatorKey;
 
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
+    navigatorKey: navigatorKey,
     initialLocation: '/products',
     refreshListenable: GoRouterRefreshStream(Supabase.instance.client.auth.onAuthStateChange),
     redirect: (context, state) async {
@@ -48,6 +51,10 @@ final routerProvider = Provider<GoRouter>((ref) {
     routes: [
       GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
       GoRoute(path: '/onboarding', builder: (context, state) => const CreateStoreScreen()),
+      GoRoute(
+        path: '/orders/offer/:id',
+        builder: (context, state) => OrderOfferScreen(orderId: state.pathParameters['id']!),
+      ),
       ShellRoute(
         builder: (context, state, child) => DashboardShell(child: child),
         routes: [

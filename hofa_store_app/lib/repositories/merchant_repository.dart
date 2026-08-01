@@ -61,6 +61,11 @@ class MerchantRepository {
   Future<Branch> updateBranch(String branchId, Map<String, dynamic> data) async =>
       Branch.fromJson(await _api.patch('/branches/$branchId', body: data) as Map<String, dynamic>);
 
+  Future<Branch> setAutoAcceptOrders(String branchId, bool value) async =>
+      Branch.fromJson(await _api.patch('/branches/$branchId', body: {
+        'auto_accept_orders': value,
+      }) as Map<String, dynamic>);
+
   Future<List<BranchHour>> branchHours(String branchId) async {
     final list = await _api.get('/branches/$branchId/hours') as List;
     return list.map((e) => BranchHour.fromJson(e as Map<String, dynamic>)).toList();

@@ -13,7 +13,7 @@ const MERCHANT_FIELDS = [
 
 const BRANCH_FIELDS = [
   'name', 'phone', 'line1', 'ward', 'district', 'province',
-  'latitude', 'longitude', 'is_main', 'is_open', 'delivery_radius_km'
+  'latitude', 'longitude', 'is_main', 'is_open', 'delivery_radius_km', 'auto_accept_orders'
 ];
 
 // ---- Cửa hàng ----

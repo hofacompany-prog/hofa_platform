@@ -229,6 +229,7 @@ CREATE TABLE branches (
   longitude     NUMERIC(10,7) NOT NULL,
   is_main       BOOLEAN NOT NULL DEFAULT false,
   is_open       BOOLEAN NOT NULL DEFAULT true,   -- công tắc tạm đóng cửa
+  auto_accept_orders BOOLEAN NOT NULL DEFAULT false, -- true = tự xác nhận đơn mới, không cần bấm nhận
   delivery_radius_km NUMERIC(5,2) NOT NULL DEFAULT 5,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -236,6 +237,7 @@ CREATE TABLE branches (
 );
 COMMENT ON TABLE  branches IS 'Chi nhánh cửa hàng — nơi giữ hàng và tài xế tới lấy';
 COMMENT ON COLUMN branches.is_open IS 'Công tắc bật/tắt nhanh khi hết hàng hoặc nghỉ đột xuất';
+COMMENT ON COLUMN branches.auto_accept_orders IS 'true = hệ thống tự xác nhận đơn mới cho chi nhánh này, không cần nhân viên bấm nhận';
 
 CREATE INDEX idx_branches_merchant ON branches (merchant_id) WHERE deleted_at IS NULL;
 CREATE INDEX idx_branches_geo      ON branches (latitude, longitude) WHERE deleted_at IS NULL;
@@ -522,6 +524,8 @@ CREATE TABLE orders (
   cancel_reason     TEXT,
   cancelled_by      UUID REFERENCES users(id) ON DELETE SET NULL,
 
+  accept_deadline   TIMESTAMPTZ,   -- hạn cửa hàng xác nhận đơn (status='placed'); quá hạn tự huỷ
+
   customer_note     TEXT,
   created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -539,6 +543,7 @@ CREATE TABLE orders (
   )
 );
 COMMENT ON TABLE  orders IS 'Đơn hàng. Địa chỉ được chụp lại tại thời điểm đặt, không tham chiếu';
+COMMENT ON COLUMN orders.accept_deadline IS 'Hạn cửa hàng xác nhận đơn (áp dụng khi branches.auto_accept_orders = false)';
 COMMENT ON CONSTRAINT orders_total_matches ON orders IS
   'Database tự chặn nếu tổng tiền không khớp các thành phần — tránh sai số tiền do lỗi code';
 
