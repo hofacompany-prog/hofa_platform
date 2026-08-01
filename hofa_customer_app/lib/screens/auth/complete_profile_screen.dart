@@ -37,7 +37,6 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen> {
       await ref.read(userRepoProvider).syncProfile(
             fullName: _fullNameCtrl.text.trim(),
             phone: _phoneCtrl.text.trim(),
-            email: Supabase.instance.client.auth.currentUser?.email,
           );
       ref.invalidate(userProfileProvider);
     } catch (e) {
