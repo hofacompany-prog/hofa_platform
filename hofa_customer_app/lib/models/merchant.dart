@@ -45,7 +45,8 @@ class Merchant {
         phone: json['phone'] as String?,
         minOrderAmount: (json['min_order_amount'] as num?)?.toInt() ?? 0,
         avgPrepMinutes: (json['avg_prep_minutes'] as num?)?.toInt() ?? 15,
-        ratingAvg: (json['rating_avg'] as num?)?.toDouble() ?? 0,
+        // NUMERIC ở Postgres về qua node-postgres là String, không phải num.
+        ratingAvg: (num.tryParse('${json['rating_avg']}') ?? 0).toDouble(),
         ratingCount: (json['rating_count'] as num?)?.toInt() ?? 0,
         standardCertifiedAt:
             json['standard_certified_at'] != null ? DateTime.tryParse(json['standard_certified_at'] as String) : null,

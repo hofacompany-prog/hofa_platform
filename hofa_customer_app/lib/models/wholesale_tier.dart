@@ -27,7 +27,8 @@ class WholesaleTier {
         unitPrice: (json['unit_price'] as num?)?.toInt() ?? 0,
         leadTimeDays: (json['lead_time_days'] as num?)?.toInt() ?? 0,
         requiresDeposit: json['requires_deposit'] as bool? ?? false,
-        depositPercent: (json['deposit_percent'] as num?)?.toDouble() ?? 0,
+        // NUMERIC ở Postgres về qua node-postgres là String, không phải num.
+        depositPercent: (num.tryParse('${json['deposit_percent']}') ?? 0).toDouble(),
       );
 
   String get rangeLabel => maxQuantity != null ? '$minQuantity - $maxQuantity' : 'Từ $minQuantity trở lên';

@@ -57,7 +57,8 @@ class Product {
         images: (json['images'] as List? ?? []).map((e) => e.toString()).toList(),
         tags: (json['tags'] as List? ?? []).map((e) => e.toString()).toList(),
         isFeatured: json['is_featured'] as bool? ?? false,
-        ratingAvg: (json['rating_avg'] as num?)?.toDouble() ?? 0,
+        // NUMERIC ở Postgres về qua node-postgres là String, không phải num.
+        ratingAvg: (num.tryParse('${json['rating_avg']}') ?? 0).toDouble(),
         ratingCount: (json['rating_count'] as num?)?.toInt() ?? 0,
         soldCount: (json['sold_count'] as num?)?.toInt() ?? 0,
         variants:

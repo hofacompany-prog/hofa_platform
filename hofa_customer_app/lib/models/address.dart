@@ -36,8 +36,9 @@ class Address {
         ward: json['ward'] as String?,
         district: json['district'] as String?,
         province: json['province'] as String? ?? '',
-        latitude: (json['latitude'] as num?)?.toDouble(),
-        longitude: (json['longitude'] as num?)?.toDouble(),
+        // NUMERIC ở Postgres về qua node-postgres là String, không phải num.
+        latitude: json['latitude'] != null ? num.tryParse('${json['latitude']}')?.toDouble() : null,
+        longitude: json['longitude'] != null ? num.tryParse('${json['longitude']}')?.toDouble() : null,
         note: json['note'] as String?,
         isDefault: json['is_default'] as bool? ?? false,
       );
