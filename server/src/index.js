@@ -6,6 +6,7 @@ const morgan = require('morgan');
 const config = require('./config');
 const { attachContext } = require('./middleware/auth');
 const { ApiError } = require('./errors');
+const dispatch = require('./dispatch');
 
 const app = express();
 app.use(helmet());
@@ -46,3 +47,12 @@ app.use((err, req, res, next) => {
 app.listen(config.port, () => {
   console.log(`HOFA API đang chạy ở cổng ${config.port}`);
 });
+
+// Tự quét các chuyến giao hàng đã gán nhưng tài xế chưa xác nhận (bấm "Nhận đơn") sau
+// accept_deadline (25s) và chuyển sang tài xế gần nhất kế tiếp — kể cả khi tài xế im
+// lặng không bấm gì (không chỉ khi họ bấm "Từ chối"). Chạy ngay trong process này vì
+// Render free plan không có cron job riêng; /internal/sweep-expired-offers vẫn giữ lại
+// để gọi tay/debug khi cần.
+setInterval(() => {
+  dispatch.sweepExpiredOffers().catch((e) => console.error('[sweep-expired-offers]', e));
+}, 10_000);
