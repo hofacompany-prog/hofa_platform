@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../core/phone_auth.dart';
 import '../../repositories/user_repository.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -11,49 +12,87 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _emailCtrl = TextEditingController();
+  final _phoneCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
   final _fullNameCtrl = TextEditingController();
-  final _phoneCtrl = TextEditingController();
+  final _otpCtrl = TextEditingController();
 
   bool _isSignUp = false;
+  bool _awaitingOtp = false; // đang ở bước nhập mã OTP (chỉ xảy ra lúc đăng ký)
   bool _loading = false;
   String? _error;
   String? _info;
 
   @override
   void dispose() {
-    _emailCtrl.dispose();
+    _phoneCtrl.dispose();
     _passwordCtrl.dispose();
     _fullNameCtrl.dispose();
-    _phoneCtrl.dispose();
+    _otpCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _submit() async {
+    if (_awaitingOtp) {
+      await _confirmOtp();
+      return;
+    }
     if (!_formKey.currentState!.validate()) return;
+
+    if (_isSignUp) {
+      // Chưa nối SMS OTP thật — tạm hiện bước nhập mã, luôn chấp nhận 123123.
+      // TODO: thay bằng gửi OTP thật qua supabase.auth.signInWithOtp(phone: ...) khi có provider SMS.
+      setState(() {
+        _awaitingOtp = true;
+        _error = null;
+        _info = 'Đã gửi mã xác thực tới ${_phoneCtrl.text.trim()}. Tạm thời dùng mã $kTempOtpCode.';
+      });
+      return;
+    }
+
     setState(() {
       _loading = true;
       _error = null;
       _info = null;
     });
-
-    final auth = Supabase.instance.client.auth;
     try {
-      if (_isSignUp) {
-        final res = await auth.signUp(email: _emailCtrl.text.trim(), password: _passwordCtrl.text);
-        if (res.session == null) {
-          setState(() {
-            _info = 'Đăng ký thành công. Kiểm tra email để xác nhận rồi quay lại đăng nhập.';
-            _isSignUp = false;
-          });
-          return;
-        }
-        // Có session ngay (dự án tắt xác nhận email) -> tạo hồ sơ trong public.users luôn
-        await UserRepository().syncProfile(fullName: _fullNameCtrl.text.trim(), phone: _phoneCtrl.text.trim());
-      } else {
-        await auth.signInWithPassword(email: _emailCtrl.text.trim(), password: _passwordCtrl.text);
+      await Supabase.instance.client.auth.signInWithPassword(
+        email: phoneToAuthEmail(_phoneCtrl.text.trim()),
+        password: _passwordCtrl.text,
+      );
+    } on AuthException catch (e) {
+      setState(() => _error = e.message.contains('Invalid login credentials')
+          ? 'Số điện thoại hoặc mật khẩu không đúng'
+          : e.message);
+    } catch (e) {
+      setState(() => _error = 'Có lỗi xảy ra: $e');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _confirmOtp() async {
+    if (_otpCtrl.text.trim() != kTempOtpCode) {
+      setState(() => _error = 'Mã OTP không đúng');
+      return;
+    }
+    setState(() {
+      _loading = true;
+      _error = null;
+      _info = null;
+    });
+    try {
+      final res = await Supabase.instance.client.auth.signUp(
+        email: phoneToAuthEmail(_phoneCtrl.text.trim()),
+        password: _passwordCtrl.text,
+      );
+      if (res.session == null) {
+        setState(() => _error =
+            'Không tạo được phiên đăng nhập. Cần tắt "Confirm email" trong Supabase Auth settings vì tài khoản dùng email nội bộ, không nhận được thư xác nhận thật.');
+        return;
       }
+      // Đảm bảo có hồ sơ public.users ngay — CreateStoreScreen phía sau cần nó.
+      await UserRepository().syncProfile(fullName: _fullNameCtrl.text.trim(), phone: _phoneCtrl.text.trim());
     } on AuthException catch (e) {
       setState(() => _error = e.message);
     } catch (e) {
@@ -84,39 +123,47 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    _isSignUp ? 'Tạo tài khoản chủ cửa hàng' : 'Đăng nhập để quản lý cửa hàng',
+                    _awaitingOtp
+                        ? 'Xác thực số điện thoại'
+                        : (_isSignUp ? 'Tạo tài khoản chủ cửa hàng' : 'Đăng nhập để quản lý cửa hàng'),
                     textAlign: TextAlign.center,
                     style: Theme.of(context).textTheme.bodyMedium,
                   ),
                   const SizedBox(height: 32),
-                  if (_isSignUp) ...[
-                    TextFormField(
-                      controller: _fullNameCtrl,
-                      decoration: const InputDecoration(labelText: 'Họ tên'),
-                      validator: (v) => (v == null || v.trim().isEmpty) ? 'Nhập họ tên' : null,
+                  if (_awaitingOtp) ...[
+                    Text('Nhập mã OTP đã gửi tới ${_phoneCtrl.text.trim()}',
+                        style: Theme.of(context).textTheme.bodySmall),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _otpCtrl,
+                      decoration: const InputDecoration(labelText: 'Mã OTP'),
+                      keyboardType: TextInputType.number,
+                      onSubmitted: (_) => _submit(),
                     ),
-                    const SizedBox(height: 16),
+                  ] else ...[
+                    if (_isSignUp) ...[
+                      TextFormField(
+                        controller: _fullNameCtrl,
+                        decoration: const InputDecoration(labelText: 'Họ tên'),
+                        validator: (v) => (v == null || v.trim().isEmpty) ? 'Nhập họ tên' : null,
+                      ),
+                      const SizedBox(height: 16),
+                    ],
                     TextFormField(
                       controller: _phoneCtrl,
                       decoration: const InputDecoration(labelText: 'Số điện thoại'),
                       keyboardType: TextInputType.phone,
-                      validator: (v) => (v == null || v.trim().isEmpty) ? 'Nhập số điện thoại' : null,
+                      validator: (v) => (v == null || !isValidPhone(v.trim())) ? 'Số điện thoại không hợp lệ' : null,
                     ),
                     const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _passwordCtrl,
+                      decoration: const InputDecoration(labelText: 'Mật khẩu'),
+                      obscureText: true,
+                      onFieldSubmitted: (_) => _submit(),
+                      validator: (v) => (v == null || v.length < 6) ? 'Mật khẩu tối thiểu 6 ký tự' : null,
+                    ),
                   ],
-                  TextFormField(
-                    controller: _emailCtrl,
-                    decoration: const InputDecoration(labelText: 'Email'),
-                    keyboardType: TextInputType.emailAddress,
-                    validator: (v) => (v == null || !v.contains('@')) ? 'Email không hợp lệ' : null,
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: _passwordCtrl,
-                    decoration: const InputDecoration(labelText: 'Mật khẩu'),
-                    obscureText: true,
-                    validator: (v) => (v == null || v.length < 6) ? 'Mật khẩu tối thiểu 6 ký tự' : null,
-                  ),
                   if (_error != null) ...[
                     const SizedBox(height: 16),
                     Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
@@ -130,19 +177,25 @@ class _LoginScreenState extends State<LoginScreen> {
                     onPressed: _loading ? null : _submit,
                     child: _loading
                         ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                        : Text(_isSignUp ? 'Đăng ký' : 'Đăng nhập'),
+                        : Text(_awaitingOtp ? 'Xác nhận' : (_isSignUp ? 'Đăng ký' : 'Đăng nhập')),
                   ),
                   const SizedBox(height: 12),
-                  TextButton(
-                    onPressed: _loading
-                        ? null
-                        : () => setState(() {
-                              _isSignUp = !_isSignUp;
-                              _error = null;
-                              _info = null;
-                            }),
-                    child: Text(_isSignUp ? 'Đã có tài khoản? Đăng nhập' : 'Chưa có cửa hàng? Đăng ký'),
-                  ),
+                  if (_awaitingOtp)
+                    TextButton(
+                      onPressed: _loading ? null : () => setState(() => _awaitingOtp = false),
+                      child: const Text('Quay lại'),
+                    )
+                  else
+                    TextButton(
+                      onPressed: _loading
+                          ? null
+                          : () => setState(() {
+                                _isSignUp = !_isSignUp;
+                                _error = null;
+                                _info = null;
+                              }),
+                      child: Text(_isSignUp ? 'Đã có tài khoản? Đăng nhập' : 'Chưa có cửa hàng? Đăng ký'),
+                    ),
                 ],
               ),
             ),
