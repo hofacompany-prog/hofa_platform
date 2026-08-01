@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../providers/admin_providers.dart';
+import '../../widgets/image_upload_field.dart';
 
 /// Admin tạo hộ 1 cửa hàng cho chủ đã có tài khoản (tìm theo SĐT) — cửa hàng tạo ra
 /// ở trạng thái draft như bình thường, admin tự duyệt sau ở màn hình chi tiết.
@@ -25,6 +26,7 @@ class _MerchantFormScreenState extends ConsumerState<MerchantFormScreen> {
 
   bool _loading = false;
   String? _error;
+  String? _logoUrl;
 
   @override
   void dispose() {
@@ -63,6 +65,7 @@ class _MerchantFormScreenState extends ConsumerState<MerchantFormScreen> {
           'name': _nameCtrl.text.trim(),
           'slug': slug,
           'phone': _phoneCtrl.text.trim(),
+          if (_logoUrl != null) 'logo_url': _logoUrl,
         },
         ownerPhone: _ownerPhoneCtrl.text.trim(),
       );
@@ -127,6 +130,12 @@ class _MerchantFormScreenState extends ConsumerState<MerchantFormScreen> {
                     decoration: const InputDecoration(labelText: 'Số điện thoại liên hệ', border: OutlineInputBorder()),
                     keyboardType: TextInputType.phone,
                     validator: (v) => (v == null || v.trim().isEmpty) ? 'Nhập số điện thoại' : null,
+                  ),
+                  const SizedBox(height: 16),
+                  ImageUploadField(
+                    label: 'Ảnh cửa hàng',
+                    folder: 'merchants',
+                    onChanged: (url) => setState(() => _logoUrl = url),
                   ),
                   const SizedBox(height: 24),
                   Text('Chi nhánh chính', style: Theme.of(context).textTheme.labelLarge),
