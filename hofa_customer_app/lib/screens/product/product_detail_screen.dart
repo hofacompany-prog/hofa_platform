@@ -1,0 +1,286 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import '../../core/format.dart';
+import '../../models/cart_item.dart';
+import '../../models/product.dart';
+import '../../models/product_variant.dart';
+import '../../models/wholesale_tier.dart';
+import '../../providers/app_providers.dart';
+import '../../providers/cart_provider.dart';
+import '../../widgets/network_image_box.dart';
+
+class ProductDetailScreen extends ConsumerStatefulWidget {
+  final String productId;
+  const ProductDetailScreen({super.key, required this.productId});
+
+  @override
+  ConsumerState<ProductDetailScreen> createState() => _ProductDetailScreenState();
+}
+
+class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
+  ProductVariant? _selectedVariant;
+  int _quantity = 1;
+  bool _adding = false;
+
+  void _ensureVariantSelected(Product product) {
+    _selectedVariant ??= product.defaultVariant;
+  }
+
+  int _unitPriceFor(ProductVariant variant, List<WholesaleTier> tiers) {
+    if (tiers.isEmpty) return variant.price;
+    WholesaleTier? matched;
+    for (final t in tiers) {
+      if (_quantity >= t.minQuantity && (t.maxQuantity == null || _quantity <= t.maxQuantity!)) {
+        matched = t;
+        break;
+      }
+    }
+    return matched?.unitPrice ?? variant.price;
+  }
+
+  Future<void> _addToCart(Product product, ProductVariant variant, int unitPrice) async {
+    final cartNotifier = ref.read(cartProvider.notifier);
+    final cartState = ref.read(cartProvider);
+
+    if (!cartNotifier.belongsToCurrentCart(product.merchantId)) {
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Giỏ hàng có món của cửa hàng khác'),
+          content: Text(
+              'Giỏ hàng hiện đang có món từ "${cartState.merchantName}". Mỗi đơn chỉ đặt được 1 cửa hàng — xoá giỏ hiện tại để thêm món mới?'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Huỷ')),
+            FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Xoá giỏ cũ')),
+          ],
+        ),
+      );
+      if (confirm != true) return;
+      await cartNotifier.clear();
+    }
+
+    setState(() => _adding = true);
+    try {
+      final branches = await ref.read(merchantBranchesProvider(product.merchantId).future);
+      if (branches.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(const SnackBar(content: Text('Cửa hàng chưa có chi nhánh nhận đơn')));
+        }
+        return;
+      }
+      final branch = branches.firstWhere((b) => b.isMain, orElse: () => branches.first);
+      final merchant = await ref.read(merchantDetailProvider(product.merchantId).future);
+
+      await cartNotifier.addItem(
+        merchantId: product.merchantId,
+        merchantName: merchant.name,
+        branchId: branch.id,
+        salesModel: product.salesModel,
+        item: CartItem(
+          productId: product.id,
+          productName: product.name,
+          productImage: product.images.isNotEmpty ? product.images.first : null,
+          variantId: variant.id,
+          variantName: variant.name,
+          unitPrice: unitPrice,
+          quantity: _quantity,
+          unit: product.unit,
+        ),
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Đã thêm vào giỏ hàng')));
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+    } finally {
+      if (mounted) setState(() => _adding = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final productAsync = ref.watch(productDetailProvider(widget.productId));
+    final theme = Theme.of(context);
+
+    return Scaffold(
+      appBar: AppBar(
+        leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => context.pop()),
+        title: const Text('Sản phẩm'),
+      ),
+      body: productAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => Center(child: Text('Lỗi: $e')),
+        data: (product) {
+          _ensureVariantSelected(product);
+          final variant = _selectedVariant ?? product.defaultVariant;
+          final tiersAsync =
+              (product.isWholesale && variant != null) ? ref.watch(wholesaleTiersProvider(variant.id)) : null;
+          final tiers = tiersAsync?.valueOrNull ?? [];
+          final unitPrice = variant != null ? _unitPriceFor(variant, tiers) : 0;
+
+          return Column(
+            children: [
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    AspectRatio(
+                      aspectRatio: 1.3,
+                      child: NetworkImageBox(
+                        url: product.images.isNotEmpty ? product.images.first : null,
+                        width: double.infinity,
+                        height: double.infinity,
+                        fallbackIcon: Icons.shopping_bag_outlined,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    if (product.isWholesale)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Chip(
+                          label: const Text('Bán sỉ / Đặt trước'),
+                          backgroundColor: theme.colorScheme.secondary.withValues(alpha: 0.15),
+                        ),
+                      ),
+                    Text(product.name, style: theme.textTheme.headlineSmall),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Text(formatVnd(unitPrice),
+                            style: theme.textTheme.titleLarge?.copyWith(color: theme.colorScheme.primary, fontWeight: FontWeight.bold)),
+                        Text(' / ${product.unit}', style: theme.textTheme.bodyMedium),
+                      ],
+                    ),
+                    if (product.ratingCount > 0) ...[
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Icon(Icons.star, size: 16, color: Colors.amber.shade700),
+                          const SizedBox(width: 4),
+                          Text('${product.ratingAvg.toStringAsFixed(1)} (${product.ratingCount} đánh giá) · Đã bán ${product.soldCount}'),
+                        ],
+                      ),
+                    ],
+                    const SizedBox(height: 16),
+                    if (product.variants.length > 1) ...[
+                      Text('Chọn loại', style: theme.textTheme.titleSmall),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        children: product.variants
+                            .map((v) => ChoiceChip(
+                                  label: Text(v.name),
+                                  selected: _selectedVariant?.id == v.id,
+                                  onSelected: (_) => setState(() {
+                                    _selectedVariant = v;
+                                    _quantity = 1;
+                                  }),
+                                ))
+                            .toList(),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+                    if (product.isWholesale && tiers.isNotEmpty) ...[
+                      Text('Bậc giá theo số lượng', style: theme.textTheme.titleSmall),
+                      const SizedBox(height: 8),
+                      Card(
+                        elevation: 0,
+                        color: theme.colorScheme.surfaceContainerLow,
+                        child: Column(
+                          children: tiers
+                              .map((t) => ListTile(
+                                    dense: true,
+                                    title: Text('${t.rangeLabel} ${product.unit}'),
+                                    subtitle: t.leadTimeDays > 0 ? Text('Giao sau ${t.leadTimeDays} ngày') : null,
+                                    trailing: Text(formatVnd(t.unitPrice), style: const TextStyle(fontWeight: FontWeight.w600)),
+                                  ))
+                              .toList(),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+                    Text('Số lượng', style: theme.textTheme.titleSmall),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        IconButton.outlined(
+                          onPressed: _quantity > 1 ? () => setState(() => _quantity--) : null,
+                          icon: const Icon(Icons.remove),
+                        ),
+                        SizedBox(width: 56, child: Center(child: Text('$_quantity', style: theme.textTheme.titleMedium))),
+                        IconButton.outlined(
+                          onPressed: () => setState(() => _quantity++),
+                          icon: const Icon(Icons.add),
+                        ),
+                      ],
+                    ),
+                    if (product.description != null && product.description!.isNotEmpty) ...[
+                      const SizedBox(height: 20),
+                      const Divider(),
+                      const SizedBox(height: 8),
+                      Text('Mô tả', style: theme.textTheme.titleSmall),
+                      const SizedBox(height: 8),
+                      Text(product.description!),
+                    ],
+                    const SizedBox(height: 20),
+                    const Divider(),
+                    const SizedBox(height: 8),
+                    Text('Đánh giá', style: theme.textTheme.titleSmall),
+                    const SizedBox(height: 8),
+                    Consumer(builder: (context, ref, _) {
+                      final reviewsAsync = ref.watch(productReviewsProvider(product.id));
+                      return reviewsAsync.when(
+                        loading: () => const Padding(padding: EdgeInsets.all(8), child: LinearProgressIndicator()),
+                        error: (e, _) => Text('Lỗi tải đánh giá: $e'),
+                        data: (reviews) {
+                          if (reviews.isEmpty) return const Text('Chưa có đánh giá nào');
+                          return Column(
+                            children: reviews
+                                .map((r) => Padding(
+                                      padding: const EdgeInsets.only(bottom: 8),
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Row(
+                                            children: List.generate(
+                                              5,
+                                              (i) => Icon(
+                                                i < r.rating ? Icons.star : Icons.star_border,
+                                                size: 16,
+                                                color: Colors.amber.shade700,
+                                              ),
+                                            ),
+                                          ),
+                                          if (r.comment != null && r.comment!.isNotEmpty) Text(r.comment!),
+                                        ],
+                                      ),
+                                    ))
+                                .toList(),
+                          );
+                        },
+                      );
+                    }),
+                  ],
+                ),
+              ),
+              SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: FilledButton.icon(
+                    onPressed: (variant == null || _adding) ? null : () => _addToCart(product, variant, unitPrice),
+                    icon: _adding
+                        ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Icon(Icons.add_shopping_cart),
+                    label: Text('Thêm vào giỏ · ${formatVnd(unitPrice * _quantity)}'),
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}

@@ -1,0 +1,323 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import '../../core/format.dart';
+import '../../models/address.dart';
+import '../../providers/app_providers.dart';
+import '../../providers/auth_providers.dart';
+import '../../providers/cart_provider.dart';
+
+class CheckoutScreen extends ConsumerStatefulWidget {
+  const CheckoutScreen({super.key});
+
+  @override
+  ConsumerState<CheckoutScreen> createState() => _CheckoutScreenState();
+}
+
+class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
+  String? _selectedAddressId;
+  String _paymentMethod = 'cod';
+  DateTime? _scheduledFor;
+  final _voucherCtrl = TextEditingController();
+  final _noteCtrl = TextEditingController();
+  int _voucherDiscount = 0;
+  String? _voucherError;
+  bool _voucherChecking = false;
+  bool _placing = false;
+
+  @override
+  void dispose() {
+    _voucherCtrl.dispose();
+    _noteCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _addAddress() async {
+    final nameCtrl = TextEditingController();
+    final phoneCtrl = TextEditingController();
+    final line1Ctrl = TextEditingController();
+    final wardCtrl = TextEditingController();
+    final districtCtrl = TextEditingController();
+    final provinceCtrl = TextEditingController();
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Thêm địa chỉ giao hàng'),
+        content: SizedBox(
+          width: 360,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Tên người nhận')),
+                const SizedBox(height: 12),
+                TextField(controller: phoneCtrl, decoration: const InputDecoration(labelText: 'SĐT người nhận')),
+                const SizedBox(height: 12),
+                TextField(controller: line1Ctrl, decoration: const InputDecoration(labelText: 'Số nhà, tên đường')),
+                const SizedBox(height: 12),
+                TextField(controller: wardCtrl, decoration: const InputDecoration(labelText: 'Phường/Xã')),
+                const SizedBox(height: 12),
+                TextField(controller: districtCtrl, decoration: const InputDecoration(labelText: 'Quận/Huyện')),
+                const SizedBox(height: 12),
+                TextField(controller: provinceCtrl, decoration: const InputDecoration(labelText: 'Tỉnh/Thành phố')),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Huỷ')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Lưu')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    if (nameCtrl.text.trim().isEmpty || phoneCtrl.text.trim().isEmpty || line1Ctrl.text.trim().isEmpty || provinceCtrl.text.trim().isEmpty) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Thiếu thông tin bắt buộc')));
+      return;
+    }
+    try {
+      final created = await ref.read(userRepoProvider).createAddress({
+        'recipient_name': nameCtrl.text.trim(),
+        'recipient_phone': phoneCtrl.text.trim(),
+        'line1': line1Ctrl.text.trim(),
+        'ward': wardCtrl.text.trim().isEmpty ? null : wardCtrl.text.trim(),
+        'district': districtCtrl.text.trim().isEmpty ? null : districtCtrl.text.trim(),
+        'province': provinceCtrl.text.trim(),
+      });
+      ref.invalidate(addressesProvider);
+      setState(() => _selectedAddressId = created.id);
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+    }
+  }
+
+  Future<void> _checkVoucher(String merchantId, int orderAmount) async {
+    final code = _voucherCtrl.text.trim();
+    if (code.isEmpty) return;
+    setState(() {
+      _voucherChecking = true;
+      _voucherError = null;
+    });
+    try {
+      final res = await ref.read(voucherRepoProvider).validate(code: code, merchantId: merchantId, orderAmount: orderAmount);
+      setState(() {
+        _voucherDiscount = res.valid ? res.estimatedDiscount : 0;
+        _voucherError = res.valid ? null : (res.reason ?? 'Mã không hợp lệ');
+      });
+    } catch (e) {
+      setState(() {
+        _voucherDiscount = 0;
+        _voucherError = 'Lỗi kiểm tra mã: $e';
+      });
+    } finally {
+      if (mounted) setState(() => _voucherChecking = false);
+    }
+  }
+
+  Future<void> _placeOrder(Address address) async {
+    final cart = ref.read(cartProvider);
+    if (cart.isEmpty || cart.merchantId == null || cart.branchId == null) return;
+
+    setState(() => _placing = true);
+    try {
+      final order = await ref.read(orderRepoProvider).createOrder({
+        'merchant_id': cart.merchantId,
+        'branch_id': cart.branchId,
+        'sales_model': cart.salesModel,
+        'items': cart.items
+            .map((e) => {
+                  'variant_id': e.variantId,
+                  'quantity': e.quantity,
+                  if (e.note != null) 'note': e.note,
+                })
+            .toList(),
+        'ship_recipient_name': address.recipientName,
+        'ship_recipient_phone': address.recipientPhone,
+        'ship_line1': address.line1,
+        'ship_province': address.province,
+        'ship_ward': address.ward,
+        'ship_district': address.district,
+        'ship_latitude': address.latitude,
+        'ship_longitude': address.longitude,
+        'payment_method': _paymentMethod,
+        'delivery_fee': 0,
+        if (_voucherDiscount > 0) 'voucher_code': _voucherCtrl.text.trim(),
+        if (cart.salesModel == 'scheduled' && _scheduledFor != null) 'scheduled_for': _scheduledFor!.toIso8601String(),
+        if (_noteCtrl.text.trim().isNotEmpty) 'customer_note': _noteCtrl.text.trim(),
+      });
+      await ref.read(cartProvider.notifier).clear();
+      if (mounted) context.go('/orders/${order.id}');
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi đặt hàng: $e')));
+    } finally {
+      if (mounted) setState(() => _placing = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cart = ref.watch(cartProvider);
+    final addressesAsync = ref.watch(addressesProvider);
+    final theme = Theme.of(context);
+
+    if (cart.isEmpty) {
+      return Scaffold(
+        appBar: AppBar(leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => context.pop())),
+        body: const Center(child: Text('Giỏ hàng trống')),
+      );
+    }
+
+    final total = cart.subtotal - _voucherDiscount;
+
+    return Scaffold(
+      appBar: AppBar(
+        leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => context.pop()),
+        title: const Text('Thanh toán'),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Text('Địa chỉ giao hàng', style: theme.textTheme.titleSmall),
+          const SizedBox(height: 8),
+          addressesAsync.when(
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (e, _) => Text('Lỗi: $e'),
+            data: (addresses) {
+              if (_selectedAddressId == null && addresses.isNotEmpty) {
+                final defaultAddr = addresses.where((a) => a.isDefault).toList();
+                _selectedAddressId = defaultAddr.isNotEmpty ? defaultAddr.first.id : addresses.first.id;
+              }
+              return Column(
+                children: [
+                  RadioGroup<String>(
+                    groupValue: _selectedAddressId,
+                    onChanged: (v) => setState(() => _selectedAddressId = v),
+                    child: Column(
+                      children: addresses
+                          .map((a) => RadioListTile<String>(
+                                contentPadding: EdgeInsets.zero,
+                                value: a.id,
+                                title: Text('${a.recipientName} · ${a.recipientPhone}'),
+                                subtitle: Text(a.fullLine),
+                              ))
+                          .toList(),
+                    ),
+                  ),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: TextButton.icon(onPressed: _addAddress, icon: const Icon(Icons.add), label: const Text('Thêm địa chỉ mới')),
+                  ),
+                ],
+              );
+            },
+          ),
+          const Divider(height: 32),
+          Text('Mã giảm giá', style: theme.textTheme.titleSmall),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _voucherCtrl,
+                  decoration: const InputDecoration(hintText: 'Nhập mã voucher', border: OutlineInputBorder(), isDense: true),
+                ),
+              ),
+              const SizedBox(width: 8),
+              OutlinedButton(
+                onPressed: _voucherChecking ? null : () => _checkVoucher(cart.merchantId!, cart.subtotal),
+                child: _voucherChecking
+                    ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Text('Áp dụng'),
+              ),
+            ],
+          ),
+          if (_voucherError != null)
+            Padding(padding: const EdgeInsets.only(top: 6), child: Text(_voucherError!, style: TextStyle(color: theme.colorScheme.error))),
+          if (_voucherDiscount > 0)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text('Giảm ${formatVnd(_voucherDiscount)}', style: TextStyle(color: theme.colorScheme.primary)),
+            ),
+          const Divider(height: 32),
+          Text('Phương thức thanh toán', style: theme.textTheme.titleSmall),
+          RadioGroup<String>(
+            groupValue: _paymentMethod,
+            onChanged: (v) => setState(() => _paymentMethod = v ?? _paymentMethod),
+            child: Column(
+              children: const [
+                RadioListTile<String>(
+                  contentPadding: EdgeInsets.zero,
+                  value: 'cod',
+                  title: Text('Thanh toán khi nhận hàng (COD)'),
+                ),
+                RadioListTile<String>(
+                  contentPadding: EdgeInsets.zero,
+                  value: 'bank_transfer',
+                  title: Text('Chuyển khoản ngân hàng'),
+                ),
+              ],
+            ),
+          ),
+          if (cart.salesModel == 'scheduled') ...[
+            const Divider(height: 32),
+            Text('Ngày giao mong muốn', style: theme.textTheme.titleSmall),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              icon: const Icon(Icons.calendar_today_outlined),
+              label: Text(_scheduledFor == null ? 'Chọn ngày' : formatDate(_scheduledFor!)),
+              onPressed: () async {
+                final picked = await showDatePicker(
+                  context: context,
+                  initialDate: DateTime.now().add(const Duration(days: 2)),
+                  firstDate: DateTime.now(),
+                  lastDate: DateTime.now().add(const Duration(days: 90)),
+                );
+                if (picked != null) setState(() => _scheduledFor = picked);
+              },
+            ),
+          ],
+          const Divider(height: 32),
+          Text('Ghi chú cho cửa hàng', style: theme.textTheme.titleSmall),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _noteCtrl,
+            decoration: const InputDecoration(hintText: 'Không bắt buộc', border: OutlineInputBorder(), isDense: true),
+            maxLines: 2,
+          ),
+          const Divider(height: 32),
+          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('Tạm tính'), Text(formatVnd(cart.subtotal))]),
+          if (_voucherDiscount > 0)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('Giảm giá'), Text('-${formatVnd(_voucherDiscount)}')]),
+            ),
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Tổng cộng', style: TextStyle(fontWeight: FontWeight.bold)),
+                Text(formatVnd(total), style: TextStyle(fontWeight: FontWeight.bold, color: theme.colorScheme.primary, fontSize: 18)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          FilledButton(
+            onPressed: (_placing || _selectedAddressId == null)
+                ? null
+                : () {
+                    final addresses = addressesAsync.valueOrNull ?? [];
+                    final address = addresses.where((a) => a.id == _selectedAddressId).toList();
+                    if (address.isEmpty) return;
+                    _placeOrder(address.first);
+                  },
+            child: _placing
+                ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Text('Đặt hàng'),
+          ),
+        ],
+      ),
+    );
+  }
+}
