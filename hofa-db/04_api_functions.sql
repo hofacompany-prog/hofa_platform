@@ -335,8 +335,12 @@ CREATE OR REPLACE FUNCTION assign_driver(
 DECLARE
   v_delivery deliveries;
   v_order_status order_status;
+  v_driver_user_id UUID;
 BEGIN
-  IF NOT EXISTS (SELECT 1 FROM drivers WHERE id = p_driver_id AND status = 'online') THEN
+  -- order_status_history.changed_by trỏ tới users(id), không phải drivers(id) —
+  -- phải tra ra user_id thật của tài xế trước khi ghi lịch sử đơn hàng.
+  SELECT user_id INTO v_driver_user_id FROM drivers WHERE id = p_driver_id AND status = 'online';
+  IF v_driver_user_id IS NULL THEN
     RAISE EXCEPTION 'Tài xế không tồn tại hoặc không sẵn sàng nhận đơn' USING ERRCODE = 'check_violation';
   END IF;
 
@@ -356,7 +360,7 @@ BEGIN
   -- machine của update_order_status không cho phép 'assigned' -> 'assigned'.
   SELECT status INTO v_order_status FROM orders WHERE id = p_order_id;
   IF v_order_status IS DISTINCT FROM 'assigned' THEN
-    PERFORM update_order_status(p_order_id, 'assigned', p_driver_id, 'driver', 'Đã gán tài xế');
+    PERFORM update_order_status(p_order_id, 'assigned', v_driver_user_id, 'driver', 'Đã gán tài xế');
   END IF;
 
   RETURN v_delivery;

@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/format.dart';
+import '../../models/delivery.dart';
 import '../../models/order.dart';
 import '../../repositories/order_repository.dart';
 
 final _orderProvider = FutureProvider.autoDispose.family<Order, String>((ref, id) => OrderRepository().get(id));
+final _deliveryProvider =
+    FutureProvider.autoDispose.family<Delivery?, String>((ref, id) => OrderRepository().delivery(id));
 
 class OrderDetailScreen extends ConsumerStatefulWidget {
   final String orderId;
@@ -22,6 +25,22 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
     try {
       await OrderRepository().updateStatus(widget.orderId, status);
       ref.invalidate(_orderProvider(widget.orderId));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+    } finally {
+      if (mounted) setState(() => _updating = false);
+    }
+  }
+
+  Future<void> _findDriver() async {
+    setState(() => _updating = true);
+    try {
+      await OrderRepository().findDriver(widget.orderId);
+      ref.invalidate(_orderProvider(widget.orderId));
+      ref.invalidate(_deliveryProvider(widget.orderId));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Đã tìm thấy tài xế, đang chờ xác nhận')));
+      }
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
     } finally {
@@ -51,6 +70,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final orderAsync = ref.watch(_orderProvider(widget.orderId));
+    final deliveryAsync = ref.watch(_deliveryProvider(widget.orderId));
 
     return Scaffold(
       appBar: AppBar(title: const Text('Chi tiết đơn hàng')),
@@ -121,6 +141,57 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                         ),
                       ),
                     ),
+                    deliveryAsync.when(
+                      loading: () => const SizedBox(),
+                      error: (_, _) => const SizedBox(),
+                      data: (delivery) {
+                        if (delivery == null || delivery.pickupOtp == null) return const SizedBox();
+                        return Padding(
+                          padding: const EdgeInsets.only(top: 16),
+                          child: Card(
+                            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.10),
+                            child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('Mã lấy hàng', style: Theme.of(context).textTheme.titleSmall),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    delivery.pickupOtp!,
+                                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                                          fontWeight: FontWeight.bold,
+                                          letterSpacing: 4,
+                                          color: Theme.of(context).colorScheme.primary,
+                                        ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'Đọc mã này cho tài xế khi họ đến lấy hàng.',
+                                    style: Theme.of(context).textTheme.bodySmall,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                    if (o.status == 'ready_for_pickup') ...[
+                      const SizedBox(height: 16),
+                      OutlinedButton.icon(
+                        onPressed: _updating ? null : _findDriver,
+                        icon: const Icon(Icons.search),
+                        label: const Text('Tìm tài xế'),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          'Hệ thống đã tự tìm khi đơn chuyển sang trạng thái này. Bấm lại nếu lúc đó chưa có tài xế nào online.',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 24),
                     Row(
                       children: [

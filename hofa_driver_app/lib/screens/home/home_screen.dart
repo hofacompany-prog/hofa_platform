@@ -59,6 +59,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         }
       }
       await _repo.setStatus(goOnline ? 'online' : 'offline');
+      if (goOnline) {
+        // Gửi ngay 1 lần vị trí hiện tại — không đợi luồng theo dõi bắt được lần di
+        // chuyển >=30m đầu tiên, vì lúc đó server chưa có toạ độ nên chưa tìm thấy
+        // tài xế này khi có đơn mới.
+        final pos = await LocationTracker.instance.current();
+        if (pos != null) {
+          try {
+            await _repo.updateLocation(pos.latitude, pos.longitude);
+          } catch (_) {
+            // luồng theo dõi bên dưới sẽ tự bù ở lần cập nhật kế tiếp
+          }
+        }
+      }
       ref.invalidate(myDriverProvider);
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));

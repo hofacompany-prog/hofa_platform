@@ -1,5 +1,6 @@
 import '../core/api_client.dart';
 import '../models/order.dart';
+import '../models/delivery.dart';
 
 class OrderRepository {
   final _api = ApiClient.instance;
@@ -16,6 +17,12 @@ class OrderRepository {
   }
 
   Future<Order> order(String id) async => Order.fromJson(await _api.get('/orders/$id') as Map<String, dynamic>);
+
+  /// null nếu đơn chưa được gán tài xế (chưa tới lúc có mã giao hàng).
+  Future<Delivery?> delivery(String orderId) async {
+    final json = await _api.get('/orders/$orderId/delivery') as Map<String, dynamic>?;
+    return json == null ? null : Delivery.fromJson(json);
+  }
 
   Future<List<OrderStatusEvent>> history(String id) async {
     final list = await _api.get('/orders/$id/history') as List;

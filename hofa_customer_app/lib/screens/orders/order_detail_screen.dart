@@ -108,6 +108,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
   Widget build(BuildContext context) {
     final orderAsync = ref.watch(orderDetailProvider(widget.orderId));
     final historyAsync = ref.watch(orderHistoryProvider(widget.orderId));
+    final deliveryAsync = ref.watch(orderDeliveryProvider(widget.orderId));
     final theme = Theme.of(context);
 
     return Scaffold(
@@ -189,6 +190,43 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                       ],
                     ),
                   ),
+                ),
+                deliveryAsync.when(
+                  loading: () => const SizedBox(),
+                  error: (_, _) => const SizedBox(),
+                  data: (delivery) {
+                    if (delivery == null || delivery.deliveryOtp == null) return const SizedBox();
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: Card(
+                        elevation: 0,
+                        color: theme.colorScheme.secondary.withValues(alpha: 0.12),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Mã giao hàng', style: theme.textTheme.titleSmall),
+                              const SizedBox(height: 4),
+                              Text(
+                                delivery.deliveryOtp!,
+                                style: theme.textTheme.headlineMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 4,
+                                  color: theme.colorScheme.secondary,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Đọc mã này cho tài xế khi nhận hàng để xác nhận đúng người, đúng đơn.',
+                                style: theme.textTheme.bodySmall,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
                 ),
                 const SizedBox(height: 12),
                 Card(

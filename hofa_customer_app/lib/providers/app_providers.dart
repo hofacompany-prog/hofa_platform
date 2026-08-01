@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/address.dart';
 import '../models/branch.dart';
 import '../models/category.dart';
+import '../models/delivery.dart';
 import '../models/merchant.dart';
 import '../models/order.dart';
 import '../models/product.dart';
@@ -62,6 +63,9 @@ final orderDetailProvider =
 
 final orderHistoryProvider =
     FutureProvider.autoDispose.family<List<OrderStatusEvent>, String>((ref, id) => ref.watch(orderRepoProvider).history(id));
+
+final orderDeliveryProvider =
+    FutureProvider.autoDispose.family<Delivery?, String>((ref, id) => ref.watch(orderRepoProvider).delivery(id));
 
 // ---- Địa chỉ ----
 
