@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/api_exception.dart';
 import '../models/admin_stats.dart';
 import '../models/user_profile.dart';
+import '../models/user_detail.dart';
 import '../models/merchant.dart';
 import '../models/driver.dart';
 import '../models/order.dart';
@@ -49,6 +50,9 @@ final usersProvider = FutureProvider.autoDispose<List<UserProfile>>((ref) {
   final role = ref.watch(userRoleFilterProvider);
   return ref.watch(adminRepoProvider).users(role: role);
 });
+
+final userDetailProvider =
+    FutureProvider.autoDispose.family<UserDetail, String>((ref, id) => ref.watch(adminRepoProvider).userDetail(id));
 
 final driversProvider = FutureProvider.autoDispose<List<Driver>>((ref) => ref.watch(adminRepoProvider).drivers());
 

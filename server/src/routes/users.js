@@ -9,6 +9,13 @@ const ADDRESS_FIELDS = [
   'province', 'postal_code', 'latitude', 'longitude', 'note', 'is_default'
 ];
 
+// Không lấy password_hash — endpoint admin trả cả cho web hiển thị nên phải loại field nhạy cảm.
+const ADMIN_USER_COLUMNS = `
+  id, phone, email, full_name, avatar_url, date_of_birth, role, status,
+  phone_verified_at, email_verified_at, last_login_at, created_at, updated_at, deleted_at
+`;
+const ADMIN_USER_EDIT_FIELDS = ['full_name', 'email', 'phone', 'avatar_url', 'date_of_birth'];
+
 // ---- Hồ sơ cá nhân ----
 
 router.get('/me', asyncHandler(async (req, res) => {
@@ -54,14 +61,14 @@ router.patch('/me', asyncHandler(async (req, res) => {
 router.get('/admin/users', asyncHandler(async (req, res) => {
   requireRole(req.ctx, ['admin']);
   const { limit, offset } = pagination(req.query);
-  const clauses = [];
+  const clauses = ['deleted_at IS NULL'];
   const params = [];
   if (req.query.role) { params.push(req.query.role); clauses.push(`role = $${params.length}`); }
   if (req.query.status) { params.push(req.query.status); clauses.push(`status = $${params.length}`); }
-  const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+  const where = `WHERE ${clauses.join(' AND ')}`;
   params.push(limit, offset);
   const rows = await db.query(
-    `SELECT * FROM users ${where} ORDER BY created_at DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
+    `SELECT ${ADMIN_USER_COLUMNS} FROM users ${where} ORDER BY created_at DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
     params
   );
   res.json({ ok: true, data: rows });
@@ -69,23 +76,51 @@ router.get('/admin/users', asyncHandler(async (req, res) => {
 
 router.get('/admin/users/:id', asyncHandler(async (req, res) => {
   requireRole(req.ctx, ['admin']);
-  const row = await db.findById('users', req.params.id);
+  const row = await db.findById('users', req.params.id, ADMIN_USER_COLUMNS);
   if (!row) throw new ApiError('NOT_FOUND', 'Không tìm thấy người dùng', 404);
-  res.json({ ok: true, data: row });
+  const addresses = await db.query(
+    'SELECT * FROM addresses WHERE user_id = $1 ORDER BY is_default DESC, created_at DESC',
+    [req.params.id]
+  );
+  res.json({ ok: true, data: { ...row, addresses } });
+}));
+
+router.patch('/admin/users/:id', asyncHandler(async (req, res) => {
+  requireRole(req.ctx, ['admin']);
+  const data = pickFields(req.body, ADMIN_USER_EDIT_FIELDS);
+  const updated = await db.updateById('users', req.params.id, data);
+  if (!updated) throw new ApiError('NOT_FOUND', 'Không tìm thấy người dùng', 404);
+  const { password_hash, ...safe } = updated;
+  res.json({ ok: true, data: safe });
 }));
 
 router.patch('/admin/users/:id/status', asyncHandler(async (req, res) => {
   requireRole(req.ctx, ['admin']);
   requireFields(req.body, ['status']);
   const updated = await db.updateById('users', req.params.id, { status: req.body.status });
-  res.json({ ok: true, data: updated });
+  const { password_hash, ...safe } = updated;
+  res.json({ ok: true, data: safe });
 }));
 
 router.patch('/admin/users/:id/role', asyncHandler(async (req, res) => {
   requireRole(req.ctx, ['admin']);
   requireFields(req.body, ['role']);
   const updated = await db.updateById('users', req.params.id, { role: req.body.role });
-  res.json({ ok: true, data: updated });
+  const { password_hash, ...safe } = updated;
+  res.json({ ok: true, data: safe });
+}));
+
+/** Xoá mềm — giữ deleted_at để đơn hàng/dữ liệu cũ còn trỏ tới người này còn đọc được. */
+router.delete('/admin/users/:id', asyncHandler(async (req, res) => {
+  requireRole(req.ctx, ['admin']);
+  const existing = await db.findById('users', req.params.id);
+  if (!existing) throw new ApiError('NOT_FOUND', 'Không tìm thấy người dùng', 404);
+  const updated = await db.updateById('users', req.params.id, {
+    deleted_at: new Date().toISOString(),
+    status: 'banned'
+  });
+  const { password_hash, ...safe } = updated;
+  res.json({ ok: true, data: safe });
 }));
 
 // ---- Địa chỉ giao hàng ----

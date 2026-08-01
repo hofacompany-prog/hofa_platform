@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../models/user_profile.dart';
 import '../../providers/admin_providers.dart';
 
@@ -162,6 +163,7 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
                       elevation: 0,
                       color: theme.colorScheme.surfaceContainerLow,
                       child: ListTile(
+                        onTap: () => context.push('/users/${u.id}'),
                         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                         leading: CircleAvatar(
                           backgroundColor: blocked

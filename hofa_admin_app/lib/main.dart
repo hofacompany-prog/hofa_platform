@@ -21,7 +21,11 @@ class HofaAdminApp extends ConsumerWidget {
       title: 'HOFA Admin',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorSchemeSeed: Colors.indigo,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF85C100),
+          primary: const Color(0xFF85C100),
+          secondary: const Color(0xFFFB8519),
+        ),
         useMaterial3: true,
         appBarTheme: const AppBarTheme(centerTitle: false),
       ),

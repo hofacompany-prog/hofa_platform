@@ -1,6 +1,7 @@
 import '../core/api_client.dart';
 import '../models/admin_stats.dart';
 import '../models/user_profile.dart';
+import '../models/user_detail.dart';
 import '../models/merchant.dart';
 import '../models/driver.dart';
 import '../models/order.dart';
@@ -34,6 +35,16 @@ class AdminRepository {
   Future<UserProfile> setUserRole(String userId, String role) async =>
       UserProfile.fromJson(
           await _api.patch('/admin/users/$userId/role', body: {'role': role}) as Map<String, dynamic>);
+
+  Future<UserDetail> userDetail(String userId) async =>
+      UserDetail.fromJson(await _api.get('/admin/users/$userId') as Map<String, dynamic>);
+
+  Future<UserProfile> updateUser(String userId, Map<String, dynamic> data) async =>
+      UserProfile.fromJson(await _api.patch('/admin/users/$userId', body: data) as Map<String, dynamic>);
+
+  Future<void> deleteUser(String userId) async {
+    await _api.delete('/admin/users/$userId');
+  }
 
   // ---- Cửa hàng ----
   // Admin gọi GET /merchants sẽ thấy MỌI trạng thái (server bỏ lọc status khi role=admin).

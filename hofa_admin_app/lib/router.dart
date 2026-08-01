@@ -10,6 +10,7 @@ import 'screens/merchants/merchants_screen.dart';
 import 'screens/orders/orders_screen.dart';
 import 'screens/orders/order_detail_screen.dart';
 import 'screens/users/users_screen.dart';
+import 'screens/users/user_detail_screen.dart';
 import 'screens/drivers/drivers_screen.dart';
 import 'screens/catalog/categories_screen.dart';
 
@@ -51,6 +52,10 @@ final routerProvider = Provider<GoRouter>((ref) {
             builder: (context, state) => AdminOrderDetailScreen(orderId: state.pathParameters['id']!),
           ),
           GoRoute(path: '/users', builder: (context, state) => const UsersScreen()),
+          GoRoute(
+            path: '/users/:id',
+            builder: (context, state) => UserDetailScreen(userId: state.pathParameters['id']!),
+          ),
           GoRoute(path: '/drivers', builder: (context, state) => const DriversScreen()),
           GoRoute(path: '/categories', builder: (context, state) => const CategoriesScreen()),
         ],
