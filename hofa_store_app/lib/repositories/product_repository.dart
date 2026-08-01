@@ -24,7 +24,12 @@ class ProductRepository {
     String? description,
     required String unit,
     required String salesModel,
+    required String status,
     required String imageUrl,
+    required int price,
+    int? comparePrice,
+    int? costPrice,
+    int? wholesalePrice,
   }) async =>
       Product.fromJson(await _api.post('/products', body: {
         'merchant_id': merchantId,
@@ -32,7 +37,18 @@ class ProductRepository {
         if (description != null && description.isNotEmpty) 'description': description,
         'unit': unit,
         'sales_model': salesModel,
+        'status': status,
         'images': [imageUrl],
+        'variants': [
+          {
+            'name': unit,
+            'price': price,
+            if (comparePrice != null) 'compare_price': comparePrice,
+            if (costPrice != null) 'cost_price': costPrice,
+            if (wholesalePrice != null) 'wholesale_price': wholesalePrice,
+            'is_default': true,
+          },
+        ],
       }) as Map<String, dynamic>);
 
   Future<void> update(String id, Map<String, dynamic> data) async {
@@ -46,14 +62,20 @@ class ProductRepository {
   Future<void> createVariant({
     required String productId,
     required String name,
+    String? sku,
     required int price,
     int? comparePrice,
+    int? costPrice,
+    int? wholesalePrice,
     bool isDefault = false,
   }) async {
     await _api.post('/products/$productId/variants', body: {
       'name': name,
+      if (sku != null && sku.isNotEmpty) 'sku': sku,
       'price': price,
       if (comparePrice != null) 'compare_price': comparePrice,
+      if (costPrice != null) 'cost_price': costPrice,
+      if (wholesalePrice != null) 'wholesale_price': wholesalePrice,
       'is_default': isDefault,
     });
   }

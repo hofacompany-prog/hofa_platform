@@ -6,6 +6,7 @@ class ProductVariant {
   final int price;
   final int? comparePrice;
   final int? costPrice;
+  final int? wholesalePrice;
   final bool isDefault;
   final bool isActive;
 
@@ -17,6 +18,7 @@ class ProductVariant {
     required this.price,
     this.comparePrice,
     this.costPrice,
+    this.wholesalePrice,
     required this.isDefault,
     required this.isActive,
   });
@@ -29,6 +31,7 @@ class ProductVariant {
         price: (json['price'] as num?)?.toInt() ?? 0,
         comparePrice: (json['compare_price'] as num?)?.toInt(),
         costPrice: (json['cost_price'] as num?)?.toInt(),
+        wholesalePrice: (json['wholesale_price'] as num?)?.toInt(),
         isDefault: json['is_default'] as bool? ?? false,
         isActive: json['is_active'] as bool? ?? true,
       );
