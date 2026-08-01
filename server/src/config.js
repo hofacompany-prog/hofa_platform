@@ -16,5 +16,10 @@ module.exports = {
   // Từ khi Supabase chuyển sang "JWT Signing Keys" (ký bất đối xứng ES256), verify bằng
   // 1 secret dùng chung (SUPABASE_JWT_SECRET, kiểu HS256 cũ) không còn đúng cho token mới nữa.
   supabaseUrl: required('SUPABASE_URL').replace(/\/+$/, ''),
-  paymentWebhookSecret: process.env.PAYMENT_WEBHOOK_SECRET || null
+  paymentWebhookSecret: process.env.PAYMENT_WEBHOOK_SECRET || null,
+  // Không dùng required() — server vẫn phải chạy được khi chưa cấu hình Cloudinary,
+  // chỉ route /uploads/cloudinary-signature báo lỗi rõ ràng nếu thiếu.
+  cloudinaryCloudName: process.env.CLOUDINARY_CLOUD_NAME || null,
+  cloudinaryApiKey: process.env.CLOUDINARY_API_KEY || null,
+  cloudinaryApiSecret: process.env.CLOUDINARY_API_SECRET || null
 };

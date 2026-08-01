@@ -5,6 +5,7 @@ import '../../core/format.dart';
 import '../../models/product.dart';
 import '../../providers/auth_provider.dart';
 import '../../repositories/product_repository.dart';
+import '../../widgets/image_upload_field.dart';
 
 /// productId == null: tạo sản phẩm mới. Có id: sửa sản phẩm + quản lý biến thể.
 class ProductFormScreen extends ConsumerStatefulWidget {
@@ -22,6 +23,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   final _descCtrl = TextEditingController();
   final _unitCtrl = TextEditingController(text: 'cái');
   String _salesModel = 'instant';
+  String? _imageUrl;
 
   Product? _product;
   bool _loading = false;
@@ -46,6 +48,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
         _descCtrl.text = p.description ?? '';
         _unitCtrl.text = p.unit;
         _salesModel = p.salesModel;
+        _imageUrl = p.images.isNotEmpty ? p.images.first : null;
       });
     } catch (e) {
       setState(() => _error = 'Không tải được sản phẩm: $e');
@@ -56,6 +59,10 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_imageUrl == null) {
+      setState(() => _error = 'Vui lòng thêm ảnh sản phẩm');
+      return;
+    }
     setState(() {
       _loading = true;
       _error = null;
@@ -67,6 +74,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
           'description': _descCtrl.text.trim(),
           'unit': _unitCtrl.text.trim(),
           'sales_model': _salesModel,
+          'images': [_imageUrl],
         });
         await _load();
         if (mounted) {
@@ -81,6 +89,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
           description: _descCtrl.text.trim(),
           unit: _unitCtrl.text.trim(),
           salesModel: _salesModel,
+          imageUrl: _imageUrl!,
         );
         if (mounted) context.pushReplacement('/products/${created.id}/edit');
       }
@@ -167,6 +176,13 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                           controller: _descCtrl,
                           decoration: const InputDecoration(labelText: 'Mô tả (không bắt buộc)'),
                           maxLines: 3,
+                        ),
+                        const SizedBox(height: 16),
+                        ImageUploadField(
+                          label: 'Ảnh sản phẩm (bắt buộc)',
+                          folder: 'products',
+                          initialUrl: _imageUrl,
+                          onChanged: (url) => setState(() => _imageUrl = url),
                         ),
                         const SizedBox(height: 12),
                         Row(

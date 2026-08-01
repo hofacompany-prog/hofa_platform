@@ -12,11 +12,17 @@ class MerchantRepository {
     return Merchant.fromJson(list.first as Map<String, dynamic>);
   }
 
-  Future<Merchant> createMerchant({required String name, required String slug, String? phone}) async =>
+  Future<Merchant> createMerchant({
+    required String name,
+    required String slug,
+    String? phone,
+    String? logoUrl,
+  }) async =>
       Merchant.fromJson(await _api.post('/merchants', body: {
         'name': name,
         'slug': slug,
         if (phone != null && phone.isNotEmpty) 'phone': phone,
+        if (logoUrl != null) 'logo_url': logoUrl,
       }) as Map<String, dynamic>);
 
   Future<Merchant> updateMerchant(String id, Map<String, dynamic> data) async =>

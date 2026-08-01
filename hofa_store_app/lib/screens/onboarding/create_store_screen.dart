@@ -5,6 +5,7 @@ import '../../core/api_exception.dart';
 import '../../providers/auth_provider.dart';
 import '../../repositories/merchant_repository.dart';
 import '../../repositories/user_repository.dart';
+import '../../widgets/image_upload_field.dart';
 
 class CreateStoreScreen extends ConsumerStatefulWidget {
   const CreateStoreScreen({super.key});
@@ -29,6 +30,7 @@ class _CreateStoreScreenState extends ConsumerState<CreateStoreScreen> {
 
   bool _loading = false;
   String? _error;
+  String? _logoUrl;
 
   @override
   void dispose() {
@@ -56,6 +58,10 @@ class _CreateStoreScreenState extends ConsumerState<CreateStoreScreen> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_logoUrl == null) {
+      setState(() => _error = 'Vui lòng thêm ảnh cửa hàng');
+      return;
+    }
     setState(() {
       _loading = true;
       _error = null;
@@ -74,6 +80,7 @@ class _CreateStoreScreenState extends ConsumerState<CreateStoreScreen> {
         name: _nameCtrl.text.trim(),
         slug: slug,
         phone: _phoneCtrl.text.trim(),
+        logoUrl: _logoUrl,
       );
       await _merchantRepo.createBranch(
         merchantId: merchant.id,
@@ -141,6 +148,12 @@ class _CreateStoreScreenState extends ConsumerState<CreateStoreScreen> {
                     decoration: const InputDecoration(labelText: 'Số điện thoại liên hệ'),
                     keyboardType: TextInputType.phone,
                     validator: (v) => (v == null || v.trim().isEmpty) ? 'Nhập số điện thoại' : null,
+                  ),
+                  const SizedBox(height: 16),
+                  ImageUploadField(
+                    label: 'Ảnh cửa hàng (bắt buộc)',
+                    folder: 'merchants',
+                    onChanged: (url) => setState(() => _logoUrl = url),
                   ),
                   const SizedBox(height: 24),
                   Text('Chi nhánh chính', style: Theme.of(context).textTheme.labelLarge),

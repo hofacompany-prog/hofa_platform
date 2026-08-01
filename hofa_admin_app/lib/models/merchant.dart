@@ -7,6 +7,7 @@ class Merchant {
   final String merchantType;
   final String status;
   final String? phone;
+  final String? logoUrl;
   final num commissionRate;
   final int minOrderAmount;
   final num ratingAvg;
@@ -21,6 +22,7 @@ class Merchant {
     required this.merchantType,
     required this.status,
     this.phone,
+    this.logoUrl,
     required this.commissionRate,
     required this.minOrderAmount,
     required this.ratingAvg,
@@ -36,6 +38,7 @@ class Merchant {
         merchantType: json['merchant_type'] as String? ?? 'regular',
         status: json['status'] as String? ?? 'draft',
         phone: json['phone'] as String?,
+        logoUrl: json['logo_url'] as String?,
         commissionRate: num.tryParse('${json['commission_rate']}') ?? 0,
         minOrderAmount: (json['min_order_amount'] as num?)?.toInt() ?? 0,
         ratingAvg: num.tryParse('${json['rating_avg']}') ?? 0,

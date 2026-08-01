@@ -161,7 +161,8 @@ class _MerchantsScreenState extends ConsumerState<MerchantsScreen> {
                           children: [
                             CircleAvatar(
                               backgroundColor: color.withValues(alpha: 0.12),
-                              child: Icon(Icons.storefront, color: color),
+                              backgroundImage: m.logoUrl != null ? NetworkImage(m.logoUrl!) : null,
+                              child: m.logoUrl == null ? Icon(Icons.storefront, color: color) : null,
                             ),
                             const SizedBox(width: 16),
                             Expanded(

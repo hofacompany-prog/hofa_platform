@@ -28,6 +28,7 @@ app.use('/', require('./routes/deliveries'));
 app.use('/', require('./routes/payments'));
 app.use('/', require('./routes/reviews'));
 app.use('/', require('./routes/vouchers'));
+app.use('/', require('./routes/uploads'));
 
 app.use((req, res) => {
   res.status(404).json({ ok: false, error: { code: 'NOT_FOUND', message: 'Không có route này' } });

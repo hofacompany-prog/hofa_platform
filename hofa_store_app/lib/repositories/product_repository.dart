@@ -24,6 +24,7 @@ class ProductRepository {
     String? description,
     required String unit,
     required String salesModel,
+    required String imageUrl,
   }) async =>
       Product.fromJson(await _api.post('/products', body: {
         'merchant_id': merchantId,
@@ -31,6 +32,7 @@ class ProductRepository {
         if (description != null && description.isNotEmpty) 'description': description,
         'unit': unit,
         'sales_model': salesModel,
+        'images': [imageUrl],
       }) as Map<String, dynamic>);
 
   Future<void> update(String id, Map<String, dynamic> data) async {
