@@ -99,10 +99,11 @@ router.post('/products', asyncHandler(async (req, res) => {
   if (Array.isArray(req.body.category_ids) && req.body.category_ids.length) {
     await db.insertRows('product_categories', req.body.category_ids.map((cid) => ({ product_id: product.id, category_id: cid })));
   }
+  let variants = [];
   if (Array.isArray(req.body.variants) && req.body.variants.length) {
-    await db.insertRows('product_variants', req.body.variants.map((v) => ({ ...pickFields(v, VARIANT_FIELDS), product_id: product.id })));
+    variants = await db.insertRows('product_variants', req.body.variants.map((v) => ({ ...pickFields(v, VARIANT_FIELDS), product_id: product.id })));
   }
-  res.status(201).json({ ok: true, data: product });
+  res.status(201).json({ ok: true, data: { ...product, variants } });
 }));
 
 router.patch('/products/:id', asyncHandler(async (req, res) => {

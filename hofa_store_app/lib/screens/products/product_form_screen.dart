@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/format.dart';
+import '../../models/branch.dart';
 import '../../models/product.dart';
 import '../../providers/auth_provider.dart';
+import '../../repositories/inventory_repository.dart';
+import '../../repositories/merchant_repository.dart';
 import '../../repositories/product_repository.dart';
 import '../../widgets/image_upload_field.dart';
 
@@ -26,6 +29,7 @@ class ProductFormScreen extends ConsumerStatefulWidget {
 
 class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   final _repo = ProductRepository();
+  final _inventoryRepo = InventoryRepository();
   final _formKey = GlobalKey<FormState>();
   final _nameCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
@@ -34,11 +38,14 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   final _comparePriceCtrl = TextEditingController();
   final _costPriceCtrl = TextEditingController();
   final _wholesalePriceCtrl = TextEditingController();
+  final _stockCtrl = TextEditingController();
   String _salesModel = 'instant';
   String _status = 'active';
   String? _imageUrl;
 
   Product? _product;
+  Branch? _branch;
+  Map<String, int> _stockByVariant = {};
   bool _loading = false;
   bool _loadingProduct = false;
   String? _error;
@@ -48,6 +55,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   @override
   void initState() {
     super.initState();
+    _loadBranch();
     if (_isEdit) _load();
   }
 
@@ -60,7 +68,32 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     _comparePriceCtrl.dispose();
     _costPriceCtrl.dispose();
     _wholesalePriceCtrl.dispose();
+    _stockCtrl.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadBranch() async {
+    try {
+      final merchant = await ref.read(myMerchantProvider.future);
+      if (merchant == null) return;
+      final branches = await MerchantRepository().branches(merchant.id);
+      if (branches.isEmpty) return;
+      final branch = branches.firstWhere((b) => b.isMain, orElse: () => branches.first);
+      if (mounted) setState(() => _branch = branch);
+      if (_isEdit) await _loadStock();
+    } catch (_) {
+      // Không chặn form nếu tạm thời không lấy được chi nhánh — chỉ ẩn phần tồn kho.
+    }
+  }
+
+  Future<void> _loadStock() async {
+    if (_branch == null) return;
+    try {
+      final items = await _inventoryRepo.list(_branch!.id);
+      setState(() => _stockByVariant = {for (final i in items) i.variantId: i.quantityOnHand});
+    } catch (_) {
+      // bỏ qua — phần tồn kho chỉ là thông tin thêm, không chặn sửa sản phẩm
+    }
   }
 
   Future<void> _load() async {
@@ -76,6 +109,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
         _status = p.status;
         _imageUrl = p.images.isNotEmpty ? p.images.first : null;
       });
+      await _loadStock();
     } catch (e) {
       setState(() => _error = 'Không tải được sản phẩm: $e');
     } finally {
@@ -123,6 +157,21 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
           costPrice: int.tryParse(_costPriceCtrl.text.trim()),
           wholesalePrice: int.tryParse(_wholesalePriceCtrl.text.trim()),
         );
+        final stock = int.tryParse(_stockCtrl.text.trim());
+        if (stock != null && stock > 0 && _branch != null && created.variants.isNotEmpty) {
+          try {
+            await _inventoryRepo.adjust(
+              branchId: _branch!.id,
+              variantId: created.variants.first.id,
+              moveType: 'purchase_in',
+              quantity: stock,
+              note: 'Tồn kho ban đầu khi tạo sản phẩm',
+            );
+          } catch (_) {
+            // sản phẩm đã tạo thành công — lỗi nhập kho không nên chặn điều hướng,
+            // chủ cửa hàng vẫn có thể nhập lại ở màn "Biến thể & giá" hoặc "Kho hàng"
+          }
+        }
         if (mounted) context.pushReplacement('/products/${created.id}/edit');
       }
     } catch (e) {
@@ -139,6 +188,8 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     final comparePriceCtrl = TextEditingController(text: existing?.comparePrice?.toString() ?? '');
     final costPriceCtrl = TextEditingController(text: existing?.costPrice?.toString() ?? '');
     final wholesalePriceCtrl = TextEditingController(text: existing?.wholesalePrice?.toString() ?? '');
+    final currentStock = existing != null ? (_stockByVariant[existing.id] ?? 0) : 0;
+    final stockCtrl = TextEditingController(text: existing != null ? currentStock.toString() : '');
     var isActive = existing?.isActive ?? true;
 
     final ok = await showDialog<bool>(
@@ -186,6 +237,17 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                     decoration: const InputDecoration(labelText: 'Giá sỉ (không bắt buộc)', border: OutlineInputBorder()),
                     keyboardType: TextInputType.number,
                   ),
+                  if (_branch != null) ...[
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: stockCtrl,
+                      decoration: InputDecoration(
+                        labelText: existing == null ? 'Tồn kho ban đầu (không bắt buộc)' : 'Tồn kho hiện tại',
+                        border: const OutlineInputBorder(),
+                      ),
+                      keyboardType: TextInputType.number,
+                    ),
+                  ],
                   if (existing != null) ...[
                     const SizedBox(height: 8),
                     SwitchListTile(
@@ -212,7 +274,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
 
     try {
       if (existing == null) {
-        await _repo.createVariant(
+        final created = await _repo.createVariant(
           productId: widget.productId!,
           name: nameCtrl.text.trim(),
           sku: skuCtrl.text.trim(),
@@ -222,6 +284,16 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
           wholesalePrice: int.tryParse(wholesalePriceCtrl.text.trim()),
           isDefault: _product?.variants.isEmpty ?? true,
         );
+        final stock = int.tryParse(stockCtrl.text.trim());
+        if (stock != null && stock > 0 && _branch != null) {
+          await _inventoryRepo.adjust(
+            branchId: _branch!.id,
+            variantId: created.id,
+            moveType: 'purchase_in',
+            quantity: stock,
+            note: 'Tồn kho ban đầu khi thêm biến thể',
+          );
+        }
       } else {
         await _repo.updateVariant(existing.id, {
           'name': nameCtrl.text.trim(),
@@ -232,6 +304,17 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
           'wholesale_price': int.tryParse(wholesalePriceCtrl.text.trim()),
           'is_active': isActive,
         });
+        final newStock = int.tryParse(stockCtrl.text.trim());
+        final delta = (newStock ?? currentStock) - currentStock;
+        if (delta != 0 && _branch != null) {
+          await _inventoryRepo.adjust(
+            branchId: _branch!.id,
+            variantId: existing.id,
+            moveType: 'adjustment',
+            quantity: delta,
+            note: 'Cập nhật tồn kho từ trang sản phẩm',
+          );
+        }
       }
       await _load();
     } catch (e) {
@@ -356,6 +439,15 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                               keyboardType: TextInputType.number,
                             ),
                           ],
+                          if (_branch != null) ...[
+                            const SizedBox(height: 12),
+                            TextFormField(
+                              controller: _stockCtrl,
+                              decoration: const InputDecoration(
+                                  labelText: 'Tồn kho ban đầu (không bắt buộc)', border: OutlineInputBorder()),
+                              keyboardType: TextInputType.number,
+                            ),
+                          ],
                           Padding(
                             padding: const EdgeInsets.only(top: 6),
                             child: Text(
@@ -392,45 +484,53 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                           if ((_product?.variants ?? []).isEmpty)
                             const Text('Chưa có biến thể nào. Khách sẽ không mua được nếu chưa có giá.')
                           else
-                            ...(_product!.variants.map((v) => Card(
-                                  child: ListTile(
-                                    title: Row(
-                                      children: [
-                                        Flexible(child: Text(v.name)),
-                                        if (v.isDefault) ...[
-                                          const SizedBox(width: 6),
-                                          const Chip(label: Text('Mặc định'), visualDensity: VisualDensity.compact),
-                                        ],
-                                        if (!v.isActive) ...[
-                                          const SizedBox(width: 6),
-                                          Chip(
-                                            label: const Text('Ngừng bán'),
-                                            visualDensity: VisualDensity.compact,
-                                            backgroundColor: Theme.of(context).colorScheme.errorContainer,
-                                          ),
-                                        ],
+                            ...(_product!.variants.map((v) {
+                              final stock = _stockByVariant[v.id];
+                              final lowStock = stock != null && stock <= 5;
+                              return Card(
+                                child: ListTile(
+                                  title: Row(
+                                    children: [
+                                      Flexible(child: Text(v.name)),
+                                      if (v.isDefault) ...[
+                                        const SizedBox(width: 6),
+                                        const Chip(label: Text('Mặc định'), visualDensity: VisualDensity.compact),
                                       ],
-                                    ),
-                                    subtitle: Text([
-                                      formatVnd(v.price),
-                                      if (v.comparePrice != null) 'Giá gốc ${formatVnd(v.comparePrice!)}',
-                                      if (v.sku != null && v.sku!.isNotEmpty) 'SKU ${v.sku}',
-                                    ].join(' · ')),
-                                    trailing: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        IconButton(
-                                          icon: const Icon(Icons.edit_outlined),
-                                          onPressed: () => _variantDialog(existing: v),
-                                        ),
-                                        IconButton(
-                                          icon: const Icon(Icons.delete_outline),
-                                          onPressed: () => _deleteVariant(v.id),
+                                      if (!v.isActive) ...[
+                                        const SizedBox(width: 6),
+                                        Chip(
+                                          label: const Text('Ngừng bán'),
+                                          visualDensity: VisualDensity.compact,
+                                          backgroundColor: Theme.of(context).colorScheme.errorContainer,
                                         ),
                                       ],
-                                    ),
+                                    ],
                                   ),
-                                ))),
+                                  subtitle: Text([
+                                    formatVnd(v.price),
+                                    if (v.comparePrice != null) 'Giá gốc ${formatVnd(v.comparePrice!)}',
+                                    if (v.sku != null && v.sku!.isNotEmpty) 'SKU ${v.sku}',
+                                    if (stock != null) 'Tồn kho: $stock${lowStock ? ' (sắp hết)' : ''}',
+                                  ].join(' · ')),
+                                  leading: lowStock
+                                      ? const Icon(Icons.warning_amber, color: Colors.orange)
+                                      : null,
+                                  trailing: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      IconButton(
+                                        icon: const Icon(Icons.edit_outlined),
+                                        onPressed: () => _variantDialog(existing: v),
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(Icons.delete_outline),
+                                        onPressed: () => _deleteVariant(v.id),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            })),
                         ],
                       ],
                     ),

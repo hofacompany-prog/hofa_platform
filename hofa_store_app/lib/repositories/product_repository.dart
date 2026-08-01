@@ -59,7 +59,7 @@ class ProductRepository {
     await _api.delete('/products/$id');
   }
 
-  Future<void> createVariant({
+  Future<ProductVariant> createVariant({
     required String productId,
     required String name,
     String? sku,
@@ -68,17 +68,16 @@ class ProductRepository {
     int? costPrice,
     int? wholesalePrice,
     bool isDefault = false,
-  }) async {
-    await _api.post('/products/$productId/variants', body: {
-      'name': name,
-      if (sku != null && sku.isNotEmpty) 'sku': sku,
-      'price': price,
-      if (comparePrice != null) 'compare_price': comparePrice,
-      if (costPrice != null) 'cost_price': costPrice,
-      if (wholesalePrice != null) 'wholesale_price': wholesalePrice,
-      'is_default': isDefault,
-    });
-  }
+  }) async =>
+      ProductVariant.fromJson(await _api.post('/products/$productId/variants', body: {
+        'name': name,
+        if (sku != null && sku.isNotEmpty) 'sku': sku,
+        'price': price,
+        if (comparePrice != null) 'compare_price': comparePrice,
+        if (costPrice != null) 'cost_price': costPrice,
+        if (wholesalePrice != null) 'wholesale_price': wholesalePrice,
+        'is_default': isDefault,
+      }) as Map<String, dynamic>);
 
   Future<void> updateVariant(String id, Map<String, dynamic> data) async {
     await _api.patch('/variants/$id', body: data);
