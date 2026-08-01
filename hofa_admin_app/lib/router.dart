@@ -7,6 +7,8 @@ import 'screens/auth/admin_login_screen.dart';
 import 'screens/dashboard/admin_shell.dart';
 import 'screens/dashboard/dashboard_screen.dart';
 import 'screens/merchants/merchants_screen.dart';
+import 'screens/merchants/merchant_form_screen.dart';
+import 'screens/merchants/merchant_detail_screen.dart';
 import 'screens/orders/orders_screen.dart';
 import 'screens/orders/order_detail_screen.dart';
 import 'screens/users/users_screen.dart';
@@ -46,6 +48,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         routes: [
           GoRoute(path: '/', builder: (context, state) => const DashboardScreen()),
           GoRoute(path: '/merchants', builder: (context, state) => const MerchantsScreen()),
+          GoRoute(path: '/merchants/new', builder: (context, state) => const MerchantFormScreen()),
+          GoRoute(
+            path: '/merchants/:id',
+            builder: (context, state) => MerchantDetailScreen(merchantId: state.pathParameters['id']!),
+          ),
           GoRoute(path: '/orders', builder: (context, state) => const OrdersScreen()),
           GoRoute(
             path: '/orders/:id',

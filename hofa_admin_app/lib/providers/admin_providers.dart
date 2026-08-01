@@ -44,6 +44,9 @@ final merchantsProvider = FutureProvider.autoDispose<List<Merchant>>((ref) {
   return ref.watch(adminRepoProvider).merchants(q: q);
 });
 
+final merchantDetailProvider = FutureProvider.autoDispose
+    .family<Merchant, String>((ref, id) => ref.watch(adminRepoProvider).merchantDetail(id));
+
 final userRoleFilterProvider = StateProvider.autoDispose<String?>((ref) => null);
 
 final usersProvider = FutureProvider.autoDispose<List<UserProfile>>((ref) {

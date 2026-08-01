@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../core/format.dart';
 import '../../models/merchant.dart';
 import '../../providers/admin_providers.dart';
@@ -102,6 +103,12 @@ class _MerchantsScreenState extends ConsumerState<MerchantsScreen> {
             onPressed: () => ref.invalidate(merchantsProvider),
           ),
           const SizedBox(width: 8),
+          FilledButton.icon(
+            onPressed: () => context.push('/merchants/new'),
+            icon: const Icon(Icons.add),
+            label: const Text('Tạo cửa hàng'),
+          ),
+          const SizedBox(width: 16),
         ],
       ),
       body: Column(
@@ -155,7 +162,10 @@ class _MerchantsScreenState extends ConsumerState<MerchantsScreen> {
                     return Card(
                       elevation: 0,
                       color: theme.colorScheme.surfaceContainerLow,
-                      child: Padding(
+                      clipBehavior: Clip.antiAlias,
+                      child: InkWell(
+                        onTap: () => context.push('/merchants/${m.id}'),
+                        child: Padding(
                         padding: const EdgeInsets.all(16),
                         child: Row(
                           children: [
@@ -230,6 +240,7 @@ class _MerchantsScreenState extends ConsumerState<MerchantsScreen> {
                                 child: const Text('Mở lại'),
                               ),
                           ],
+                        ),
                         ),
                       ),
                     );

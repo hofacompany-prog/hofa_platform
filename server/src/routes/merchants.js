@@ -48,23 +48,45 @@ router.get('/merchants/mine', asyncHandler(async (req, res) => {
   res.json({ ok: true, data: rows });
 }));
 
+// Field nhạy cảm (ngân hàng/thuế) — chỉ admin hoặc chính chủ cửa hàng mới thấy.
+const SENSITIVE_MERCHANT_FIELDS = [
+  'bank_name', 'bank_account_no', 'bank_account_name', 'tax_code', 'business_license_no', 'legal_doc_urls'
+];
+
 router.get('/merchants/:id', asyncHandler(async (req, res) => {
   const row = await db.queryOne('SELECT * FROM merchants WHERE id = $1 AND deleted_at IS NULL', [req.params.id]);
   if (!row) throw new ApiError('NOT_FOUND', 'Không tìm thấy cửa hàng', 404);
-  res.json({ ok: true, data: row });
+
+  const isPrivileged = req.ctx.authenticated && (req.ctx.role === 'admin' || row.owner_id === req.ctx.userId);
+  if (!isPrivileged) {
+    SENSITIVE_MERCHANT_FIELDS.forEach((f) => delete row[f]);
+    return res.json({ ok: true, data: row });
+  }
+
+  const [owner, branches] = await Promise.all([
+    db.queryOne('SELECT id, full_name, phone, email FROM users WHERE id = $1', [row.owner_id]),
+    db.query('SELECT * FROM branches WHERE merchant_id = $1 AND deleted_at IS NULL ORDER BY is_main DESC', [req.params.id])
+  ]);
+  res.json({ ok: true, data: { ...row, owner, branches } });
 }));
 
 router.post('/merchants', asyncHandler(async (req, res) => {
   requireAuth(req.ctx);
   requireFields(req.body, ['name', 'slug']);
   const data = pickFields(req.body, MERCHANT_FIELDS);
-  data.owner_id = req.ctx.userId;
+
+  // Admin tạo hộ cửa hàng cho 1 chủ có sẵn (chọn theo SĐT) — mọi role khác luôn tự làm owner.
+  let ownerId = req.ctx.userId;
+  if (req.ctx.role === 'admin' && req.body.owner_phone) {
+    const owner = await db.queryOne('SELECT id FROM users WHERE phone = $1', [req.body.owner_phone]);
+    if (!owner) throw new ApiError('NOT_FOUND', 'Không tìm thấy người dùng với SĐT này', 404);
+    ownerId = owner.id;
+  }
+  data.owner_id = ownerId;
   data.status = 'draft';
   const merchant = await db.insertRow('merchants', data);
 
-  if (req.ctx.role === 'customer') {
-    await db.query(`UPDATE users SET role = 'merchant_owner' WHERE id = $1 AND role = 'customer'`, [req.ctx.userId]);
-  }
+  await db.query(`UPDATE users SET role = 'merchant_owner' WHERE id = $1 AND role = 'customer'`, [ownerId]);
   res.status(201).json({ ok: true, data: merchant });
 }));
 
@@ -95,6 +117,18 @@ router.patch('/merchants/:id/pause', asyncHandler(async (req, res) => {
   await requireMerchantAccess(req.ctx, req.params.id);
   requireFields(req.body, ['paused']);
   const updated = await db.updateById('merchants', req.params.id, { status: req.body.paused ? 'paused' : 'active' });
+  res.json({ ok: true, data: updated });
+}));
+
+/** Xoá mềm — giữ deleted_at vì sản phẩm/đơn hàng cũ còn trỏ tới cửa hàng này. Chỉ admin. */
+router.delete('/merchants/:id', asyncHandler(async (req, res) => {
+  requireRole(req.ctx, ['admin']);
+  const existing = await db.queryOne('SELECT id FROM merchants WHERE id = $1 AND deleted_at IS NULL', [req.params.id]);
+  if (!existing) throw new ApiError('NOT_FOUND', 'Không tìm thấy cửa hàng', 404);
+  const updated = await db.updateById('merchants', req.params.id, {
+    deleted_at: new Date().toISOString(),
+    status: 'closed'
+  });
   res.json({ ok: true, data: updated });
 }));
 

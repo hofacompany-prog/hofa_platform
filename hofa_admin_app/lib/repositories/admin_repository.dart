@@ -66,6 +66,26 @@ class AdminRepository {
   Future<Merchant> setMerchantPaused(String id, bool paused) async =>
       Merchant.fromJson(await _api.patch('/merchants/$id/pause', body: {'paused': paused}) as Map<String, dynamic>);
 
+  Future<Merchant> merchantDetail(String id) async =>
+      Merchant.fromJson(await _api.get('/merchants/$id') as Map<String, dynamic>);
+
+  /// [ownerPhone] = SĐT của user có sẵn sẽ làm chủ cửa hàng — bắt buộc khi admin tự tạo hộ.
+  Future<Merchant> createMerchant(Map<String, dynamic> data, {required String ownerPhone}) async =>
+      Merchant.fromJson(await _api.post('/merchants', body: {
+        ...data,
+        'owner_phone': ownerPhone,
+      }) as Map<String, dynamic>);
+
+  Future<Merchant> updateMerchant(String id, Map<String, dynamic> data) async =>
+      Merchant.fromJson(await _api.patch('/merchants/$id', body: data) as Map<String, dynamic>);
+
+  Future<void> deleteMerchant(String id) async {
+    await _api.delete('/merchants/$id');
+  }
+
+  Future<Branch> createBranch(String merchantId, Map<String, dynamic> data) async =>
+      Branch.fromJson(await _api.post('/merchants/$merchantId/branches', body: data) as Map<String, dynamic>);
+
   // ---- Tài xế ----
 
   Future<List<Driver>> drivers({String? status, int limit = 100}) async {
