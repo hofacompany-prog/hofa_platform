@@ -453,6 +453,7 @@ CREATE TABLE drivers (
   document_urls     JSONB NOT NULL DEFAULT '[]'::jsonb,
   -- Trạng thái làm việc
   status            driver_status NOT NULL DEFAULT 'offline',
+  auto_accept       BOOLEAN NOT NULL DEFAULT false,  -- true = hệ thống tự gán đơn, không cần xác nhận
   current_latitude  NUMERIC(10,7),
   current_longitude NUMERIC(10,7),
   location_updated_at TIMESTAMPTZ,
@@ -605,6 +606,7 @@ CREATE TABLE deliveries (
   driver_fee        INTEGER NOT NULL DEFAULT 0,   -- tài xế được trả bao nhiêu
   -- Mốc thời gian
   assigned_at       TIMESTAMPTZ,
+  accept_deadline   TIMESTAMPTZ,   -- tài xế (không auto_accept) phải xác nhận trước mốc này, quá hạn tự gán tài xế khác
   accepted_at       TIMESTAMPTZ,
   arrived_store_at  TIMESTAMPTZ,
   picked_up_at      TIMESTAMPTZ,
@@ -617,11 +619,13 @@ CREATE TABLE deliveries (
   recipient_name    VARCHAR(150),        -- ai thật sự nhận hàng
   failure_reason    TEXT,
   attempt_count     SMALLINT NOT NULL DEFAULT 0,
+  declined_driver_ids UUID[] NOT NULL DEFAULT '{}',  -- tài xế đã từ chối/hết hạn — loại khỏi lần gán tiếp theo
   created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at        TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 COMMENT ON TABLE  deliveries IS 'Chuyến giao hàng, mỗi đơn một chuyến';
 COMMENT ON COLUMN deliveries.delivery_otp IS 'Mã khách đọc cho tài xế để xác nhận đã nhận hàng';
+COMMENT ON COLUMN deliveries.accept_deadline IS 'Hạn tài xế xác nhận nhận đơn (chỉ áp dụng khi driver.auto_accept = false)';
 
 CREATE INDEX idx_deliveries_driver ON deliveries (driver_id, status);
 CREATE INDEX idx_deliveries_status ON deliveries (status) WHERE status NOT IN ('delivered','failed','returned');

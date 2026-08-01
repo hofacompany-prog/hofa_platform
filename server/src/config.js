@@ -21,5 +21,9 @@ module.exports = {
   // chỉ route /uploads/cloudinary-signature báo lỗi rõ ràng nếu thiếu.
   cloudinaryCloudName: process.env.CLOUDINARY_CLOUD_NAME || null,
   cloudinaryApiKey: process.env.CLOUDINARY_API_KEY || null,
-  cloudinaryApiSecret: process.env.CLOUDINARY_API_SECRET || null
+  cloudinaryApiSecret: process.env.CLOUDINARY_API_SECRET || null,
+  // Không dùng required() — server vẫn phải chạy được khi chưa cấu hình Firebase,
+  // chỉ việc gửi push cho tài xế sẽ tự bỏ qua (xem push.js) tới khi được cấu hình.
+  firebaseServiceAccountJson: process.env.FIREBASE_SERVICE_ACCOUNT_JSON || null,
+  internalSweepSecret: process.env.INTERNAL_SWEEP_SECRET || null
 };

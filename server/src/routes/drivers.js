@@ -37,6 +37,16 @@ router.patch('/drivers/me/status', asyncHandler(async (req, res) => {
   res.json({ ok: true, data: rows[0] });
 }));
 
+router.patch('/drivers/me/auto-accept', asyncHandler(async (req, res) => {
+  requireRole(req.ctx, ['driver']);
+  requireFields(req.body, ['auto_accept']);
+  const rows = await db.query(
+    'UPDATE drivers SET auto_accept = $1 WHERE user_id = $2 RETURNING *',
+    [!!req.body.auto_accept, req.ctx.userId]
+  );
+  res.json({ ok: true, data: rows[0] });
+}));
+
 router.patch('/drivers/me/location', asyncHandler(async (req, res) => {
   requireRole(req.ctx, ['driver']);
   requireFields(req.body, ['latitude', 'longitude']);

@@ -334,6 +334,7 @@ CREATE OR REPLACE FUNCTION assign_driver(
 ) RETURNS deliveries AS $$
 DECLARE
   v_delivery deliveries;
+  v_order_status order_status;
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM drivers WHERE id = p_driver_id AND status = 'online') THEN
     RAISE EXCEPTION 'Tài xế không tồn tại hoặc không sẵn sàng nhận đơn' USING ERRCODE = 'check_violation';
@@ -350,7 +351,13 @@ BEGIN
 
   UPDATE drivers SET status = 'busy' WHERE id = p_driver_id;
 
-  PERFORM update_order_status(p_order_id, 'assigned', p_driver_id, 'driver', 'Đã gán tài xế');
+  -- Chỉ đổi order_status lần gán ĐẦU TIÊN. Khi tài xế từ chối/hết hạn và đơn
+  -- được tự động gán lại cho tài xế khác (order vẫn đang ở 'assigned'), state
+  -- machine của update_order_status không cho phép 'assigned' -> 'assigned'.
+  SELECT status INTO v_order_status FROM orders WHERE id = p_order_id;
+  IF v_order_status IS DISTINCT FROM 'assigned' THEN
+    PERFORM update_order_status(p_order_id, 'assigned', p_driver_id, 'driver', 'Đã gán tài xế');
+  END IF;
 
   RETURN v_delivery;
 END;

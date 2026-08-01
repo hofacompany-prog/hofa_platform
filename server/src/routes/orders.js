@@ -3,6 +3,7 @@ const db = require('../db');
 const asyncHandler = require('../asyncHandler');
 const { ApiError } = require('../errors');
 const { requireFields, pagination, requireAuth, requireRole, requireMerchantAccess, requireOrderAccess } = require('../utils');
+const dispatch = require('../dispatch');
 
 /** roles cho phép đổi SANG từng trạng thái; state machine chi tiết nằm trong RPC update_order_status. */
 const ORDER_STATUS_ROLES = {
@@ -136,6 +137,16 @@ router.patch('/orders/:id/status', asyncHandler(async (req, res) => {
     p_note: req.body.note || null,
     p_force: req.ctx.role === 'admin'
   });
+
+  // Đơn đã sẵn sàng lấy hàng — tự tìm tài xế online gần nhất, không bắt cửa hàng
+  // phải tự chọn tài xế (giống Grab/Shopee). Không tìm được ai thì bỏ qua lặng lẽ,
+  // cửa hàng vẫn có thể bấm "Tìm tài xế" thủ công (POST /orders/:id/find-driver).
+  if (req.body.status === 'ready_for_pickup') {
+    dispatch.offerToNearestDriver(req.params.id).catch((err) => {
+      console.error('[dispatch] Không tự gán được tài xế cho đơn', req.params.id, err.message);
+    });
+  }
+
   res.json({ ok: true, data: updated });
 }));
 

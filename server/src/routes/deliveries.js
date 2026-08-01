@@ -3,6 +3,8 @@ const db = require('../db');
 const asyncHandler = require('../asyncHandler');
 const { ApiError } = require('../errors');
 const { requireFields, pagination, requireRole, requireMerchantAccess, requireOrderAccess } = require('../utils');
+const dispatch = require('../dispatch');
+const config = require('../config');
 
 async function requireOwnDriverRow(ctx) {
   requireRole(ctx, ['driver']);
@@ -25,6 +27,8 @@ router.get('/orders/:orderId/delivery', asyncHandler(async (req, res) => {
   res.json({ ok: true, data: row });
 }));
 
+/** Phải đặt TRƯỚC /deliveries/:id để Express không hiểu nhầm "mine" là 1 giá trị :id
+ * (giống lưu ý ở GET /merchants/mine trong merchants.js). */
 router.get('/deliveries/mine', asyncHandler(async (req, res) => {
   const driver = await requireOwnDriverRow(req.ctx);
   const { limit, offset } = pagination(req.query);
@@ -39,7 +43,12 @@ router.get('/deliveries/mine', asyncHandler(async (req, res) => {
   res.json({ ok: true, data: rows });
 }));
 
-/** merchant (hoặc admin) gán 1 tài xế cụ thể cho đơn đã sẵn sàng lấy hàng. */
+router.get('/deliveries/:id', asyncHandler(async (req, res) => {
+  const delivery = await requireOwnDelivery(req.ctx, req.params.id);
+  res.json({ ok: true, data: delivery });
+}));
+
+/** merchant (hoặc admin) gán 1 tài xế cụ thể cho đơn đã sẵn sàng lấy hàng — chọn tay. */
 router.post('/orders/:orderId/assign-driver', asyncHandler(async (req, res) => {
   requireFields(req.body, ['driver_id']);
   const order = await db.findById('orders', req.params.orderId);
@@ -56,13 +65,35 @@ router.post('/orders/:orderId/assign-driver', asyncHandler(async (req, res) => {
   res.json({ ok: true, data: delivery });
 }));
 
+/** Tự động tìm tài xế online gần nhất và gán (giống Grab/Shopee) — merchant/admin gọi
+ * khi đơn đã "ready_for_pickup". Cũng được gọi tự động ở PATCH /orders/:id/status khi
+ * đơn chuyển sang ready_for_pickup, endpoint này chỉ để bấm "Tìm tài xế" lại thủ công
+ * nếu lần tự động đầu không tìm được ai (không có tài xế online). */
+router.post('/orders/:orderId/find-driver', asyncHandler(async (req, res) => {
+  const order = await db.findById('orders', req.params.orderId);
+  if (!order) throw new ApiError('NOT_FOUND', 'Không tìm thấy đơn hàng', 404);
+  await requireMerchantAccess(req.ctx, order.merchant_id);
+
+  const existing = await db.queryOne('SELECT declined_driver_ids FROM deliveries WHERE order_id = $1', [req.params.orderId]);
+  const result = await dispatch.offerToNearestDriver(req.params.orderId, {
+    excludeDriverIds: existing?.declined_driver_ids || []
+  });
+  if (!result) throw new ApiError('NOT_FOUND', 'Hiện không có tài xế nào đang online', 404);
+  res.json({ ok: true, data: result.delivery });
+}));
+
 /**
  * status: accepted | arrived_store | picked_up | delivering | delivered | failed
  * picked_up và delivered bắt buộc kèm otp đúng (khách đọc cho tài xế).
  */
 router.patch('/deliveries/:id/status', asyncHandler(async (req, res) => {
   requireFields(req.body, ['status']);
-  await requireOwnDelivery(req.ctx, req.params.id);
+  const delivery = await requireOwnDelivery(req.ctx, req.params.id);
+
+  if (req.body.status === 'accepted' && delivery.accept_deadline && new Date(delivery.accept_deadline) < new Date()) {
+    await dispatch.reassignAfterDecline(req.params.id);
+    throw new ApiError('OFFER_EXPIRED', 'Đã quá hạn xác nhận — đơn đã được gán cho tài xế khác', 409);
+  }
 
   const updated = await db.callRpc('update_delivery_status', {
     p_delivery_id: req.params.id,
@@ -73,7 +104,32 @@ router.patch('/deliveries/:id/status', asyncHandler(async (req, res) => {
     p_signature_url: req.body.signature_url || null,
     p_failure_reason: req.body.failure_reason || null
   });
+  if (req.body.status === 'accepted') {
+    await db.query('UPDATE deliveries SET accept_deadline = NULL WHERE id = $1', [req.params.id]);
+  }
   res.json({ ok: true, data: updated });
+}));
+
+/** Tài xế chủ động từ chối đơn vừa được gán (trước khi accepted) — tự động chuyển
+ * sang tài xế gần nhất kế tiếp, tài xế hiện tại trở lại online. */
+router.post('/deliveries/:id/decline', asyncHandler(async (req, res) => {
+  const delivery = await requireOwnDelivery(req.ctx, req.params.id);
+  if (delivery.status !== 'assigned') {
+    throw new ApiError('BAD_REQUEST', 'Chỉ có thể từ chối đơn chưa xác nhận', 400);
+  }
+  const result = await dispatch.reassignAfterDecline(req.params.id);
+  res.json({ ok: true, data: { reassigned: !!result } });
+}));
+
+/** Quét các chuyến quá hạn accept_deadline và tự chuyển tài xế khác — gọi định kỳ
+ * từ 1 cron ngoài (Render Cron Job, cron-job.org...) vì repo chưa có job scheduler
+ * nội bộ. Bảo vệ bằng secret riêng, không dùng JWT vì đây không phải người dùng gọi. */
+router.post('/internal/sweep-expired-offers', asyncHandler(async (req, res) => {
+  if (!config.internalSweepSecret || req.headers['x-internal-secret'] !== config.internalSweepSecret) {
+    throw new ApiError('FORBIDDEN', 'Thiếu hoặc sai secret', 403);
+  }
+  const result = await dispatch.sweepExpiredOffers();
+  res.json({ ok: true, data: result });
 }));
 
 router.post('/deliveries/:id/tracks', asyncHandler(async (req, res) => {
