@@ -3,8 +3,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/format.dart';
 import '../../models/merchant.dart';
+import '../../models/branch_hours.dart';
 import '../../providers/admin_providers.dart';
+import '../../widgets/image_upload_field.dart';
+import '../../widgets/multi_image_upload_field.dart';
 import 'merchants_screen.dart' show merchantStatusLabels;
+
+const merchantTypeLabels = {
+  'standard': 'HOFA Standard',
+  'regular': 'Cửa hàng thường',
+  'wholesale': 'Cửa hàng bán sỉ',
+};
 
 class MerchantDetailScreen extends ConsumerStatefulWidget {
   final String merchantId;
@@ -45,62 +54,195 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
     final bankAccNameCtrl = TextEditingController(text: m.bankAccountName ?? '');
     final taxCodeCtrl = TextEditingController(text: m.taxCode ?? '');
     final licenseCtrl = TextEditingController(text: m.businessLicenseNo ?? '');
+    var merchantType = m.merchantType;
+    var logoUrl = m.logoUrl;
+    var coverUrl = m.coverUrl;
+    var legalDocUrls = List.of(m.legalDocUrls);
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setInner) => AlertDialog(
+          title: const Text('Sửa thông tin cửa hàng'),
+          content: SizedBox(
+            width: 460,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      ImageUploadField(
+                        label: 'Ảnh đại diện',
+                        folder: 'merchants',
+                        initialUrl: logoUrl,
+                        onChanged: (url) => logoUrl = url,
+                      ),
+                      const SizedBox(width: 16),
+                      ImageUploadField(
+                        label: 'Ảnh bìa',
+                        folder: 'merchants',
+                        initialUrl: coverUrl,
+                        onChanged: (url) => coverUrl = url,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Tên cửa hàng')),
+                  const SizedBox(height: 12),
+                  TextField(controller: descCtrl, decoration: const InputDecoration(labelText: 'Mô tả'), maxLines: 3),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    initialValue: merchantType,
+                    decoration: const InputDecoration(labelText: 'Loại cửa hàng'),
+                    items: merchantTypeLabels.entries
+                        .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))
+                        .toList(),
+                    onChanged: (v) => setInner(() => merchantType = v ?? merchantType),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(controller: phoneCtrl, decoration: const InputDecoration(labelText: 'Số điện thoại')),
+                  const SizedBox(height: 12),
+                  TextField(controller: emailCtrl, decoration: const InputDecoration(labelText: 'Email')),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: commissionCtrl,
+                          decoration: const InputDecoration(labelText: 'Hoa hồng (%)'),
+                          keyboardType: TextInputType.number,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextField(
+                          controller: prepCtrl,
+                          decoration: const InputDecoration(labelText: 'TG chuẩn bị (phút)'),
+                          keyboardType: TextInputType.number,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: minOrderCtrl,
+                    decoration: const InputDecoration(labelText: 'Đơn tối thiểu (VNĐ)'),
+                    keyboardType: TextInputType.number,
+                  ),
+                  const Divider(height: 28),
+                  Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text('Ngân hàng & pháp lý', style: Theme.of(context).textTheme.labelLarge)),
+                  const SizedBox(height: 12),
+                  TextField(controller: bankNameCtrl, decoration: const InputDecoration(labelText: 'Tên ngân hàng')),
+                  const SizedBox(height: 12),
+                  TextField(controller: bankAccNoCtrl, decoration: const InputDecoration(labelText: 'Số tài khoản')),
+                  const SizedBox(height: 12),
+                  TextField(controller: bankAccNameCtrl, decoration: const InputDecoration(labelText: 'Tên chủ tài khoản')),
+                  const SizedBox(height: 12),
+                  TextField(controller: taxCodeCtrl, decoration: const InputDecoration(labelText: 'Mã số thuế')),
+                  const SizedBox(height: 12),
+                  TextField(controller: licenseCtrl, decoration: const InputDecoration(labelText: 'Số giấy phép KD')),
+                  const SizedBox(height: 16),
+                  MultiImageUploadField(
+                    label: 'Ảnh giấy phép kinh doanh / giấy tờ pháp lý',
+                    folder: 'merchants',
+                    initialUrls: legalDocUrls,
+                    onChanged: (urls) => legalDocUrls = urls,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Huỷ')),
+            FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Lưu')),
+          ],
+        ),
+      ),
+    );
+    if (ok != true) return;
+
+    await _run(() => ref.read(adminRepoProvider).updateMerchant(m.id, {
+          'name': nameCtrl.text.trim(),
+          'description': descCtrl.text.trim(),
+          'merchant_type': merchantType,
+          if (logoUrl != null) 'logo_url': logoUrl,
+          if (coverUrl != null) 'cover_url': coverUrl,
+          'legal_doc_urls': legalDocUrls,
+          'phone': phoneCtrl.text.trim(),
+          'email': emailCtrl.text.trim().isEmpty ? null : emailCtrl.text.trim(),
+          'commission_rate': num.tryParse(commissionCtrl.text.trim()) ?? m.commissionRate,
+          'min_order_amount': int.tryParse(minOrderCtrl.text.trim()) ?? m.minOrderAmount,
+          'avg_prep_minutes': int.tryParse(prepCtrl.text.trim()) ?? m.avgPrepMinutes,
+          'bank_name': bankNameCtrl.text.trim().isEmpty ? null : bankNameCtrl.text.trim(),
+          'bank_account_no': bankAccNoCtrl.text.trim().isEmpty ? null : bankAccNoCtrl.text.trim(),
+          'bank_account_name': bankAccNameCtrl.text.trim().isEmpty ? null : bankAccNameCtrl.text.trim(),
+          'tax_code': taxCodeCtrl.text.trim().isEmpty ? null : taxCodeCtrl.text.trim(),
+          'business_license_no': licenseCtrl.text.trim().isEmpty ? null : licenseCtrl.text.trim(),
+        }));
+  }
+
+  Future<void> _editBranch(Branch b) async {
+    final nameCtrl = TextEditingController(text: b.name);
+    final phoneCtrl = TextEditingController(text: b.phone ?? '');
+    final line1Ctrl = TextEditingController(text: b.line1);
+    final wardCtrl = TextEditingController(text: b.ward ?? '');
+    final districtCtrl = TextEditingController(text: b.district ?? '');
+    final provinceCtrl = TextEditingController(text: b.province);
+    final latCtrl = TextEditingController(text: b.latitude.toString());
+    final lngCtrl = TextEditingController(text: b.longitude.toString());
+    final radiusCtrl = TextEditingController(text: b.deliveryRadiusKm.toString());
 
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Sửa thông tin cửa hàng'),
+        title: Text('Sửa chi nhánh — ${b.name}'),
         content: SizedBox(
           width: 420,
           child: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Tên cửa hàng')),
-                const SizedBox(height: 12),
-                TextField(controller: descCtrl, decoration: const InputDecoration(labelText: 'Mô tả'), maxLines: 3),
+                TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Tên chi nhánh')),
                 const SizedBox(height: 12),
                 TextField(controller: phoneCtrl, decoration: const InputDecoration(labelText: 'Số điện thoại')),
                 const SizedBox(height: 12),
-                TextField(controller: emailCtrl, decoration: const InputDecoration(labelText: 'Email')),
+                TextField(controller: line1Ctrl, decoration: const InputDecoration(labelText: 'Địa chỉ (số nhà, đường)')),
+                const SizedBox(height: 12),
+                TextField(controller: wardCtrl, decoration: const InputDecoration(labelText: 'Phường/Xã')),
+                const SizedBox(height: 12),
+                TextField(controller: districtCtrl, decoration: const InputDecoration(labelText: 'Quận/Huyện')),
+                const SizedBox(height: 12),
+                TextField(controller: provinceCtrl, decoration: const InputDecoration(labelText: 'Tỉnh/Thành phố')),
                 const SizedBox(height: 12),
                 Row(
                   children: [
                     Expanded(
                       child: TextField(
-                        controller: commissionCtrl,
-                        decoration: const InputDecoration(labelText: 'Hoa hồng (%)'),
-                        keyboardType: TextInputType.number,
+                        controller: latCtrl,
+                        decoration: const InputDecoration(labelText: 'Vĩ độ'),
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
                       ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
                       child: TextField(
-                        controller: prepCtrl,
-                        decoration: const InputDecoration(labelText: 'TG chuẩn bị (phút)'),
-                        keyboardType: TextInputType.number,
+                        controller: lngCtrl,
+                        decoration: const InputDecoration(labelText: 'Kinh độ'),
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 12),
                 TextField(
-                  controller: minOrderCtrl,
-                  decoration: const InputDecoration(labelText: 'Đơn tối thiểu (VNĐ)'),
-                  keyboardType: TextInputType.number,
+                  controller: radiusCtrl,
+                  decoration: const InputDecoration(labelText: 'Bán kính giao hàng (km)'),
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 ),
-                const Divider(height: 28),
-                Align(alignment: Alignment.centerLeft, child: Text('Ngân hàng & pháp lý', style: Theme.of(context).textTheme.labelLarge)),
-                const SizedBox(height: 12),
-                TextField(controller: bankNameCtrl, decoration: const InputDecoration(labelText: 'Tên ngân hàng')),
-                const SizedBox(height: 12),
-                TextField(controller: bankAccNoCtrl, decoration: const InputDecoration(labelText: 'Số tài khoản')),
-                const SizedBox(height: 12),
-                TextField(controller: bankAccNameCtrl, decoration: const InputDecoration(labelText: 'Tên chủ tài khoản')),
-                const SizedBox(height: 12),
-                TextField(controller: taxCodeCtrl, decoration: const InputDecoration(labelText: 'Mã số thuế')),
-                const SizedBox(height: 12),
-                TextField(controller: licenseCtrl, decoration: const InputDecoration(labelText: 'Số giấy phép KD')),
               ],
             ),
           ),
@@ -113,20 +255,58 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
     );
     if (ok != true) return;
 
-    await _run(() => ref.read(adminRepoProvider).updateMerchant(m.id, {
+    await _run(() => ref.read(adminRepoProvider).updateBranch(b.id, {
           'name': nameCtrl.text.trim(),
-          'description': descCtrl.text.trim(),
-          'phone': phoneCtrl.text.trim(),
-          'email': emailCtrl.text.trim().isEmpty ? null : emailCtrl.text.trim(),
-          'commission_rate': num.tryParse(commissionCtrl.text.trim()) ?? m.commissionRate,
-          'min_order_amount': int.tryParse(minOrderCtrl.text.trim()) ?? m.minOrderAmount,
-          'avg_prep_minutes': int.tryParse(prepCtrl.text.trim()) ?? m.avgPrepMinutes,
-          'bank_name': bankNameCtrl.text.trim().isEmpty ? null : bankNameCtrl.text.trim(),
-          'bank_account_no': bankAccNoCtrl.text.trim().isEmpty ? null : bankAccNoCtrl.text.trim(),
-          'bank_account_name': bankAccNameCtrl.text.trim().isEmpty ? null : bankAccNameCtrl.text.trim(),
-          'tax_code': taxCodeCtrl.text.trim().isEmpty ? null : taxCodeCtrl.text.trim(),
-          'business_license_no': licenseCtrl.text.trim().isEmpty ? null : licenseCtrl.text.trim(),
+          'phone': phoneCtrl.text.trim().isEmpty ? null : phoneCtrl.text.trim(),
+          'line1': line1Ctrl.text.trim(),
+          'ward': wardCtrl.text.trim().isEmpty ? null : wardCtrl.text.trim(),
+          'district': districtCtrl.text.trim().isEmpty ? null : districtCtrl.text.trim(),
+          'province': provinceCtrl.text.trim(),
+          'latitude': double.tryParse(latCtrl.text.trim()) ?? b.latitude,
+          'longitude': double.tryParse(lngCtrl.text.trim()) ?? b.longitude,
+          'delivery_radius_km': num.tryParse(radiusCtrl.text.trim()) ?? b.deliveryRadiusKm,
         }));
+  }
+
+  Future<void> _viewBranchHours(Branch b) async {
+    List<BranchHour>? hours;
+    String? error;
+    try {
+      hours = await ref.read(adminRepoProvider).branchHours(b.id);
+    } catch (e) {
+      error = '$e';
+    }
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Giờ mở cửa — ${b.name}'),
+        content: SizedBox(
+          width: 320,
+          child: error != null
+              ? Text('Lỗi: $error')
+              : (hours!.isEmpty
+                  ? const Text('Chưa thiết lập giờ mở cửa cố định.')
+                  : Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: hours
+                          .map((h) => Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 4),
+                                child: Row(
+                                  children: [
+                                    SizedBox(width: 110, child: Text(weekdayLabels[h.weekday] ?? '${h.weekday}')),
+                                    Text('${h.openTime} — ${h.closeTime}'),
+                                  ],
+                                ),
+                              ))
+                          .toList(),
+                    )),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Đóng')),
+        ],
+      ),
+    );
   }
 
   Future<void> _changeStatus(Merchant m) async {
@@ -302,10 +482,17 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
                                 ),
                               ],
                             ),
+                            if (m.coverUrl != null) ...[
+                              const SizedBox(height: 16),
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(10),
+                                child: Image.network(m.coverUrl!, height: 140, width: double.infinity, fit: BoxFit.cover),
+                              ),
+                            ],
                             const Divider(height: 32),
                             _row('Slug', m.slug),
                             _row('Mô tả', m.description ?? '—'),
-                            _row('Loại cửa hàng', m.merchantType),
+                            _row('Loại cửa hàng', merchantTypeLabels[m.merchantType] ?? m.merchantType),
                             _row('SĐT', m.phone ?? '—'),
                             _row('Email', m.email ?? '—'),
                             _row('Hoa hồng', '${m.commissionRate}%'),
@@ -321,6 +508,19 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
                             _row('Chủ tài khoản', m.bankAccountName ?? '—'),
                             _row('Mã số thuế', m.taxCode ?? '—'),
                             _row('Giấy phép KD', m.businessLicenseNo ?? '—'),
+                            if (m.legalDocUrls.isNotEmpty) ...[
+                              const SizedBox(height: 8),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: m.legalDocUrls
+                                    .map((url) => ClipRRect(
+                                          borderRadius: BorderRadius.circular(8),
+                                          child: Image.network(url, width: 80, height: 80, fit: BoxFit.cover),
+                                        ))
+                                    .toList(),
+                              ),
+                            ],
                             const SizedBox(height: 16),
                             Wrap(
                               spacing: 8,
@@ -396,27 +596,54 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
                             if ((m.branches ?? []).isEmpty) const Text('Chưa có chi nhánh nào'),
                             ...(m.branches ?? []).map((b) => Padding(
                                   padding: const EdgeInsets.symmetric(vertical: 6),
-                                  child: Row(
+                                  child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      Icon(Icons.storefront_outlined, size: 18, color: theme.colorScheme.primary),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                      Row(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Icon(Icons.storefront_outlined, size: 18, color: theme.colorScheme.primary),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment: CrossAxisAlignment.start,
+                                              children: [
+                                                Text('${b.name}${b.isMain ? ' (chính)' : ''}',
+                                                    style: const TextStyle(fontWeight: FontWeight.w500)),
+                                                Text(b.fullLine, style: theme.textTheme.bodySmall),
+                                                Text('Bán kính giao: ${b.deliveryRadiusKm} km', style: theme.textTheme.bodySmall),
+                                              ],
+                                            ),
+                                          ),
+                                          Chip(
+                                            label: Text(b.isOpen ? 'Đang mở' : 'Đang đóng'),
+                                            visualDensity: VisualDensity.compact,
+                                            backgroundColor: b.isOpen
+                                                ? theme.colorScheme.primary.withValues(alpha: 0.12)
+                                                : theme.colorScheme.errorContainer,
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Padding(
+                                        padding: const EdgeInsets.only(left: 26),
+                                        child: Wrap(
+                                          spacing: 8,
                                           children: [
-                                            Text('${b.name}${b.isMain ? ' (chính)' : ''}',
-                                                style: const TextStyle(fontWeight: FontWeight.w500)),
-                                            Text(b.fullLine, style: theme.textTheme.bodySmall),
+                                            OutlinedButton.icon(
+                                              onPressed: _busy ? null : () => _editBranch(b),
+                                              icon: const Icon(Icons.edit_location_alt_outlined, size: 16),
+                                              label: const Text('Sửa'),
+                                              style: OutlinedButton.styleFrom(visualDensity: VisualDensity.compact),
+                                            ),
+                                            OutlinedButton.icon(
+                                              onPressed: () => _viewBranchHours(b),
+                                              icon: const Icon(Icons.schedule_outlined, size: 16),
+                                              label: const Text('Giờ mở cửa'),
+                                              style: OutlinedButton.styleFrom(visualDensity: VisualDensity.compact),
+                                            ),
                                           ],
                                         ),
-                                      ),
-                                      Chip(
-                                        label: Text(b.isOpen ? 'Đang mở' : 'Đang đóng'),
-                                        visualDensity: VisualDensity.compact,
-                                        backgroundColor: b.isOpen
-                                            ? theme.colorScheme.primary.withValues(alpha: 0.12)
-                                            : theme.colorScheme.errorContainer,
                                       ),
                                     ],
                                   ),

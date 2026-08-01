@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import '../../core/format.dart';
 import '../../models/branch.dart';
 import '../../providers/auth_provider.dart';
 import '../../repositories/merchant_repository.dart';
@@ -17,6 +19,7 @@ class BranchSettingsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final merchantAsync = ref.watch(myMerchantProvider);
     final branchesAsync = ref.watch(_branchesProvider);
+    final theme = Theme.of(context);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Cài đặt')),
@@ -30,18 +33,54 @@ class BranchSettingsScreen extends ConsumerWidget {
               children: [
                 merchantAsync.when(
                   loading: () => const SizedBox(),
-                  error: (_, __) => const SizedBox(),
+                  error: (_, _) => const SizedBox(),
                   data: (m) => m == null
                       ? const SizedBox()
                       : Card(
-                          child: ListTile(
-                            title: Text(m.name),
-                            subtitle: Text('Trạng thái: ${m.status} · Hoa hồng: ${m.commissionRate}%'),
+                          elevation: 0,
+                          color: theme.colorScheme.surfaceContainerLow,
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    CircleAvatar(
+                                      radius: 24,
+                                      backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.12),
+                                      backgroundImage: m.logoUrl != null ? NetworkImage(m.logoUrl!) : null,
+                                      child: m.logoUrl == null ? Icon(Icons.storefront, color: theme.colorScheme.primary) : null,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(m.name, style: theme.textTheme.titleMedium),
+                                          Text('Trạng thái: ${m.status} · Hoa hồng: ${m.commissionRate}%',
+                                              style: theme.textTheme.bodySmall),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                Text('Đơn tối thiểu: ${formatVnd(m.minOrderAmount)} · TG chuẩn bị: ${m.avgPrepMinutes} phút',
+                                    style: theme.textTheme.bodySmall),
+                                const SizedBox(height: 12),
+                                OutlinedButton.icon(
+                                  onPressed: () => context.push('/settings/profile', extra: m),
+                                  icon: const Icon(Icons.edit_outlined),
+                                  label: const Text('Sửa hồ sơ cửa hàng'),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                 ),
                 const SizedBox(height: 16),
-                Text('Chi nhánh', style: Theme.of(context).textTheme.titleMedium),
+                Text('Chi nhánh', style: theme.textTheme.titleMedium),
                 const SizedBox(height: 8),
                 branchesAsync.when(
                   loading: () => const Center(child: CircularProgressIndicator()),
@@ -49,23 +88,52 @@ class BranchSettingsScreen extends ConsumerWidget {
                   data: (branches) => Column(
                     children: branches
                         .map((b) => Card(
-                              child: SwitchListTile(
-                                title: Text(b.name),
-                                subtitle: Text('${b.line1}, ${b.province}'),
-                                value: b.isOpen,
-                                onChanged: (val) async {
-                                  try {
-                                    await MerchantRepository().toggleBranchOpen(b.id, val);
-                                    ref.invalidate(_branchesProvider);
-                                  } catch (e) {
-                                    if (context.mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
-                                    }
-                                  }
-                                },
-                                secondary: Icon(
-                                  b.isOpen ? Icons.storefront : Icons.storefront_outlined,
-                                  color: b.isOpen ? Colors.green : Colors.grey,
+                              elevation: 0,
+                              color: theme.colorScheme.surfaceContainerLow,
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    SwitchListTile(
+                                      title: Text(b.name),
+                                      subtitle: Text(b.fullLine.isEmpty ? '${b.line1}, ${b.province}' : b.fullLine),
+                                      value: b.isOpen,
+                                      onChanged: (val) async {
+                                        try {
+                                          await MerchantRepository().toggleBranchOpen(b.id, val);
+                                          ref.invalidate(_branchesProvider);
+                                        } catch (e) {
+                                          if (context.mounted) {
+                                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+                                          }
+                                        }
+                                      },
+                                      secondary: Icon(
+                                        b.isOpen ? Icons.storefront : Icons.storefront_outlined,
+                                        color: b.isOpen ? Colors.green : Colors.grey,
+                                      ),
+                                    ),
+                                    Padding(
+                                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                                      child: Wrap(
+                                        spacing: 8,
+                                        runSpacing: 8,
+                                        children: [
+                                          OutlinedButton.icon(
+                                            onPressed: () => context.push('/settings/branches/${b.id}', extra: b),
+                                            icon: const Icon(Icons.edit_location_alt_outlined, size: 18),
+                                            label: const Text('Sửa địa chỉ'),
+                                          ),
+                                          OutlinedButton.icon(
+                                            onPressed: () => context.push('/settings/branches/${b.id}/hours', extra: b.name),
+                                            icon: const Icon(Icons.schedule_outlined, size: 18),
+                                            label: const Text('Giờ mở cửa'),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ))

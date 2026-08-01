@@ -44,4 +44,6 @@ class Branch {
         isOpen: json['is_open'] as bool? ?? true,
         deliveryRadiusKm: num.tryParse('${json['delivery_radius_km']}') ?? 5,
       );
+
+  String get fullLine => [line1, ward, district, province].where((e) => e != null && e.isNotEmpty).join(', ');
 }

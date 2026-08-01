@@ -1,6 +1,7 @@
 import '../core/api_client.dart';
 import '../models/merchant.dart';
 import '../models/branch.dart';
+import '../models/branch_hours.dart';
 
 class MerchantRepository {
   final _api = ApiClient.instance;
@@ -59,4 +60,16 @@ class MerchantRepository {
 
   Future<Branch> updateBranch(String branchId, Map<String, dynamic> data) async =>
       Branch.fromJson(await _api.patch('/branches/$branchId', body: data) as Map<String, dynamic>);
+
+  Future<List<BranchHour>> branchHours(String branchId) async {
+    final list = await _api.get('/branches/$branchId/hours') as List;
+    return list.map((e) => BranchHour.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<List<BranchHour>> setBranchHours(String branchId, List<BranchHour> hours) async {
+    final list = await _api.put('/branches/$branchId/hours', body: {
+      'hours': hours.map((h) => h.toJson()).toList(),
+    }) as List;
+    return list.map((e) => BranchHour.fromJson(e as Map<String, dynamic>)).toList();
+  }
 }

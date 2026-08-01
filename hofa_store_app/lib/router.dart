@@ -12,6 +12,11 @@ import 'screens/orders/orders_list_screen.dart';
 import 'screens/orders/order_detail_screen.dart';
 import 'screens/inventory/inventory_screen.dart';
 import 'screens/settings/branch_settings_screen.dart';
+import 'screens/settings/store_profile_edit_screen.dart';
+import 'screens/settings/branch_edit_screen.dart';
+import 'screens/settings/branch_hours_screen.dart';
+import 'models/merchant.dart';
+import 'models/branch.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
@@ -59,6 +64,21 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(path: '/inventory', builder: (context, state) => const InventoryScreen()),
           GoRoute(path: '/settings', builder: (context, state) => const BranchSettingsScreen()),
+          GoRoute(
+            path: '/settings/profile',
+            builder: (context, state) => StoreProfileEditScreen(merchant: state.extra as Merchant),
+          ),
+          GoRoute(
+            path: '/settings/branches/:id',
+            builder: (context, state) => BranchEditScreen(branch: state.extra as Branch),
+          ),
+          GoRoute(
+            path: '/settings/branches/:id/hours',
+            builder: (context, state) => BranchHoursScreen(
+              branchId: state.pathParameters['id']!,
+              branchName: state.extra as String,
+            ),
+          ),
         ],
       ),
     ],

@@ -23,8 +23,11 @@ class Branch {
   final String? ward;
   final String? district;
   final String province;
+  final double latitude;
+  final double longitude;
   final bool isMain;
   final bool isOpen;
+  final num deliveryRadiusKm;
 
   Branch({
     required this.id,
@@ -35,8 +38,11 @@ class Branch {
     this.ward,
     this.district,
     required this.province,
+    required this.latitude,
+    required this.longitude,
     required this.isMain,
     required this.isOpen,
+    required this.deliveryRadiusKm,
   });
 
   factory Branch.fromJson(Map<String, dynamic> json) => Branch(
@@ -48,8 +54,11 @@ class Branch {
         ward: json['ward'] as String?,
         district: json['district'] as String?,
         province: json['province'] as String? ?? '',
+        latitude: double.tryParse('${json['latitude']}') ?? 0,
+        longitude: double.tryParse('${json['longitude']}') ?? 0,
         isMain: json['is_main'] as bool? ?? false,
         isOpen: json['is_open'] as bool? ?? true,
+        deliveryRadiusKm: num.tryParse('${json['delivery_radius_km']}') ?? 5,
       );
 
   String get fullLine => [line1, ward, district, province].where((e) => e != null && e.isNotEmpty).join(', ');
@@ -69,6 +78,7 @@ class Merchant {
   final String? email;
   final String? businessLicenseNo;
   final String? taxCode;
+  final List<String> legalDocUrls;
   final String? bankName;
   final String? bankAccountNo;
   final String? bankAccountName;
@@ -97,6 +107,7 @@ class Merchant {
     this.email,
     this.businessLicenseNo,
     this.taxCode,
+    this.legalDocUrls = const [],
     this.bankName,
     this.bankAccountNo,
     this.bankAccountName,
@@ -127,6 +138,8 @@ class Merchant {
         email: json['email'] as String?,
         businessLicenseNo: json['business_license_no'] as String?,
         taxCode: json['tax_code'] as String?,
+        legalDocUrls:
+            json['legal_doc_urls'] is List ? (json['legal_doc_urls'] as List).map((e) => e.toString()).toList() : const [],
         bankName: json['bank_name'] as String?,
         bankAccountNo: json['bank_account_no'] as String?,
         bankAccountName: json['bank_account_name'] as String?,

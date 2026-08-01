@@ -3,6 +3,7 @@ import '../models/admin_stats.dart';
 import '../models/user_profile.dart';
 import '../models/user_detail.dart';
 import '../models/merchant.dart';
+import '../models/branch_hours.dart';
 import '../models/driver.dart';
 import '../models/order.dart';
 import '../models/category.dart';
@@ -88,6 +89,14 @@ class AdminRepository {
 
   Future<Branch> createBranch(String merchantId, Map<String, dynamic> data) async =>
       Branch.fromJson(await _api.post('/merchants/$merchantId/branches', body: data) as Map<String, dynamic>);
+
+  Future<Branch> updateBranch(String branchId, Map<String, dynamic> data) async =>
+      Branch.fromJson(await _api.patch('/branches/$branchId', body: data) as Map<String, dynamic>);
+
+  Future<List<BranchHour>> branchHours(String branchId) async {
+    final list = await _api.get('/branches/$branchId/hours') as List;
+    return list.map((e) => BranchHour.fromJson(e as Map<String, dynamic>)).toList();
+  }
 
   // ---- Tài xế ----
 
