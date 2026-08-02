@@ -154,4 +154,8 @@ class AdminRepository {
 
   Future<Category> updateCategory(String id, Map<String, dynamic> data) async =>
       Category.fromJson(await _api.patch('/categories/$id', body: data) as Map<String, dynamic>);
+
+  Future<void> deleteCategory(String id) async {
+    await _api.delete('/categories/$id');
+  }
 }

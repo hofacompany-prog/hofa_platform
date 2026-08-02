@@ -43,6 +43,16 @@ router.patch('/categories/:id', asyncHandler(async (req, res) => {
   res.json({ ok: true, data: updated });
 }));
 
+/** Xoá danh mục — danh mục con của nó tự chuyển thành danh mục gốc (parent_id ON DELETE
+ * SET NULL), sản phẩm gắn danh mục này chỉ mất tag (ON DELETE CASCADE trên bảng nối
+ * product_categories), không xoá sản phẩm. */
+router.delete('/categories/:id', asyncHandler(async (req, res) => {
+  requireRole(req.ctx, ['admin']);
+  const deleted = await db.deleteById('categories', req.params.id);
+  if (!deleted) throw new ApiError('NOT_FOUND', 'Không tìm thấy danh mục', 404);
+  res.json({ ok: true, data: deleted });
+}));
+
 // ---- Sản phẩm ----
 
 async function attachVariants(products) {

@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/category_icons.dart';
 import '../../models/category.dart';
 import '../../providers/admin_providers.dart';
-import '../../core/category_icons.dart';
 import '../../widgets/icon_picker_field.dart';
 
-/// Danh mục ngành hàng dùng chung cho cả sàn (Thực phẩm > Rau củ quả > Rau ăn lá).
-/// Chỉ admin được tạo/sửa — cửa hàng chỉ gắn sản phẩm vào danh mục có sẵn.
+/// Danh mục ngành hàng dùng chung cho cả sàn — tối đa 2 cấp (gốc và con), mỗi cấp đều
+/// chọn được icon. Chỉ admin được tạo/sửa/xoá — cửa hàng chỉ gắn sản phẩm vào danh mục có sẵn.
 class CategoriesScreen extends ConsumerStatefulWidget {
   const CategoriesScreen({super.key});
 
@@ -27,7 +27,8 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
     return s.replaceAll(RegExp(r'[^a-z0-9\s-]'), '').replaceAll(RegExp(r'\s+'), '-');
   }
 
-  Future<void> _addDialog(List<Category> existing, {String? parentId}) async {
+  /// Chỉ danh mục con được, không cho chọn tiếp danh mục con làm cha (giới hạn 2 cấp).
+  Future<void> _addDialog(List<Category> roots, {String? parentId}) async {
     final nameCtrl = TextEditingController();
     String? selectedParent = parentId;
     String? iconName;
@@ -58,7 +59,7 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
                     decoration: const InputDecoration(labelText: 'Thuộc danh mục cha', border: OutlineInputBorder()),
                     items: [
                       const DropdownMenuItem(value: null, child: Text('— Danh mục gốc —')),
-                      ...existing.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))),
+                      ...roots.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))),
                     ],
                     onChanged: (v) => setInner(() => selectedParent = v),
                   ),
@@ -101,6 +102,95 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
     }
   }
 
+  Future<void> _editDialog(Category category) async {
+    final nameCtrl = TextEditingController(text: category.name);
+    String? iconName = category.iconName;
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setInner) => AlertDialog(
+          title: const Text('Sửa danh mục'),
+          content: SizedBox(
+            width: 360,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: nameCtrl,
+                    autofocus: true,
+                    decoration: const InputDecoration(labelText: 'Tên danh mục', border: OutlineInputBorder()),
+                  ),
+                  const SizedBox(height: 16),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: IconPickerField(
+                      label: 'Icon danh mục',
+                      initialIconName: iconName,
+                      onChanged: (name) => setInner(() => iconName = name),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Huỷ')),
+            FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Lưu')),
+          ],
+        ),
+      ),
+    );
+    if (ok != true || nameCtrl.text.trim().isEmpty) return;
+
+    setState(() => _busy = true);
+    try {
+      await ref.read(adminRepoProvider).updateCategory(category.id, {
+        'name': nameCtrl.text.trim(),
+        if (iconName != null) 'icon_name': iconName,
+      });
+      ref.invalidate(categoriesProvider);
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _deleteDialog(Category category, {required int childCount}) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Xoá danh mục?'),
+        content: Text(
+          childCount > 0
+              ? 'Danh mục "${category.name}" đang có $childCount danh mục con — xoá sẽ khiến chúng trở thành danh mục gốc riêng. Sản phẩm đang gắn danh mục này chỉ mất tag, không bị xoá.'
+              : 'Sản phẩm đang gắn danh mục "${category.name}" sẽ chỉ mất tag, không bị xoá.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Huỷ')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Xoá'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+
+    setState(() => _busy = true);
+    try {
+      await ref.read(adminRepoProvider).deleteCategory(category.id);
+      ref.invalidate(categoriesProvider);
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final categoriesAsync = ref.watch(categoriesProvider);
@@ -114,7 +204,7 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
             data: (list) => Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               child: FilledButton.icon(
-                onPressed: _busy ? null : () => _addDialog(list),
+                onPressed: _busy ? null : () => _addDialog(list.where((c) => c.parentId == null).toList()),
                 icon: const Icon(Icons.add),
                 label: const Text('Thêm danh mục'),
               ),
@@ -130,7 +220,6 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
           final roots = all.where((c) => c.parentId == null).toList();
           if (all.isEmpty) return const Center(child: Text('Chưa có danh mục nào'));
 
-          // Dựng cây 2 cấp trở lên: hiện danh mục gốc, lồng các con bên dưới
           List<Category> childrenOf(String id) => all.where((c) => c.parentId == id).toList();
 
           return ListView(
@@ -148,51 +237,43 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
                           leading: _CategoryLeadingIcon(iconUrl: root.iconUrl, iconName: root.iconName),
                           title: Text(root.name),
                           subtitle: Text(root.slug, style: theme.textTheme.bodySmall),
-                          trailing: IconButton(
-                            tooltip: 'Thêm danh mục con',
-                            icon: const Icon(Icons.add),
-                            onPressed: _busy ? null : () => _addDialog(all, parentId: root.id),
+                          trailing: _CategoryActions(
+                            busy: _busy,
+                            onAddChild: () => _addDialog(roots, parentId: root.id),
+                            onEdit: () => _editDialog(root),
+                            onDelete: () => _deleteDialog(root, childCount: 0),
                           ),
                         )
                       : ExpansionTile(
                           leading: _CategoryLeadingIcon(iconUrl: root.iconUrl, iconName: root.iconName),
                           title: Text(root.name),
                           subtitle: Text('${kids.length} danh mục con', style: theme.textTheme.bodySmall),
+                          trailing: _CategoryActions(
+                            busy: _busy,
+                            onAddChild: () => _addDialog(roots, parentId: root.id),
+                            onEdit: () => _editDialog(root),
+                            onDelete: () => _deleteDialog(root, childCount: kids.length),
+                          ),
                           children: [
-                            ...kids.map((kid) {
-                              final grandKids = childrenOf(kid.id);
-                              return Padding(
-                                padding: const EdgeInsets.only(left: 24),
-                                child: Column(
-                                  children: [
-                                    ListTile(
-                                      dense: true,
-                                      leading: const Icon(Icons.subdirectory_arrow_right, size: 18),
-                                      title: Text(kid.name),
-                                      trailing: IconButton(
-                                        tooltip: 'Thêm danh mục con',
-                                        icon: const Icon(Icons.add, size: 18),
-                                        onPressed: _busy ? null : () => _addDialog(all, parentId: kid.id),
-                                      ),
+                            ...kids.map((kid) => Padding(
+                                  padding: const EdgeInsets.only(left: 16),
+                                  child: ListTile(
+                                    dense: true,
+                                    leading: _CategoryLeadingIcon(iconUrl: kid.iconUrl, iconName: kid.iconName, size: 22),
+                                    title: Text(kid.name),
+                                    trailing: _CategoryActions(
+                                      busy: _busy,
+                                      onEdit: () => _editDialog(kid),
+                                      onDelete: () => _deleteDialog(kid, childCount: 0),
                                     ),
-                                    ...grandKids.map((g) => Padding(
-                                          padding: const EdgeInsets.only(left: 32),
-                                          child: ListTile(
-                                            dense: true,
-                                            leading: const Icon(Icons.circle, size: 6),
-                                            title: Text(g.name),
-                                          ),
-                                        )),
-                                  ],
-                                ),
-                              );
-                            }),
+                                  ),
+                                )),
                             Padding(
                               padding: const EdgeInsets.only(left: 24, bottom: 8),
                               child: Align(
                                 alignment: Alignment.centerLeft,
                                 child: TextButton.icon(
-                                  onPressed: _busy ? null : () => _addDialog(all, parentId: root.id),
+                                  onPressed: _busy ? null : () => _addDialog(roots, parentId: root.id),
                                   icon: const Icon(Icons.add, size: 18),
                                   label: const Text('Thêm vào nhóm này'),
                                 ),
@@ -210,25 +291,61 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
   }
 }
 
+class _CategoryActions extends StatelessWidget {
+  final bool busy;
+  final VoidCallback? onAddChild;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+
+  const _CategoryActions({required this.busy, this.onAddChild, required this.onEdit, required this.onDelete});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (onAddChild != null)
+          IconButton(
+            tooltip: 'Thêm danh mục con',
+            icon: const Icon(Icons.add),
+            onPressed: busy ? null : onAddChild,
+          ),
+        PopupMenuButton<String>(
+          enabled: !busy,
+          onSelected: (v) {
+            if (v == 'edit') onEdit();
+            if (v == 'delete') onDelete();
+          },
+          itemBuilder: (context) => const [
+            PopupMenuItem(value: 'edit', child: Text('Sửa')),
+            PopupMenuItem(value: 'delete', child: Text('Xoá')),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
 class _CategoryLeadingIcon extends StatelessWidget {
   final String? iconUrl;
   final String? iconName;
-  const _CategoryLeadingIcon({this.iconUrl, this.iconName});
+  final double size;
+  const _CategoryLeadingIcon({this.iconUrl, this.iconName, this.size = 24});
 
   @override
   Widget build(BuildContext context) {
     if (iconName != null && iconName!.isNotEmpty) {
-      return Icon(categoryIconOf(iconName), color: Theme.of(context).colorScheme.primary);
+      return Icon(categoryIconOf(iconName), size: size, color: Theme.of(context).colorScheme.primary);
     }
-    if (iconUrl == null || iconUrl!.isEmpty) return const Icon(Icons.folder_outlined);
+    if (iconUrl == null || iconUrl!.isEmpty) return Icon(Icons.folder_outlined, size: size);
     return ClipRRect(
       borderRadius: BorderRadius.circular(6),
       child: Image.network(
         iconUrl!,
-        width: 28,
-        height: 28,
+        width: size + 4,
+        height: size + 4,
         fit: BoxFit.cover,
-        errorBuilder: (_, _, _) => const Icon(Icons.folder_outlined),
+        errorBuilder: (_, _, _) => Icon(Icons.folder_outlined, size: size),
       ),
     );
   }
