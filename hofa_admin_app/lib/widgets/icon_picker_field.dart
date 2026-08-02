@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import '../core/category_icons.dart';
 
-/// Chọn 1 icon từ bộ icon dựng sẵn (xem core/category_icons.dart) — dùng cho icon danh
-/// mục thay vì bắt tải ảnh lên, đủ dùng cho phần lớn danh mục ngành hàng phổ biến.
+/// Chọn 1 icon từ toàn bộ icon Material Design có sẵn (xem core/category_icons.dart) —
+/// dùng cho icon danh mục thay vì bắt tải ảnh lên. Hơn 2000 icon nên bắt buộc có ô tìm
+/// kiếm để lọc theo tên (tiếng Anh, vd "food", "car", "book").
 class IconPickerField extends StatefulWidget {
   final String label;
   final String? initialIconName;
@@ -64,7 +65,16 @@ class _IconPickerFieldState extends State<IconPickerField> {
                     children: [
                       Icon(categoryIconOf(_selected), size: 36, color: theme.colorScheme.primary),
                       const SizedBox(height: 6),
-                      Text(categoryIconLabels[_selected] ?? _selected!, style: theme.textTheme.bodySmall),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        child: Text(
+                          categoryIconLabel(_selected!),
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall,
+                        ),
+                      ),
                     ],
                   )
                 : Center(
@@ -84,9 +94,36 @@ class _IconPickerFieldState extends State<IconPickerField> {
   }
 }
 
-class _IconPickerSheet extends StatelessWidget {
+class _IconPickerSheet extends StatefulWidget {
   final String? selected;
   const _IconPickerSheet({this.selected});
+
+  @override
+  State<_IconPickerSheet> createState() => _IconPickerSheetState();
+}
+
+class _IconPickerSheetState extends State<_IconPickerSheet> {
+  final _searchCtrl = TextEditingController();
+  late List<String> _keys;
+
+  @override
+  void initState() {
+    super.initState();
+    _keys = categoryIcons.keys.toList();
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  void _onSearchChanged(String value) {
+    final q = value.trim().toLowerCase();
+    setState(() {
+      _keys = q.isEmpty ? categoryIcons.keys.toList() : categoryIcons.keys.where((k) => k.contains(q.replaceAll(' ', '_'))).toList();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -98,48 +135,65 @@ class _IconPickerSheet extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Chọn icon danh mục', style: theme.textTheme.titleMedium),
-            const SizedBox(height: 16),
-            SizedBox(
-              height: 360,
-              child: GridView.builder(
-                itemCount: categoryIcons.length,
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 4,
-                  mainAxisSpacing: 12,
-                  crossAxisSpacing: 8,
-                  childAspectRatio: 0.85,
-                ),
-                itemBuilder: (context, i) {
-                  final key = categoryIcons.keys.elementAt(i);
-                  final isSelected = key == selected;
-                  return InkWell(
-                    onTap: () => Navigator.pop(context, key),
-                    borderRadius: BorderRadius.circular(12),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
-                        color: isSelected ? theme.colorScheme.primary.withValues(alpha: 0.12) : null,
-                        border: isSelected ? Border.all(color: theme.colorScheme.primary) : null,
-                      ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(categoryIcons[key], color: theme.colorScheme.primary),
-                          const SizedBox(height: 4),
-                          Text(
-                            categoryIconLabels[key] ?? key,
-                            textAlign: TextAlign.center,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.bodySmall,
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
+            Text('Chọn icon danh mục (${categoryIcons.length} icon)', style: theme.textTheme.titleMedium),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _searchCtrl,
+              autofocus: true,
+              decoration: const InputDecoration(
+                hintText: 'Tìm icon theo tên tiếng Anh, vd: food, car, book...',
+                prefixIcon: Icon(Icons.search),
+                border: OutlineInputBorder(),
+                isDense: true,
               ),
+              onChanged: _onSearchChanged,
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              height: 420,
+              child: _keys.isEmpty
+                  ? const Center(child: Text('Không tìm thấy icon nào'))
+                  : GridView.builder(
+                      itemCount: _keys.length,
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 5,
+                        mainAxisSpacing: 12,
+                        crossAxisSpacing: 8,
+                        childAspectRatio: 0.85,
+                      ),
+                      itemBuilder: (context, i) {
+                        final key = _keys[i];
+                        final isSelected = key == widget.selected;
+                        return InkWell(
+                          onTap: () => Navigator.pop(context, key),
+                          borderRadius: BorderRadius.circular(12),
+                          child: Container(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(12),
+                              color: isSelected ? theme.colorScheme.primary.withValues(alpha: 0.12) : null,
+                              border: isSelected ? Border.all(color: theme.colorScheme.primary) : null,
+                            ),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(categoryIcons[key], color: theme.colorScheme.primary),
+                                const SizedBox(height: 4),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 2),
+                                  child: Text(
+                                    categoryIconLabel(key),
+                                    textAlign: TextAlign.center,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: theme.textTheme.bodySmall?.copyWith(fontSize: 10),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
             ),
           ],
         ),
