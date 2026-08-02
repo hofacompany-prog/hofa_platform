@@ -33,11 +33,11 @@ class AllCategoriesScreen extends ConsumerWidget {
           return GridView.builder(
             padding: const EdgeInsets.all(16),
             itemCount: items.length,
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 4,
+            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+              maxCrossAxisExtent: 84,
+              mainAxisExtent: 88,
               mainAxisSpacing: 16,
               crossAxisSpacing: 4,
-              childAspectRatio: 0.8,
             ),
             itemBuilder: (context, i) {
               final c = items[i];

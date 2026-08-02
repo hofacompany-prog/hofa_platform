@@ -49,6 +49,14 @@ final categoryProductsProvider = FutureProvider.autoDispose.family<List<Product>
 final categoryFeaturedProductsProvider = FutureProvider.autoDispose.family<List<Product>, String>(
     (ref, categoryId) => ref.watch(productRepoProvider).products(categoryId: categoryId, isFeatured: true, limit: 10));
 
+final productSearchProvider = StateProvider.autoDispose<String>((ref) => '');
+
+final searchedProductsProvider = FutureProvider.autoDispose<List<Product>>((ref) {
+  final q = ref.watch(productSearchProvider);
+  if (q.isEmpty) return Future.value(<Product>[]);
+  return ref.watch(productRepoProvider).products(q: q);
+});
+
 final productDetailProvider =
     FutureProvider.autoDispose.family<Product, String>((ref, id) => ref.watch(productRepoProvider).product(id));
 

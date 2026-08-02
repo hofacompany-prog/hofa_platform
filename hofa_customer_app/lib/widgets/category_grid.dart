@@ -26,26 +26,31 @@ class CategoryGrid extends StatelessWidget {
 
     final visible = categories.take(_maxTiles - 1).toList();
 
-    return GridView.count(
+    // maxCrossAxisExtent + mainAxisExtent cố định kích thước ô tuyệt đối (không phụ
+    // thuộc bề rộng container) — trên web/màn hình rộng chỉ hiện thêm cột chứ ô không
+    // bị giãn to ra như GridView.count(crossAxisCount cố định) từng bị.
+    return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      crossAxisCount: 4,
-      mainAxisSpacing: 12,
-      crossAxisSpacing: 4,
-      childAspectRatio: 0.8,
-      children: [
-        ...visible.map((c) => CategoryTile(
-              label: c.name,
-              iconUrl: c.iconUrl,
-              iconName: c.iconName,
-              onTap: () => onTapCategory(c),
-            )),
-        CategoryTile(
-          label: 'Xem tất cả',
-          icon: Icons.grid_view_rounded,
-          onTap: onTapViewAll,
-        ),
-      ],
+      itemCount: visible.length + 1,
+      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+        maxCrossAxisExtent: 84,
+        mainAxisExtent: 88,
+        mainAxisSpacing: 12,
+        crossAxisSpacing: 4,
+      ),
+      itemBuilder: (context, i) {
+        if (i == visible.length) {
+          return CategoryTile(label: 'Xem tất cả', icon: Icons.grid_view_rounded, onTap: onTapViewAll);
+        }
+        final c = visible[i];
+        return CategoryTile(
+          label: c.name,
+          iconUrl: c.iconUrl,
+          iconName: c.iconName,
+          onTap: () => onTapCategory(c),
+        );
+      },
     );
   }
 }
