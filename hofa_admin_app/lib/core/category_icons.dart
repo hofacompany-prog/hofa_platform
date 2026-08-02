@@ -2154,7 +2154,37 @@ const categoryIcons = <String, IconData>{
   'zoom_out_map': Icons.zoom_out_map,
 };
 
-IconData categoryIconOf(String? name) => categoryIcons[name] ?? Icons.category_outlined;
+/// Bộ 24 icon tự đặt tên trước đây (trước khi mở rộng lên toàn bộ Material Icons) dùng
+/// key riêng (vd 'food', 'phone') không khớp tên hằng số icon thật — map lại để danh
+/// mục tạo trước đó không bị mất icon, không cần vào sửa tay từng cái.
+const _legacyIconAliases = <String, String>{
+  'food': 'restaurant',
+  'drink': 'local_cafe',
+  'fresh': 'eco',
+  'meat_seafood': 'set_meal',
+  'bakery': 'cake',
+  'grocery': 'local_grocery_store',
+  'electronics': 'devices',
+  'phone': 'smartphone',
+  'appliance': 'kitchen',
+  'fashion': 'checkroom',
+  'beauty': 'spa',
+  'health': 'medical_services',
+  'mom_baby': 'child_care',
+  'pet': 'pets',
+  'book_office': 'menu_book',
+  'toy': 'toys',
+  'sport': 'sports_soccer',
+  'vehicle': 'two_wheeler',
+  'home': 'home_outlined',
+  'other': 'category_outlined',
+};
+
+IconData categoryIconOf(String? name) {
+  if (name == null) return Icons.category_outlined;
+  final resolved = _legacyIconAliases[name] ?? name;
+  return categoryIcons[resolved] ?? Icons.category_outlined;
+}
 
 /// Không có bản dịch tiếng Việt cho từng icon (hơn 2000 icon) — chỉ làm gọn tên biến
 /// (vd 'local_grocery_store' -> 'local grocery store') để hiện dưới ô tìm kiếm.
