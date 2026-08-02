@@ -38,6 +38,7 @@ async function offerOrderToMerchant(orderId) {
       body: `${order.order_code} · ${order.total_amount.toLocaleString('vi-VN')}đ`,
       data: { type: 'order_auto_confirmed', order_id: orderId }
     })));
+    await push.notifyCustomerOrderStatus(orderId, 'confirmed');
     return updated;
   }
 
@@ -76,6 +77,7 @@ async function autoCancelExpiredOrder(orderId) {
     body: `${order.order_code} đã tự huỷ vì không được xác nhận kịp thời`,
     data: { type: 'order_auto_cancelled', order_id: orderId }
   })));
+  await push.notifyCustomerOrderStatus(orderId, 'cancelled');
   return updated;
 }
 

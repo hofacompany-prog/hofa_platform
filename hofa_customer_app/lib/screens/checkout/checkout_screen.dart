@@ -6,6 +6,7 @@ import '../../models/address.dart';
 import '../../providers/app_providers.dart';
 import '../../providers/auth_providers.dart';
 import '../../providers/cart_provider.dart';
+import '../address/address_picker_screen.dart';
 
 class CheckoutScreen extends ConsumerStatefulWidget {
   const CheckoutScreen({super.key});
@@ -39,36 +40,59 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final wardCtrl = TextEditingController();
     final districtCtrl = TextEditingController();
     final provinceCtrl = TextEditingController();
+    double? pickedLat;
+    double? pickedLng;
 
     final ok = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Thêm địa chỉ giao hàng'),
-        content: SizedBox(
-          width: 360,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Tên người nhận')),
-                const SizedBox(height: 12),
-                TextField(controller: phoneCtrl, decoration: const InputDecoration(labelText: 'SĐT người nhận')),
-                const SizedBox(height: 12),
-                TextField(controller: line1Ctrl, decoration: const InputDecoration(labelText: 'Số nhà, tên đường')),
-                const SizedBox(height: 12),
-                TextField(controller: wardCtrl, decoration: const InputDecoration(labelText: 'Phường/Xã')),
-                const SizedBox(height: 12),
-                TextField(controller: districtCtrl, decoration: const InputDecoration(labelText: 'Quận/Huyện')),
-                const SizedBox(height: 12),
-                TextField(controller: provinceCtrl, decoration: const InputDecoration(labelText: 'Tỉnh/Thành phố')),
-              ],
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Thêm địa chỉ giao hàng'),
+          content: SizedBox(
+            width: 360,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Tên người nhận')),
+                  const SizedBox(height: 12),
+                  TextField(controller: phoneCtrl, decoration: const InputDecoration(labelText: 'SĐT người nhận')),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.map_outlined),
+                    label: Text(pickedLat == null ? 'Chọn vị trí trên bản đồ' : 'Đã chọn vị trí trên bản đồ ✓'),
+                    onPressed: () async {
+                      final picked = await Navigator.of(context).push<PickedAddress>(
+                        MaterialPageRoute(builder: (_) => const AddressPickerScreen()),
+                      );
+                      if (picked == null) return;
+                      line1Ctrl.text = picked.line1;
+                      wardCtrl.text = picked.ward ?? '';
+                      districtCtrl.text = picked.district ?? '';
+                      provinceCtrl.text = picked.province;
+                      setDialogState(() {
+                        pickedLat = picked.latitude;
+                        pickedLng = picked.longitude;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(controller: line1Ctrl, decoration: const InputDecoration(labelText: 'Số nhà, tên đường')),
+                  const SizedBox(height: 12),
+                  TextField(controller: wardCtrl, decoration: const InputDecoration(labelText: 'Phường/Xã')),
+                  const SizedBox(height: 12),
+                  TextField(controller: districtCtrl, decoration: const InputDecoration(labelText: 'Quận/Huyện')),
+                  const SizedBox(height: 12),
+                  TextField(controller: provinceCtrl, decoration: const InputDecoration(labelText: 'Tỉnh/Thành phố')),
+                ],
+              ),
             ),
           ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Huỷ')),
+            FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Lưu')),
+          ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Huỷ')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Lưu')),
-        ],
       ),
     );
     if (ok != true) return;
@@ -84,6 +108,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         'ward': wardCtrl.text.trim().isEmpty ? null : wardCtrl.text.trim(),
         'district': districtCtrl.text.trim().isEmpty ? null : districtCtrl.text.trim(),
         'province': provinceCtrl.text.trim(),
+        if (pickedLat != null) 'latitude': pickedLat,
+        if (pickedLng != null) 'longitude': pickedLng,
       });
       ref.invalidate(addressesProvider);
       setState(() => _selectedAddressId = created.id);

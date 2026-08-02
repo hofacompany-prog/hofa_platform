@@ -11,12 +11,21 @@ class ProductRepository {
     return list.map((e) => Category.fromJson(e as Map<String, dynamic>)).toList();
   }
 
-  Future<List<Product>> products({String? merchantId, String? q, String? salesModel, int limit = 50}) async {
+  Future<List<Product>> products({
+    String? merchantId,
+    String? q,
+    String? salesModel,
+    String? categoryId,
+    bool? isFeatured,
+    int limit = 50,
+  }) async {
     final list = await _api.get('/products', query: {
       'limit': limit,
       if (merchantId != null) 'merchant_id': merchantId,
       if (q != null && q.isNotEmpty) 'q': q,
       if (salesModel != null) 'sales_model': salesModel,
+      if (categoryId != null) 'category_id': categoryId,
+      if (isFeatured != null) 'is_featured': isFeatured,
     }) as List;
     return list.map((e) => Product.fromJson(e as Map<String, dynamic>)).toList();
   }

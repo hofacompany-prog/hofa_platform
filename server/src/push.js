@@ -57,4 +57,31 @@ async function sendPushToUser(userId, { title, body, data = {} }) {
   }
 }
 
-module.exports = { sendPushToUser };
+/** Nội dung push cho khách theo từng mốc trạng thái đơn — chỉ những mốc khách thực
+ * sự cần biết (không báo 'preparing'/'assigned', khách không quan tâm mấy bước nội bộ đó). */
+const CUSTOMER_STATUS_MESSAGES = {
+  confirmed: (code) => ({ title: 'Đơn hàng đã được xác nhận', body: `${code} · Cửa hàng đang chuẩn bị đơn cho bạn` }),
+  ready_for_pickup: (code) => ({ title: 'Đơn hàng đã chuẩn bị xong', body: `${code} · Đang chờ tài xế đến lấy` }),
+  picked_up: (code) => ({ title: 'Tài xế đã lấy đơn hàng', body: `${code} · Chuẩn bị lên đường giao đến bạn` }),
+  delivering: (code) => ({ title: 'Tài xế đang trên đường giao đến bạn', body: `${code} · Sắp tới nơi rồi!` }),
+  delivered: (code) => ({ title: 'Giao hàng thành công', body: `${code} · Cảm ơn bạn đã đặt hàng qua HOFA` }),
+  cancelled: (code) => ({ title: 'Đơn hàng đã bị huỷ', body: `${code}` })
+};
+
+/** Báo cho khách mỗi khi đơn của họ đổi sang 1 mốc trạng thái đáng chú ý — gọi từ mọi
+ * nơi order status/delivery status đổi (PATCH /orders/:id/status, PATCH /deliveries/:id/status,
+ * orderOffer.js). Không throw, im lặng bỏ qua nếu status không nằm trong danh sách trên. */
+async function notifyCustomerOrderStatus(orderId, status) {
+  const compose = CUSTOMER_STATUS_MESSAGES[status];
+  if (!compose) return;
+  const order = await db.queryOne('SELECT customer_id, order_code FROM orders WHERE id = $1', [orderId]);
+  if (!order) return;
+  const { title, body } = compose(order.order_code);
+  await sendPushToUser(order.customer_id, {
+    title,
+    body,
+    data: { type: 'order_status_changed', order_id: orderId, status }
+  });
+}
+
+module.exports = { sendPushToUser, notifyCustomerOrderStatus };

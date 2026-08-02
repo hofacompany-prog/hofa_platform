@@ -5,6 +5,7 @@ const { ApiError } = require('../errors');
 const { requireFields, pagination, requireAuth, requireRole, requireMerchantAccess, requireOrderAccess } = require('../utils');
 const dispatch = require('../dispatch');
 const orderOffer = require('../orderOffer');
+const push = require('../push');
 
 /** roles cho phép đổi SANG từng trạng thái; state machine chi tiết nằm trong RPC update_order_status. */
 const ORDER_STATUS_ROLES = {
@@ -153,6 +154,13 @@ router.patch('/orders/:id/status', asyncHandler(async (req, res) => {
   });
   if (req.body.status === 'confirmed') {
     await db.query('UPDATE orders SET accept_deadline = NULL WHERE id = $1', [req.params.id]);
+  }
+
+  // Không tự báo cho khách khi chính khách là người vừa bấm huỷ — họ đã biết rồi.
+  if (!(req.body.status === 'cancelled' && req.ctx.role === 'customer')) {
+    push.notifyCustomerOrderStatus(req.params.id, req.body.status).catch((err) => {
+      console.error('[push] Không báo được cho khách về đơn', req.params.id, err.message);
+    });
   }
 
   // Đơn đã sẵn sàng lấy hàng — tự tìm tài xế online gần nhất, không bắt cửa hàng

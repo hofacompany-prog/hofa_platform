@@ -137,11 +137,19 @@ class AdminRepository {
     return list.map((e) => Category.fromJson(e as Map<String, dynamic>)).toList();
   }
 
-  Future<Category> createCategory({required String name, required String slug, String? parentId}) async =>
+  Future<Category> createCategory({
+    required String name,
+    required String slug,
+    String? parentId,
+    String? iconUrl,
+    String? iconName,
+  }) async =>
       Category.fromJson(await _api.post('/categories', body: {
         'name': name,
         'slug': slug,
         if (parentId != null) 'parent_id': parentId,
+        if (iconUrl != null) 'icon_url': iconUrl,
+        if (iconName != null) 'icon_name': iconName,
       }) as Map<String, dynamic>);
 
   Future<Category> updateCategory(String id, Map<String, dynamic> data) async =>

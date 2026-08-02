@@ -5,6 +5,7 @@ const { ApiError } = require('../errors');
 const { requireFields, pagination, requireRole, requireMerchantAccess, requireOrderAccess } = require('../utils');
 const dispatch = require('../dispatch');
 const config = require('../config');
+const push = require('../push');
 
 async function requireOwnDriverRow(ctx) {
   requireRole(ctx, ['driver']);
@@ -107,6 +108,13 @@ router.patch('/deliveries/:id/status', asyncHandler(async (req, res) => {
   if (req.body.status === 'accepted') {
     await db.query('UPDATE deliveries SET accept_deadline = NULL WHERE id = $1', [req.params.id]);
   }
+
+  // update_delivery_status (RPC) tự đồng bộ order.status = cùng tên khi picked_up/delivering/
+  // delivered — báo cho khách ngay ở đây vì SQL không gọi được firebase-admin.
+  push.notifyCustomerOrderStatus(delivery.order_id, req.body.status).catch((err) => {
+    console.error('[push] Không báo được cho khách về chuyến giao', req.params.id, err.message);
+  });
+
   res.json({ ok: true, data: updated });
 }));
 

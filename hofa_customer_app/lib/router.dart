@@ -14,9 +14,14 @@ import 'screens/checkout/checkout_screen.dart';
 import 'screens/orders/orders_list_screen.dart';
 import 'screens/orders/order_detail_screen.dart';
 import 'screens/profile/profile_screen.dart';
+import 'screens/categories/all_categories_screen.dart';
+import 'screens/categories/category_detail_screen.dart';
+import 'screens/categories/category_products_screen.dart';
+import 'main.dart' show navigatorKey;
 
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
+    navigatorKey: navigatorKey,
     initialLocation: '/',
     refreshListenable: GoRouterRefreshStream(Supabase.instance.client.auth.onAuthStateChange),
     redirect: (context, state) async {
@@ -58,6 +63,28 @@ final routerProvider = Provider<GoRouter>((ref) {
             builder: (context, state) => OrderDetailScreen(orderId: state.pathParameters['id']!),
           ),
           GoRoute(path: '/profile', builder: (context, state) => const ProfileScreen()),
+          GoRoute(path: '/categories', builder: (context, state) => const AllCategoriesScreen()),
+          GoRoute(
+            path: '/categories/:id',
+            builder: (context, state) => CategoryDetailScreen(
+              categoryId: state.pathParameters['id']!,
+              categoryName: state.extra as String?,
+            ),
+          ),
+          GoRoute(
+            path: '/categories/:id/children',
+            builder: (context, state) => AllCategoriesScreen(
+              parentId: state.pathParameters['id']!,
+              parentName: state.extra as String?,
+            ),
+          ),
+          GoRoute(
+            path: '/categories/:id/products',
+            builder: (context, state) => CategoryProductsScreen(
+              categoryId: state.pathParameters['id']!,
+              categoryName: state.extra as String?,
+            ),
+          ),
         ],
       ),
     ],

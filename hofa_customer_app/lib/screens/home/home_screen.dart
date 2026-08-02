@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../providers/app_providers.dart';
+import '../../widgets/category_grid.dart';
 import '../../widgets/merchant_card.dart';
 
 class HomeScreen extends ConsumerWidget {
@@ -10,6 +11,7 @@ class HomeScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final merchantsAsync = ref.watch(merchantsProvider);
+    final categoriesAsync = ref.watch(categoriesProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -30,7 +32,17 @@ class HomeScreen extends ConsumerWidget {
               ),
               onSubmitted: (v) => ref.read(merchantSearchProvider.notifier).state = v.trim(),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
+            categoriesAsync.when(
+              loading: () => const SizedBox(),
+              error: (_, _) => const SizedBox(),
+              data: (categories) => CategoryGrid(
+                categories: categories.where((c) => c.parentId == null).toList(),
+                onTapCategory: (c) => context.push('/categories/${c.id}', extra: c.name),
+                onTapViewAll: () => context.push('/categories'),
+              ),
+            ),
+            const SizedBox(height: 20),
             merchantsAsync.when(
               loading: () => const Padding(
                 padding: EdgeInsets.only(top: 40),

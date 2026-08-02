@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/category.dart';
 import '../../providers/admin_providers.dart';
+import '../../core/category_icons.dart';
+import '../../widgets/icon_picker_field.dart';
 
 /// Danh mục ngành hàng dùng chung cho cả sàn (Thực phẩm > Rau củ quả > Rau ăn lá).
 /// Chỉ admin được tạo/sửa — cửa hàng chỉ gắn sản phẩm vào danh mục có sẵn.
@@ -28,6 +30,7 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
   Future<void> _addDialog(List<Category> existing, {String? parentId}) async {
     final nameCtrl = TextEditingController();
     String? selectedParent = parentId;
+    String? iconName;
 
     final ok = await showDialog<bool>(
       context: context,
@@ -36,29 +39,39 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
           title: const Text('Thêm danh mục'),
           content: SizedBox(
             width: 360,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: nameCtrl,
-                  autofocus: true,
-                  decoration: const InputDecoration(
-                    labelText: 'Tên danh mục',
-                    hintText: 'VD: Rau ăn lá',
-                    border: OutlineInputBorder(),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: nameCtrl,
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Tên danh mục',
+                      hintText: 'VD: Rau ăn lá',
+                      border: OutlineInputBorder(),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 16),
-                DropdownButtonFormField<String?>(
-                  initialValue: selectedParent,
-                  decoration: const InputDecoration(labelText: 'Thuộc danh mục cha', border: OutlineInputBorder()),
-                  items: [
-                    const DropdownMenuItem(value: null, child: Text('— Danh mục gốc —')),
-                    ...existing.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))),
-                  ],
-                  onChanged: (v) => setInner(() => selectedParent = v),
-                ),
-              ],
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String?>(
+                    initialValue: selectedParent,
+                    decoration: const InputDecoration(labelText: 'Thuộc danh mục cha', border: OutlineInputBorder()),
+                    items: [
+                      const DropdownMenuItem(value: null, child: Text('— Danh mục gốc —')),
+                      ...existing.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))),
+                    ],
+                    onChanged: (v) => setInner(() => selectedParent = v),
+                  ),
+                  const SizedBox(height: 16),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: IconPickerField(
+                      label: 'Icon danh mục (hiện ở trang chủ app khách)',
+                      onChanged: (name) => setInner(() => iconName = name),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
           actions: [
@@ -78,6 +91,7 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
             // slug phải là duy nhất toàn sàn, thêm hậu tố thời gian để không đụng tên trùng
             slug: '${_slugify(name)}-${DateTime.now().millisecondsSinceEpoch % 10000}',
             parentId: selectedParent,
+            iconName: iconName,
           );
       ref.invalidate(categoriesProvider);
     } catch (e) {
@@ -131,7 +145,7 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
                   margin: const EdgeInsets.only(bottom: 8),
                   child: kids.isEmpty
                       ? ListTile(
-                          leading: const Icon(Icons.folder_outlined),
+                          leading: _CategoryLeadingIcon(iconUrl: root.iconUrl, iconName: root.iconName),
                           title: Text(root.name),
                           subtitle: Text(root.slug, style: theme.textTheme.bodySmall),
                           trailing: IconButton(
@@ -141,7 +155,7 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
                           ),
                         )
                       : ExpansionTile(
-                          leading: const Icon(Icons.folder_outlined),
+                          leading: _CategoryLeadingIcon(iconUrl: root.iconUrl, iconName: root.iconName),
                           title: Text(root.name),
                           subtitle: Text('${kids.length} danh mục con', style: theme.textTheme.bodySmall),
                           children: [
@@ -191,6 +205,30 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+class _CategoryLeadingIcon extends StatelessWidget {
+  final String? iconUrl;
+  final String? iconName;
+  const _CategoryLeadingIcon({this.iconUrl, this.iconName});
+
+  @override
+  Widget build(BuildContext context) {
+    if (iconName != null && iconName!.isNotEmpty) {
+      return Icon(categoryIconOf(iconName), color: Theme.of(context).colorScheme.primary);
+    }
+    if (iconUrl == null || iconUrl!.isEmpty) return const Icon(Icons.folder_outlined);
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(6),
+      child: Image.network(
+        iconUrl!,
+        width: 28,
+        height: 28,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => const Icon(Icons.folder_outlined),
       ),
     );
   }

@@ -277,6 +277,7 @@ CREATE TABLE categories (
   name        VARCHAR(150) NOT NULL,
   slug        VARCHAR(170) NOT NULL UNIQUE,
   icon_url    TEXT,
+  icon_name   VARCHAR(50), -- key trong bộ icon dựng sẵn (vd 'food', 'electronics'), xem IconPickerField ở admin app
   sort_order  INTEGER NOT NULL DEFAULT 0,
   is_active   BOOLEAN NOT NULL DEFAULT true,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()

@@ -33,13 +33,13 @@ router.get('/categories', asyncHandler(async (req, res) => {
 router.post('/categories', asyncHandler(async (req, res) => {
   requireRole(req.ctx, ['admin']);
   requireFields(req.body, ['name', 'slug']);
-  const created = await db.insertRow('categories', pickFields(req.body, ['parent_id', 'name', 'slug', 'icon_url', 'sort_order', 'is_active']));
+  const created = await db.insertRow('categories', pickFields(req.body, ['parent_id', 'name', 'slug', 'icon_url', 'icon_name', 'sort_order', 'is_active']));
   res.status(201).json({ ok: true, data: created });
 }));
 
 router.patch('/categories/:id', asyncHandler(async (req, res) => {
   requireRole(req.ctx, ['admin']);
-  const updated = await db.updateById('categories', req.params.id, pickFields(req.body, ['parent_id', 'name', 'slug', 'icon_url', 'sort_order', 'is_active']));
+  const updated = await db.updateById('categories', req.params.id, pickFields(req.body, ['parent_id', 'name', 'slug', 'icon_url', 'icon_name', 'sort_order', 'is_active']));
   res.json({ ok: true, data: updated });
 }));
 
@@ -69,6 +69,14 @@ router.get('/products', asyncHandler(async (req, res) => {
   if (req.query.merchant_id) { params.push(req.query.merchant_id); clauses.push(`merchant_id = $${params.length}`); }
   if (req.query.q) { params.push(`%${req.query.q}%`); clauses.push(`name ILIKE $${params.length}`); }
   if (req.query.sales_model) { params.push(req.query.sales_model); clauses.push(`sales_model = $${params.length}`); }
+  if (req.query.category_id) {
+    params.push(req.query.category_id);
+    clauses.push(`id IN (SELECT product_id FROM product_categories WHERE category_id = $${params.length})`);
+  }
+  if (req.query.is_featured !== undefined) {
+    params.push(req.query.is_featured === 'true');
+    clauses.push(`is_featured = $${params.length}`);
+  }
 
   params.push(limit, offset);
   const rows = await db.query(

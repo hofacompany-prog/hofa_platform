@@ -6,7 +6,7 @@ const { ApiError } = require('../errors');
 const { requireAuth } = require('../utils');
 
 // Nơi lưu ảnh hợp lệ — chặn client tự đặt folder tuỳ ý trên Cloudinary.
-const ALLOWED_FOLDERS = ['merchants', 'products', 'drivers', 'deliveries'];
+const ALLOWED_FOLDERS = ['merchants', 'products', 'drivers', 'deliveries', 'categories'];
 
 /**
  * Ký request upload ảnh lên Cloudinary — client (hofa_store_app) gọi API này trước,
