@@ -238,6 +238,11 @@ router.patch('/variants/:id', asyncHandler(async (req, res) => {
   if (!variant) throw new ApiError('NOT_FOUND', 'Không tìm thấy biến thể', 404);
   const product = await db.queryOne('SELECT merchant_id FROM products WHERE id = $1', [variant.product_id]);
   await requireMerchantAccess(req.ctx, product.merchant_id);
+  // Chỉ 1 biến thể mặc định / sản phẩm — đặt biến thể này làm mặc định thì tắt mặc định
+  // của các biến thể còn lại.
+  if (req.body.is_default === true) {
+    await db.query('UPDATE product_variants SET is_default = false WHERE product_id = $1 AND id != $2', [variant.product_id, req.params.id]);
+  }
   const updated = await db.updateById('product_variants', req.params.id, pickFields(req.body, VARIANT_FIELDS));
   res.json({ ok: true, data: updated });
 }));

@@ -334,6 +334,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
       text: existing != null ? currentStock.toString() : '',
     );
     var isActive = existing?.isActive ?? true;
+    var isDefault = existing?.isDefault ?? false;
 
     final ok = await showDialog<bool>(
       context: context,
@@ -414,6 +415,15 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                     const SizedBox(height: 8),
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
+                      title: const Text('Đặt làm mặc định'),
+                      subtitle: const Text(
+                        'Biến thể mặc định hiển thị đầu tiên — bật sẽ tự tắt mặc định của biến thể khác',
+                      ),
+                      value: isDefault,
+                      onChanged: (v) => setInner(() => isDefault = v),
+                    ),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
                       title: const Text('Đang bán'),
                       value: isActive,
                       onChanged: (v) => setInner(() => isActive = v),
@@ -471,6 +481,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
           'cost_price': int.tryParse(costPriceCtrl.text.trim()),
           'wholesale_price': int.tryParse(wholesalePriceCtrl.text.trim()),
           'is_active': isActive,
+          'is_default': isDefault,
         });
         final newStock = int.tryParse(stockCtrl.text.trim());
         final delta = (newStock ?? currentStock) - currentStock;
