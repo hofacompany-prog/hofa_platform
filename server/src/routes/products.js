@@ -15,6 +15,7 @@ const VARIANT_FIELDS = [
 ];
 const TOPPING_GROUP_FIELDS = ['name', 'is_required', 'allow_multiple', 'sort_order'];
 const TOPPING_FIELDS = ['name', 'price', 'sort_order'];
+const TIER_FIELDS = ['min_quantity', 'max_quantity', 'unit_price', 'lead_time_days', 'requires_deposit', 'deposit_percent'];
 
 // ---- Danh mục ----
 
@@ -162,9 +163,19 @@ router.post('/products', asyncHandler(async (req, res) => {
   if (Array.isArray(req.body.category_ids) && req.body.category_ids.length) {
     await db.insertRows('product_categories', req.body.category_ids.map((cid) => ({ product_id: product.id, category_id: cid })));
   }
+  // Cho phép tạo luôn bậc giá sỉ/đặt trước theo từng biến thể ngay lúc tạo sản phẩm — lý do
+  // giống topping_groups bên dưới: màn "Thêm sản phẩm" chưa có variant_id để gọi API bậc
+  // giá riêng như lúc sửa sản phẩm.
   let variants = [];
   if (Array.isArray(req.body.variants) && req.body.variants.length) {
-    variants = await db.insertRows('product_variants', req.body.variants.map((v) => ({ ...pickFields(v, VARIANT_FIELDS), product_id: product.id })));
+    for (const v of req.body.variants) {
+      const variant = await db.insertRow('product_variants', { ...pickFields(v, VARIANT_FIELDS), product_id: product.id });
+      let tiers = [];
+      if (Array.isArray(v.wholesale_tiers) && v.wholesale_tiers.length) {
+        tiers = await db.insertRows('wholesale_tiers', v.wholesale_tiers.map((t) => ({ ...pickFields(t, TIER_FIELDS), variant_id: variant.id })));
+      }
+      variants.push({ ...variant, wholesale_tiers: tiers });
+    }
   }
 
   // Cho phép tạo luôn nhóm topping + lựa chọn bên trong ngay lúc tạo sản phẩm (màn "Thêm

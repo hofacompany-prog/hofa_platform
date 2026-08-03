@@ -47,6 +47,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   Map<String, int> _stockByVariant = {};
   List<ToppingGroup> _toppingGroups = [];
   Map<String, List<WholesaleTier>> _tiersByVariant = {};
+  List<WholesaleTier> _pendingTiers = [];
   String _tierTab = 'wholesale'; // wholesale (Giá sỉ) | preorder (Đặt trước)
   bool _loading = false;
   bool _loadingProduct = false;
@@ -162,10 +163,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     }
   }
 
-  Future<void> _tierDialog({
-    required String variantId,
-    WholesaleTier? existing,
-  }) async {
+  Future<void> _tierDialog({String? variantId, WholesaleTier? existing}) async {
     final minQtyCtrl = TextEditingController(
       text: existing?.minQuantity.toString() ?? '',
     );
@@ -255,10 +253,47 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
         ? (int.tryParse(leadDaysCtrl.text.trim()) ?? 0)
         : 0;
 
+    // Chưa tạo sản phẩm (đang ở màn "Thêm sản phẩm") — chưa có variant_id để gọi API,
+    // giữ tạm bậc giá trong bộ nhớ, gửi kèm lên cùng lúc tạo sản phẩm lúc bấm "Tạo sản
+    // phẩm" (xem _submit).
+    if (!_isEdit) {
+      setState(() {
+        if (existing == null) {
+          _pendingTiers = [
+            ..._pendingTiers,
+            WholesaleTier(
+              id: 'local-${DateTime.now().microsecondsSinceEpoch}',
+              variantId: '',
+              minQuantity: minQty,
+              maxQuantity: maxQty,
+              unitPrice: price,
+              leadTimeDays: leadDays,
+            ),
+          ];
+        } else {
+          _pendingTiers = _pendingTiers
+              .map(
+                (t) => t.id == existing.id
+                    ? WholesaleTier(
+                        id: t.id,
+                        variantId: t.variantId,
+                        minQuantity: minQty,
+                        maxQuantity: maxQty,
+                        unitPrice: price,
+                        leadTimeDays: leadDays,
+                      )
+                    : t,
+              )
+              .toList();
+        }
+      });
+      return;
+    }
+
     try {
       if (existing == null) {
         await _repo.createWholesaleTier(
-          variantId: variantId,
+          variantId: variantId!,
           minQuantity: minQty,
           maxQuantity: maxQty,
           unitPrice: price,
@@ -304,6 +339,16 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
       ),
     );
     if (ok != true) return;
+
+    if (!_isEdit) {
+      setState(
+        () => _pendingTiers = _pendingTiers
+            .where((t) => t.id != tier.id)
+            .toList(),
+      );
+      return;
+    }
+
     try {
       await _repo.deleteWholesaleTier(tier.id);
       await _loadWholesaleTiers();
@@ -314,6 +359,94 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
         ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
       }
     }
+  }
+
+  /// [variantId] null nghĩa là đang ở màn "Thêm sản phẩm" (chưa có biến thể thật, thao
+  /// tác trên [_pendingTiers]) — khi đó cũng không có tên biến thể riêng nên [title] null.
+  Widget _tierVariantCard({
+    required String? variantId,
+    required String? title,
+    required List<WholesaleTier> allTiers,
+  }) {
+    final tiers =
+        allTiers
+            .where(
+              (t) => _tierTab == 'preorder'
+                  ? t.leadTimeDays > 0
+                  : t.leadTimeDays == 0,
+            )
+            .toList()
+          ..sort((a, b) => a.minQuantity.compareTo(b.minQuantity));
+    final addButton = TextButton.icon(
+      onPressed: () => _tierDialog(variantId: variantId),
+      icon: const Icon(Icons.add, size: 18),
+      label: const Text('Thêm bậc'),
+    );
+
+    return Card(
+      elevation: 0,
+      color: Theme.of(context).colorScheme.surfaceContainerLow,
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (title != null)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(title, style: Theme.of(context).textTheme.titleSmall),
+                  addButton,
+                ],
+              )
+            else
+              Align(alignment: Alignment.centerRight, child: addButton),
+            if (tiers.isEmpty)
+              Padding(
+                padding: const EdgeInsets.only(left: 4, bottom: 4),
+                child: Text(
+                  'Chưa có bậc giá nào.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              )
+            else
+              ...tiers.map(
+                (t) => ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(
+                    t.maxQuantity != null
+                        ? 'Số lượng ${t.minQuantity}–${t.maxQuantity}'
+                        : 'Số lượng từ ${t.minQuantity}',
+                  ),
+                  subtitle: Text(
+                    [
+                      formatVnd(t.unitPrice),
+                      if (_tierTab == 'preorder')
+                        'Đặt trước ≥ ${t.leadTimeDays} ngày',
+                    ].join(' · '),
+                  ),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.edit_outlined, size: 20),
+                        onPressed: () =>
+                            _tierDialog(variantId: variantId, existing: t),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.delete_outline, size: 20),
+                        onPressed: () => _deleteTier(t),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
   }
 
   /// Nạp cây danh mục hệ thống (chính/con) + nếu đang sửa sản phẩm đã có danh mục cửa
@@ -461,6 +594,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
           price: int.parse(_priceCtrl.text.trim()),
           wholesalePrice: int.tryParse(_wholesalePriceCtrl.text.trim()),
           toppingGroups: _toppingGroups,
+          wholesaleTiers: _pendingTiers,
         );
         final stock = int.tryParse(_stockCtrl.text.trim());
         if (stock != null &&
@@ -1406,7 +1540,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                               );
                             })),
                         ],
-                        if (_isEdit && _salesModel == 'scheduled') ...[
+                        if (_salesModel == 'scheduled') ...[
                           const SizedBox(height: 32),
                           Text(
                             'Bậc giá theo số lượng',
@@ -1436,123 +1570,25 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                             ],
                           ),
                           const SizedBox(height: 12),
-                          if ((_product?.variants ?? []).isEmpty)
-                            const Text(
-                              'Chưa có biến thể nào — thêm biến thể ở trên trước.',
-                            )
-                          else
-                            ...(_product!.variants.map((v) {
-                              final tiers =
-                                  (_tiersByVariant[v.id] ?? [])
-                                      .where(
-                                        (t) => _tierTab == 'preorder'
-                                            ? t.leadTimeDays > 0
-                                            : t.leadTimeDays == 0,
-                                      )
-                                      .toList()
-                                    ..sort(
-                                      (a, b) => a.minQuantity.compareTo(
-                                        b.minQuantity,
-                                      ),
-                                    );
-                              return Card(
-                                elevation: 0,
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.surfaceContainerLow,
-                                margin: const EdgeInsets.only(bottom: 12),
-                                child: Padding(
-                                  padding: const EdgeInsets.fromLTRB(
-                                    16,
-                                    12,
-                                    8,
-                                    12,
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.spaceBetween,
-                                        children: [
-                                          Text(
-                                            v.name,
-                                            style: Theme.of(
-                                              context,
-                                            ).textTheme.titleSmall,
-                                          ),
-                                          TextButton.icon(
-                                            onPressed: () =>
-                                                _tierDialog(variantId: v.id),
-                                            icon: const Icon(
-                                              Icons.add,
-                                              size: 18,
-                                            ),
-                                            label: const Text('Thêm bậc'),
-                                          ),
-                                        ],
-                                      ),
-                                      if (tiers.isEmpty)
-                                        Padding(
-                                          padding: const EdgeInsets.only(
-                                            left: 4,
-                                            bottom: 4,
-                                          ),
-                                          child: Text(
-                                            'Chưa có bậc giá nào.',
-                                            style: Theme.of(
-                                              context,
-                                            ).textTheme.bodySmall,
-                                          ),
-                                        )
-                                      else
-                                        ...tiers.map(
-                                          (t) => ListTile(
-                                            dense: true,
-                                            contentPadding: EdgeInsets.zero,
-                                            title: Text(
-                                              t.maxQuantity != null
-                                                  ? 'Số lượng ${t.minQuantity}–${t.maxQuantity}'
-                                                  : 'Số lượng từ ${t.minQuantity}',
-                                            ),
-                                            subtitle: Text(
-                                              [
-                                                formatVnd(t.unitPrice),
-                                                if (_tierTab == 'preorder')
-                                                  'Đặt trước ≥ ${t.leadTimeDays} ngày',
-                                              ].join(' · '),
-                                            ),
-                                            trailing: Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                IconButton(
-                                                  icon: const Icon(
-                                                    Icons.edit_outlined,
-                                                    size: 20,
-                                                  ),
-                                                  onPressed: () => _tierDialog(
-                                                    variantId: v.id,
-                                                    existing: t,
-                                                  ),
-                                                ),
-                                                IconButton(
-                                                  icon: const Icon(
-                                                    Icons.delete_outline,
-                                                    size: 20,
-                                                  ),
-                                                  onPressed: () =>
-                                                      _deleteTier(t),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                    ],
-                                  ),
+                          if (_isEdit)
+                            if ((_product?.variants ?? []).isEmpty)
+                              const Text(
+                                'Chưa có biến thể nào — thêm biến thể ở trên trước.',
+                              )
+                            else
+                              ...(_product!.variants.map(
+                                (v) => _tierVariantCard(
+                                  variantId: v.id,
+                                  title: v.name,
+                                  allTiers: _tiersByVariant[v.id] ?? [],
                                 ),
-                              );
-                            })),
+                              ))
+                          else
+                            _tierVariantCard(
+                              variantId: null,
+                              title: null,
+                              allTiers: _pendingTiers,
+                            ),
                         ],
                         const SizedBox(height: 32),
                         Row(

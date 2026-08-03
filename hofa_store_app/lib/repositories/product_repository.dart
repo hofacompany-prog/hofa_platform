@@ -16,14 +16,15 @@ class ProductRepository {
     required String merchantId,
     String? categoryId,
   }) async {
-    final list = await _api.get(
-          '/merchant-categories',
-          query: {
-            'merchant_id': merchantId,
-            if (categoryId != null) 'category_id': categoryId,
-          },
-        )
-        as List;
+    final list =
+        await _api.get(
+              '/merchant-categories',
+              query: {
+                'merchant_id': merchantId,
+                if (categoryId != null) 'category_id': categoryId,
+              },
+            )
+            as List;
     return list
         .map((e) => MerchantCategory.fromJson(e as Map<String, dynamic>))
         .toList();
@@ -74,6 +75,7 @@ class ProductRepository {
     int? costPrice,
     int? wholesalePrice,
     List<ToppingGroup> toppingGroups = const [],
+    List<WholesaleTier> wholesaleTiers = const [],
   }) async => Product.fromJson(
     await _api.post(
           '/products',
@@ -90,12 +92,16 @@ class ProductRepository {
             'images': [imageUrl],
             if (toppingGroups.isNotEmpty)
               'topping_groups': toppingGroups
-                  .map((g) => {
-                        'name': g.name,
-                        'is_required': g.isRequired,
-                        'allow_multiple': g.allowMultiple,
-                        'toppings': g.toppings.map((t) => {'name': t.name, 'price': t.price}).toList(),
-                      })
+                  .map(
+                    (g) => {
+                      'name': g.name,
+                      'is_required': g.isRequired,
+                      'allow_multiple': g.allowMultiple,
+                      'toppings': g.toppings
+                          .map((t) => {'name': t.name, 'price': t.price})
+                          .toList(),
+                    },
+                  )
                   .toList(),
             'variants': [
               {
@@ -105,6 +111,18 @@ class ProductRepository {
                 if (costPrice != null) 'cost_price': costPrice,
                 if (wholesalePrice != null) 'wholesale_price': wholesalePrice,
                 'is_default': true,
+                if (wholesaleTiers.isNotEmpty)
+                  'wholesale_tiers': wholesaleTiers
+                      .map(
+                        (t) => {
+                          'min_quantity': t.minQuantity,
+                          if (t.maxQuantity != null)
+                            'max_quantity': t.maxQuantity,
+                          'unit_price': t.unitPrice,
+                          'lead_time_days': t.leadTimeDays,
+                        },
+                      )
+                      .toList(),
               },
             ],
           },
