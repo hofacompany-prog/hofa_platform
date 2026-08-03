@@ -36,7 +36,7 @@ class DashboardShell extends ConsumerWidget {
               padding: const EdgeInsets.symmetric(vertical: 16),
               child: Column(
                 children: [
-                  const Icon(Icons.eco, size: 32, color: Colors.green),
+                  Image.asset('assets/images/logo.png', height: 32),
                   const SizedBox(height: 8),
                   merchantAsync.when(
                     data: (m) => Padding(

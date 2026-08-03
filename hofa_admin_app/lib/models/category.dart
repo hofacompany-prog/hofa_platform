@@ -5,8 +5,17 @@ class Category {
   final String slug;
   final String? iconUrl;
   final String? iconName;
+  final int sortOrder;
 
-  Category({required this.id, this.parentId, required this.name, required this.slug, this.iconUrl, this.iconName});
+  Category({
+    required this.id,
+    this.parentId,
+    required this.name,
+    required this.slug,
+    this.iconUrl,
+    this.iconName,
+    this.sortOrder = 0,
+  });
 
   factory Category.fromJson(Map<String, dynamic> json) => Category(
         id: json['id'] as String,
@@ -15,5 +24,6 @@ class Category {
         slug: json['slug'] as String,
         iconUrl: json['icon_url'] as String?,
         iconName: json['icon_name'] as String?,
+        sortOrder: (json['sort_order'] as num?)?.toInt() ?? 0,
       );
 }

@@ -12,6 +12,8 @@ const VARIANT_FIELDS = [
   'sku', 'barcode', 'name', 'attributes', 'price', 'compare_price', 'cost_price',
   'wholesale_price', 'weight_gram', 'is_default', 'is_active'
 ];
+const TOPPING_GROUP_FIELDS = ['name', 'is_required', 'allow_multiple', 'sort_order'];
+const TOPPING_FIELDS = ['name', 'price', 'sort_order'];
 
 // ---- Danh mục ----
 
@@ -189,6 +191,88 @@ router.delete('/variants/:id', asyncHandler(async (req, res) => {
   await requireMerchantAccess(req.ctx, product.merchant_id);
   const updated = await db.updateById('product_variants', req.params.id, { is_active: false });
   res.json({ ok: true, data: updated });
+}));
+
+// ---- Topping (tuỳ chọn thêm: topping, size, độ ngọt...) ----
+
+router.get('/products/:productId/topping-groups', asyncHandler(async (req, res) => {
+  const groups = await db.query(
+    'SELECT * FROM product_topping_groups WHERE product_id = $1 ORDER BY sort_order ASC',
+    [req.params.productId]
+  );
+  if (!groups.length) return res.json({ ok: true, data: [] });
+  const ids = groups.map((g) => g.id);
+  const toppings = await db.query(
+    'SELECT * FROM product_toppings WHERE group_id = ANY($1::uuid[]) ORDER BY sort_order ASC',
+    [ids]
+  );
+  const byGroup = {};
+  toppings.forEach((t) => { (byGroup[t.group_id] ||= []).push(t); });
+  res.json({ ok: true, data: groups.map((g) => ({ ...g, toppings: byGroup[g.id] || [] })) });
+}));
+
+router.post('/products/:productId/topping-groups', asyncHandler(async (req, res) => {
+  requireFields(req.body, ['name']);
+  const product = await db.queryOne('SELECT id, merchant_id FROM products WHERE id = $1', [req.params.productId]);
+  if (!product) throw new ApiError('NOT_FOUND', 'Không tìm thấy sản phẩm', 404);
+  await requireMerchantAccess(req.ctx, product.merchant_id);
+
+  const data = pickFields(req.body, TOPPING_GROUP_FIELDS);
+  data.product_id = req.params.productId;
+  const created = await db.insertRow('product_topping_groups', data);
+  res.status(201).json({ ok: true, data: { ...created, toppings: [] } });
+}));
+
+router.patch('/topping-groups/:id', asyncHandler(async (req, res) => {
+  const group = await db.queryOne('SELECT id, product_id FROM product_topping_groups WHERE id = $1', [req.params.id]);
+  if (!group) throw new ApiError('NOT_FOUND', 'Không tìm thấy nhóm topping', 404);
+  const product = await db.queryOne('SELECT merchant_id FROM products WHERE id = $1', [group.product_id]);
+  await requireMerchantAccess(req.ctx, product.merchant_id);
+  const updated = await db.updateById('product_topping_groups', req.params.id, pickFields(req.body, TOPPING_GROUP_FIELDS));
+  res.json({ ok: true, data: updated });
+}));
+
+/** Xoá nhóm topping — CASCADE tự xoá luôn các lựa chọn (toppings) bên trong nhóm đó. */
+router.delete('/topping-groups/:id', asyncHandler(async (req, res) => {
+  const group = await db.queryOne('SELECT id, product_id FROM product_topping_groups WHERE id = $1', [req.params.id]);
+  if (!group) throw new ApiError('NOT_FOUND', 'Không tìm thấy nhóm topping', 404);
+  const product = await db.queryOne('SELECT merchant_id FROM products WHERE id = $1', [group.product_id]);
+  await requireMerchantAccess(req.ctx, product.merchant_id);
+  const deleted = await db.deleteById('product_topping_groups', req.params.id);
+  res.json({ ok: true, data: deleted });
+}));
+
+router.post('/topping-groups/:groupId/toppings', asyncHandler(async (req, res) => {
+  requireFields(req.body, ['name']);
+  const group = await db.queryOne('SELECT id, product_id FROM product_topping_groups WHERE id = $1', [req.params.groupId]);
+  if (!group) throw new ApiError('NOT_FOUND', 'Không tìm thấy nhóm topping', 404);
+  const product = await db.queryOne('SELECT merchant_id FROM products WHERE id = $1', [group.product_id]);
+  await requireMerchantAccess(req.ctx, product.merchant_id);
+
+  const data = pickFields(req.body, TOPPING_FIELDS);
+  data.group_id = req.params.groupId;
+  const created = await db.insertRow('product_toppings', data);
+  res.status(201).json({ ok: true, data: created });
+}));
+
+router.patch('/toppings/:id', asyncHandler(async (req, res) => {
+  const topping = await db.queryOne('SELECT id, group_id FROM product_toppings WHERE id = $1', [req.params.id]);
+  if (!topping) throw new ApiError('NOT_FOUND', 'Không tìm thấy topping', 404);
+  const group = await db.queryOne('SELECT product_id FROM product_topping_groups WHERE id = $1', [topping.group_id]);
+  const product = await db.queryOne('SELECT merchant_id FROM products WHERE id = $1', [group.product_id]);
+  await requireMerchantAccess(req.ctx, product.merchant_id);
+  const updated = await db.updateById('product_toppings', req.params.id, pickFields(req.body, TOPPING_FIELDS));
+  res.json({ ok: true, data: updated });
+}));
+
+router.delete('/toppings/:id', asyncHandler(async (req, res) => {
+  const topping = await db.queryOne('SELECT id, group_id FROM product_toppings WHERE id = $1', [req.params.id]);
+  if (!topping) throw new ApiError('NOT_FOUND', 'Không tìm thấy topping', 404);
+  const group = await db.queryOne('SELECT product_id FROM product_topping_groups WHERE id = $1', [topping.group_id]);
+  const product = await db.queryOne('SELECT merchant_id FROM products WHERE id = $1', [group.product_id]);
+  await requireMerchantAccess(req.ctx, product.merchant_id);
+  const deleted = await db.deleteById('product_toppings', req.params.id);
+  res.json({ ok: true, data: deleted });
 }));
 
 module.exports = router;

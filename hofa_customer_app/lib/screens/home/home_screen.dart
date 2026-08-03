@@ -1,9 +1,13 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/format.dart';
+import '../../models/product.dart';
 import '../../providers/app_providers.dart';
 import '../../widgets/category_grid.dart';
 import '../../widgets/merchant_card.dart';
+import '../../widgets/network_image_box.dart';
 import '../../widgets/product_card.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -15,15 +19,47 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   final _searchCtrl = TextEditingController();
+  Timer? _debounce;
+  List<Product> _suggestions = [];
+  bool _suggesting = false;
 
   @override
   void dispose() {
+    _debounce?.cancel();
     _searchCtrl.dispose();
     super.dispose();
   }
 
+  void _onSearchChanged(String value) {
+    _debounce?.cancel();
+    final q = value.trim();
+    if (q.length < 2) {
+      setState(() => _suggestions = []);
+      return;
+    }
+    _debounce = Timer(const Duration(milliseconds: 350), () async {
+      setState(() => _suggesting = true);
+      final results = await ref.read(productRepoProvider).products(q: q, limit: 6);
+      if (!mounted) return;
+      setState(() {
+        _suggestions = results;
+        _suggesting = false;
+      });
+    });
+  }
+
+  void _runFullSearch(String query) {
+    final q = query.trim();
+    if (q.isEmpty) return;
+    _debounce?.cancel();
+    setState(() => _suggestions = []);
+    ref.read(productSearchProvider.notifier).state = q;
+  }
+
   void _clearSearch() {
+    _debounce?.cancel();
     _searchCtrl.clear();
+    setState(() => _suggestions = []);
     ref.read(productSearchProvider.notifier).state = '';
   }
 
@@ -34,10 +70,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final searchQuery = ref.watch(productSearchProvider);
     final searchedProductsAsync = ref.watch(searchedProductsProvider);
     final isSearching = searchQuery.isNotEmpty;
+    final showSuggestions = _suggestions.isNotEmpty || _suggesting;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('HOFA'),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Image.asset('assets/images/logo.png', height: 28),
+            const SizedBox(width: 8),
+            const Text('HOFA', style: TextStyle(fontWeight: FontWeight.bold)),
+          ],
+        ),
         centerTitle: false,
       ),
       body: RefreshIndicator(
@@ -50,14 +94,55 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               decoration: InputDecoration(
                 hintText: 'Tìm sản phẩm...',
                 prefixIcon: const Icon(Icons.search),
-                suffixIcon: isSearching ? IconButton(icon: const Icon(Icons.close), onPressed: _clearSearch) : null,
+                suffixIcon: (isSearching || _searchCtrl.text.isNotEmpty)
+                    ? IconButton(icon: const Icon(Icons.close), onPressed: _clearSearch)
+                    : null,
                 border: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
                 isDense: true,
               ),
-              onSubmitted: (v) => ref.read(productSearchProvider.notifier).state = v.trim(),
+              onChanged: _onSearchChanged,
+              onSubmitted: _runFullSearch,
             ),
+            // Gợi ý nhỏ khi đang gõ — bấm 1 gợi ý hoặc nhấn Enter mới chạy tìm kiếm đầy
+            // đủ (danh sách lớn) bên dưới, tránh gọi API nặng liên tục theo từng ký tự.
+            if (showSuggestions)
+              Container(
+                margin: const EdgeInsets.only(top: 4),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: _suggesting
+                    ? const Padding(
+                        padding: EdgeInsets.all(16),
+                        child: Center(child: SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))),
+                      )
+                    : Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: _suggestions
+                            .map((p) => ListTile(
+                                  dense: true,
+                                  leading: NetworkImageBox(
+                                    url: p.images.isNotEmpty ? p.images.first : null,
+                                    width: 40,
+                                    height: 40,
+                                    borderRadius: BorderRadius.circular(8),
+                                    fallbackIcon: Icons.shopping_bag_outlined,
+                                  ),
+                                  title: Text(p.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+                                  subtitle: p.defaultVariant != null ? Text(formatVnd(p.defaultVariant!.price)) : null,
+                                  onTap: () {
+                                    _searchCtrl.text = p.name;
+                                    _runFullSearch(p.name);
+                                  },
+                                ))
+                            .toList(),
+                      ),
+              ),
             const SizedBox(height: 20),
-            if (isSearching)
+            if (showSuggestions)
+              const SizedBox()
+            else if (isSearching)
               searchedProductsAsync.when(
                 loading: () => const Padding(
                   padding: EdgeInsets.only(top: 40),

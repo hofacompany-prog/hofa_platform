@@ -69,7 +69,7 @@ class _AdminLoginScreenState extends ConsumerState<AdminLoginScreen> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.shield_outlined, size: 40, color: theme.colorScheme.primary),
+                      Image.asset('assets/images/logo.png', height: 64),
                       const SizedBox(height: 16),
                       Text('HOFA Admin',
                           textAlign: TextAlign.center,

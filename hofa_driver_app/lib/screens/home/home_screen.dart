@@ -99,7 +99,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('HOFA Tài xế')),
+      appBar: AppBar(
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Image.asset('assets/images/logo.png', height: 28),
+            const SizedBox(width: 8),
+            const Text('HOFA Tài xế', style: TextStyle(fontWeight: FontWeight.bold)),
+          ],
+        ),
+      ),
       body: RefreshIndicator(
         onRefresh: () async {
           ref.invalidate(myDriverProvider);

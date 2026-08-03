@@ -43,7 +43,7 @@ class AdminShell extends ConsumerWidget {
               padding: const EdgeInsets.symmetric(vertical: 20),
               child: Column(
                 children: [
-                  Icon(Icons.shield, size: 30, color: theme.colorScheme.primary),
+                  Image.asset('assets/images/logo.png', height: 30),
                   if (wide) ...[
                     const SizedBox(height: 8),
                     const Text('HOFA Admin', style: TextStyle(fontWeight: FontWeight.bold)),

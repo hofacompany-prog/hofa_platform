@@ -116,7 +116,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   const SizedBox(height: 24),
-                  Icon(Icons.two_wheeler, size: 56, color: Theme.of(context).colorScheme.primary),
+                  Center(child: Image.asset('assets/images/logo.png', height: 64)),
                   const SizedBox(height: 12),
                   Text(
                     'HOFA cho tài xế',

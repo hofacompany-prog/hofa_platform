@@ -27,6 +27,8 @@ DROP TABLE IF EXISTS drivers               CASCADE;
 DROP TABLE IF EXISTS stock_movements       CASCADE;
 DROP TABLE IF EXISTS inventory             CASCADE;
 DROP TABLE IF EXISTS wholesale_tiers       CASCADE;
+DROP TABLE IF EXISTS product_toppings      CASCADE;
+DROP TABLE IF EXISTS product_topping_groups CASCADE;
 DROP TABLE IF EXISTS product_variants      CASCADE;
 DROP TABLE IF EXISTS product_categories    CASCADE;
 DROP TABLE IF EXISTS products              CASCADE;

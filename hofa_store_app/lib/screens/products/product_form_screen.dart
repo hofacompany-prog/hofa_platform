@@ -46,6 +46,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   Product? _product;
   Branch? _branch;
   Map<String, int> _stockByVariant = {};
+  List<ToppingGroup> _toppingGroups = [];
   bool _loading = false;
   bool _loadingProduct = false;
   String? _error;
@@ -78,7 +79,10 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
       if (merchant == null) return;
       final branches = await MerchantRepository().branches(merchant.id);
       if (branches.isEmpty) return;
-      final branch = branches.firstWhere((b) => b.isMain, orElse: () => branches.first);
+      final branch = branches.firstWhere(
+        (b) => b.isMain,
+        orElse: () => branches.first,
+      );
       if (mounted) setState(() => _branch = branch);
       if (_isEdit) await _loadStock();
     } catch (_) {
@@ -90,7 +94,11 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     if (_branch == null) return;
     try {
       final items = await _inventoryRepo.list(_branch!.id);
-      setState(() => _stockByVariant = {for (final i in items) i.variantId: i.quantityOnHand});
+      setState(
+        () => _stockByVariant = {
+          for (final i in items) i.variantId: i.quantityOnHand,
+        },
+      );
     } catch (_) {
       // bỏ qua — phần tồn kho chỉ là thông tin thêm, không chặn sửa sản phẩm
     }
@@ -110,10 +118,20 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
         _imageUrl = p.images.isNotEmpty ? p.images.first : null;
       });
       await _loadStock();
+      await _loadToppingGroups();
     } catch (e) {
       setState(() => _error = 'Không tải được sản phẩm: $e');
     } finally {
       if (mounted) setState(() => _loadingProduct = false);
+    }
+  }
+
+  Future<void> _loadToppingGroups() async {
+    try {
+      final groups = await _repo.toppingGroups(widget.productId!);
+      if (mounted) setState(() => _toppingGroups = groups);
+    } catch (_) {
+      // bỏ qua — phần topping chỉ là tuỳ chọn thêm, không chặn sửa sản phẩm
     }
   }
 
@@ -139,7 +157,9 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
         });
         await _load();
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Đã lưu')));
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Đã lưu')));
         }
       } else {
         final merchant = await ref.read(myMerchantProvider.future);
@@ -158,7 +178,10 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
           wholesalePrice: int.tryParse(_wholesalePriceCtrl.text.trim()),
         );
         final stock = int.tryParse(_stockCtrl.text.trim());
-        if (stock != null && stock > 0 && _branch != null && created.variants.isNotEmpty) {
+        if (stock != null &&
+            stock > 0 &&
+            _branch != null &&
+            created.variants.isNotEmpty) {
           try {
             await _inventoryRepo.adjust(
               branchId: _branch!.id,
@@ -184,12 +207,24 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   Future<void> _variantDialog({ProductVariant? existing}) async {
     final nameCtrl = TextEditingController(text: existing?.name ?? '');
     final skuCtrl = TextEditingController(text: existing?.sku ?? '');
-    final priceCtrl = TextEditingController(text: existing?.price.toString() ?? '');
-    final comparePriceCtrl = TextEditingController(text: existing?.comparePrice?.toString() ?? '');
-    final costPriceCtrl = TextEditingController(text: existing?.costPrice?.toString() ?? '');
-    final wholesalePriceCtrl = TextEditingController(text: existing?.wholesalePrice?.toString() ?? '');
-    final currentStock = existing != null ? (_stockByVariant[existing.id] ?? 0) : 0;
-    final stockCtrl = TextEditingController(text: existing != null ? currentStock.toString() : '');
+    final priceCtrl = TextEditingController(
+      text: existing?.price.toString() ?? '',
+    );
+    final comparePriceCtrl = TextEditingController(
+      text: existing?.comparePrice?.toString() ?? '',
+    );
+    final costPriceCtrl = TextEditingController(
+      text: existing?.costPrice?.toString() ?? '',
+    );
+    final wholesalePriceCtrl = TextEditingController(
+      text: existing?.wholesalePrice?.toString() ?? '',
+    );
+    final currentStock = existing != null
+        ? (_stockByVariant[existing.id] ?? 0)
+        : 0;
+    final stockCtrl = TextEditingController(
+      text: existing != null ? currentStock.toString() : '',
+    );
     var isActive = existing?.isActive ?? true;
 
     final ok = await showDialog<bool>(
@@ -205,36 +240,53 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                 children: [
                   TextField(
                     controller: nameCtrl,
-                    decoration: const InputDecoration(labelText: 'Tên (VD: 500g, 1kg)', border: OutlineInputBorder()),
+                    decoration: const InputDecoration(
+                      labelText: 'Tên (VD: 500g, 1kg)',
+                      border: OutlineInputBorder(),
+                    ),
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: skuCtrl,
-                    decoration: const InputDecoration(labelText: 'Mã SKU (không bắt buộc)', border: OutlineInputBorder()),
+                    decoration: const InputDecoration(
+                      labelText: 'Mã SKU (không bắt buộc)',
+                      border: OutlineInputBorder(),
+                    ),
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: priceCtrl,
-                    decoration: const InputDecoration(labelText: 'Giá bán (VNĐ)', border: OutlineInputBorder()),
+                    decoration: const InputDecoration(
+                      labelText: 'Giá bán (VNĐ)',
+                      border: OutlineInputBorder(),
+                    ),
                     keyboardType: TextInputType.number,
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: comparePriceCtrl,
-                    decoration:
-                        const InputDecoration(labelText: 'Giá gốc / gạch ngang (không bắt buộc)', border: OutlineInputBorder()),
+                    decoration: const InputDecoration(
+                      labelText: 'Giá gốc / gạch ngang (không bắt buộc)',
+                      border: OutlineInputBorder(),
+                    ),
                     keyboardType: TextInputType.number,
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: costPriceCtrl,
-                    decoration: const InputDecoration(labelText: 'Giá nhập (không bắt buộc)', border: OutlineInputBorder()),
+                    decoration: const InputDecoration(
+                      labelText: 'Giá nhập (không bắt buộc)',
+                      border: OutlineInputBorder(),
+                    ),
                     keyboardType: TextInputType.number,
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: wholesalePriceCtrl,
-                    decoration: const InputDecoration(labelText: 'Giá sỉ (không bắt buộc)', border: OutlineInputBorder()),
+                    decoration: const InputDecoration(
+                      labelText: 'Giá sỉ (không bắt buộc)',
+                      border: OutlineInputBorder(),
+                    ),
                     keyboardType: TextInputType.number,
                   ),
                   if (_branch != null) ...[
@@ -242,7 +294,9 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                     TextField(
                       controller: stockCtrl,
                       decoration: InputDecoration(
-                        labelText: existing == null ? 'Tồn kho ban đầu (không bắt buộc)' : 'Tồn kho hiện tại',
+                        labelText: existing == null
+                            ? 'Tồn kho ban đầu (không bắt buộc)'
+                            : 'Tồn kho hiện tại',
                         border: const OutlineInputBorder(),
                       ),
                       keyboardType: TextInputType.number,
@@ -262,8 +316,14 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Huỷ')),
-            FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Lưu')),
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Huỷ'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Lưu'),
+            ),
           ],
         ),
       ),
@@ -318,7 +378,11 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
       }
       await _load();
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      }
     }
   }
 
@@ -327,7 +391,226 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
       await _repo.deleteVariant(id);
       await _load();
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      }
+    }
+  }
+
+  Future<void> _toppingGroupDialog({ToppingGroup? existing}) async {
+    final nameCtrl = TextEditingController(text: existing?.name ?? '');
+    var isRequired = existing?.isRequired ?? false;
+    var allowMultiple = existing?.allowMultiple ?? false;
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setInner) => AlertDialog(
+          title: Text(
+            existing == null ? 'Thêm nhóm topping' : 'Sửa nhóm topping',
+          ),
+          content: SizedBox(
+            width: 380,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextField(
+                    controller: nameCtrl,
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      labelText: 'Tên nhóm (VD: Chọn topping, Độ ngọt)',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Bắt buộc chọn'),
+                    subtitle: const Text(
+                      'Khách phải chọn ít nhất 1 mục trong nhóm này',
+                    ),
+                    value: isRequired,
+                    onChanged: (v) => setInner(() => isRequired = v),
+                  ),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Cho chọn nhiều mục'),
+                    subtitle: const Text(
+                      'Bật: chọn nhiều · Tắt: chỉ chọn 1 trong nhóm',
+                    ),
+                    value: allowMultiple,
+                    onChanged: (v) => setInner(() => allowMultiple = v),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Huỷ'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Lưu'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (ok != true || nameCtrl.text.trim().isEmpty) return;
+
+    try {
+      if (existing == null) {
+        await _repo.createToppingGroup(
+          productId: widget.productId!,
+          name: nameCtrl.text.trim(),
+          isRequired: isRequired,
+          allowMultiple: allowMultiple,
+        );
+      } else {
+        await _repo.updateToppingGroup(existing.id, {
+          'name': nameCtrl.text.trim(),
+          'is_required': isRequired,
+          'allow_multiple': allowMultiple,
+        });
+      }
+      await _loadToppingGroups();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      }
+    }
+  }
+
+  Future<void> _deleteToppingGroup(ToppingGroup group) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Xoá nhóm topping?'),
+        content: Text(
+          'Xoá nhóm "${group.name}" sẽ xoá luôn ${group.toppings.length} lựa chọn bên trong.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Huỷ'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Xoá'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await _repo.deleteToppingGroup(group.id);
+      await _loadToppingGroups();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      }
+    }
+  }
+
+  Future<void> _toppingDialog({
+    required String groupId,
+    Topping? existing,
+  }) async {
+    final nameCtrl = TextEditingController(text: existing?.name ?? '');
+    final priceCtrl = TextEditingController(
+      text: existing?.price.toString() ?? '0',
+    );
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(existing == null ? 'Thêm lựa chọn' : 'Sửa lựa chọn'),
+        content: SizedBox(
+          width: 360,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameCtrl,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Tên (VD: Trân châu đen)',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: priceCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Giá cộng thêm (VNĐ, để 0 nếu miễn phí)',
+                    border: OutlineInputBorder(),
+                  ),
+                  keyboardType: TextInputType.number,
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Huỷ'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Lưu'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || nameCtrl.text.trim().isEmpty) return;
+    final price = int.tryParse(priceCtrl.text.trim()) ?? 0;
+
+    try {
+      if (existing == null) {
+        await _repo.createTopping(
+          groupId: groupId,
+          name: nameCtrl.text.trim(),
+          price: price,
+        );
+      } else {
+        await _repo.updateTopping(existing.id, {
+          'name': nameCtrl.text.trim(),
+          'price': price,
+        });
+      }
+      await _loadToppingGroups();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      }
+    }
+  }
+
+  Future<void> _deleteTopping(String id) async {
+    try {
+      await _repo.deleteTopping(id);
+      await _loadToppingGroups();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      }
     }
   }
 
@@ -349,13 +632,21 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                       children: [
                         TextFormField(
                           controller: _nameCtrl,
-                          decoration: const InputDecoration(labelText: 'Tên sản phẩm', border: OutlineInputBorder()),
-                          validator: (v) => (v == null || v.trim().isEmpty) ? 'Nhập tên sản phẩm' : null,
+                          decoration: const InputDecoration(
+                            labelText: 'Tên sản phẩm',
+                            border: OutlineInputBorder(),
+                          ),
+                          validator: (v) => (v == null || v.trim().isEmpty)
+                              ? 'Nhập tên sản phẩm'
+                              : null,
                         ),
                         const SizedBox(height: 12),
                         TextFormField(
                           controller: _descCtrl,
-                          decoration: const InputDecoration(labelText: 'Mô tả (không bắt buộc)', border: OutlineInputBorder()),
+                          decoration: const InputDecoration(
+                            labelText: 'Mô tả (không bắt buộc)',
+                            border: OutlineInputBorder(),
+                          ),
                           maxLines: 3,
                         ),
                         const SizedBox(height: 16),
@@ -371,19 +662,33 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                             Expanded(
                               child: TextFormField(
                                 controller: _unitCtrl,
-                                decoration: const InputDecoration(labelText: 'Đơn vị (kg, bó, hộp...)', border: OutlineInputBorder()),
+                                decoration: const InputDecoration(
+                                  labelText: 'Đơn vị (kg, bó, hộp...)',
+                                  border: OutlineInputBorder(),
+                                ),
                               ),
                             ),
                             const SizedBox(width: 12),
                             Expanded(
                               child: DropdownButtonFormField<String>(
                                 initialValue: _salesModel,
-                                decoration: const InputDecoration(labelText: 'Hình thức bán', border: OutlineInputBorder()),
+                                decoration: const InputDecoration(
+                                  labelText: 'Hình thức bán',
+                                  border: OutlineInputBorder(),
+                                ),
                                 items: const [
-                                  DropdownMenuItem(value: 'instant', child: Text('Giao ngay')),
-                                  DropdownMenuItem(value: 'scheduled', child: Text('Đặt trước / bán sỉ')),
+                                  DropdownMenuItem(
+                                    value: 'instant',
+                                    child: Text('Giao ngay'),
+                                  ),
+                                  DropdownMenuItem(
+                                    value: 'scheduled',
+                                    child: Text('Đặt trước / bán sỉ'),
+                                  ),
                                 ],
-                                onChanged: (v) => setState(() => _salesModel = v ?? 'instant'),
+                                onChanged: (v) => setState(
+                                  () => _salesModel = v ?? 'instant',
+                                ),
                               ),
                             ),
                           ],
@@ -391,24 +696,42 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                         const SizedBox(height: 12),
                         DropdownButtonFormField<String>(
                           initialValue: _status,
-                          decoration: const InputDecoration(labelText: 'Trạng thái sản phẩm', border: OutlineInputBorder()),
+                          decoration: const InputDecoration(
+                            labelText: 'Trạng thái sản phẩm',
+                            border: OutlineInputBorder(),
+                          ),
                           items: productStatusLabels.entries
-                              .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))
+                              .map(
+                                (e) => DropdownMenuItem(
+                                  value: e.key,
+                                  child: Text(e.value),
+                                ),
+                              )
                               .toList(),
-                          onChanged: (v) => setState(() => _status = v ?? _status),
+                          onChanged: (v) =>
+                              setState(() => _status = v ?? _status),
                         ),
                         if (!_isEdit) ...[
                           const Divider(height: 32),
                           Align(
                             alignment: Alignment.centerLeft,
-                            child: Text('Giá bán', style: Theme.of(context).textTheme.labelLarge),
+                            child: Text(
+                              'Giá bán',
+                              style: Theme.of(context).textTheme.labelLarge,
+                            ),
                           ),
                           const SizedBox(height: 12),
                           TextFormField(
                             controller: _priceCtrl,
-                            decoration: const InputDecoration(labelText: 'Giá bán (VNĐ)', border: OutlineInputBorder()),
+                            decoration: const InputDecoration(
+                              labelText: 'Giá bán (VNĐ)',
+                              border: OutlineInputBorder(),
+                            ),
                             keyboardType: TextInputType.number,
-                            validator: (v) => (int.tryParse(v?.trim() ?? '') == null) ? 'Nhập giá bán hợp lệ' : null,
+                            validator: (v) =>
+                                (int.tryParse(v?.trim() ?? '') == null)
+                                ? 'Nhập giá bán hợp lệ'
+                                : null,
                           ),
                           const SizedBox(height: 12),
                           Row(
@@ -417,7 +740,9 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                                 child: TextFormField(
                                   controller: _comparePriceCtrl,
                                   decoration: const InputDecoration(
-                                      labelText: 'Giá gốc (gạch ngang)', border: OutlineInputBorder()),
+                                    labelText: 'Giá gốc (gạch ngang)',
+                                    border: OutlineInputBorder(),
+                                  ),
                                   keyboardType: TextInputType.number,
                                 ),
                               ),
@@ -425,7 +750,10 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                               Expanded(
                                 child: TextFormField(
                                   controller: _costPriceCtrl,
-                                  decoration: const InputDecoration(labelText: 'Giá nhập', border: OutlineInputBorder()),
+                                  decoration: const InputDecoration(
+                                    labelText: 'Giá nhập',
+                                    border: OutlineInputBorder(),
+                                  ),
                                   keyboardType: TextInputType.number,
                                 ),
                               ),
@@ -435,7 +763,10 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                             const SizedBox(height: 12),
                             TextFormField(
                               controller: _wholesalePriceCtrl,
-                              decoration: const InputDecoration(labelText: 'Giá sỉ', border: OutlineInputBorder()),
+                              decoration: const InputDecoration(
+                                labelText: 'Giá sỉ',
+                                border: OutlineInputBorder(),
+                              ),
                               keyboardType: TextInputType.number,
                             ),
                           ],
@@ -444,7 +775,9 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                             TextFormField(
                               controller: _stockCtrl,
                               decoration: const InputDecoration(
-                                  labelText: 'Tồn kho ban đầu (không bắt buộc)', border: OutlineInputBorder()),
+                                labelText: 'Tồn kho ban đầu (không bắt buộc)',
+                                border: OutlineInputBorder(),
+                              ),
                               keyboardType: TextInputType.number,
                             ),
                           ],
@@ -458,13 +791,24 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                         ],
                         if (_error != null) ...[
                           const SizedBox(height: 16),
-                          Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                          Text(
+                            _error!,
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.error,
+                            ),
+                          ),
                         ],
                         const SizedBox(height: 20),
                         FilledButton(
                           onPressed: _loading ? null : _submit,
                           child: _loading
-                              ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                              ? const SizedBox(
+                                  height: 20,
+                                  width: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
                               : Text(_isEdit ? 'Lưu thay đổi' : 'Tạo sản phẩm'),
                         ),
                         if (_isEdit) ...[
@@ -472,7 +816,10 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text('Biến thể & giá', style: Theme.of(context).textTheme.titleMedium),
+                              Text(
+                                'Biến thể & giá',
+                                style: Theme.of(context).textTheme.titleMedium,
+                              ),
                               TextButton.icon(
                                 onPressed: () => _variantDialog(),
                                 icon: const Icon(Icons.add),
@@ -482,7 +829,9 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                           ),
                           const SizedBox(height: 8),
                           if ((_product?.variants ?? []).isEmpty)
-                            const Text('Chưa có biến thể nào. Khách sẽ không mua được nếu chưa có giá.')
+                            const Text(
+                              'Chưa có biến thể nào. Khách sẽ không mua được nếu chưa có giá.',
+                            )
                           else
                             ...(_product!.variants.map((v) {
                               final stock = _stockByVariant[v.id];
@@ -494,33 +843,47 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                                       Flexible(child: Text(v.name)),
                                       if (v.isDefault) ...[
                                         const SizedBox(width: 6),
-                                        const Chip(label: Text('Mặc định'), visualDensity: VisualDensity.compact),
+                                        const Chip(
+                                          label: Text('Mặc định'),
+                                          visualDensity: VisualDensity.compact,
+                                        ),
                                       ],
                                       if (!v.isActive) ...[
                                         const SizedBox(width: 6),
                                         Chip(
                                           label: const Text('Ngừng bán'),
                                           visualDensity: VisualDensity.compact,
-                                          backgroundColor: Theme.of(context).colorScheme.errorContainer,
+                                          backgroundColor: Theme.of(
+                                            context,
+                                          ).colorScheme.errorContainer,
                                         ),
                                       ],
                                     ],
                                   ),
-                                  subtitle: Text([
-                                    formatVnd(v.price),
-                                    if (v.comparePrice != null) 'Giá gốc ${formatVnd(v.comparePrice!)}',
-                                    if (v.sku != null && v.sku!.isNotEmpty) 'SKU ${v.sku}',
-                                    if (stock != null) 'Tồn kho: $stock${lowStock ? ' (sắp hết)' : ''}',
-                                  ].join(' · ')),
+                                  subtitle: Text(
+                                    [
+                                      formatVnd(v.price),
+                                      if (v.comparePrice != null)
+                                        'Giá gốc ${formatVnd(v.comparePrice!)}',
+                                      if (v.sku != null && v.sku!.isNotEmpty)
+                                        'SKU ${v.sku}',
+                                      if (stock != null)
+                                        'Tồn kho: $stock${lowStock ? ' (sắp hết)' : ''}',
+                                    ].join(' · '),
+                                  ),
                                   leading: lowStock
-                                      ? const Icon(Icons.warning_amber, color: Colors.orange)
+                                      ? const Icon(
+                                          Icons.warning_amber,
+                                          color: Colors.orange,
+                                        )
                                       : null,
                                   trailing: Row(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
                                       IconButton(
                                         icon: const Icon(Icons.edit_outlined),
-                                        onPressed: () => _variantDialog(existing: v),
+                                        onPressed: () =>
+                                            _variantDialog(existing: v),
                                       ),
                                       IconButton(
                                         icon: const Icon(Icons.delete_outline),
@@ -531,6 +894,177 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                                 ),
                               );
                             })),
+                          const SizedBox(height: 32),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'Topping & tuỳ chọn thêm',
+                                style: Theme.of(context).textTheme.titleMedium,
+                              ),
+                              TextButton.icon(
+                                onPressed: () => _toppingGroupDialog(),
+                                icon: const Icon(Icons.add),
+                                label: const Text('Thêm nhóm'),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'VD: "Chọn topping" (chọn nhiều, không bắt buộc), "Size" (chỉ chọn 1, bắt buộc).',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                          const SizedBox(height: 8),
+                          if (_toppingGroups.isEmpty)
+                            const Text(
+                              'Chưa có nhóm topping nào. Sản phẩm vẫn bán bình thường nếu không cần.',
+                            )
+                          else
+                            ..._toppingGroups.map(
+                              (g) => Card(
+                                elevation: 0,
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.surfaceContainerLow,
+                                margin: const EdgeInsets.only(bottom: 12),
+                                child: Padding(
+                                  padding: const EdgeInsets.fromLTRB(
+                                    16,
+                                    12,
+                                    8,
+                                    12,
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: Wrap(
+                                              crossAxisAlignment:
+                                                  WrapCrossAlignment.center,
+                                              spacing: 8,
+                                              runSpacing: 4,
+                                              children: [
+                                                Text(
+                                                  g.name,
+                                                  style: Theme.of(
+                                                    context,
+                                                  ).textTheme.titleSmall,
+                                                ),
+                                                if (g.isRequired)
+                                                  Chip(
+                                                    label: const Text(
+                                                      'Bắt buộc',
+                                                    ),
+                                                    visualDensity:
+                                                        VisualDensity.compact,
+                                                    backgroundColor:
+                                                        Theme.of(context)
+                                                            .colorScheme
+                                                            .errorContainer,
+                                                  ),
+                                                Chip(
+                                                  label: Text(
+                                                    g.allowMultiple
+                                                        ? 'Chọn nhiều'
+                                                        : 'Chọn 1',
+                                                  ),
+                                                  visualDensity:
+                                                      VisualDensity.compact,
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          PopupMenuButton<String>(
+                                            onSelected: (v) {
+                                              if (v == 'edit') {
+                                                _toppingGroupDialog(
+                                                  existing: g,
+                                                );
+                                              }
+                                              if (v == 'delete') {
+                                                _deleteToppingGroup(g);
+                                              }
+                                            },
+                                            itemBuilder: (context) => const [
+                                              PopupMenuItem(
+                                                value: 'edit',
+                                                child: Text('Sửa nhóm'),
+                                              ),
+                                              PopupMenuItem(
+                                                value: 'delete',
+                                                child: Text('Xoá nhóm'),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+                                      if (g.toppings.isEmpty)
+                                        Padding(
+                                          padding: const EdgeInsets.only(
+                                            left: 4,
+                                            bottom: 4,
+                                          ),
+                                          child: Text(
+                                            'Chưa có lựa chọn nào trong nhóm này.',
+                                            style: Theme.of(
+                                              context,
+                                            ).textTheme.bodySmall,
+                                          ),
+                                        )
+                                      else
+                                        ...g.toppings.map(
+                                          (t) => ListTile(
+                                            dense: true,
+                                            contentPadding: EdgeInsets.zero,
+                                            title: Text(t.name),
+                                            subtitle: Text(
+                                              t.price > 0
+                                                  ? '+${formatVnd(t.price)}'
+                                                  : 'Miễn phí',
+                                            ),
+                                            trailing: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                IconButton(
+                                                  icon: const Icon(
+                                                    Icons.edit_outlined,
+                                                    size: 20,
+                                                  ),
+                                                  onPressed: () =>
+                                                      _toppingDialog(
+                                                        groupId: g.id,
+                                                        existing: t,
+                                                      ),
+                                                ),
+                                                IconButton(
+                                                  icon: const Icon(
+                                                    Icons.delete_outline,
+                                                    size: 20,
+                                                  ),
+                                                  onPressed: () =>
+                                                      _deleteTopping(t.id),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      Align(
+                                        alignment: Alignment.centerLeft,
+                                        child: TextButton.icon(
+                                          onPressed: () =>
+                                              _toppingDialog(groupId: g.id),
+                                          icon: const Icon(Icons.add, size: 18),
+                                          label: const Text('Thêm lựa chọn'),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
                         ],
                       ],
                     ),

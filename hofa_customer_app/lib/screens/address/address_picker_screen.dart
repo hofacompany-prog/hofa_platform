@@ -64,17 +64,60 @@ class _AddressPickerScreenState extends State<AddressPickerScreen> {
     super.dispose();
   }
 
+  /// [userInitiated] = true khi bấm nút định vị (animate mặc định true) — lúc đó LUÔN
+  /// thử hỏi lại quyền nếu chưa có (kể cả trước đó đã từ chối) và báo rõ cho biết nếu
+  /// không lấy được vị trí, thay vì im lặng không làm gì. Áp dụng như nhau trên cả web
+  /// lẫn app vì geolocator dùng chung 1 API cho mọi nền tảng.
+  /// initState gọi với animate=false — vẫn im lặng, không làm phiền ngay lúc mở màn hình.
   Future<void> _tryLocateMe({bool animate = true}) async {
+    final userInitiated = animate;
     try {
-      final permission = await Geolocator.checkPermission();
-      var granted = permission == LocationPermission.always || permission == LocationPermission.whileInUse;
-      if (!granted && permission != LocationPermission.deniedForever) {
-        final requested = await Geolocator.requestPermission();
-        granted = requested == LocationPermission.always || requested == LocationPermission.whileInUse;
+      if (userInitiated) {
+        // Trình duyệt web không hỗ trợ kiểm tra riêng "dịch vụ định vị có bật không"
+        // (geolocator_web không cài đặt method này) — coi như đang bật, để trình duyệt
+        // tự xử lý qua bước xin quyền/lấy vị trí bên dưới thay vì báo lỗi oan.
+        var serviceEnabled = true;
+        try {
+          serviceEnabled = await Geolocator.isLocationServiceEnabled();
+        } catch (_) {}
+        if (!serviceEnabled) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Vui lòng bật định vị (GPS/vị trí) trên thiết bị để dùng tính năng này.')),
+            );
+          }
+          return;
+        }
       }
-      if (!granted) return;
+
+      var permission = await Geolocator.checkPermission();
+      var granted = permission == LocationPermission.always || permission == LocationPermission.whileInUse;
+      if (!granted && (userInitiated || permission != LocationPermission.deniedForever)) {
+        permission = await Geolocator.requestPermission();
+        granted = permission == LocationPermission.always || permission == LocationPermission.whileInUse;
+      }
+      if (!granted) {
+        if (userInitiated && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text(
+              permission == LocationPermission.deniedForever
+                  ? 'HOFA chưa được cấp quyền vị trí — vào phần Cài đặt quyền của thiết bị/trình duyệt để bật lại.'
+                  : 'Cần cấp quyền vị trí để định vị vị trí hiện tại.',
+            ),
+          ));
+        }
+        return;
+      }
+
+      // geolocator_web (4.1.4) có lỗi đơn vị thời gian — truyền timeLimit dưới dạng mili-giây
+      // thay vì đúng đơn vị nên trình duyệt hiểu 8 giây thành >2 tiếng. Tự giới hạn thời gian
+      // chờ ở đây để không bị treo lâu bất thường khi trình duyệt (đặc biệt Safari) chậm trả
+      // vị trí hoặc không trả lỗi rõ ràng.
       final pos = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(accuracy: LocationAccuracy.medium, timeLimit: Duration(seconds: 8)),
+      ).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () => throw TimeoutException('Quá thời gian chờ xác định vị trí'),
       );
       final target = LatLng(pos.latitude, pos.longitude);
       _center = target;
@@ -85,7 +128,12 @@ class _AddressPickerScreenState extends State<AddressPickerScreen> {
         _resolveAddressAt(target); // bản đồ chưa dựng xong lúc initState — xác định địa chỉ ngay, không đợi sự kiện kéo bản đồ
       }
     } catch (_) {
-      // Không có quyền hoặc không lấy được vị trí — vẫn ở toạ độ mặc định, khách tự kéo bản đồ.
+      if (userInitiated && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Không thể lấy vị trí, vui lòng nhập hoặc kéo thả để lấy vị trí nhé!'),
+        ));
+      }
+      // initState: im lặng, vẫn ở toạ độ mặc định, khách tự kéo bản đồ.
     }
   }
 

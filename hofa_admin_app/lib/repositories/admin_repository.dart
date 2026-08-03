@@ -143,6 +143,7 @@ class AdminRepository {
     String? parentId,
     String? iconUrl,
     String? iconName,
+    int? sortOrder,
   }) async =>
       Category.fromJson(await _api.post('/categories', body: {
         'name': name,
@@ -150,6 +151,7 @@ class AdminRepository {
         if (parentId != null) 'parent_id': parentId,
         if (iconUrl != null) 'icon_url': iconUrl,
         if (iconName != null) 'icon_name': iconName,
+        if (sortOrder != null) 'sort_order': sortOrder,
       }) as Map<String, dynamic>);
 
   Future<Category> updateCategory(String id, Map<String, dynamic> data) async =>

@@ -1,16 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/phone_auth.dart';
-import '../../repositories/user_repository.dart';
+import '../../providers/auth_provider.dart';
 
-class LoginScreen extends StatefulWidget {
+class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _phoneCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
@@ -91,8 +92,11 @@ class _LoginScreenState extends State<LoginScreen> {
             'Không tạo được phiên đăng nhập. Cần tắt "Confirm email" trong Supabase Auth settings vì tài khoản dùng email nội bộ, không nhận được thư xác nhận thật.');
         return;
       }
-      // Đảm bảo có hồ sơ public.users ngay — CreateStoreScreen phía sau cần nó.
-      await UserRepository().syncProfile(fullName: _fullNameCtrl.text.trim(), phone: _phoneCtrl.text.trim());
+      // KHÔNG gọi syncProfile ở đây — hồ sơ public.users (và cửa hàng) chỉ được ghi
+      // xuống database khi chủ cửa hàng hoàn tất màn "Tạo cửa hàng" tiếp theo. Chỉ giữ
+      // tạm họ tên/SĐT trong bộ nhớ để điền sẵn form, tránh gõ lại.
+      ref.read(pendingSignupProvider.notifier).state =
+          PendingSignup(fullName: _fullNameCtrl.text.trim(), phone: _phoneCtrl.text.trim());
     } on AuthException catch (e) {
       setState(() => _error = e.message);
     } catch (e) {
@@ -116,6 +120,8 @@ class _LoginScreenState extends State<LoginScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   const SizedBox(height: 24),
+                  Center(child: Image.asset('assets/images/logo.png', height: 64)),
+                  const SizedBox(height: 16),
                   Text(
                     'HOFA cho cửa hàng',
                     textAlign: TextAlign.center,

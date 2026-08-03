@@ -28,7 +28,8 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
   }
 
   /// Chỉ danh mục con được, không cho chọn tiếp danh mục con làm cha (giới hạn 2 cấp).
-  Future<void> _addDialog(List<Category> roots, {String? parentId}) async {
+  Future<void> _addDialog(List<Category> all, {String? parentId}) async {
+    final roots = all.where((c) => c.parentId == null).toList();
     final nameCtrl = TextEditingController();
     String? selectedParent = parentId;
     String? iconName;
@@ -87,12 +88,18 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
     setState(() => _busy = true);
     try {
       final name = nameCtrl.text.trim();
+      // Danh mục mới luôn xếp ở cuối nhóm anh em của nó (cha giống nhau), không giành chỗ
+      // của danh mục đã sắp xếp trước đó.
+      final siblings = all.where((c) => c.parentId == selectedParent);
+      final nextSortOrder =
+          siblings.isEmpty ? 0 : siblings.map((c) => c.sortOrder).reduce((a, b) => a > b ? a : b) + 1;
       await ref.read(adminRepoProvider).createCategory(
             name: name,
             // slug phải là duy nhất toàn sàn, thêm hậu tố thời gian để không đụng tên trùng
             slug: '${_slugify(name)}-${DateTime.now().millisecondsSinceEpoch % 10000}',
             parentId: selectedParent,
             iconName: iconName,
+            sortOrder: nextSortOrder,
           );
       ref.invalidate(categoriesProvider);
     } catch (e) {
@@ -158,6 +165,32 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
     }
   }
 
+  /// Đổi vị trí [category] lên/xuống 1 bậc trong nhóm anh em [siblings] (đã sắp theo thứ tự
+  /// hiện tại). Ghi lại sort_order tuần tự 0..n-1 cho cả nhóm — tự "chữa" luôn trường hợp
+  /// nhiều danh mục cũ đang cùng sort_order=0 (chưa từng sắp xếp) chỉ sau 1 lần bấm.
+  Future<void> _move(List<Category> siblings, int index, int direction) async {
+    final newIndex = index + direction;
+    if (newIndex < 0 || newIndex >= siblings.length) return;
+
+    final reordered = List<Category>.from(siblings);
+    final item = reordered.removeAt(index);
+    reordered.insert(newIndex, item);
+
+    setState(() => _busy = true);
+    try {
+      for (var i = 0; i < reordered.length; i++) {
+        if (reordered[i].sortOrder != i) {
+          await ref.read(adminRepoProvider).updateCategory(reordered[i].id, {'sort_order': i});
+        }
+      }
+      ref.invalidate(categoriesProvider);
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _deleteDialog(Category category, {required int childCount}) async {
     final ok = await showDialog<bool>(
       context: context,
@@ -204,7 +237,7 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
             data: (list) => Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               child: FilledButton.icon(
-                onPressed: _busy ? null : () => _addDialog(list.where((c) => c.parentId == null).toList()),
+                onPressed: _busy ? null : () => _addDialog(list),
                 icon: const Icon(Icons.add),
                 label: const Text('Thêm danh mục'),
               ),
@@ -217,16 +250,20 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Lỗi: $e')),
         data: (all) {
-          final roots = all.where((c) => c.parentId == null).toList();
+          final roots = all.where((c) => c.parentId == null).toList()
+            ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
           if (all.isEmpty) return const Center(child: Text('Chưa có danh mục nào'));
 
-          List<Category> childrenOf(String id) => all.where((c) => c.parentId == id).toList();
+          List<Category> childrenOf(String id) => all.where((c) => c.parentId == id).toList()
+            ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
 
           return ListView(
             padding: const EdgeInsets.all(24),
             children: [
               if (_busy) const Padding(padding: EdgeInsets.only(bottom: 12), child: LinearProgressIndicator()),
-              ...roots.map((root) {
+              ...roots.asMap().entries.map((entry) {
+                final rootIndex = entry.key;
+                final root = entry.value;
                 final kids = childrenOf(root.id);
                 return Card(
                   elevation: 0,
@@ -239,7 +276,9 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
                           subtitle: Text(root.slug, style: theme.textTheme.bodySmall),
                           trailing: _CategoryActions(
                             busy: _busy,
-                            onAddChild: () => _addDialog(roots, parentId: root.id),
+                            onMoveUp: rootIndex > 0 ? () => _move(roots, rootIndex, -1) : null,
+                            onMoveDown: rootIndex < roots.length - 1 ? () => _move(roots, rootIndex, 1) : null,
+                            onAddChild: () => _addDialog(all, parentId: root.id),
                             onEdit: () => _editDialog(root),
                             onDelete: () => _deleteDialog(root, childCount: 0),
                           ),
@@ -250,12 +289,17 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
                           subtitle: Text('${kids.length} danh mục con', style: theme.textTheme.bodySmall),
                           trailing: _CategoryActions(
                             busy: _busy,
-                            onAddChild: () => _addDialog(roots, parentId: root.id),
+                            onMoveUp: rootIndex > 0 ? () => _move(roots, rootIndex, -1) : null,
+                            onMoveDown: rootIndex < roots.length - 1 ? () => _move(roots, rootIndex, 1) : null,
+                            onAddChild: () => _addDialog(all, parentId: root.id),
                             onEdit: () => _editDialog(root),
                             onDelete: () => _deleteDialog(root, childCount: kids.length),
                           ),
                           children: [
-                            ...kids.map((kid) => Padding(
+                            ...kids.asMap().entries.map((kidEntry) {
+                              final kidIndex = kidEntry.key;
+                              final kid = kidEntry.value;
+                              return Padding(
                                   padding: const EdgeInsets.only(left: 16),
                                   child: ListTile(
                                     dense: true,
@@ -263,17 +307,20 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
                                     title: Text(kid.name),
                                     trailing: _CategoryActions(
                                       busy: _busy,
+                                      onMoveUp: kidIndex > 0 ? () => _move(kids, kidIndex, -1) : null,
+                                      onMoveDown: kidIndex < kids.length - 1 ? () => _move(kids, kidIndex, 1) : null,
                                       onEdit: () => _editDialog(kid),
                                       onDelete: () => _deleteDialog(kid, childCount: 0),
                                     ),
                                   ),
-                                )),
+                                );
+                            }),
                             Padding(
                               padding: const EdgeInsets.only(left: 24, bottom: 8),
                               child: Align(
                                 alignment: Alignment.centerLeft,
                                 child: TextButton.icon(
-                                  onPressed: _busy ? null : () => _addDialog(roots, parentId: root.id),
+                                  onPressed: _busy ? null : () => _addDialog(all, parentId: root.id),
                                   icon: const Icon(Icons.add, size: 18),
                                   label: const Text('Thêm vào nhóm này'),
                                 ),
@@ -293,17 +340,36 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
 
 class _CategoryActions extends StatelessWidget {
   final bool busy;
+  final VoidCallback? onMoveUp;
+  final VoidCallback? onMoveDown;
   final VoidCallback? onAddChild;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
 
-  const _CategoryActions({required this.busy, this.onAddChild, required this.onEdit, required this.onDelete});
+  const _CategoryActions({
+    required this.busy,
+    this.onMoveUp,
+    this.onMoveDown,
+    this.onAddChild,
+    required this.onEdit,
+    required this.onDelete,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
+        IconButton(
+          tooltip: 'Đưa lên trên',
+          icon: const Icon(Icons.arrow_upward),
+          onPressed: busy || onMoveUp == null ? null : onMoveUp,
+        ),
+        IconButton(
+          tooltip: 'Đưa xuống dưới',
+          icon: const Icon(Icons.arrow_downward),
+          onPressed: busy || onMoveDown == null ? null : onMoveDown,
+        ),
         if (onAddChild != null)
           IconButton(
             tooltip: 'Thêm danh mục con',

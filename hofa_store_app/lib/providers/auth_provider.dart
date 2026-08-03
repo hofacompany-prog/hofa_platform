@@ -9,6 +9,18 @@ import '../repositories/merchant_repository.dart';
 final _userRepo = UserRepository();
 final _merchantRepo = MerchantRepository();
 
+/// Họ tên + SĐT vừa nhập lúc đăng ký (OTP xác nhận xong) — chỉ giữ tạm trong bộ nhớ để
+/// điền sẵn màn "Tạo cửa hàng" tiếp theo, KHÔNG ghi xuống database ở bước này. Hồ sơ
+/// public.users thật sự chỉ được tạo khi chủ cửa hàng hoàn tất "Tạo cửa hàng" (xem
+/// CreateStoreScreen._submit) — bỏ dở giữa chừng thì không có gì bị lưu lại.
+class PendingSignup {
+  final String fullName;
+  final String phone;
+  const PendingSignup({required this.fullName, required this.phone});
+}
+
+final pendingSignupProvider = StateProvider<PendingSignup?>((ref) => null);
+
 /// Phát lại mỗi khi trạng thái đăng nhập Supabase đổi (login/logout/token refresh).
 final authStateProvider = StreamProvider<AuthState>((ref) {
   return Supabase.instance.client.auth.onAuthStateChange;

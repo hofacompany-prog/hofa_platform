@@ -5,6 +5,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'core/env.dart';
 import 'core/push_service.dart';
 import 'router.dart';
+import 'widgets/app_background.dart';
 
 final navigatorKey = GlobalKey<NavigatorState>();
 
@@ -35,9 +36,17 @@ class HofaStoreApp extends ConsumerWidget {
       title: 'HOFA — Quản lý cửa hàng',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorSchemeSeed: Colors.green,
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF85C100),
+          primary: const Color(0xFF85C100),
+          secondary: const Color(0xFFFB8519),
+        ),
         useMaterial3: true,
+        fontFamily: 'Montserrat',
+        scaffoldBackgroundColor: Colors.transparent,
+        appBarTheme: const AppBarTheme(centerTitle: false, backgroundColor: Colors.transparent),
       ),
+      builder: (context, child) => AppBackground(child: child!),
       routerConfig: router,
     );
   }

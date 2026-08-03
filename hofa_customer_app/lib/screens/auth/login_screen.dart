@@ -128,7 +128,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.storefront_outlined, size: 40, color: theme.colorScheme.primary),
+                      Image.asset('assets/images/logo.png', height: 64),
                       const SizedBox(height: 16),
                       Text('HOFA',
                           textAlign: TextAlign.center,

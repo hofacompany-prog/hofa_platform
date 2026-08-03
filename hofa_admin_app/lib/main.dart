@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/env.dart';
 import 'router.dart';
+import 'widgets/app_background.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -27,8 +28,11 @@ class HofaAdminApp extends ConsumerWidget {
           secondary: const Color(0xFFFB8519),
         ),
         useMaterial3: true,
-        appBarTheme: const AppBarTheme(centerTitle: false),
+        fontFamily: 'Montserrat',
+        scaffoldBackgroundColor: Colors.transparent,
+        appBarTheme: const AppBarTheme(centerTitle: false, backgroundColor: Colors.transparent),
       ),
+      builder: (context, child) => AppBackground(child: child!),
       routerConfig: router,
     );
   }

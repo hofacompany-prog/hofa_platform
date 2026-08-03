@@ -376,6 +376,37 @@ COMMENT ON TABLE wholesale_tiers IS
 
 CREATE INDEX idx_tiers_variant ON wholesale_tiers (variant_id, min_quantity);
 
+-- Nhóm tuỳ chọn thêm của sản phẩm (topping, size, độ ngọt...) — vd trà sữa: trân châu,
+-- thạch, pudding. Mỗi nhóm tự chọn bắt buộc hay không (is_required) và cho chọn nhiều
+-- mục hay chỉ 1 (allow_multiple).
+CREATE TABLE product_topping_groups (
+  id             UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  product_id     UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  name           VARCHAR(150) NOT NULL,
+  is_required    BOOLEAN NOT NULL DEFAULT false,
+  allow_multiple BOOLEAN NOT NULL DEFAULT false,
+  sort_order     INTEGER NOT NULL DEFAULT 0,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+COMMENT ON TABLE product_topping_groups IS 'Nhóm tuỳ chọn thêm của 1 sản phẩm (topping, size, độ ngọt...)';
+
+CREATE INDEX idx_topping_groups_product ON product_topping_groups (product_id);
+
+-- Từng lựa chọn cụ thể trong 1 nhóm topping, có giá cộng thêm riêng (0 = miễn phí)
+CREATE TABLE product_toppings (
+  id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  group_id   UUID NOT NULL REFERENCES product_topping_groups(id) ON DELETE CASCADE,
+  name       VARCHAR(150) NOT NULL,
+  price      INTEGER NOT NULL DEFAULT 0,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+  CONSTRAINT product_toppings_price_nonnegative CHECK (price >= 0)
+);
+COMMENT ON TABLE product_toppings IS 'Từng lựa chọn cụ thể trong 1 nhóm topping, có giá cộng thêm riêng';
+
+CREATE INDEX idx_toppings_group ON product_toppings (group_id);
+
 -- ============================================================================
 -- PHẦN 5: INVENTORY MODULE (SDD 7.4) — Tồn kho
 -- ============================================================================
