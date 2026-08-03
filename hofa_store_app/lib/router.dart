@@ -12,6 +12,7 @@ import 'screens/orders/orders_list_screen.dart';
 import 'screens/orders/order_detail_screen.dart';
 import 'screens/orders/order_offer_screen.dart';
 import 'screens/inventory/inventory_screen.dart';
+import 'screens/categories/categories_screen.dart';
 import 'screens/settings/branch_settings_screen.dart';
 import 'screens/settings/store_profile_edit_screen.dart';
 import 'screens/settings/branch_edit_screen.dart';
@@ -24,7 +25,9 @@ final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     navigatorKey: navigatorKey,
     initialLocation: '/products',
-    refreshListenable: GoRouterRefreshStream(Supabase.instance.client.auth.onAuthStateChange),
+    refreshListenable: GoRouterRefreshStream(
+      Supabase.instance.client.auth.onAuthStateChange,
+    ),
     redirect: (context, state) async {
       final session = Supabase.instance.client.auth.currentSession;
       final loggingIn = state.matchedLocation == '/login';
@@ -50,34 +53,61 @@ final routerProvider = Provider<GoRouter>((ref) {
     },
     routes: [
       GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
-      GoRoute(path: '/onboarding', builder: (context, state) => const CreateStoreScreen()),
+      GoRoute(
+        path: '/onboarding',
+        builder: (context, state) => const CreateStoreScreen(),
+      ),
       GoRoute(
         path: '/orders/offer/:id',
-        builder: (context, state) => OrderOfferScreen(orderId: state.pathParameters['id']!),
+        builder: (context, state) =>
+            OrderOfferScreen(orderId: state.pathParameters['id']!),
       ),
       ShellRoute(
         builder: (context, state, child) => DashboardShell(child: child),
         routes: [
-          GoRoute(path: '/products', builder: (context, state) => const ProductsListScreen()),
-          GoRoute(path: '/products/new', builder: (context, state) => const ProductFormScreen()),
+          GoRoute(
+            path: '/products',
+            builder: (context, state) => const ProductsListScreen(),
+          ),
+          GoRoute(
+            path: '/products/new',
+            builder: (context, state) => const ProductFormScreen(),
+          ),
           GoRoute(
             path: '/products/:id/edit',
-            builder: (context, state) => ProductFormScreen(productId: state.pathParameters['id']),
+            builder: (context, state) =>
+                ProductFormScreen(productId: state.pathParameters['id']),
           ),
-          GoRoute(path: '/orders', builder: (context, state) => const OrdersListScreen()),
+          GoRoute(
+            path: '/orders',
+            builder: (context, state) => const OrdersListScreen(),
+          ),
           GoRoute(
             path: '/orders/:id',
-            builder: (context, state) => OrderDetailScreen(orderId: state.pathParameters['id']!),
+            builder: (context, state) =>
+                OrderDetailScreen(orderId: state.pathParameters['id']!),
           ),
-          GoRoute(path: '/inventory', builder: (context, state) => const InventoryScreen()),
-          GoRoute(path: '/settings', builder: (context, state) => const BranchSettingsScreen()),
+          GoRoute(
+            path: '/inventory',
+            builder: (context, state) => const InventoryScreen(),
+          ),
+          GoRoute(
+            path: '/categories',
+            builder: (context, state) => const CategoriesScreen(),
+          ),
+          GoRoute(
+            path: '/settings',
+            builder: (context, state) => const BranchSettingsScreen(),
+          ),
           GoRoute(
             path: '/settings/profile',
-            builder: (context, state) => StoreProfileEditScreen(merchant: state.extra as Merchant),
+            builder: (context, state) =>
+                StoreProfileEditScreen(merchant: state.extra as Merchant),
           ),
           GoRoute(
             path: '/settings/branches/:id',
-            builder: (context, state) => BranchEditScreen(branch: state.extra as Branch),
+            builder: (context, state) =>
+                BranchEditScreen(branch: state.extra as Branch),
           ),
           GoRoute(
             path: '/settings/branches/:id/hours',

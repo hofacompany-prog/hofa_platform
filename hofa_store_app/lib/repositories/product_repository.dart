@@ -53,6 +53,17 @@ class ProductRepository {
         as Map<String, dynamic>,
   );
 
+  Future<void> updateMerchantCategory(
+    String id,
+    Map<String, dynamic> data,
+  ) async {
+    await _api.patch('/merchant-categories/$id', body: data);
+  }
+
+  Future<void> deleteMerchantCategory(String id) async {
+    await _api.delete('/merchant-categories/$id');
+  }
+
   Future<List<Product>> list(String merchantId) async {
     final list =
         await _api.get(

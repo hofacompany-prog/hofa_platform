@@ -9,10 +9,36 @@ class DashboardShell extends ConsumerWidget {
   const DashboardShell({super.key, required this.child});
 
   static const _destinations = [
-    (icon: Icons.storefront_outlined, selected: Icons.storefront, label: 'Sản phẩm', path: '/products'),
-    (icon: Icons.receipt_long_outlined, selected: Icons.receipt_long, label: 'Đơn hàng', path: '/orders'),
-    (icon: Icons.inventory_2_outlined, selected: Icons.inventory_2, label: 'Kho hàng', path: '/inventory'),
-    (icon: Icons.settings_outlined, selected: Icons.settings, label: 'Cài đặt', path: '/settings'),
+    (
+      icon: Icons.storefront_outlined,
+      selected: Icons.storefront,
+      label: 'Sản phẩm',
+      path: '/products',
+    ),
+    (
+      icon: Icons.receipt_long_outlined,
+      selected: Icons.receipt_long,
+      label: 'Đơn hàng',
+      path: '/orders',
+    ),
+    (
+      icon: Icons.inventory_2_outlined,
+      selected: Icons.inventory_2,
+      label: 'Kho hàng',
+      path: '/inventory',
+    ),
+    (
+      icon: Icons.category_outlined,
+      selected: Icons.category,
+      label: 'Danh mục',
+      path: '/categories',
+    ),
+    (
+      icon: Icons.settings_outlined,
+      selected: Icons.settings,
+      label: 'Cài đặt',
+      path: '/settings',
+    ),
   ];
 
   int _indexFor(String location) {
@@ -46,7 +72,10 @@ class DashboardShell extends ConsumerWidget {
                         textAlign: TextAlign.center,
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
                       ),
                     ),
                     loading: () => const SizedBox(),
@@ -69,11 +98,13 @@ class DashboardShell extends ConsumerWidget {
               ),
             ),
             destinations: _destinations
-                .map((d) => NavigationRailDestination(
-                      icon: Icon(d.icon),
-                      selectedIcon: Icon(d.selected),
-                      label: Text(d.label),
-                    ))
+                .map(
+                  (d) => NavigationRailDestination(
+                    icon: Icon(d.icon),
+                    selectedIcon: Icon(d.selected),
+                    label: Text(d.label),
+                  ),
+                )
                 .toList(),
           ),
           const VerticalDivider(width: 1),
