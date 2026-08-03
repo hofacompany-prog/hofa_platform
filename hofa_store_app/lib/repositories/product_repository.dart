@@ -153,6 +153,40 @@ class ProductRepository {
     await _api.delete('/variants/$id');
   }
 
+  Future<List<WholesaleTier>> wholesaleTiers(String variantId) async {
+    final list = await _api.get('/variants/$variantId/wholesale-tiers') as List;
+    return list
+        .map((e) => WholesaleTier.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<WholesaleTier> createWholesaleTier({
+    required String variantId,
+    required int minQuantity,
+    int? maxQuantity,
+    required int unitPrice,
+    int leadTimeDays = 0,
+  }) async => WholesaleTier.fromJson(
+    await _api.post(
+          '/variants/$variantId/wholesale-tiers',
+          body: {
+            'min_quantity': minQuantity,
+            if (maxQuantity != null) 'max_quantity': maxQuantity,
+            'unit_price': unitPrice,
+            'lead_time_days': leadTimeDays,
+          },
+        )
+        as Map<String, dynamic>,
+  );
+
+  Future<void> updateWholesaleTier(String id, Map<String, dynamic> data) async {
+    await _api.patch('/wholesale-tiers/$id', body: data);
+  }
+
+  Future<void> deleteWholesaleTier(String id) async {
+    await _api.delete('/wholesale-tiers/$id');
+  }
+
   Future<List<ToppingGroup>> toppingGroups(String productId) async {
     final list = await _api.get('/products/$productId/topping-groups') as List;
     return list

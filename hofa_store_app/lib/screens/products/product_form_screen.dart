@@ -46,6 +46,8 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   Branch? _branch;
   Map<String, int> _stockByVariant = {};
   List<ToppingGroup> _toppingGroups = [];
+  Map<String, List<WholesaleTier>> _tiersByVariant = {};
+  String _tierTab = 'wholesale'; // wholesale (Giá sỉ) | preorder (Đặt trước)
   bool _loading = false;
   bool _loadingProduct = false;
   String? _error;
@@ -133,11 +135,184 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
       });
       await _loadStock();
       await _loadToppingGroups();
+      await _loadWholesaleTiers();
       await _initCategoryPicker();
     } catch (e) {
       setState(() => _error = 'Không tải được sản phẩm: $e');
     } finally {
       if (mounted) setState(() => _loadingProduct = false);
+    }
+  }
+
+  Future<void> _loadWholesaleTiers() async {
+    if (_product == null || _salesModel != 'scheduled') return;
+    try {
+      final entries = await Future.wait(
+        _product!.variants.map(
+          (v) async => MapEntry(v.id, await _repo.wholesaleTiers(v.id)),
+        ),
+      );
+      if (mounted) {
+        setState(
+          () => _tiersByVariant = {for (final e in entries) e.key: e.value},
+        );
+      }
+    } catch (_) {
+      // bậc giá chỉ là thông tin thêm, không chặn sửa sản phẩm
+    }
+  }
+
+  Future<void> _tierDialog({
+    required String variantId,
+    WholesaleTier? existing,
+  }) async {
+    final minQtyCtrl = TextEditingController(
+      text: existing?.minQuantity.toString() ?? '',
+    );
+    final maxQtyCtrl = TextEditingController(
+      text: existing?.maxQuantity?.toString() ?? '',
+    );
+    final priceCtrl = TextEditingController(
+      text: existing?.unitPrice.toString() ?? '',
+    );
+    final leadDaysCtrl = TextEditingController(
+      text:
+          existing?.leadTimeDays.toString() ??
+          (_tierTab == 'preorder' ? '' : '0'),
+    );
+    final isPreorder = _tierTab == 'preorder';
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(existing == null ? 'Thêm bậc giá' : 'Sửa bậc giá'),
+        content: SizedBox(
+          width: 380,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: minQtyCtrl,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Số lượng tối thiểu',
+                    border: OutlineInputBorder(),
+                  ),
+                  keyboardType: TextInputType.number,
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: maxQtyCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Số lượng tối đa (để trống = không giới hạn)',
+                    border: OutlineInputBorder(),
+                  ),
+                  keyboardType: TextInputType.number,
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: priceCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Đơn giá (VNĐ)',
+                    border: OutlineInputBorder(),
+                  ),
+                  keyboardType: TextInputType.number,
+                ),
+                if (isPreorder) ...[
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: leadDaysCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Đặt trước tối thiểu bao nhiêu ngày',
+                      border: OutlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.number,
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Huỷ'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Lưu'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final minQty = int.tryParse(minQtyCtrl.text.trim());
+    final price = int.tryParse(priceCtrl.text.trim());
+    if (minQty == null || price == null) return;
+    final maxQty = int.tryParse(maxQtyCtrl.text.trim());
+    final leadDays = isPreorder
+        ? (int.tryParse(leadDaysCtrl.text.trim()) ?? 0)
+        : 0;
+
+    try {
+      if (existing == null) {
+        await _repo.createWholesaleTier(
+          variantId: variantId,
+          minQuantity: minQty,
+          maxQuantity: maxQty,
+          unitPrice: price,
+          leadTimeDays: leadDays,
+        );
+      } else {
+        await _repo.updateWholesaleTier(existing.id, {
+          'min_quantity': minQty,
+          'max_quantity': maxQty,
+          'unit_price': price,
+          'lead_time_days': leadDays,
+        });
+      }
+      await _loadWholesaleTiers();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      }
+    }
+  }
+
+  Future<void> _deleteTier(WholesaleTier tier) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Xoá bậc giá?'),
+        content: Text(
+          'Xoá bậc giá cho số lượng từ ${tier.minQuantity} trở lên?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Huỷ'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Xoá'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await _repo.deleteWholesaleTier(tier.id);
+      await _loadWholesaleTiers();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      }
     }
   }
 
@@ -164,7 +339,9 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
         _childCategoryId = childId;
         _parentCategoryId = child.isNotEmpty ? child.first.parentId : null;
         _merchantCategoryId = mcId;
-        _merchantCategories = mine.where((m) => m.categoryId == childId).toList();
+        _merchantCategories = mine
+            .where((m) => m.categoryId == childId)
+            .toList();
       });
     } catch (_) {
       // danh mục chỉ là thông tin thêm, không chặn thêm/sửa sản phẩm
@@ -963,9 +1140,12 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                                     child: Text('Đặt trước / bán sỉ'),
                                   ),
                                 ],
-                                onChanged: (v) => setState(
-                                  () => _salesModel = v ?? 'instant',
-                                ),
+                                onChanged: (v) {
+                                  setState(() => _salesModel = v ?? 'instant');
+                                  if (_isEdit && _salesModel == 'scheduled') {
+                                    _loadWholesaleTiers();
+                                  }
+                                },
                               ),
                             ),
                           ],
@@ -1220,6 +1400,154 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                                         icon: const Icon(Icons.delete_outline),
                                         onPressed: () => _deleteVariant(v.id),
                                       ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            })),
+                        ],
+                        if (_isEdit && _salesModel == 'scheduled') ...[
+                          const SizedBox(height: 32),
+                          Text(
+                            'Bậc giá theo số lượng',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '"Giá sỉ" chỉ theo số lượng mua · "Đặt trước" có thêm điều kiện đặt trước tối thiểu bao nhiêu ngày. Mỗi biến thể tự cài đặt bậc giá riêng.',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              ChoiceChip(
+                                label: const Text('Giá sỉ'),
+                                selected: _tierTab == 'wholesale',
+                                onSelected: (_) =>
+                                    setState(() => _tierTab = 'wholesale'),
+                              ),
+                              const SizedBox(width: 8),
+                              ChoiceChip(
+                                label: const Text('Đặt trước'),
+                                selected: _tierTab == 'preorder',
+                                onSelected: (_) =>
+                                    setState(() => _tierTab = 'preorder'),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          if ((_product?.variants ?? []).isEmpty)
+                            const Text(
+                              'Chưa có biến thể nào — thêm biến thể ở trên trước.',
+                            )
+                          else
+                            ...(_product!.variants.map((v) {
+                              final tiers =
+                                  (_tiersByVariant[v.id] ?? [])
+                                      .where(
+                                        (t) => _tierTab == 'preorder'
+                                            ? t.leadTimeDays > 0
+                                            : t.leadTimeDays == 0,
+                                      )
+                                      .toList()
+                                    ..sort(
+                                      (a, b) => a.minQuantity.compareTo(
+                                        b.minQuantity,
+                                      ),
+                                    );
+                              return Card(
+                                elevation: 0,
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.surfaceContainerLow,
+                                margin: const EdgeInsets.only(bottom: 12),
+                                child: Padding(
+                                  padding: const EdgeInsets.fromLTRB(
+                                    16,
+                                    12,
+                                    8,
+                                    12,
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Text(
+                                            v.name,
+                                            style: Theme.of(
+                                              context,
+                                            ).textTheme.titleSmall,
+                                          ),
+                                          TextButton.icon(
+                                            onPressed: () =>
+                                                _tierDialog(variantId: v.id),
+                                            icon: const Icon(
+                                              Icons.add,
+                                              size: 18,
+                                            ),
+                                            label: const Text('Thêm bậc'),
+                                          ),
+                                        ],
+                                      ),
+                                      if (tiers.isEmpty)
+                                        Padding(
+                                          padding: const EdgeInsets.only(
+                                            left: 4,
+                                            bottom: 4,
+                                          ),
+                                          child: Text(
+                                            'Chưa có bậc giá nào.',
+                                            style: Theme.of(
+                                              context,
+                                            ).textTheme.bodySmall,
+                                          ),
+                                        )
+                                      else
+                                        ...tiers.map(
+                                          (t) => ListTile(
+                                            dense: true,
+                                            contentPadding: EdgeInsets.zero,
+                                            title: Text(
+                                              t.maxQuantity != null
+                                                  ? 'Số lượng ${t.minQuantity}–${t.maxQuantity}'
+                                                  : 'Số lượng từ ${t.minQuantity}',
+                                            ),
+                                            subtitle: Text(
+                                              [
+                                                formatVnd(t.unitPrice),
+                                                if (_tierTab == 'preorder')
+                                                  'Đặt trước ≥ ${t.leadTimeDays} ngày',
+                                              ].join(' · '),
+                                            ),
+                                            trailing: Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              children: [
+                                                IconButton(
+                                                  icon: const Icon(
+                                                    Icons.edit_outlined,
+                                                    size: 20,
+                                                  ),
+                                                  onPressed: () => _tierDialog(
+                                                    variantId: v.id,
+                                                    existing: t,
+                                                  ),
+                                                ),
+                                                IconButton(
+                                                  icon: const Icon(
+                                                    Icons.delete_outline,
+                                                    size: 20,
+                                                  ),
+                                                  onPressed: () =>
+                                                      _deleteTier(t),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
                                     ],
                                   ),
                                 ),

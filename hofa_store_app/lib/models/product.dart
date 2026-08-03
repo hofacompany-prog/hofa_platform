@@ -37,6 +37,36 @@ class ProductVariant {
   );
 }
 
+/// Bậc giá theo số lượng của 1 biến thể. leadTimeDays == 0 nghĩa là bậc "Giá sỉ" (chỉ
+/// theo số lượng); leadTimeDays > 0 nghĩa là bậc "Đặt trước" (thêm điều kiện đặt trước
+/// tối thiểu bao nhiêu ngày mới được giá này).
+class WholesaleTier {
+  final String id;
+  final String variantId;
+  final int minQuantity;
+  final int? maxQuantity;
+  final int unitPrice;
+  final int leadTimeDays;
+
+  WholesaleTier({
+    required this.id,
+    required this.variantId,
+    required this.minQuantity,
+    this.maxQuantity,
+    required this.unitPrice,
+    required this.leadTimeDays,
+  });
+
+  factory WholesaleTier.fromJson(Map<String, dynamic> json) => WholesaleTier(
+    id: json['id'] as String,
+    variantId: json['variant_id'] as String? ?? '',
+    minQuantity: (json['min_quantity'] as num?)?.toInt() ?? 0,
+    maxQuantity: (json['max_quantity'] as num?)?.toInt(),
+    unitPrice: (json['unit_price'] as num?)?.toInt() ?? 0,
+    leadTimeDays: (json['lead_time_days'] as num?)?.toInt() ?? 0,
+  );
+}
+
 class Topping {
   final String id;
   final String groupId;
