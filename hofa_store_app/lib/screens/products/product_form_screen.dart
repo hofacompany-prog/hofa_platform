@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/format.dart';
 import '../../models/branch.dart';
+import '../../models/category.dart';
 import '../../models/product.dart';
 import '../../providers/auth_provider.dart';
 import '../../repositories/inventory_repository.dart';
@@ -35,8 +36,6 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   final _descCtrl = TextEditingController();
   final _unitCtrl = TextEditingController(text: 'cái');
   final _priceCtrl = TextEditingController();
-  final _comparePriceCtrl = TextEditingController();
-  final _costPriceCtrl = TextEditingController();
   final _wholesalePriceCtrl = TextEditingController();
   final _stockCtrl = TextEditingController();
   String _salesModel = 'instant';
@@ -51,13 +50,30 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   bool _loadingProduct = false;
   String? _error;
 
+  String? _merchantId;
+  List<Category> _allCategories = [];
+  List<MerchantCategory> _merchantCategories = [];
+  String? _parentCategoryId;
+  String? _childCategoryId;
+  String? _merchantCategoryId;
+
+  List<Category> get _rootCategories =>
+      _allCategories.where((c) => c.parentId == null).toList();
+
+  List<Category> _childCategoriesOf(String parentId) =>
+      _allCategories.where((c) => c.parentId == parentId).toList();
+
   bool get _isEdit => widget.productId != null;
 
   @override
   void initState() {
     super.initState();
     _loadBranch();
-    if (_isEdit) _load();
+    if (_isEdit) {
+      _load();
+    } else {
+      _initCategoryPicker();
+    }
   }
 
   @override
@@ -66,8 +82,6 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     _descCtrl.dispose();
     _unitCtrl.dispose();
     _priceCtrl.dispose();
-    _comparePriceCtrl.dispose();
-    _costPriceCtrl.dispose();
     _wholesalePriceCtrl.dispose();
     _stockCtrl.dispose();
     super.dispose();
@@ -119,10 +133,103 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
       });
       await _loadStock();
       await _loadToppingGroups();
+      await _initCategoryPicker();
     } catch (e) {
       setState(() => _error = 'Không tải được sản phẩm: $e');
     } finally {
       if (mounted) setState(() => _loadingProduct = false);
+    }
+  }
+
+  /// Nạp cây danh mục hệ thống (chính/con) + nếu đang sửa sản phẩm đã có danh mục cửa
+  /// hàng, dò ngược lại danh mục con → danh mục chính tương ứng để chọn sẵn 3 tầng.
+  Future<void> _initCategoryPicker() async {
+    try {
+      final merchant = await ref.read(myMerchantProvider.future);
+      if (merchant == null) return;
+      _merchantId = merchant.id;
+      final all = await _repo.categories();
+      if (!mounted) return;
+      setState(() => _allCategories = all);
+
+      final mcId = _product?.merchantCategoryId;
+      if (mcId == null) return;
+      final mine = await _repo.merchantCategories(merchantId: merchant.id);
+      final matched = mine.where((m) => m.id == mcId);
+      if (matched.isEmpty) return;
+      final childId = matched.first.categoryId;
+      final child = all.where((c) => c.id == childId);
+      if (!mounted) return;
+      setState(() {
+        _childCategoryId = childId;
+        _parentCategoryId = child.isNotEmpty ? child.first.parentId : null;
+        _merchantCategoryId = mcId;
+        _merchantCategories = mine.where((m) => m.categoryId == childId).toList();
+      });
+    } catch (_) {
+      // danh mục chỉ là thông tin thêm, không chặn thêm/sửa sản phẩm
+    }
+  }
+
+  Future<void> _loadMerchantCategoriesFor(String categoryId) async {
+    if (_merchantId == null) return;
+    try {
+      final list = await _repo.merchantCategories(
+        merchantId: _merchantId!,
+        categoryId: categoryId,
+      );
+      if (mounted) setState(() => _merchantCategories = list);
+    } catch (_) {
+      // bỏ qua — chọn danh mục cửa hàng không bắt buộc
+    }
+  }
+
+  Future<void> _addMerchantCategoryDialog() async {
+    if (_merchantId == null || _childCategoryId == null) return;
+    final nameCtrl = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Thêm danh mục cửa hàng'),
+        content: TextField(
+          controller: nameCtrl,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: 'Tên danh mục (VD: Cà phê máy, Trà trái cây)',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Huỷ'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Tạo'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || nameCtrl.text.trim().isEmpty) return;
+    try {
+      final created = await _repo.createMerchantCategory(
+        merchantId: _merchantId!,
+        categoryId: _childCategoryId!,
+        name: nameCtrl.text.trim(),
+      );
+      if (mounted) {
+        setState(() {
+          _merchantCategories = [..._merchantCategories, created];
+          _merchantCategoryId = created.id;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      }
     }
   }
 
@@ -154,6 +261,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
           'sales_model': _salesModel,
           'status': _status,
           'images': [_imageUrl],
+          'merchant_category_id': _merchantCategoryId,
         });
         await _load();
         if (mounted) {
@@ -166,6 +274,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
         if (merchant == null) return;
         final created = await _repo.create(
           merchantId: merchant.id,
+          merchantCategoryId: _merchantCategoryId,
           name: _nameCtrl.text.trim(),
           description: _descCtrl.text.trim(),
           unit: _unitCtrl.text.trim(),
@@ -173,9 +282,8 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
           status: _status,
           imageUrl: _imageUrl!,
           price: int.parse(_priceCtrl.text.trim()),
-          comparePrice: int.tryParse(_comparePriceCtrl.text.trim()),
-          costPrice: int.tryParse(_costPriceCtrl.text.trim()),
           wholesalePrice: int.tryParse(_wholesalePriceCtrl.text.trim()),
+          toppingGroups: _toppingGroups,
         );
         final stock = int.tryParse(_stockCtrl.text.trim());
         if (stock != null &&
@@ -403,6 +511,11 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     final nameCtrl = TextEditingController(text: existing?.name ?? '');
     var isRequired = existing?.isRequired ?? false;
     var allowMultiple = existing?.allowMultiple ?? false;
+    // Toppings sẽ được nhân bản kèm theo nếu bấm "Dán" — chỉ có ý nghĩa lúc TẠO nhóm mới.
+    var pasteToppings = const <Topping>[];
+    final copiedGroup = existing == null
+        ? ref.read(copiedToppingGroupProvider)
+        : null;
 
     final ok = await showDialog<bool>(
       context: context,
@@ -418,6 +531,22 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  if (copiedGroup != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: OutlinedButton.icon(
+                        onPressed: () => setInner(() {
+                          nameCtrl.text = copiedGroup.name;
+                          isRequired = copiedGroup.isRequired;
+                          allowMultiple = copiedGroup.allowMultiple;
+                          pasteToppings = copiedGroup.toppings;
+                        }),
+                        icon: const Icon(Icons.content_paste),
+                        label: Text(
+                          'Dán "${copiedGroup.name}" (${copiedGroup.toppings.length} lựa chọn)',
+                        ),
+                      ),
+                    ),
                   TextField(
                     controller: nameCtrl,
                     autofocus: true,
@@ -464,14 +593,70 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     );
     if (ok != true || nameCtrl.text.trim().isEmpty) return;
 
+    // Chưa tạo sản phẩm (đang ở màn "Thêm sản phẩm") — chưa có product_id để gọi API,
+    // giữ tạm nhóm topping trong bộ nhớ, gửi kèm lên cùng lúc tạo sản phẩm lúc bấm "Tạo
+    // sản phẩm" (xem _submit).
+    if (!_isEdit) {
+      setState(() {
+        if (existing == null) {
+          final newGroupId = 'local-${DateTime.now().microsecondsSinceEpoch}';
+          _toppingGroups = [
+            ..._toppingGroups,
+            ToppingGroup(
+              id: newGroupId,
+              productId: '',
+              name: nameCtrl.text.trim(),
+              isRequired: isRequired,
+              allowMultiple: allowMultiple,
+              sortOrder: _toppingGroups.length,
+              toppings: [
+                for (final entry in pasteToppings.asMap().entries)
+                  Topping(
+                    id: 'local-${DateTime.now().microsecondsSinceEpoch}-${entry.key}',
+                    groupId: newGroupId,
+                    name: entry.value.name,
+                    price: entry.value.price,
+                    sortOrder: entry.key,
+                  ),
+              ],
+            ),
+          ];
+        } else {
+          _toppingGroups = _toppingGroups
+              .map(
+                (g) => g.id == existing.id
+                    ? ToppingGroup(
+                        id: g.id,
+                        productId: g.productId,
+                        name: nameCtrl.text.trim(),
+                        isRequired: isRequired,
+                        allowMultiple: allowMultiple,
+                        sortOrder: g.sortOrder,
+                        toppings: g.toppings,
+                      )
+                    : g,
+              )
+              .toList();
+        }
+      });
+      return;
+    }
+
     try {
       if (existing == null) {
-        await _repo.createToppingGroup(
+        final createdGroup = await _repo.createToppingGroup(
           productId: widget.productId!,
           name: nameCtrl.text.trim(),
           isRequired: isRequired,
           allowMultiple: allowMultiple,
         );
+        for (final t in pasteToppings) {
+          await _repo.createTopping(
+            groupId: createdGroup.id,
+            name: t.name,
+            price: t.price,
+          );
+        }
       } else {
         await _repo.updateToppingGroup(existing.id, {
           'name': nameCtrl.text.trim(),
@@ -487,6 +672,17 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
         ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
       }
     }
+  }
+
+  void _copyToppingGroup(ToppingGroup group) {
+    ref.read(copiedToppingGroupProvider.notifier).state = group;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          'Đã sao chép nhóm "${group.name}" — bấm "Thêm nhóm" ở sản phẩm bất kỳ để dán lại.',
+        ),
+      ),
+    );
   }
 
   Future<void> _deleteToppingGroup(ToppingGroup group) async {
@@ -511,6 +707,16 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
       ),
     );
     if (ok != true) return;
+
+    if (!_isEdit) {
+      setState(
+        () => _toppingGroups = _toppingGroups
+            .where((g) => g.id != group.id)
+            .toList(),
+      );
+      return;
+    }
+
     try {
       await _repo.deleteToppingGroup(group.id);
       await _loadToppingGroups();
@@ -578,6 +784,48 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     if (ok != true || nameCtrl.text.trim().isEmpty) return;
     final price = int.tryParse(priceCtrl.text.trim()) ?? 0;
 
+    if (!_isEdit) {
+      setState(() {
+        _toppingGroups = _toppingGroups.map((g) {
+          if (g.id != groupId) return g;
+          final newToppings = existing == null
+              ? [
+                  ...g.toppings,
+                  Topping(
+                    id: 'local-${DateTime.now().microsecondsSinceEpoch}',
+                    groupId: g.id,
+                    name: nameCtrl.text.trim(),
+                    price: price,
+                    sortOrder: g.toppings.length,
+                  ),
+                ]
+              : g.toppings
+                    .map(
+                      (t) => t.id == existing.id
+                          ? Topping(
+                              id: t.id,
+                              groupId: t.groupId,
+                              name: nameCtrl.text.trim(),
+                              price: price,
+                              sortOrder: t.sortOrder,
+                            )
+                          : t,
+                    )
+                    .toList();
+          return ToppingGroup(
+            id: g.id,
+            productId: g.productId,
+            name: g.name,
+            isRequired: g.isRequired,
+            allowMultiple: g.allowMultiple,
+            sortOrder: g.sortOrder,
+            toppings: newToppings,
+          );
+        }).toList();
+      });
+      return;
+    }
+
     try {
       if (existing == null) {
         await _repo.createTopping(
@@ -601,9 +849,27 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     }
   }
 
-  Future<void> _deleteTopping(String id) async {
+  Future<void> _deleteTopping(String groupId, String toppingId) async {
+    if (!_isEdit) {
+      setState(() {
+        _toppingGroups = _toppingGroups.map((g) {
+          if (g.id != groupId) return g;
+          return ToppingGroup(
+            id: g.id,
+            productId: g.productId,
+            name: g.name,
+            isRequired: g.isRequired,
+            allowMultiple: g.allowMultiple,
+            sortOrder: g.sortOrder,
+            toppings: g.toppings.where((t) => t.id != toppingId).toList(),
+          );
+        }).toList();
+      });
+      return;
+    }
+
     try {
-      await _repo.deleteTopping(id);
+      await _repo.deleteTopping(toppingId);
       await _loadToppingGroups();
     } catch (e) {
       if (mounted) {
@@ -711,6 +977,108 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                           onChanged: (v) =>
                               setState(() => _status = v ?? _status),
                         ),
+                        const Divider(height: 32),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            'Danh mục',
+                            style: Theme.of(context).textTheme.labelLarge,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Chọn danh mục chính → danh mục con của hệ thống, sau đó chọn hoặc tạo danh mục riêng của cửa hàng bạn — khách chỉ thấy danh mục cửa hàng, không thấy danh mục chính/con.',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                        const SizedBox(height: 12),
+                        DropdownButtonFormField<String>(
+                          initialValue: _parentCategoryId,
+                          decoration: const InputDecoration(
+                            labelText: 'Danh mục chính',
+                            border: OutlineInputBorder(),
+                          ),
+                          items: _rootCategories
+                              .map(
+                                (c) => DropdownMenuItem(
+                                  value: c.id,
+                                  child: Text(c.name),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (v) => setState(() {
+                            _parentCategoryId = v;
+                            _childCategoryId = null;
+                            _merchantCategoryId = null;
+                            _merchantCategories = [];
+                          }),
+                        ),
+                        if (_parentCategoryId != null) ...[
+                          const SizedBox(height: 12),
+                          DropdownButtonFormField<String>(
+                            initialValue: _childCategoryId,
+                            decoration: const InputDecoration(
+                              labelText: 'Danh mục con',
+                              border: OutlineInputBorder(),
+                            ),
+                            items: _childCategoriesOf(_parentCategoryId!)
+                                .map(
+                                  (c) => DropdownMenuItem(
+                                    value: c.id,
+                                    child: Text(c.name),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: (v) {
+                              setState(() {
+                                _childCategoryId = v;
+                                _merchantCategoryId = null;
+                                _merchantCategories = [];
+                              });
+                              if (v != null) _loadMerchantCategoriesFor(v);
+                            },
+                          ),
+                        ],
+                        if (_childCategoryId != null) ...[
+                          const SizedBox(height: 12),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: DropdownButtonFormField<String>(
+                                  initialValue: _merchantCategoryId,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Danh mục cửa hàng',
+                                    border: OutlineInputBorder(),
+                                  ),
+                                  items: _merchantCategories
+                                      .map(
+                                        (c) => DropdownMenuItem(
+                                          value: c.id,
+                                          child: Text(c.name),
+                                        ),
+                                      )
+                                      .toList(),
+                                  onChanged: (v) =>
+                                      setState(() => _merchantCategoryId = v),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              IconButton.filledTonal(
+                                tooltip: 'Thêm danh mục cửa hàng mới',
+                                icon: const Icon(Icons.add),
+                                onPressed: _addMerchantCategoryDialog,
+                              ),
+                            ],
+                          ),
+                          if (_merchantCategories.isEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Text(
+                                'Cửa hàng chưa có danh mục nào trong nhóm này — bấm nút + để tạo mới.',
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ),
+                        ],
                         if (!_isEdit) ...[
                           const Divider(height: 32),
                           Align(
@@ -732,32 +1100,6 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                                 (int.tryParse(v?.trim() ?? '') == null)
                                 ? 'Nhập giá bán hợp lệ'
                                 : null,
-                          ),
-                          const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: TextFormField(
-                                  controller: _comparePriceCtrl,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Giá gốc (gạch ngang)',
-                                    border: OutlineInputBorder(),
-                                  ),
-                                  keyboardType: TextInputType.number,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: TextFormField(
-                                  controller: _costPriceCtrl,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Giá nhập',
-                                    border: OutlineInputBorder(),
-                                  ),
-                                  keyboardType: TextInputType.number,
-                                ),
-                              ),
-                            ],
                           ),
                           if (_salesModel == 'scheduled') ...[
                             const SizedBox(height: 12),
@@ -789,28 +1131,6 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                             ),
                           ),
                         ],
-                        if (_error != null) ...[
-                          const SizedBox(height: 16),
-                          Text(
-                            _error!,
-                            style: TextStyle(
-                              color: Theme.of(context).colorScheme.error,
-                            ),
-                          ),
-                        ],
-                        const SizedBox(height: 20),
-                        FilledButton(
-                          onPressed: _loading ? null : _submit,
-                          child: _loading
-                              ? const SizedBox(
-                                  height: 20,
-                                  width: 20,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2,
-                                  ),
-                                )
-                              : Text(_isEdit ? 'Lưu thay đổi' : 'Tạo sản phẩm'),
-                        ),
                         if (_isEdit) ...[
                           const SizedBox(height: 32),
                           Row(
@@ -894,178 +1214,198 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                                 ),
                               );
                             })),
-                          const SizedBox(height: 32),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                'Topping & tuỳ chọn thêm',
-                                style: Theme.of(context).textTheme.titleMedium,
-                              ),
-                              TextButton.icon(
-                                onPressed: () => _toppingGroupDialog(),
-                                icon: const Icon(Icons.add),
-                                label: const Text('Thêm nhóm'),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'VD: "Chọn topping" (chọn nhiều, không bắt buộc), "Size" (chỉ chọn 1, bắt buộc).',
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                          const SizedBox(height: 8),
-                          if (_toppingGroups.isEmpty)
-                            const Text(
-                              'Chưa có nhóm topping nào. Sản phẩm vẫn bán bình thường nếu không cần.',
-                            )
-                          else
-                            ..._toppingGroups.map(
-                              (g) => Card(
-                                elevation: 0,
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.surfaceContainerLow,
-                                margin: const EdgeInsets.only(bottom: 12),
-                                child: Padding(
-                                  padding: const EdgeInsets.fromLTRB(
-                                    16,
-                                    12,
-                                    8,
-                                    12,
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        children: [
-                                          Expanded(
-                                            child: Wrap(
-                                              crossAxisAlignment:
-                                                  WrapCrossAlignment.center,
-                                              spacing: 8,
-                                              runSpacing: 4,
-                                              children: [
-                                                Text(
-                                                  g.name,
-                                                  style: Theme.of(
-                                                    context,
-                                                  ).textTheme.titleSmall,
-                                                ),
-                                                if (g.isRequired)
-                                                  Chip(
-                                                    label: const Text(
-                                                      'Bắt buộc',
-                                                    ),
-                                                    visualDensity:
-                                                        VisualDensity.compact,
-                                                    backgroundColor:
-                                                        Theme.of(context)
-                                                            .colorScheme
-                                                            .errorContainer,
-                                                  ),
+                        ],
+                        const SizedBox(height: 32),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              'Topping & tuỳ chọn thêm',
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                            TextButton.icon(
+                              onPressed: () => _toppingGroupDialog(),
+                              icon: const Icon(Icons.add),
+                              label: const Text('Thêm nhóm'),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'VD: "Chọn topping" (chọn nhiều, không bắt buộc), "Size" (chỉ chọn 1, bắt buộc).',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                        const SizedBox(height: 8),
+                        if (_toppingGroups.isEmpty)
+                          const Text(
+                            'Chưa có nhóm topping nào. Sản phẩm vẫn bán bình thường nếu không cần.',
+                          )
+                        else
+                          ..._toppingGroups.map(
+                            (g) => Card(
+                              elevation: 0,
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.surfaceContainerLow,
+                              margin: const EdgeInsets.only(bottom: 12),
+                              child: Padding(
+                                padding: const EdgeInsets.fromLTRB(
+                                  16,
+                                  12,
+                                  8,
+                                  12,
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: Wrap(
+                                            crossAxisAlignment:
+                                                WrapCrossAlignment.center,
+                                            spacing: 8,
+                                            runSpacing: 4,
+                                            children: [
+                                              Text(
+                                                g.name,
+                                                style: Theme.of(
+                                                  context,
+                                                ).textTheme.titleSmall,
+                                              ),
+                                              if (g.isRequired)
                                                 Chip(
-                                                  label: Text(
-                                                    g.allowMultiple
-                                                        ? 'Chọn nhiều'
-                                                        : 'Chọn 1',
-                                                  ),
+                                                  label: const Text('Bắt buộc'),
                                                   visualDensity:
                                                       VisualDensity.compact,
+                                                  backgroundColor: Theme.of(
+                                                    context,
+                                                  ).colorScheme.errorContainer,
                                                 ),
-                                              ],
-                                            ),
-                                          ),
-                                          PopupMenuButton<String>(
-                                            onSelected: (v) {
-                                              if (v == 'edit') {
-                                                _toppingGroupDialog(
-                                                  existing: g,
-                                                );
-                                              }
-                                              if (v == 'delete') {
-                                                _deleteToppingGroup(g);
-                                              }
-                                            },
-                                            itemBuilder: (context) => const [
-                                              PopupMenuItem(
-                                                value: 'edit',
-                                                child: Text('Sửa nhóm'),
-                                              ),
-                                              PopupMenuItem(
-                                                value: 'delete',
-                                                child: Text('Xoá nhóm'),
+                                              Chip(
+                                                label: Text(
+                                                  g.allowMultiple
+                                                      ? 'Chọn nhiều'
+                                                      : 'Chọn 1',
+                                                ),
+                                                visualDensity:
+                                                    VisualDensity.compact,
                                               ),
                                             ],
                                           ),
-                                        ],
-                                      ),
-                                      if (g.toppings.isEmpty)
-                                        Padding(
-                                          padding: const EdgeInsets.only(
-                                            left: 4,
-                                            bottom: 4,
-                                          ),
-                                          child: Text(
-                                            'Chưa có lựa chọn nào trong nhóm này.',
-                                            style: Theme.of(
-                                              context,
-                                            ).textTheme.bodySmall,
-                                          ),
-                                        )
-                                      else
-                                        ...g.toppings.map(
-                                          (t) => ListTile(
-                                            dense: true,
-                                            contentPadding: EdgeInsets.zero,
-                                            title: Text(t.name),
-                                            subtitle: Text(
-                                              t.price > 0
-                                                  ? '+${formatVnd(t.price)}'
-                                                  : 'Miễn phí',
+                                        ),
+                                        IconButton(
+                                          tooltip: 'Sao chép nhóm này',
+                                          icon: const Icon(Icons.copy_outlined),
+                                          onPressed: () => _copyToppingGroup(g),
+                                        ),
+                                        PopupMenuButton<String>(
+                                          onSelected: (v) {
+                                            if (v == 'edit') {
+                                              _toppingGroupDialog(existing: g);
+                                            }
+                                            if (v == 'delete') {
+                                              _deleteToppingGroup(g);
+                                            }
+                                          },
+                                          itemBuilder: (context) => const [
+                                            PopupMenuItem(
+                                              value: 'edit',
+                                              child: Text('Sửa nhóm'),
                                             ),
-                                            trailing: Row(
-                                              mainAxisSize: MainAxisSize.min,
-                                              children: [
-                                                IconButton(
-                                                  icon: const Icon(
-                                                    Icons.edit_outlined,
-                                                    size: 20,
-                                                  ),
-                                                  onPressed: () =>
-                                                      _toppingDialog(
-                                                        groupId: g.id,
-                                                        existing: t,
-                                                      ),
-                                                ),
-                                                IconButton(
-                                                  icon: const Icon(
-                                                    Icons.delete_outline,
-                                                    size: 20,
-                                                  ),
-                                                  onPressed: () =>
-                                                      _deleteTopping(t.id),
-                                                ),
-                                              ],
+                                            PopupMenuItem(
+                                              value: 'delete',
+                                              child: Text('Xoá nhóm'),
                                             ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                    if (g.toppings.isEmpty)
+                                      Padding(
+                                        padding: const EdgeInsets.only(
+                                          left: 4,
+                                          bottom: 4,
+                                        ),
+                                        child: Text(
+                                          'Chưa có lựa chọn nào trong nhóm này.',
+                                          style: Theme.of(
+                                            context,
+                                          ).textTheme.bodySmall,
+                                        ),
+                                      )
+                                    else
+                                      ...g.toppings.map(
+                                        (t) => ListTile(
+                                          dense: true,
+                                          contentPadding: EdgeInsets.zero,
+                                          title: Text(t.name),
+                                          subtitle: Text(
+                                            t.price > 0
+                                                ? '+${formatVnd(t.price)}'
+                                                : 'Miễn phí',
+                                          ),
+                                          trailing: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              IconButton(
+                                                icon: const Icon(
+                                                  Icons.edit_outlined,
+                                                  size: 20,
+                                                ),
+                                                onPressed: () => _toppingDialog(
+                                                  groupId: g.id,
+                                                  existing: t,
+                                                ),
+                                              ),
+                                              IconButton(
+                                                icon: const Icon(
+                                                  Icons.delete_outline,
+                                                  size: 20,
+                                                ),
+                                                onPressed: () =>
+                                                    _deleteTopping(g.id, t.id),
+                                              ),
+                                            ],
                                           ),
                                         ),
-                                      Align(
-                                        alignment: Alignment.centerLeft,
-                                        child: TextButton.icon(
-                                          onPressed: () =>
-                                              _toppingDialog(groupId: g.id),
-                                          icon: const Icon(Icons.add, size: 18),
-                                          label: const Text('Thêm lựa chọn'),
-                                        ),
                                       ),
-                                    ],
-                                  ),
+                                    Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: TextButton.icon(
+                                        onPressed: () =>
+                                            _toppingDialog(groupId: g.id),
+                                        icon: const Icon(Icons.add, size: 18),
+                                        label: const Text('Thêm lựa chọn'),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
                             ),
+                          ),
+                        if (_error != null) ...[
+                          const SizedBox(height: 16),
+                          Text(
+                            _error!,
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.error,
+                            ),
+                          ),
                         ],
+                        const SizedBox(height: 20),
+                        FilledButton(
+                          onPressed: _loading ? null : _submit,
+                          child: _loading
+                              ? const SizedBox(
+                                  height: 20,
+                                  width: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : Text(_isEdit ? 'Lưu thay đổi' : 'Tạo sản phẩm'),
+                        ),
                       ],
                     ),
                   ),

@@ -12,6 +12,39 @@ class ProductRepository {
         .toList();
   }
 
+  Future<List<MerchantCategory>> merchantCategories({
+    required String merchantId,
+    String? categoryId,
+  }) async {
+    final list = await _api.get(
+          '/merchant-categories',
+          query: {
+            'merchant_id': merchantId,
+            if (categoryId != null) 'category_id': categoryId,
+          },
+        )
+        as List;
+    return list
+        .map((e) => MerchantCategory.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<MerchantCategory> createMerchantCategory({
+    required String merchantId,
+    required String categoryId,
+    required String name,
+  }) async => MerchantCategory.fromJson(
+    await _api.post(
+          '/merchant-categories',
+          body: {
+            'merchant_id': merchantId,
+            'category_id': categoryId,
+            'name': name,
+          },
+        )
+        as Map<String, dynamic>,
+  );
+
   Future<List<Product>> list(String merchantId) async {
     final list =
         await _api.get(
@@ -29,6 +62,7 @@ class ProductRepository {
 
   Future<Product> create({
     required String merchantId,
+    String? merchantCategoryId,
     required String name,
     String? description,
     required String unit,
@@ -39,11 +73,14 @@ class ProductRepository {
     int? comparePrice,
     int? costPrice,
     int? wholesalePrice,
+    List<ToppingGroup> toppingGroups = const [],
   }) async => Product.fromJson(
     await _api.post(
           '/products',
           body: {
             'merchant_id': merchantId,
+            if (merchantCategoryId != null)
+              'merchant_category_id': merchantCategoryId,
             'name': name,
             if (description != null && description.isNotEmpty)
               'description': description,
@@ -51,6 +88,15 @@ class ProductRepository {
             'sales_model': salesModel,
             'status': status,
             'images': [imageUrl],
+            if (toppingGroups.isNotEmpty)
+              'topping_groups': toppingGroups
+                  .map((g) => {
+                        'name': g.name,
+                        'is_required': g.isRequired,
+                        'allow_multiple': g.allowMultiple,
+                        'toppings': g.toppings.map((t) => {'name': t.name, 'price': t.price}).toList(),
+                      })
+                  .toList(),
             'variants': [
               {
                 'name': unit,

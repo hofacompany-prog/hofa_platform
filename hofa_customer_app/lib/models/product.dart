@@ -3,6 +3,7 @@ import 'product_variant.dart';
 class Product {
   final String id;
   final String merchantId;
+  final String? merchantCategoryId;
   final String name;
   final String? description;
   final String salesModel; // instant | scheduled
@@ -20,6 +21,7 @@ class Product {
   Product({
     required this.id,
     required this.merchantId,
+    this.merchantCategoryId,
     required this.name,
     this.description,
     required this.salesModel,
@@ -48,6 +50,7 @@ class Product {
   factory Product.fromJson(Map<String, dynamic> json) => Product(
         id: json['id'] as String,
         merchantId: json['merchant_id'] as String? ?? '',
+        merchantCategoryId: json['merchant_category_id'] as String?,
         name: json['name'] as String? ?? '',
         description: json['description'] as String?,
         salesModel: json['sales_model'] as String? ?? 'instant',

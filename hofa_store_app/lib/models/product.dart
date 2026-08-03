@@ -98,6 +98,7 @@ class ToppingGroup {
 class Product {
   final String id;
   final String merchantId;
+  final String? merchantCategoryId;
   final String name;
   final String? description;
   final String salesModel;
@@ -105,10 +106,12 @@ class Product {
   final String unit;
   final List<String> images;
   final List<ProductVariant> variants;
+  final List<ToppingGroup> toppingGroups;
 
   Product({
     required this.id,
     required this.merchantId,
+    this.merchantCategoryId,
     required this.name,
     this.description,
     required this.salesModel,
@@ -116,17 +119,24 @@ class Product {
     required this.unit,
     required this.images,
     required this.variants,
+    this.toppingGroups = const [],
   });
 
   factory Product.fromJson(Map<String, dynamic> json) => Product(
     id: json['id'] as String,
     merchantId: json['merchant_id'] as String,
+    merchantCategoryId: json['merchant_category_id'] as String?,
     name: json['name'] as String,
     description: json['description'] as String?,
     salesModel: json['sales_model'] as String? ?? 'instant',
     status: json['status'] as String? ?? 'draft',
     unit: json['unit'] as String? ?? 'cái',
     images: (json['images'] as List?)?.map((e) => e.toString()).toList() ?? [],
+    toppingGroups:
+        (json['topping_groups'] as List?)
+            ?.map((e) => ToppingGroup.fromJson(e as Map<String, dynamic>))
+            .toList() ??
+        [],
     variants:
         (json['variants'] as List?)
             ?.map((e) => ProductVariant.fromJson(e as Map<String, dynamic>))

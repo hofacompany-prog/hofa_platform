@@ -20,6 +20,59 @@ const _statusLabels = {
   'archived': 'Đã xoá',
 };
 
+final _repo = ProductRepository();
+
+Future<void> _toggleActive(BuildContext context, WidgetRef ref, Product p) async {
+  final newStatus = p.status == 'active' ? 'hidden' : 'active';
+  try {
+    await _repo.update(p.id, {'status': newStatus});
+    ref.invalidate(_productsProvider);
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+    }
+  }
+}
+
+Future<void> _confirmDelete(BuildContext context, WidgetRef ref, Product p) async {
+  final confirmed = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Xoá sản phẩm?'),
+      content: Text(
+        'Xoá "${p.name}"? Sản phẩm sẽ không còn hiển thị nữa, đơn hàng cũ vẫn giữ nguyên thông tin.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, false),
+          child: const Text('Huỷ'),
+        ),
+        FilledButton(
+          style: FilledButton.styleFrom(
+            backgroundColor: Theme.of(ctx).colorScheme.error,
+          ),
+          onPressed: () => Navigator.pop(ctx, true),
+          child: const Text('Xoá'),
+        ),
+      ],
+    ),
+  );
+  if (confirmed != true || !context.mounted) return;
+  try {
+    await _repo.delete(p.id);
+    ref.invalidate(_productsProvider);
+    if (context.mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Đã xoá "${p.name}"')));
+    }
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+    }
+  }
+}
+
 class ProductsListScreen extends ConsumerWidget {
   const ProductsListScreen({super.key});
 
@@ -71,21 +124,70 @@ class ProductsListScreen extends ConsumerWidget {
               separatorBuilder: (_, __) => const SizedBox(height: 8),
               itemBuilder: (context, i) {
                 final p = products[i];
+                final isActive = p.status == 'active';
                 return Card(
-                  child: ListTile(
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(12),
                     onTap: () => context.push('/products/${p.id}/edit'),
-                    leading: CircleAvatar(
-                      backgroundColor: Colors.green.shade50,
-                      backgroundImage: p.images.isNotEmpty ? NetworkImage(p.images.first) : null,
-                      child: p.images.isEmpty ? const Icon(Icons.storefront, color: Colors.green) : null,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 8, 8),
+                      child: Row(
+                        children: [
+                          Opacity(
+                            opacity: isActive ? 1 : 0.5,
+                            child: CircleAvatar(
+                              backgroundColor: Colors.green.shade50,
+                              backgroundImage: p.images.isNotEmpty
+                                  ? NetworkImage(p.images.first)
+                                  : null,
+                              child: p.images.isEmpty
+                                  ? const Icon(Icons.storefront, color: Colors.green)
+                                  : null,
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: Opacity(
+                              opacity: isActive ? 1 : 0.5,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    p.name,
+                                    style: Theme.of(context).textTheme.titleMedium,
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    p.variants.isEmpty
+                                        ? 'Chưa có biến thể/giá — bấm để thêm'
+                                        : '${p.variants.length} biến thể · từ ${formatVnd(p.lowestPrice)}',
+                                    style: Theme.of(context).textTheme.bodySmall,
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: Chip(
+                                      label: Text(_statusLabels[p.status] ?? p.status),
+                                      visualDensity: VisualDensity.compact,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          Switch(
+                            value: isActive,
+                            onChanged: (_) => _toggleActive(context, ref, p),
+                          ),
+                          IconButton(
+                            tooltip: 'Xoá sản phẩm',
+                            icon: const Icon(Icons.delete_outline),
+                            onPressed: () => _confirmDelete(context, ref, p),
+                          ),
+                        ],
+                      ),
                     ),
-                    title: Text(p.name),
-                    subtitle: Text(
-                      p.variants.isEmpty
-                          ? 'Chưa có biến thể/giá — bấm để thêm'
-                          : '${p.variants.length} biến thể · từ ${formatVnd(p.lowestPrice)}',
-                    ),
-                    trailing: Chip(label: Text(_statusLabels[p.status] ?? p.status)),
                   ),
                 );
               },

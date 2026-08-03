@@ -6,8 +6,9 @@ const { pickFields, requireFields, pagination, requireRole, requireMerchantAcces
 
 const PRODUCT_FIELDS = [
   'name', 'slug', 'description', 'sales_model', 'status', 'brand', 'unit',
-  'images', 'video_url', 'tags', 'is_featured'
+  'images', 'video_url', 'tags', 'is_featured', 'merchant_category_id'
 ];
+const MERCHANT_CATEGORY_FIELDS = ['category_id', 'name', 'sort_order', 'is_active'];
 const VARIANT_FIELDS = [
   'sku', 'barcode', 'name', 'attributes', 'price', 'compare_price', 'cost_price',
   'wholesale_price', 'weight_gram', 'is_default', 'is_active'
@@ -52,6 +53,48 @@ router.delete('/categories/:id', asyncHandler(async (req, res) => {
   requireRole(req.ctx, ['admin']);
   const deleted = await db.deleteById('categories', req.params.id);
   if (!deleted) throw new ApiError('NOT_FOUND', 'Không tìm thấy danh mục', 404);
+  res.json({ ok: true, data: deleted });
+}));
+
+// ---- Danh mục cửa hàng (nằm dưới 1 danh mục con hệ thống) ----
+// Công khai (không cần đăng nhập) để app khách nhóm sản phẩm theo danh mục cửa hàng.
+
+router.get('/merchant-categories', asyncHandler(async (req, res) => {
+  requireFields(req.query, ['merchant_id']);
+  const clauses = ['merchant_id = $1', 'is_active'];
+  const params = [req.query.merchant_id];
+  if (req.query.category_id) { params.push(req.query.category_id); clauses.push(`category_id = $${params.length}`); }
+  const rows = await db.query(
+    `SELECT * FROM merchant_categories WHERE ${clauses.join(' AND ')} ORDER BY sort_order ASC, created_at ASC`,
+    params
+  );
+  res.json({ ok: true, data: rows });
+}));
+
+router.post('/merchant-categories', asyncHandler(async (req, res) => {
+  requireFields(req.body, ['merchant_id', 'category_id', 'name']);
+  await requireMerchantAccess(req.ctx, req.body.merchant_id);
+  const created = await db.insertRow('merchant_categories', {
+    ...pickFields(req.body, MERCHANT_CATEGORY_FIELDS),
+    merchant_id: req.body.merchant_id,
+  });
+  res.status(201).json({ ok: true, data: created });
+}));
+
+router.patch('/merchant-categories/:id', asyncHandler(async (req, res) => {
+  const category = await db.queryOne('SELECT id, merchant_id FROM merchant_categories WHERE id = $1', [req.params.id]);
+  if (!category) throw new ApiError('NOT_FOUND', 'Không tìm thấy danh mục cửa hàng', 404);
+  await requireMerchantAccess(req.ctx, category.merchant_id);
+  const updated = await db.updateById('merchant_categories', req.params.id, pickFields(req.body, MERCHANT_CATEGORY_FIELDS));
+  res.json({ ok: true, data: updated });
+}));
+
+/** Xoá — sản phẩm đang gắn danh mục này chỉ mất tag (products.merchant_category_id ON DELETE SET NULL). */
+router.delete('/merchant-categories/:id', asyncHandler(async (req, res) => {
+  const category = await db.queryOne('SELECT id, merchant_id FROM merchant_categories WHERE id = $1', [req.params.id]);
+  if (!category) throw new ApiError('NOT_FOUND', 'Không tìm thấy danh mục cửa hàng', 404);
+  await requireMerchantAccess(req.ctx, category.merchant_id);
+  const deleted = await db.deleteById('merchant_categories', req.params.id);
   res.json({ ok: true, data: deleted });
 }));
 
@@ -123,7 +166,22 @@ router.post('/products', asyncHandler(async (req, res) => {
   if (Array.isArray(req.body.variants) && req.body.variants.length) {
     variants = await db.insertRows('product_variants', req.body.variants.map((v) => ({ ...pickFields(v, VARIANT_FIELDS), product_id: product.id })));
   }
-  res.status(201).json({ ok: true, data: { ...product, variants } });
+
+  // Cho phép tạo luôn nhóm topping + lựa chọn bên trong ngay lúc tạo sản phẩm (màn "Thêm
+  // sản phẩm" không có product_id để gọi 2 API topping riêng như lúc sửa sản phẩm).
+  let toppingGroups = [];
+  if (Array.isArray(req.body.topping_groups) && req.body.topping_groups.length) {
+    for (const g of req.body.topping_groups) {
+      const group = await db.insertRow('product_topping_groups', { ...pickFields(g, TOPPING_GROUP_FIELDS), product_id: product.id });
+      let toppings = [];
+      if (Array.isArray(g.toppings) && g.toppings.length) {
+        toppings = await db.insertRows('product_toppings', g.toppings.map((t) => ({ ...pickFields(t, TOPPING_FIELDS), group_id: group.id })));
+      }
+      toppingGroups.push({ ...group, toppings });
+    }
+  }
+
+  res.status(201).json({ ok: true, data: { ...product, variants, topping_groups: toppingGroups } });
 }));
 
 router.patch('/products/:id', asyncHandler(async (req, res) => {

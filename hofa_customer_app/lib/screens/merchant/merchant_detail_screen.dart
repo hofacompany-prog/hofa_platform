@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../models/category.dart';
 import '../../models/product.dart';
 import '../../providers/app_providers.dart';
 import '../../widgets/network_image_box.dart';
@@ -14,6 +15,7 @@ class MerchantDetailScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final merchantAsync = ref.watch(merchantDetailProvider(merchantId));
     final productsAsync = ref.watch(merchantProductsProvider(merchantId));
+    final categoriesAsync = ref.watch(merchantCategoriesProvider(merchantId));
     final theme = Theme.of(context);
 
     return Scaffold(
@@ -81,7 +83,13 @@ class MerchantDetailScreen extends ConsumerWidget {
                   child: Center(child: CircularProgressIndicator()),
                 ),
                 error: (e, _) => Center(child: Text('Lỗi: $e')),
-                data: (products) => _ProductGrid(products: products),
+                data: (products) => _ProductGrid(
+                  products: products,
+                  categories: categoriesAsync.maybeWhen(
+                    data: (v) => v,
+                    orElse: () => const [],
+                  ),
+                ),
               ),
             ],
           );
@@ -93,7 +101,8 @@ class MerchantDetailScreen extends ConsumerWidget {
 
 class _ProductGrid extends StatefulWidget {
   final List<Product> products;
-  const _ProductGrid({required this.products});
+  final List<MerchantCategory> categories;
+  const _ProductGrid({required this.products, this.categories = const []});
 
   @override
   State<_ProductGrid> createState() => _ProductGridState();
@@ -101,6 +110,22 @@ class _ProductGrid extends StatefulWidget {
 
 class _ProductGridState extends State<_ProductGrid> {
   String _filter = 'all'; // all | instant | scheduled
+
+  Widget _grid(List<Product> items) => GridView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: items.length,
+        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+          maxCrossAxisExtent: 220,
+          mainAxisSpacing: 12,
+          crossAxisSpacing: 12,
+          childAspectRatio: 0.68,
+        ),
+        itemBuilder: (context, i) {
+          final p = items[i];
+          return ProductCard(product: p, onTap: () => GoRouter.of(context).push('/products/${p.id}'));
+        },
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -114,11 +139,8 @@ class _ProductGridState extends State<_ProductGrid> {
       return const Padding(padding: EdgeInsets.only(top: 24), child: Center(child: Text('Cửa hàng chưa có sản phẩm')));
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (showFilter)
-          Padding(
+    final filterChips = showFilter
+        ? Padding(
             padding: const EdgeInsets.only(bottom: 12),
             child: Wrap(
               spacing: 8,
@@ -132,22 +154,40 @@ class _ProductGridState extends State<_ProductGrid> {
                     onSelected: (_) => setState(() => _filter = 'scheduled')),
               ],
             ),
+          )
+        : const SizedBox.shrink();
+
+    // Cửa hàng chưa tự cài đặt danh mục nào — giữ layout phẳng như trước.
+    if (widget.categories.isEmpty) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [filterChips, _grid(visible)],
+      );
+    }
+
+    final byCategory = <String, List<Product>>{};
+    for (final p in visible) {
+      final key = p.merchantCategoryId ?? '_none';
+      (byCategory[key] ??= []).add(p);
+    }
+    final sections = <MapEntry<String, List<Product>>>[
+      for (final c in widget.categories)
+        if (byCategory[c.id] != null) MapEntry(c.name, byCategory[c.id]!),
+      if (byCategory['_none'] != null) MapEntry('Khác', byCategory['_none']!),
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        filterChips,
+        for (final s in sections) ...[
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(s.key, style: Theme.of(context).textTheme.titleSmall),
           ),
-        GridView.builder(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          itemCount: visible.length,
-          gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-            maxCrossAxisExtent: 220,
-            mainAxisSpacing: 12,
-            crossAxisSpacing: 12,
-            childAspectRatio: 0.68,
-          ),
-          itemBuilder: (context, i) {
-            final p = visible[i];
-            return ProductCard(product: p, onTap: () => GoRouter.of(context).push('/products/${p.id}'));
-          },
-        ),
+          _grid(s.value),
+          const SizedBox(height: 16),
+        ],
       ],
     );
   }

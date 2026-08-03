@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/api_exception.dart';
 import '../models/user_profile.dart';
 import '../models/merchant.dart';
+import '../models/product.dart';
 import '../repositories/user_repository.dart';
 import '../repositories/merchant_repository.dart';
 
@@ -21,6 +22,11 @@ class PendingSignup {
 
 final pendingSignupProvider = StateProvider<PendingSignup?>((ref) => null);
 
+/// Nhóm topping vừa được "sao chép" (chỉ giữ trong bộ nhớ, không lưu database) — dùng
+/// để "dán" lại toàn bộ tên nhóm + các lựa chọn bên trong khi tạo nhóm topping mới ở
+/// bất kỳ sản phẩm nào khác, tránh phải gõ lại từ đầu mỗi lần. Mất khi tắt app.
+final copiedToppingGroupProvider = StateProvider<ToppingGroup?>((ref) => null);
+
 /// Phát lại mỗi khi trạng thái đăng nhập Supabase đổi (login/logout/token refresh).
 final authStateProvider = StreamProvider<AuthState>((ref) {
   return Supabase.instance.client.auth.onAuthStateChange;
@@ -32,7 +38,9 @@ final currentSessionProvider = Provider<Session?>((ref) {
 });
 
 /// Hồ sơ public.users — null nếu đã đăng nhập Supabase nhưng chưa gọi auth.syncProfile.
-final userProfileProvider = FutureProvider.autoDispose<UserProfile?>((ref) async {
+final userProfileProvider = FutureProvider.autoDispose<UserProfile?>((
+  ref,
+) async {
   final session = ref.watch(currentSessionProvider);
   if (session == null) return null;
   try {

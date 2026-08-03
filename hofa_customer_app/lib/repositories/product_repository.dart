@@ -11,6 +11,11 @@ class ProductRepository {
     return list.map((e) => Category.fromJson(e as Map<String, dynamic>)).toList();
   }
 
+  Future<List<MerchantCategory>> merchantCategories(String merchantId) async {
+    final list = await _api.get('/merchant-categories', query: {'merchant_id': merchantId}) as List;
+    return list.map((e) => MerchantCategory.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
   Future<List<Product>> products({
     String? merchantId,
     String? q,

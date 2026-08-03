@@ -286,9 +286,29 @@ COMMENT ON TABLE categories IS 'Danh mục ngành hàng, có thể lồng nhau (
 
 CREATE INDEX idx_categories_parent ON categories (parent_id) WHERE is_active;
 
+-- Danh mục riêng của từng cửa hàng (SDD bổ sung) — mỗi cửa hàng tự đặt tên danh mục hiển
+-- thị cho khách (vd "Cà phê máy", "Trà trái cây"), nhưng bên dưới vẫn phải gắn vào ĐÚNG 1
+-- danh mục con của hệ thống (categories.parent_id NOT NULL) để admin thống kê/tìm kiếm theo
+-- ngành hàng chung. Khách xem trang cửa hàng chỉ thấy danh mục cửa hàng này, không thấy cây
+-- danh mục chính/con của hệ thống.
+CREATE TABLE merchant_categories (
+  id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  merchant_id UUID NOT NULL REFERENCES merchants(id)  ON DELETE CASCADE,
+  category_id UUID NOT NULL REFERENCES categories(id) ON DELETE CASCADE, -- danh mục con hệ thống
+  name        VARCHAR(150) NOT NULL,
+  sort_order  INTEGER NOT NULL DEFAULT 0,
+  is_active   BOOLEAN NOT NULL DEFAULT true,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+COMMENT ON TABLE merchant_categories IS 'Danh mục riêng của 1 cửa hàng, nằm dưới 1 danh mục con hệ thống — khách chỉ thấy danh mục này khi xem cửa hàng';
+
+CREATE INDEX idx_merchant_categories_merchant ON merchant_categories (merchant_id) WHERE is_active;
+CREATE INDEX idx_merchant_categories_category ON merchant_categories (category_id) WHERE is_active;
+
 CREATE TABLE products (
-  id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  merchant_id   UUID NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+  id                   UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  merchant_id          UUID NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+  merchant_category_id UUID REFERENCES merchant_categories(id) ON DELETE SET NULL,
   name          VARCHAR(255) NOT NULL,
   slug          VARCHAR(280),
   description   TEXT,
@@ -315,6 +335,7 @@ COMMENT ON COLUMN products.sales_model IS 'instant = giao ngay; scheduled = đ�
 CREATE INDEX idx_products_merchant ON products (merchant_id, status) WHERE deleted_at IS NULL;
 CREATE INDEX idx_products_search   ON products USING GIN (to_tsvector('simple', name));
 CREATE INDEX idx_products_tags     ON products USING GIN (tags);
+CREATE INDEX idx_products_merchant_category ON products (merchant_category_id) WHERE deleted_at IS NULL;
 
 -- Một sản phẩm thuộc nhiều danh mục (SDD 7.16)
 CREATE TABLE product_categories (

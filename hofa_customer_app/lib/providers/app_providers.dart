@@ -43,6 +43,9 @@ final categoriesProvider = FutureProvider.autoDispose<List<Category>>((ref) => r
 final merchantProductsProvider =
     FutureProvider.autoDispose.family<List<Product>, String>((ref, merchantId) => ref.watch(productRepoProvider).products(merchantId: merchantId));
 
+final merchantCategoriesProvider = FutureProvider.autoDispose.family<List<MerchantCategory>, String>(
+    (ref, merchantId) => ref.watch(productRepoProvider).merchantCategories(merchantId));
+
 final categoryProductsProvider = FutureProvider.autoDispose.family<List<Product>, String>(
     (ref, categoryId) => ref.watch(productRepoProvider).products(categoryId: categoryId));
 
