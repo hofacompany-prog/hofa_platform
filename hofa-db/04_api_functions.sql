@@ -71,11 +71,44 @@ $$ LANGUAGE plpgsql;
 COMMENT ON FUNCTION reserve_inventory IS 'Giữ chỗ tồn kho lúc đặt hàng. Không trừ on_hand, chỉ tăng reserved';
 COMMENT ON FUNCTION release_inventory IS 'Nhả chỗ đã giữ khi đơn bị huỷ trước khi lấy hàng';
 
+-- Giá thật của 1 biến thể khi đặt hàng: ưu tiên bậc giá (wholesale_tiers) khớp số lượng
+-- (và khớp cả số ngày đặt trước tối thiểu nếu bậc đó có lead_time_days > 0), nếu không
+-- có bậc nào khớp thì dùng lại giá bán gốc (p_base_price = product_variants.price).
+-- Nhiều bậc cùng khớp thì ưu tiên bậc có min_quantity cao nhất (đúng tinh thần "mua càng
+-- nhiều giá càng tốt"), rồi tới bậc có lead_time_days cao nhất (khớp càng nhiều điều kiện
+-- càng ưu tiên).
+CREATE OR REPLACE FUNCTION resolve_variant_price(
+  p_variant_id UUID, p_quantity INTEGER, p_scheduled_for TIMESTAMPTZ, p_base_price INTEGER
+) RETURNS INTEGER AS $$
+DECLARE
+  v_lead_days INTEGER;
+  v_price     INTEGER;
+BEGIN
+  v_lead_days := CASE WHEN p_scheduled_for IS NULL THEN NULL
+                      ELSE GREATEST(FLOOR(EXTRACT(EPOCH FROM (p_scheduled_for - now())) / 86400)::INTEGER, 0)
+                 END;
+
+  SELECT unit_price INTO v_price
+    FROM wholesale_tiers
+   WHERE variant_id = p_variant_id
+     AND p_quantity >= min_quantity
+     AND (max_quantity IS NULL OR p_quantity <= max_quantity)
+     AND (lead_time_days = 0 OR (v_lead_days IS NOT NULL AND v_lead_days >= lead_time_days))
+   ORDER BY min_quantity DESC, lead_time_days DESC
+   LIMIT 1;
+
+  RETURN COALESCE(v_price, p_base_price);
+END;
+$$ LANGUAGE plpgsql;
+COMMENT ON FUNCTION resolve_variant_price IS
+  'Chốt giá thật theo bậc giá sỉ/đặt trước khớp số lượng (và số ngày đặt trước nếu có) — không có bậc nào khớp thì trả về giá bán gốc';
+
 -- ============================================================================
 -- PHẦN 1: TẠO ĐƠN HÀNG (SDD 7.5)
 -- p_items: [{"variant_id":"uuid","quantity":2,"note":"không lấy đá"}, ...]
--- Giá KHÔNG lấy từ client — luôn đọc giá hiện tại trong product_variants,
--- để khách không thể sửa giá bằng cách sửa request.
+-- Giá KHÔNG lấy từ client — luôn chốt qua resolve_variant_price() (bậc giá sỉ/đặt trước
+-- khớp số lượng, không khớp bậc nào thì lấy giá bán gốc product_variants.price), để khách
+-- không thể sửa giá bằng cách sửa request.
 -- ============================================================================
 
 CREATE OR REPLACE FUNCTION create_order(
@@ -104,6 +137,7 @@ DECLARE
   v_item          JSONB;
   v_variant       product_variants;
   v_subtotal      INTEGER := 0;
+  v_unit_price    INTEGER;
   v_line_total    INTEGER;
   v_discount      INTEGER := 0;
   v_voucher       vouchers;
@@ -141,7 +175,10 @@ BEGIN
 
     PERFORM reserve_inventory(p_branch_id, v_variant.id, (v_item->>'quantity')::INTEGER);
 
-    v_line_total := v_variant.price * (v_item->>'quantity')::INTEGER;
+    v_unit_price := resolve_variant_price(
+      v_variant.id, (v_item->>'quantity')::INTEGER, p_scheduled_for, v_variant.price
+    );
+    v_line_total := v_unit_price * (v_item->>'quantity')::INTEGER;
     v_subtotal   := v_subtotal + v_line_total;
 
     SELECT v_items_json || jsonb_build_object(
@@ -150,7 +187,7 @@ BEGIN
       'variant_name', v_variant.name,
       'sku', v_variant.sku,
       'unit', p.unit,
-      'unit_price', v_variant.price,
+      'unit_price', v_unit_price,
       'quantity', (v_item->>'quantity')::INTEGER,
       'line_total', v_line_total,
       'note', v_item->>'note'

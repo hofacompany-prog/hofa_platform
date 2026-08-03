@@ -36,7 +36,6 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   final _descCtrl = TextEditingController();
   final _unitCtrl = TextEditingController(text: 'cái');
   final _priceCtrl = TextEditingController();
-  final _wholesalePriceCtrl = TextEditingController();
   final _stockCtrl = TextEditingController();
   String _salesModel = 'instant';
   String _status = 'active';
@@ -88,7 +87,6 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     _descCtrl.dispose();
     _unitCtrl.dispose();
     _priceCtrl.dispose();
-    _wholesalePriceCtrl.dispose();
     _stockCtrl.dispose();
     super.dispose();
   }
@@ -607,7 +605,6 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
           status: _status,
           imageUrl: _imageUrl!,
           price: int.parse(_priceCtrl.text.trim()),
-          wholesalePrice: int.tryParse(_wholesalePriceCtrl.text.trim()),
           toppingGroups: _toppingGroups,
           wholesaleTiers: _tiersByVariant['default'] ?? [],
           extraVariants: _pendingVariants,
@@ -651,9 +648,6 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     );
     final costPriceCtrl = TextEditingController(
       text: existing?.costPrice?.toString() ?? '',
-    );
-    final wholesalePriceCtrl = TextEditingController(
-      text: existing?.wholesalePrice?.toString() ?? '',
     );
     final currentStock = existing != null
         ? (_stockByVariant[existing.id] ?? 0)
@@ -717,15 +711,6 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                     ),
                     keyboardType: TextInputType.number,
                   ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: wholesalePriceCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Giá sỉ (không bắt buộc)',
-                      border: OutlineInputBorder(),
-                    ),
-                    keyboardType: TextInputType.number,
-                  ),
                   if (_branch != null && _isEdit) ...[
                     const SizedBox(height: 12),
                     TextField(
@@ -785,7 +770,6 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     if (!_isEdit) {
       final comparePrice = int.tryParse(comparePriceCtrl.text.trim());
       final costPrice = int.tryParse(costPriceCtrl.text.trim());
-      final wholesalePrice = int.tryParse(wholesalePriceCtrl.text.trim());
       final sku = skuCtrl.text.trim().isEmpty ? null : skuCtrl.text.trim();
       setState(() {
         if (existing == null) {
@@ -799,7 +783,6 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
               price: price,
               comparePrice: comparePrice,
               costPrice: costPrice,
-              wholesalePrice: wholesalePrice,
               isDefault: false,
               isActive: true,
             ),
@@ -816,7 +799,6 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                         price: price,
                         comparePrice: comparePrice,
                         costPrice: costPrice,
-                        wholesalePrice: wholesalePrice,
                         isDefault: v.isDefault,
                         isActive: v.isActive,
                       )
@@ -837,7 +819,6 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
           price: price,
           comparePrice: int.tryParse(comparePriceCtrl.text.trim()),
           costPrice: int.tryParse(costPriceCtrl.text.trim()),
-          wholesalePrice: int.tryParse(wholesalePriceCtrl.text.trim()),
           isDefault: _product?.variants.isEmpty ?? true,
         );
         final stock = int.tryParse(stockCtrl.text.trim());
@@ -857,7 +838,6 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
           'price': price,
           'compare_price': int.tryParse(comparePriceCtrl.text.trim()),
           'cost_price': int.tryParse(costPriceCtrl.text.trim()),
-          'wholesale_price': int.tryParse(wholesalePriceCtrl.text.trim()),
           'is_active': isActive,
           'is_default': isDefault,
         });
@@ -1501,17 +1481,6 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                                 ? 'Nhập giá bán hợp lệ'
                                 : null,
                           ),
-                          if (_salesModel == 'scheduled') ...[
-                            const SizedBox(height: 12),
-                            TextFormField(
-                              controller: _wholesalePriceCtrl,
-                              decoration: const InputDecoration(
-                                labelText: 'Giá sỉ',
-                                border: OutlineInputBorder(),
-                              ),
-                              keyboardType: TextInputType.number,
-                            ),
-                          ],
                           if (_branch != null) ...[
                             const SizedBox(height: 12),
                             TextFormField(
