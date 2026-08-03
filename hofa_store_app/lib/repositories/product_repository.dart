@@ -2,6 +2,13 @@ import '../core/api_client.dart';
 import '../models/product.dart';
 import '../models/category.dart';
 
+Map<String, dynamic> _tierPayload(WholesaleTier t) => {
+  'min_quantity': t.minQuantity,
+  if (t.maxQuantity != null) 'max_quantity': t.maxQuantity,
+  'unit_price': t.unitPrice,
+  'lead_time_days': t.leadTimeDays,
+};
+
 class ProductRepository {
   final _api = ApiClient.instance;
 
@@ -76,6 +83,8 @@ class ProductRepository {
     int? wholesalePrice,
     List<ToppingGroup> toppingGroups = const [],
     List<WholesaleTier> wholesaleTiers = const [],
+    List<ProductVariant> extraVariants = const [],
+    Map<String, List<WholesaleTier>> tiersByVariant = const {},
   }) async => Product.fromJson(
     await _api.post(
           '/products',
@@ -112,18 +121,23 @@ class ProductRepository {
                 if (wholesalePrice != null) 'wholesale_price': wholesalePrice,
                 'is_default': true,
                 if (wholesaleTiers.isNotEmpty)
-                  'wholesale_tiers': wholesaleTiers
-                      .map(
-                        (t) => {
-                          'min_quantity': t.minQuantity,
-                          if (t.maxQuantity != null)
-                            'max_quantity': t.maxQuantity,
-                          'unit_price': t.unitPrice,
-                          'lead_time_days': t.leadTimeDays,
-                        },
-                      )
-                      .toList(),
+                  'wholesale_tiers': wholesaleTiers.map(_tierPayload).toList(),
               },
+              for (final v in extraVariants)
+                {
+                  'name': v.name,
+                  if (v.sku != null && v.sku!.isNotEmpty) 'sku': v.sku,
+                  'price': v.price,
+                  if (v.comparePrice != null) 'compare_price': v.comparePrice,
+                  if (v.costPrice != null) 'cost_price': v.costPrice,
+                  if (v.wholesalePrice != null)
+                    'wholesale_price': v.wholesalePrice,
+                  'is_default': false,
+                  if ((tiersByVariant[v.id] ?? []).isNotEmpty)
+                    'wholesale_tiers': tiersByVariant[v.id]!
+                        .map(_tierPayload)
+                        .toList(),
+                },
             ],
           },
         )

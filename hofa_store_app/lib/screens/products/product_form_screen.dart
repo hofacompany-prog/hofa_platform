@@ -46,8 +46,11 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   Branch? _branch;
   Map<String, int> _stockByVariant = {};
   List<ToppingGroup> _toppingGroups = [];
+  // _tiersByVariant: khi sửa sản phẩm khoá bằng id biến thể thật; khi tạo mới khoá bằng
+  // 'default' (biến thể mặc định lấy giá từ khung "Giá bán") hoặc id tạm của _pendingVariants.
   Map<String, List<WholesaleTier>> _tiersByVariant = {};
-  List<WholesaleTier> _pendingTiers = [];
+  List<ProductVariant> _pendingVariants =
+      []; // biến thể thêm lúc tạo mới, chưa có id thật
   String _tierTab = 'wholesale'; // wholesale (Giá sỉ) | preorder (Đặt trước)
   bool _loading = false;
   bool _loadingProduct = false;
@@ -253,38 +256,46 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
         ? (int.tryParse(leadDaysCtrl.text.trim()) ?? 0)
         : 0;
 
-    // Chưa tạo sản phẩm (đang ở màn "Thêm sản phẩm") — chưa có variant_id để gọi API,
-    // giữ tạm bậc giá trong bộ nhớ, gửi kèm lên cùng lúc tạo sản phẩm lúc bấm "Tạo sản
-    // phẩm" (xem _submit).
+    // Chưa tạo sản phẩm (đang ở màn "Thêm sản phẩm") — chưa có variant_id thật để gọi API,
+    // giữ tạm bậc giá trong bộ nhớ theo khoá 'default'/id tạm của biến thể, gửi kèm lên
+    // cùng lúc tạo sản phẩm lúc bấm "Tạo sản phẩm" (xem _submit).
     if (!_isEdit) {
+      final key = variantId ?? 'default';
       setState(() {
+        final current = _tiersByVariant[key] ?? [];
         if (existing == null) {
-          _pendingTiers = [
-            ..._pendingTiers,
-            WholesaleTier(
-              id: 'local-${DateTime.now().microsecondsSinceEpoch}',
-              variantId: '',
-              minQuantity: minQty,
-              maxQuantity: maxQty,
-              unitPrice: price,
-              leadTimeDays: leadDays,
-            ),
-          ];
+          _tiersByVariant = {
+            ..._tiersByVariant,
+            key: [
+              ...current,
+              WholesaleTier(
+                id: 'local-${DateTime.now().microsecondsSinceEpoch}',
+                variantId: key,
+                minQuantity: minQty,
+                maxQuantity: maxQty,
+                unitPrice: price,
+                leadTimeDays: leadDays,
+              ),
+            ],
+          };
         } else {
-          _pendingTiers = _pendingTiers
-              .map(
-                (t) => t.id == existing.id
-                    ? WholesaleTier(
-                        id: t.id,
-                        variantId: t.variantId,
-                        minQuantity: minQty,
-                        maxQuantity: maxQty,
-                        unitPrice: price,
-                        leadTimeDays: leadDays,
-                      )
-                    : t,
-              )
-              .toList();
+          _tiersByVariant = {
+            ..._tiersByVariant,
+            key: current
+                .map(
+                  (t) => t.id == existing.id
+                      ? WholesaleTier(
+                          id: t.id,
+                          variantId: t.variantId,
+                          minQuantity: minQty,
+                          maxQuantity: maxQty,
+                          unitPrice: price,
+                          leadTimeDays: leadDays,
+                        )
+                      : t,
+                )
+                .toList(),
+          };
         }
       });
       return;
@@ -341,10 +352,14 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     if (ok != true) return;
 
     if (!_isEdit) {
+      final key = tier.variantId;
       setState(
-        () => _pendingTiers = _pendingTiers
-            .where((t) => t.id != tier.id)
-            .toList(),
+        () => _tiersByVariant = {
+          ..._tiersByVariant,
+          key: (_tiersByVariant[key] ?? [])
+              .where((t) => t.id != tier.id)
+              .toList(),
+        },
       );
       return;
     }
@@ -361,8 +376,8 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     }
   }
 
-  /// [variantId] null nghĩa là đang ở màn "Thêm sản phẩm" (chưa có biến thể thật, thao
-  /// tác trên [_pendingTiers]) — khi đó cũng không có tên biến thể riêng nên [title] null.
+  /// [variantId] là id thật (đang sửa sản phẩm) hoặc 'default'/id tạm của biến thể đang
+  /// chờ tạo (đang thêm sản phẩm) — cả 2 trường hợp đều đọc/ghi vào [_tiersByVariant].
   Widget _tierVariantCard({
     required String? variantId,
     required String? title,
@@ -594,7 +609,9 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
           price: int.parse(_priceCtrl.text.trim()),
           wholesalePrice: int.tryParse(_wholesalePriceCtrl.text.trim()),
           toppingGroups: _toppingGroups,
-          wholesaleTiers: _pendingTiers,
+          wholesaleTiers: _tiersByVariant['default'] ?? [],
+          extraVariants: _pendingVariants,
+          tiersByVariant: _tiersByVariant,
         );
         final stock = int.tryParse(_stockCtrl.text.trim());
         if (stock != null &&
@@ -709,7 +726,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                     ),
                     keyboardType: TextInputType.number,
                   ),
-                  if (_branch != null) ...[
+                  if (_branch != null && _isEdit) ...[
                     const SizedBox(height: 12),
                     TextField(
                       controller: stockCtrl,
@@ -722,7 +739,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                       keyboardType: TextInputType.number,
                     ),
                   ],
-                  if (existing != null) ...[
+                  if (existing != null && _isEdit) ...[
                     const SizedBox(height: 8),
                     SwitchListTile(
                       contentPadding: EdgeInsets.zero,
@@ -760,6 +777,56 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     if (ok != true) return;
     final price = int.tryParse(priceCtrl.text.trim());
     if (nameCtrl.text.trim().isEmpty || price == null) return;
+
+    // Chưa tạo sản phẩm (đang ở màn "Thêm sản phẩm") — chưa có product_id để gọi API,
+    // giữ tạm biến thể trong bộ nhớ, gửi kèm lên cùng lúc tạo sản phẩm lúc bấm "Tạo sản
+    // phẩm" (xem _submit). Đây luôn là biến thể THÊM (biến thể mặc định lấy từ khung
+    // "Giá bán" phía trên).
+    if (!_isEdit) {
+      final comparePrice = int.tryParse(comparePriceCtrl.text.trim());
+      final costPrice = int.tryParse(costPriceCtrl.text.trim());
+      final wholesalePrice = int.tryParse(wholesalePriceCtrl.text.trim());
+      final sku = skuCtrl.text.trim().isEmpty ? null : skuCtrl.text.trim();
+      setState(() {
+        if (existing == null) {
+          _pendingVariants = [
+            ..._pendingVariants,
+            ProductVariant(
+              id: 'local-${DateTime.now().microsecondsSinceEpoch}',
+              productId: '',
+              sku: sku,
+              name: nameCtrl.text.trim(),
+              price: price,
+              comparePrice: comparePrice,
+              costPrice: costPrice,
+              wholesalePrice: wholesalePrice,
+              isDefault: false,
+              isActive: true,
+            ),
+          ];
+        } else {
+          _pendingVariants = _pendingVariants
+              .map(
+                (v) => v.id == existing.id
+                    ? ProductVariant(
+                        id: v.id,
+                        productId: v.productId,
+                        sku: sku,
+                        name: nameCtrl.text.trim(),
+                        price: price,
+                        comparePrice: comparePrice,
+                        costPrice: costPrice,
+                        wholesalePrice: wholesalePrice,
+                        isDefault: v.isDefault,
+                        isActive: v.isActive,
+                      )
+                    : v,
+              )
+              .toList();
+        }
+      });
+      return;
+    }
 
     try {
       if (existing == null) {
@@ -817,6 +884,14 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   }
 
   Future<void> _deleteVariant(String id) async {
+    if (!_isEdit) {
+      setState(
+        () => _pendingVariants = _pendingVariants
+            .where((v) => v.id != id)
+            .toList(),
+      );
+      return;
+    }
     try {
       await _repo.deleteVariant(id);
       await _load();
@@ -1448,13 +1523,52 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                               keyboardType: TextInputType.number,
                             ),
                           ],
-                          Padding(
-                            padding: const EdgeInsets.only(top: 6),
-                            child: Text(
-                              'Có thể thêm nhiều biến thể khác (size, khối lượng...) sau khi tạo sản phẩm.',
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
+                          const SizedBox(height: 24),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'Biến thể khác (không bắt buộc)',
+                                style: Theme.of(context).textTheme.titleMedium,
+                              ),
+                              TextButton.icon(
+                                onPressed: () => _variantDialog(),
+                                icon: const Icon(Icons.add),
+                                label: const Text('Thêm biến thể'),
+                              ),
+                            ],
                           ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Giá ở trên là biến thể mặc định (VD: 500g) — thêm biến thể khác nếu sản phẩm có nhiều lựa chọn (VD: 1kg, 2kg) ngay từ lúc tạo.',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                          const SizedBox(height: 8),
+                          if (_pendingVariants.isEmpty)
+                            const Text('Chưa có biến thể nào khác.')
+                          else
+                            ..._pendingVariants.map(
+                              (v) => Card(
+                                child: ListTile(
+                                  title: Text(v.name),
+                                  subtitle: Text(formatVnd(v.price)),
+                                  trailing: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      IconButton(
+                                        icon: const Icon(Icons.edit_outlined),
+                                        onPressed: () =>
+                                            _variantDialog(existing: v),
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(Icons.delete_outline),
+                                        onPressed: () => _deleteVariant(v.id),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
                         ],
                         if (_isEdit) ...[
                           const SizedBox(height: 32),
@@ -1584,10 +1698,25 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                                 ),
                               ))
                           else
-                            _tierVariantCard(
-                              variantId: null,
-                              title: null,
-                              allTiers: _pendingTiers,
+                            ...[
+                              ProductVariant(
+                                id: 'default',
+                                productId: '',
+                                name: _unitCtrl.text.trim().isEmpty
+                                    ? 'Mặc định'
+                                    : _unitCtrl.text.trim(),
+                                price:
+                                    int.tryParse(_priceCtrl.text.trim()) ?? 0,
+                                isDefault: true,
+                                isActive: true,
+                              ),
+                              ..._pendingVariants,
+                            ].map(
+                              (v) => _tierVariantCard(
+                                variantId: v.id,
+                                title: v.name,
+                                allTiers: _tiersByVariant[v.id] ?? [],
+                              ),
                             ),
                         ],
                         const SizedBox(height: 32),
