@@ -14,6 +14,11 @@ class CartItem {
   final String variantId;
   final String variantName;
   final int unitPrice;
+
+  /// Giá gốc của biến thể lúc thêm vào giỏ (product_variants.price), không đổi kể cả khi
+  /// [unitPrice] được cập nhật lại theo bậc giá — dùng để biết giá hiện tại có đang được
+  /// giảm theo bậc hay không (unitPrice != basePrice) mà không cần hỏi lại server.
+  final int basePrice;
   final int quantity;
   final String unit;
   final String? note;
@@ -35,13 +40,14 @@ class CartItem {
     required this.variantId,
     required this.variantName,
     required this.unitPrice,
+    int? basePrice,
     required this.quantity,
     required this.unit,
     this.note,
     this.toppings = const [],
     this.deliverySlots = const [],
     this.orderKind,
-  });
+  }) : basePrice = basePrice ?? unitPrice;
 
   int get toppingsTotal => toppings.fold(0, (sum, t) => sum + t.price);
   int get lineTotal => (unitPrice + toppingsTotal) * quantity;
@@ -64,6 +70,7 @@ class CartItem {
     variantId: variantId,
     variantName: variantName,
     unitPrice: unitPrice ?? this.unitPrice,
+    basePrice: basePrice,
     quantity: quantity ?? this.quantity,
     unit: unit,
     note: note,
@@ -80,6 +87,7 @@ class CartItem {
     'variant_id': variantId,
     'variant_name': variantName,
     'unit_price': unitPrice,
+    'base_price': basePrice,
     'quantity': quantity,
     'unit': unit,
     'note': note,
@@ -98,6 +106,9 @@ class CartItem {
     variantId: json['variant_id'] as String,
     variantName: json['variant_name'] as String? ?? '',
     unitPrice: (json['unit_price'] as num?)?.toInt() ?? 0,
+    basePrice:
+        (json['base_price'] as num?)?.toInt() ??
+        (json['unit_price'] as num?)?.toInt(),
     quantity: (json['quantity'] as num?)?.toInt() ?? 1,
     unit: json['unit'] as String? ?? 'cái',
     note: json['note'] as String?,

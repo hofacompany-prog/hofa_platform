@@ -11,6 +11,10 @@ import '../../providers/cart_provider.dart';
 import '../../widgets/network_image_box.dart';
 import '../../widgets/topping_picker_dialog.dart';
 
+/// Màu cam thương hiệu (accent) — dùng để làm nổi bật giá khi đã đổi khỏi giá mặc định
+/// theo bậc giá sỉ/đặt trước.
+const _accentColor = Color(0xFFFB8519);
+
 const _weekdayLabels = [
   (iso: 1, label: 'T2'),
   (iso: 2, label: 'T3'),
@@ -524,8 +528,10 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
         );
       }
     }
+    // So với giá gốc (basePrice), không phải unitPrice — unitPrice bên Giá sỉ đã bị ghi
+    // đè thành giá theo bậc mỗi khi đổi số lượng nên không còn phản ánh giá "mặc định".
     final displayPrice = preorderPrice ?? item.unitPrice;
-    final discounted = preorderPrice != null && preorderPrice != item.unitPrice;
+    final discounted = displayPrice != item.basePrice;
 
     return Card(
       elevation: 0,
@@ -561,7 +567,9 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
                         '${formatVnd(displayPrice + item.toppingsTotal)}'
                         '${discounted ? ' (Giá sỉ)' : ''}',
                         style: TextStyle(
-                          color: theme.colorScheme.primary,
+                          color: discounted
+                              ? _accentColor
+                              : theme.colorScheme.primary,
                           fontWeight: discounted ? FontWeight.w700 : null,
                         ),
                       ),
@@ -824,14 +832,14 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
                                 Builder(
                                   builder: (context) {
                                     final price = priceFor(i);
-                                    final discounted = price != i.unitPrice;
+                                    final discounted = price != i.basePrice;
                                     return Text(
                                       '${formatVnd(price + i.toppingsTotal)} x ${i.quantity}'
                                       '${discounted ? ' (Giá sỉ)' : ''}',
                                       style: theme.textTheme.bodySmall
                                           ?.copyWith(
                                             color: discounted
-                                                ? theme.colorScheme.primary
+                                                ? _accentColor
                                                 : null,
                                             fontWeight: discounted
                                                 ? FontWeight.w600

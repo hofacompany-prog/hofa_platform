@@ -170,6 +170,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
           variantId: variant.id,
           variantName: variant.name,
           unitPrice: unitPrice,
+          basePrice: variant.price,
           quantity: _quantity,
           unit: product.unit,
           toppings: _selectedToppings,
