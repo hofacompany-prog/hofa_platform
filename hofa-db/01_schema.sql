@@ -402,7 +402,9 @@ CREATE TABLE wholesale_tiers (
   CONSTRAINT tiers_preorder_prices_required
     CHECK (min_days_per_week = 0 OR (unit_price_days IS NOT NULL AND unit_price_both IS NOT NULL)),
   CONSTRAINT tiers_deposit_range CHECK (deposit_percent >= 0 AND deposit_percent <= 100),
-  UNIQUE (variant_id, min_quantity)
+  -- 1 biến thể được phép có CẢ bậc giá sỉ lẫn bậc đặt trước cùng lúc — chỉ trùng
+  -- min_quantity mới cấm khi CÙNG loại (min_days_per_week giống nhau).
+  UNIQUE (variant_id, min_quantity, min_days_per_week)
 );
 COMMENT ON TABLE wholesale_tiers IS
   'Bậc giá sỉ/đặt trước theo số lượng (và với đặt trước, cả số ngày/tuần) — xem comment cột min_days_per_week';
