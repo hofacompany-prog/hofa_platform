@@ -75,9 +75,13 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/checkout',
-            builder: (context, state) => CheckoutScreen(
-              preorderSchedule: state.extra as PreorderSchedule?,
-            ),
+            builder: (context, state) {
+              final extra = state.extra;
+              return CheckoutScreen(
+                preorderSchedule: extra is PreorderSchedule ? extra : null,
+                initialScheduledFor: extra is DateTime ? extra : null,
+              );
+            },
           ),
           GoRoute(
             path: '/orders',

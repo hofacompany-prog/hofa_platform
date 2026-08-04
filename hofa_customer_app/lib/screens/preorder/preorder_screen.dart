@@ -37,13 +37,67 @@ class PreorderScreen extends ConsumerStatefulWidget {
   ConsumerState<PreorderScreen> createState() => _PreorderScreenState();
 }
 
-class _PreorderScreenState extends ConsumerState<PreorderScreen> {
+class _PreorderScreenState extends ConsumerState<PreorderScreen>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabController;
   int? _selectedViewDay;
   int _weekOffset = 0;
   String _mode = 'once';
   int _weeks = 1;
   TimeOfDay _time = const TimeOfDay(hour: 8, minute: 0);
   bool _recurringConfirmed = false;
+
+  // ---- Tab "Giá sỉ" — chỉ chọn 1 ngày giao + 1 giờ giao chung cho cả đơn,
+  // không có khái niệm ngày trong tuần / lặp lại như tab "Đặt trước". ----
+  DateTime? _wholesaleDate;
+  TimeOfDay _wholesaleTime = const TimeOfDay(hour: 8, minute: 0);
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickWholesaleDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now().add(const Duration(days: 1)),
+      firstDate: DateTime.now().add(const Duration(days: 1)),
+      lastDate: DateTime.now().add(const Duration(days: 90)),
+    );
+    if (picked != null) setState(() => _wholesaleDate = picked);
+  }
+
+  Future<void> _pickWholesaleTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: _wholesaleTime,
+    );
+    if (picked != null) setState(() => _wholesaleTime = picked);
+  }
+
+  void _goCheckoutWholesale(CartState cart) {
+    if (_wholesaleDate == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Chọn ngày giao trước khi thanh toán')),
+      );
+      return;
+    }
+    final scheduledFor = DateTime(
+      _wholesaleDate!.year,
+      _wholesaleDate!.month,
+      _wholesaleDate!.day,
+      _wholesaleTime.hour,
+      _wholesaleTime.minute,
+    );
+    context.push('/checkout', extra: scheduledFor);
+  }
 
   /// Thứ 2 của tuần chứa "ngày mai" — mốc gốc để tính ngày cho mọi tuần xem tiếp theo.
   DateTime get _baseMonday {
@@ -320,7 +374,11 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen> {
     context.push('/checkout', extra: schedule);
   }
 
-  Widget _itemCard(BuildContext context, CartItem item) {
+  Widget _itemCard(
+    BuildContext context,
+    CartItem item, {
+    bool showSchedule = true,
+  }) {
     final theme = Theme.of(context);
     final toppingGroups =
         ref.watch(toppingGroupsProvider(item.productId)).valueOrNull ?? [];
@@ -409,24 +467,26 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 4),
-            InkWell(
-              onTap: () => _editScheduleDialog(item),
-              child: Text(
-                sortedSlots.isEmpty
-                    ? 'Chưa chọn ngày giao — bấm để chọn'
-                    : 'Ngày giao: ${sortedSlots.map((s) => '${_weekdayLabelOf(s.weekday)} (${_shortDate(_nearestFutureDate(s.weekday))})').join(', ')}',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: sortedSlots.isEmpty
-                      ? theme.colorScheme.error
-                      : theme.colorScheme.primary,
-                  decoration: TextDecoration.underline,
-                  decorationColor: sortedSlots.isEmpty
-                      ? theme.colorScheme.error
-                      : theme.colorScheme.primary,
+            if (showSchedule) ...[
+              const SizedBox(height: 4),
+              InkWell(
+                onTap: () => _editScheduleDialog(item),
+                child: Text(
+                  sortedSlots.isEmpty
+                      ? 'Chưa chọn ngày giao — bấm để chọn'
+                      : 'Ngày giao: ${sortedSlots.map((s) => '${_weekdayLabelOf(s.weekday)} (${_shortDate(_nearestFutureDate(s.weekday))})').join(', ')}',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: sortedSlots.isEmpty
+                        ? theme.colorScheme.error
+                        : theme.colorScheme.primary,
+                    decoration: TextDecoration.underline,
+                    decorationColor: sortedSlots.isEmpty
+                        ? theme.colorScheme.error
+                        : theme.colorScheme.primary,
+                  ),
                 ),
               ),
-            ),
+            ],
           ],
         ),
       ),
@@ -637,210 +697,298 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen> {
     );
   }
 
+  /// Footer chung: tổng số món/tiền + nút thanh toán — dùng cho cả 2 tab, chỉ khác
+  /// hành vi khi bấm "Đến thanh toán".
+  Widget _footer(
+    BuildContext context,
+    CartState cart,
+    VoidCallback onCheckout,
+  ) {
+    final theme = Theme.of(context);
+    return SafeArea(
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface,
+          boxShadow: [
+            BoxShadow(
+              color: theme.colorScheme.shadow.withValues(alpha: 0.08),
+              blurRadius: 8,
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [const Text('Tổng số món'), Text('${cart.itemCount}')],
+            ),
+            const SizedBox(height: 4),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [const Text('Phí ship'), const Text('Miễn phí')],
+            ),
+            const SizedBox(height: 4),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text(
+                  'Tổng tiền',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                Text(
+                  formatVnd(cart.subtotal),
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.primary,
+                    fontSize: 18,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: onCheckout,
+                child: const Text('Đến thanh toán'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Tab "Giá sỉ" — chỉ cần 1 ngày giao + 1 giờ giao chung cho cả đơn, không có ngày
+  /// trong tuần / lặp lại như tab "Đặt trước".
+  Widget _wholesaleTab(BuildContext context, CartState cart) {
+    final theme = Theme.of(context);
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: Row(
+            children: [
+              Icon(
+                Icons.storefront_outlined,
+                size: 18,
+                color: theme.colorScheme.primary,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                cart.merchantName ?? '',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+            children: cart.items
+                .map((item) => _itemCard(context, item, showSchedule: false))
+                .toList(),
+          ),
+        ),
+        const Divider(height: 1),
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Ngày giao', style: theme.textTheme.titleSmall),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                icon: const Icon(Icons.calendar_today_outlined),
+                label: Text(
+                  _wholesaleDate == null
+                      ? 'Chọn ngày giao'
+                      : _shortDate(_wholesaleDate!),
+                ),
+                onPressed: _pickWholesaleDate,
+              ),
+              const SizedBox(height: 16),
+              Text('Giờ giao', style: theme.textTheme.titleSmall),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                icon: const Icon(Icons.access_time_outlined),
+                label: Text('Giờ giao: ${_wholesaleTime.format(context)}'),
+                onPressed: _pickWholesaleTime,
+              ),
+            ],
+          ),
+        ),
+        _footer(context, cart, () => _goCheckoutWholesale(cart)),
+      ],
+    );
+  }
+
+  /// Tab "Đặt trước" — khung hiện tại: mỗi món tick ngày riêng trong tuần, xem lịch theo
+  /// cột ngày bên phải, chọn giao 1 lần/nhiều lần.
+  Widget _preorderTab(BuildContext context, CartState cart) {
+    final theme = Theme.of(context);
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+          child: Row(
+            children: [
+              Icon(
+                Icons.storefront_outlined,
+                size: 18,
+                color: theme.colorScheme.primary,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                cart.merchantName ?? '',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 8, 16),
+                  children: cart.items
+                      .map((item) => _itemCard(context, item))
+                      .toList(),
+                ),
+              ),
+              const VerticalDivider(width: 1),
+              Expanded(child: _dayPicker(context, cart)),
+            ],
+          ),
+        ),
+        const Divider(height: 1),
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Giờ giao', style: theme.textTheme.titleSmall),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                icon: const Icon(Icons.access_time_outlined),
+                label: Text('Giờ giao: ${_time.format(context)}'),
+                onPressed: () async {
+                  await _pickTime();
+                  setState(() => _recurringConfirmed = false);
+                },
+              ),
+              const SizedBox(height: 16),
+              Text('Hình thức giao', style: theme.textTheme.titleSmall),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                children: [
+                  ChoiceChip(
+                    label: const Text('Giao 1 lần'),
+                    selected: _mode == 'once',
+                    onSelected: (_) => setState(() {
+                      _mode = 'once';
+                      _recurringConfirmed = false;
+                    }),
+                  ),
+                  ChoiceChip(
+                    label: const Text('Giao nhiều lần'),
+                    selected: _mode == 'recurring',
+                    onSelected: (_) => setState(() {
+                      _mode = 'recurring';
+                      _recurringConfirmed = false;
+                    }),
+                  ),
+                ],
+              ),
+              if (_mode == 'recurring') ...[
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    const Text('Số tuần lặp lại'),
+                    const Spacer(),
+                    IconButton(
+                      icon: const Icon(Icons.remove_circle_outline),
+                      onPressed: _weeks > 1
+                          ? () => setState(() {
+                              _weeks--;
+                              _recurringConfirmed = false;
+                            })
+                          : null,
+                    ),
+                    Text(
+                      '$_weeks',
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.add_circle_outline),
+                      onPressed: _weeks < 12
+                          ? () => setState(() {
+                              _weeks++;
+                              _recurringConfirmed = false;
+                            })
+                          : null,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    OutlinedButton.icon(
+                      icon: Icon(
+                        _recurringConfirmed
+                            ? Icons.check_circle
+                            : Icons.event_available,
+                      ),
+                      label: Text(
+                        _recurringConfirmed
+                            ? 'Đã xác nhận'
+                            : 'Xác nhận lịch giao',
+                      ),
+                      onPressed: () => _confirmRecurring(cart),
+                    ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        ),
+        _footer(context, cart, () => _goCheckout(cart)),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final cart = ref.watch(cartProvider);
-    final theme = Theme.of(context);
     final isPreorderCart = !cart.isEmpty && cart.salesModel == 'scheduled';
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Đặt trước')),
+      appBar: AppBar(
+        title: const Text('Đặt trước'),
+        bottom: isPreorderCart
+            ? TabBar(
+                controller: _tabController,
+                tabs: const [
+                  Tab(text: 'Giá sỉ'),
+                  Tab(text: 'Đặt trước'),
+                ],
+              )
+            : null,
+      ),
       body: !isPreorderCart
           ? const Center(
               child: Text('Chưa có sản phẩm đặt trước/bán sỉ nào trong giỏ'),
             )
-          : Column(
+          : TabBarView(
+              controller: _tabController,
               children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                  child: Row(
-                    children: [
-                      Icon(
-                        Icons.storefront_outlined,
-                        size: 18,
-                        color: theme.colorScheme.primary,
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        cart.merchantName ?? '',
-                        style: const TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                    ],
-                  ),
-                ),
-                Expanded(
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Expanded(
-                        child: ListView(
-                          padding: const EdgeInsets.fromLTRB(16, 8, 8, 16),
-                          children: cart.items
-                              .map((item) => _itemCard(context, item))
-                              .toList(),
-                        ),
-                      ),
-                      const VerticalDivider(width: 1),
-                      Expanded(child: _dayPicker(context, cart)),
-                    ],
-                  ),
-                ),
-                const Divider(height: 1),
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Giờ giao', style: theme.textTheme.titleSmall),
-                      const SizedBox(height: 8),
-                      OutlinedButton.icon(
-                        icon: const Icon(Icons.access_time_outlined),
-                        label: Text('Giờ giao: ${_time.format(context)}'),
-                        onPressed: () async {
-                          await _pickTime();
-                          setState(() => _recurringConfirmed = false);
-                        },
-                      ),
-                      const SizedBox(height: 16),
-                      Text('Hình thức giao', style: theme.textTheme.titleSmall),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        children: [
-                          ChoiceChip(
-                            label: const Text('Giao 1 lần'),
-                            selected: _mode == 'once',
-                            onSelected: (_) => setState(() {
-                              _mode = 'once';
-                              _recurringConfirmed = false;
-                            }),
-                          ),
-                          ChoiceChip(
-                            label: const Text('Giao nhiều lần'),
-                            selected: _mode == 'recurring',
-                            onSelected: (_) => setState(() {
-                              _mode = 'recurring';
-                              _recurringConfirmed = false;
-                            }),
-                          ),
-                        ],
-                      ),
-                      if (_mode == 'recurring') ...[
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            const Text('Số tuần lặp lại'),
-                            const Spacer(),
-                            IconButton(
-                              icon: const Icon(Icons.remove_circle_outline),
-                              onPressed: _weeks > 1
-                                  ? () => setState(() {
-                                      _weeks--;
-                                      _recurringConfirmed = false;
-                                    })
-                                  : null,
-                            ),
-                            Text(
-                              '$_weeks',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.add_circle_outline),
-                              onPressed: _weeks < 12
-                                  ? () => setState(() {
-                                      _weeks++;
-                                      _recurringConfirmed = false;
-                                    })
-                                  : null,
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            OutlinedButton.icon(
-                              icon: Icon(
-                                _recurringConfirmed
-                                    ? Icons.check_circle
-                                    : Icons.event_available,
-                              ),
-                              label: Text(
-                                _recurringConfirmed
-                                    ? 'Đã xác nhận'
-                                    : 'Xác nhận lịch giao',
-                              ),
-                              onPressed: () => _confirmRecurring(cart),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-                SafeArea(
-                  child: Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.surface,
-                      boxShadow: [
-                        BoxShadow(
-                          color: theme.colorScheme.shadow.withValues(
-                            alpha: 0.08,
-                          ),
-                          blurRadius: 8,
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text('Tổng số món'),
-                            Text('${cart.itemCount}'),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text('Phí ship'),
-                            const Text('Miễn phí'),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text(
-                              'Tổng tiền',
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                            Text(
-                              formatVnd(cart.subtotal),
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                color: theme.colorScheme.primary,
-                                fontSize: 18,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        SizedBox(
-                          width: double.infinity,
-                          child: FilledButton(
-                            onPressed: () => _goCheckout(cart),
-                            child: const Text('Đến thanh toán'),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+                _wholesaleTab(context, cart),
+                _preorderTab(context, cart),
               ],
             ),
     );

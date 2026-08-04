@@ -11,7 +11,15 @@ import '../address/address_picker_screen.dart';
 
 class CheckoutScreen extends ConsumerStatefulWidget {
   final PreorderSchedule? preorderSchedule;
-  const CheckoutScreen({super.key, this.preorderSchedule});
+
+  /// Ngày+giờ giao đã chọn sẵn từ tab "Giá sỉ" (chỉ 1 lần giao, không lặp lại) — khác
+  /// với [preorderSchedule] vốn dùng cho tab "Đặt trước" (theo thứ trong tuần).
+  final DateTime? initialScheduledFor;
+  const CheckoutScreen({
+    super.key,
+    this.preorderSchedule,
+    this.initialScheduledFor,
+  });
 
   @override
   ConsumerState<CheckoutScreen> createState() => _CheckoutScreenState();
@@ -34,6 +42,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     if (widget.preorderSchedule != null &&
         !widget.preorderSchedule!.recurring) {
       _scheduledFor = widget.preorderSchedule!.earliestOccurrence;
+    } else if (widget.initialScheduledFor != null) {
+      _scheduledFor = widget.initialScheduledFor;
     }
   }
 
@@ -493,6 +503,16 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     ? 'Giao lặp lại ${widget.preorderSchedule!.slots.length} khung giờ/tuần, trong ${widget.preorderSchedule!.weeks} tuần tới'
                     : 'Giao 1 lần: ${formatDateTime(_scheduledFor!)}',
               ),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: () => context.pop(),
+                  icon: const Icon(Icons.edit_outlined),
+                  label: const Text('Sửa lịch giao'),
+                ),
+              ),
+            ] else if (widget.initialScheduledFor != null) ...[
+              Text('Giao: ${formatDateTime(_scheduledFor!)}'),
               Align(
                 alignment: Alignment.centerLeft,
                 child: TextButton.icon(
