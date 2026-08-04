@@ -74,13 +74,23 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
     final cartNotifier = ref.read(cartProvider.notifier);
     final cartState = ref.read(cartProvider);
 
-    if (!cartNotifier.belongsToCurrentCart(product.merchantId)) {
+    if (!cartNotifier.belongsToCurrentCart(
+      product.merchantId,
+      product.salesModel,
+    )) {
+      final differentMerchant = cartState.merchantId != product.merchantId;
       final confirm = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Text('Giỏ hàng có món của cửa hàng khác'),
+          title: Text(
+            differentMerchant
+                ? 'Giỏ hàng có món của cửa hàng khác'
+                : 'Giỏ hàng có món khác hình thức bán',
+          ),
           content: Text(
-            'Giỏ hàng hiện đang có món từ "${cartState.merchantName}". Mỗi đơn chỉ đặt được 1 cửa hàng — xoá giỏ hiện tại để thêm món mới?',
+            differentMerchant
+                ? 'Giỏ hàng hiện đang có món từ "${cartState.merchantName}". Mỗi đơn chỉ đặt được 1 cửa hàng — xoá giỏ hiện tại để thêm món mới?'
+                : 'Giỏ hàng hiện đang có món ${cartState.salesModel == 'scheduled' ? 'đặt trước/bán sỉ' : 'giao ngay'}, khác với sản phẩm này. Giao ngay và đặt trước/bán sỉ đặt riêng — xoá giỏ hiện tại để thêm món mới?',
           ),
           actions: [
             TextButton(
@@ -140,9 +150,15 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
         ),
       );
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Đã thêm vào giỏ hàng')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              product.isWholesale
+                  ? 'Đã thêm vào Đặt trước'
+                  : 'Đã thêm vào Giỏ hàng',
+            ),
+          ),
+        );
         setState(() => _selectedToppings = []);
       }
     } catch (e) {

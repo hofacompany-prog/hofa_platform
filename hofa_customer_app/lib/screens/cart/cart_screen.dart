@@ -42,12 +42,15 @@ class CartScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final cart = ref.watch(cartProvider);
     final theme = Theme.of(context);
+    // Giỏ chỉ chứa 1 hình thức bán tại 1 thời điểm (xem CartNotifier.belongsToCurrentCart)
+    // — món đặt trước/bán sỉ hiển thị ở tab "Đặt trước", không lặp lại ở đây.
+    final isInstantCart = !cart.isEmpty && cart.salesModel == 'instant';
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Giỏ hàng'),
         actions: [
-          if (!cart.isEmpty)
+          if (isInstantCart)
             IconButton(
               tooltip: 'Xoá giỏ hàng',
               icon: const Icon(Icons.delete_outline),
@@ -55,7 +58,7 @@ class CartScreen extends ConsumerWidget {
             ),
         ],
       ),
-      body: cart.isEmpty
+      body: !isInstantCart
           ? const Center(child: Text('Giỏ hàng đang trống'))
           : Column(
               children: [

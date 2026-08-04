@@ -70,8 +70,12 @@ class CartNotifier extends StateNotifier<CartState> {
   }
 
   /// Giỏ trống hoặc đang chứa món của đúng cửa hàng này thì thêm được luôn.
-  bool belongsToCurrentCart(String merchantId) =>
-      state.isEmpty || state.merchantId == merchantId;
+  /// Giỏ chỉ chứa món của đúng 1 cửa hàng VÀ đúng 1 hình thức bán (giao ngay hoặc
+  /// đặt trước/bán sỉ) tại 1 thời điểm — giao ngay vào "Giỏ hàng", đặt trước/bán sỉ
+  /// vào "Đặt trước", không trộn lẫn để 2 màn không hiện nhầm món của nhau.
+  bool belongsToCurrentCart(String merchantId, String salesModel) =>
+      state.isEmpty ||
+      (state.merchantId == merchantId && state.salesModel == salesModel);
 
   Future<void> addItem({
     required String merchantId,
