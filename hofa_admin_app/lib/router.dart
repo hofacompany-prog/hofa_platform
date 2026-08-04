@@ -16,6 +16,7 @@ import 'screens/users/user_detail_screen.dart';
 import 'screens/drivers/drivers_screen.dart';
 import 'screens/catalog/categories_screen.dart';
 import 'screens/settings/shipping_fee_screen.dart';
+import 'screens/vouchers/vouchers_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
@@ -98,6 +99,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/shipping-fee',
             builder: (context, state) => const ShippingFeeScreen(),
+          ),
+          GoRoute(
+            path: '/vouchers',
+            builder: (context, state) => const VouchersScreen(),
           ),
         ],
       ),

@@ -9,6 +9,7 @@ import '../models/driver.dart';
 import '../models/order.dart';
 import '../models/category.dart';
 import '../models/shipping_fee_settings.dart';
+import '../models/voucher.dart';
 import '../repositories/admin_repository.dart';
 import '../repositories/user_repository.dart';
 
@@ -93,3 +94,7 @@ final shippingFeeSettingsProvider =
     FutureProvider.autoDispose<ShippingFeeSettings>(
       (ref) => ref.watch(adminRepoProvider).shippingFeeSettings(),
     );
+
+final vouchersProvider = FutureProvider.autoDispose<List<Voucher>>(
+  (ref) => ref.watch(adminRepoProvider).vouchers(),
+);

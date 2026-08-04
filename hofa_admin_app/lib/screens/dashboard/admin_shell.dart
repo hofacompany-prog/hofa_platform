@@ -51,6 +51,12 @@ class AdminShell extends ConsumerWidget {
       label: 'Phí ship',
       path: '/shipping-fee',
     ),
+    (
+      icon: Icons.confirmation_number_outlined,
+      selected: Icons.confirmation_number,
+      label: 'Voucher',
+      path: '/vouchers',
+    ),
   ];
 
   int _indexFor(String location) {

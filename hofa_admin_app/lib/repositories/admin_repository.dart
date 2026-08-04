@@ -8,6 +8,7 @@ import '../models/driver.dart';
 import '../models/order.dart';
 import '../models/category.dart';
 import '../models/shipping_fee_settings.dart';
+import '../models/voucher.dart';
 
 /// Gom mọi lời gọi API mà web admin cần. Tất cả endpoint ở đây đều yêu cầu
 /// role = 'admin' ở phía server (server/src/utils.js requireRole).
@@ -264,5 +265,37 @@ class AdminRepository {
   ) async => ShippingFeeSettings.fromJson(
     await _api.patch('/shipping-fee-settings', body: settings.toJson())
         as Map<String, dynamic>,
+  );
+
+  // ---- Voucher ----
+  // GET /vouchers trả về MỌI voucher (kể cả đã tắt/hết hạn) khi gọi với quyền admin.
+
+  Future<List<Voucher>> vouchers({String? merchantId}) async {
+    final list =
+        await _api.get(
+              '/vouchers',
+              query: {
+                'limit': 200,
+                if (merchantId != null) 'merchant_id': merchantId,
+              },
+            )
+            as List;
+    return list
+        .map((e) => Voucher.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<Voucher> createVoucher(Map<String, dynamic> data) async =>
+      Voucher.fromJson(
+        await _api.post('/vouchers', body: data) as Map<String, dynamic>,
+      );
+
+  Future<Voucher> updateVoucher(String id, Map<String, dynamic> data) async =>
+      Voucher.fromJson(
+        await _api.patch('/vouchers/$id', body: data) as Map<String, dynamic>,
+      );
+
+  Future<Voucher> deactivateVoucher(String id) async => Voucher.fromJson(
+    await _api.patch('/vouchers/$id/deactivate') as Map<String, dynamic>,
   );
 }

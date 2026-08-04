@@ -827,6 +827,9 @@ CREATE TABLE vouchers (
   starts_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
   ends_at           TIMESTAMPTZ,
   is_active         BOOLEAN NOT NULL DEFAULT true,
+  -- true = hiện trong danh sách cho khách chọn (không cần gõ mã, kiểu Shopee); false =
+  -- chỉ dùng được khi khách tự nhập đúng mã.
+  is_public         BOOLEAN NOT NULL DEFAULT false,
   created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
 
   CONSTRAINT vouchers_type_valid CHECK (discount_type IN ('percent','fixed','free_shipping')),

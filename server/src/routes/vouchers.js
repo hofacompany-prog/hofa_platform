@@ -6,17 +6,28 @@ const { pickFields, requireFields, pagination, requireAuth, requireRole, require
 
 const VOUCHER_FIELDS = [
   'code', 'merchant_id', 'description', 'discount_type', 'discount_value', 'max_discount',
-  'min_order_amount', 'usage_limit', 'usage_limit_per_user', 'starts_at', 'ends_at', 'is_active'
+  'min_order_amount', 'usage_limit', 'usage_limit_per_user', 'starts_at', 'ends_at', 'is_active',
+  'is_public'
 ];
 
+/** Admin (màn quản lý voucher) thấy MỌI voucher kể cả đã tắt/hết hạn; ai khác (app khách
+ * xem danh sách voucher công khai, hoặc kiểm tra mã) chỉ thấy voucher đang bật. */
 router.get('/vouchers', asyncHandler(async (req, res) => {
   const { limit, offset } = pagination(req.query);
-  const clauses = ['is_active'];
+  const clauses = [];
   const params = [];
-  if (req.query.merchant_id) { params.push(req.query.merchant_id); clauses.push(`merchant_id = $${params.length}`); }
+  if (req.ctx.role !== 'admin') clauses.push('is_active');
+  if (req.query.merchant_id) {
+    params.push(req.query.merchant_id);
+    clauses.push(`(merchant_id = $${params.length} OR merchant_id IS NULL)`);
+  }
+  if (req.query.is_public !== undefined) {
+    params.push(req.query.is_public === 'true');
+    clauses.push(`is_public = $${params.length}`);
+  }
   params.push(limit, offset);
   const rows = await db.query(
-    `SELECT * FROM vouchers WHERE ${clauses.join(' AND ')} ORDER BY created_at DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
+    `SELECT * FROM vouchers ${clauses.length ? `WHERE ${clauses.join(' AND ')}` : ''} ORDER BY created_at DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
     params
   );
   res.json({ ok: true, data: rows });
