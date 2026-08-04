@@ -34,12 +34,15 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   String? _selectedAddressId;
   String _paymentMethod = 'cod';
   DateTime? _scheduledFor;
-  final _voucherCtrl = TextEditingController();
   final _noteCtrl = TextEditingController();
-  int _voucherDiscount = 0;
+  // Nhiều voucher cùng lúc, tối đa theo voucherMaxCountProvider (admin cấu hình).
+  final List<_AppliedVoucher> _appliedVouchers = [];
   String? _voucherError;
   bool _voucherChecking = false;
   bool _placing = false;
+
+  int get _voucherDiscount =>
+      _appliedVouchers.fold(0, (sum, v) => sum + v.discount);
 
   @override
   void initState() {
@@ -51,7 +54,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
   @override
   void dispose() {
-    _voucherCtrl.dispose();
     _noteCtrl.dispose();
     super.dispose();
   }
@@ -234,13 +236,22 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     }
   }
 
+  /// Kiểm tra + thêm 1 mã vào danh sách voucher đã áp dụng (không thay thế mã cũ) — chặn
+  /// thêm nếu mã đã có trong danh sách hoặc đã đạt số lượng tối đa (giới hạn thật vẫn nằm
+  /// ở server lúc tạo đơn, đây chỉ để báo sớm cho khách).
   Future<void> _checkVoucher(
+    String code,
     String merchantId,
     int orderAmount,
     int deliveryFee,
   ) async {
-    final code = _voucherCtrl.text.trim();
     if (code.isEmpty) return;
+    if (_appliedVouchers.any(
+      (v) => v.code.toUpperCase() == code.toUpperCase(),
+    )) {
+      setState(() => _voucherError = 'Mã "$code" đã được áp dụng rồi');
+      return;
+    }
     setState(() {
       _voucherChecking = true;
       _voucherError = null;
@@ -255,21 +266,23 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             deliveryFee: deliveryFee,
           );
       setState(() {
-        _voucherDiscount = res.valid ? res.estimatedDiscount : 0;
-        _voucherError = res.valid ? null : (res.reason ?? 'Mã không hợp lệ');
+        if (res.valid) {
+          _appliedVouchers.add(
+            _AppliedVoucher(code: code, discount: res.estimatedDiscount),
+          );
+        } else {
+          _voucherError = res.reason ?? 'Mã không hợp lệ';
+        }
       });
     } catch (e) {
-      setState(() {
-        _voucherDiscount = 0;
-        _voucherError = 'Lỗi kiểm tra mã: $e';
-      });
+      setState(() => _voucherError = 'Lỗi kiểm tra mã: $e');
     } finally {
       if (mounted) setState(() => _voucherChecking = false);
     }
   }
 
-  /// Mở popup chọn voucher công khai/nhập mã riêng, rồi kiểm tra + áp dụng luôn mã vừa
-  /// chọn — dùng lại đúng _checkVoucher như lúc gõ tay, không tự tính giảm giá ở đây.
+  /// Mở popup chọn voucher công khai/nhập mã riêng, rồi kiểm tra + thêm vào danh sách mã
+  /// đã áp dụng — dùng lại đúng _checkVoucher như lúc gõ tay, không tự tính giảm giá ở đây.
   Future<void> _pickVoucher(
     List<Voucher> publicVouchers,
     String merchantId,
@@ -280,16 +293,15 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       context,
       vouchers: publicVouchers,
       orderAmount: orderAmount,
+      excludeCodes: _appliedVouchers.map((v) => v.code).toList(),
     );
     if (code == null || code.isEmpty) return;
-    _voucherCtrl.text = code;
-    await _checkVoucher(merchantId, orderAmount, deliveryFee);
+    await _checkVoucher(code, merchantId, orderAmount, deliveryFee);
   }
 
-  void _removeVoucher() {
+  void _removeVoucher(String code) {
     setState(() {
-      _voucherCtrl.clear();
-      _voucherDiscount = 0;
+      _appliedVouchers.removeWhere((v) => v.code == code);
       _voucherError = null;
     });
   }
@@ -332,7 +344,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     'ship_longitude': address.longitude,
     'payment_method': _paymentMethod,
     'delivery_fee': deliveryFee,
-    if (_voucherDiscount > 0) 'voucher_code': _voucherCtrl.text.trim(),
+    if (_appliedVouchers.isNotEmpty)
+      'voucher_codes': _appliedVouchers.map((v) => v.code).toList(),
     if (cart.salesModel == 'scheduled' && scheduledFor != null)
       'scheduled_for': scheduledFor.toIso8601String(),
     if (_noteCtrl.text.trim().isNotEmpty)
@@ -537,6 +550,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final publicVouchersAsync = cart.merchantId == null
         ? null
         : ref.watch(publicVouchersProvider(cart.merchantId!));
+    final maxVouchers = ref.watch(voucherMaxCountProvider).valueOrNull ?? 1;
     final theme = Theme.of(context);
     final items = _relevantItems(cart);
 
@@ -648,41 +662,56 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             ),
           ),
           const Divider(height: 32),
-          Text('Mã giảm giá', style: theme.textTheme.titleSmall),
-          const SizedBox(height: 8),
-          if (_voucherDiscount > 0)
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.primary.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Row(
-                children: [
-                  Icon(
-                    Icons.local_offer,
-                    color: theme.colorScheme.primary,
-                    size: 20,
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Mã giảm giá', style: theme.textTheme.titleSmall),
+              if (maxVouchers > 1)
+                Text(
+                  '${_appliedVouchers.length}/$maxVouchers mã',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.outline,
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Đã áp dụng mã "${_voucherCtrl.text.trim()}" — giảm '
-                      '${formatVnd(_voucherDiscount)}',
-                      style: TextStyle(
-                        color: theme.colorScheme.primary,
-                        fontWeight: FontWeight.w600,
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ..._appliedVouchers.map(
+            (v) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primary.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.local_offer,
+                      color: theme.colorScheme.primary,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Mã "${v.code}" — giảm ${formatVnd(v.discount)}',
+                        style: TextStyle(
+                          color: theme.colorScheme.primary,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
-                  ),
-                  TextButton(
-                    onPressed: _removeVoucher,
-                    child: const Text('Bỏ'),
-                  ),
-                ],
+                    TextButton(
+                      onPressed: () => _removeVoucher(v.code),
+                      child: const Text('Bỏ'),
+                    ),
+                  ],
+                ),
               ),
-            )
-          else
+            ),
+          ),
+          if (_appliedVouchers.length < maxVouchers)
             OutlinedButton.icon(
               onPressed: (_voucherChecking || cart.merchantId == null)
                   ? null
@@ -699,7 +728,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.local_offer_outlined),
-              label: const Text('Chọn hoặc nhập mã giảm giá'),
+              label: Text(
+                _appliedVouchers.isEmpty
+                    ? 'Chọn hoặc nhập mã giảm giá'
+                    : 'Thêm mã khác',
+              ),
             ),
           if (_voucherError != null)
             Padding(
@@ -858,4 +891,12 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       ),
     );
   }
+}
+
+/// 1 voucher đã được kiểm tra hợp lệ và thêm vào đơn — [discount] là số tiền server
+/// (POST /vouchers/validate) đã tính, không phải ước tính riêng ở client.
+class _AppliedVoucher {
+  final String code;
+  final int discount;
+  const _AppliedVoucher({required this.code, required this.discount});
 }

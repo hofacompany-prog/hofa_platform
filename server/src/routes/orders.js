@@ -43,7 +43,7 @@ router.post('/orders', asyncHandler(async (req, res) => {
     p_payment_method: body.payment_method || 'cod',
     p_delivery_fee: body.delivery_fee || 0,
     p_tax_amount: body.tax_amount || 0,
-    p_voucher_code: body.voucher_code || null,
+    p_voucher_codes: Array.isArray(body.voucher_codes) ? body.voucher_codes : null,
     p_scheduled_for: body.scheduled_for || null,
     p_customer_note: body.customer_note || null
   });

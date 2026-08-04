@@ -298,4 +298,24 @@ class AdminRepository {
   Future<Voucher> deactivateVoucher(String id) async => Voucher.fromJson(
     await _api.patch('/vouchers/$id/deactivate') as Map<String, dynamic>,
   );
+
+  /// Số voucher tối đa được áp dụng cùng lúc trên 1 đơn — mặc định 1 nếu server chưa có
+  /// dòng cấu hình nào.
+  Future<int> voucherMaxCount() async {
+    final data = await _api.get('/voucher-settings');
+    if (data == null) return 1;
+    return ((data as Map<String, dynamic>)['max_vouchers_per_order'] as num?)
+            ?.toInt() ??
+        1;
+  }
+
+  Future<int> updateVoucherMaxCount(int maxVouchersPerOrder) async {
+    final data =
+        await _api.patch(
+              '/voucher-settings',
+              body: {'max_vouchers_per_order': maxVouchersPerOrder},
+            )
+            as Map<String, dynamic>;
+    return (data['max_vouchers_per_order'] as num?)?.toInt() ?? 1;
+  }
 }

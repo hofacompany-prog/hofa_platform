@@ -153,7 +153,7 @@ CREATE OR REPLACE FUNCTION create_order(
   p_payment_method   payment_method DEFAULT 'cod',
   p_delivery_fee     INTEGER DEFAULT 0,
   p_tax_amount       INTEGER DEFAULT 0,
-  p_voucher_code     VARCHAR DEFAULT NULL,
+  p_voucher_codes    VARCHAR[] DEFAULT NULL,
   p_scheduled_for    TIMESTAMPTZ DEFAULT NULL,
   p_customer_note    TEXT DEFAULT NULL
 ) RETURNS orders AS $$
@@ -164,7 +164,11 @@ DECLARE
   v_unit_price    INTEGER;
   v_line_total    INTEGER;
   v_discount      INTEGER := 0;
+  v_voucher_discount INTEGER;
   v_voucher       vouchers;
+  v_voucher_code  VARCHAR;
+  v_max_vouchers  INTEGER;
+  v_redemptions_json JSONB := '[]'::jsonb;
   v_order         orders;
   v_user_redemptions INTEGER;
   v_items_json    JSONB := '[]'::jsonb;   -- gom item đã chốt giá, chỉ ghi vào order_items SAU KHI có order.id
@@ -251,47 +255,64 @@ BEGIN
     FROM products p WHERE p.id = v_variant.product_id;
   END LOOP;
 
-  -- Áp mã giảm giá (nếu có)
-  IF p_voucher_code IS NOT NULL THEN
-    SELECT * INTO v_voucher FROM vouchers
-     WHERE code = p_voucher_code AND is_active
-       AND starts_at <= now() AND (ends_at IS NULL OR ends_at > now())
-       AND (merchant_id IS NULL OR merchant_id = p_merchant_id)
-     FOR UPDATE;
-
-    IF NOT FOUND THEN
-      RAISE EXCEPTION 'Mã giảm giá không hợp lệ hoặc đã hết hạn' USING ERRCODE = 'check_violation';
+  -- Áp mã giảm giá (nếu có) — nhiều mã cùng lúc, tối đa voucher_settings.max_vouchers_per_order.
+  IF p_voucher_codes IS NOT NULL AND array_length(p_voucher_codes, 1) > 0 THEN
+    IF array_length(p_voucher_codes, 1) <> (SELECT COUNT(DISTINCT x) FROM unnest(p_voucher_codes) x) THEN
+      RAISE EXCEPTION 'Không được dùng trùng lặp cùng 1 mã giảm giá' USING ERRCODE = 'check_violation';
     END IF;
 
-    IF v_subtotal < v_voucher.min_order_amount THEN
-      RAISE EXCEPTION 'Đơn chưa đạt giá trị tối thiểu % để dùng mã này', v_voucher.min_order_amount
+    SELECT max_vouchers_per_order INTO v_max_vouchers FROM voucher_settings ORDER BY updated_at DESC LIMIT 1;
+    IF array_length(p_voucher_codes, 1) > COALESCE(v_max_vouchers, 1) THEN
+      RAISE EXCEPTION 'Chỉ được dùng tối đa % mã giảm giá cho 1 đơn', COALESCE(v_max_vouchers, 1)
         USING ERRCODE = 'check_violation';
     END IF;
 
-    IF v_voucher.usage_limit IS NOT NULL AND v_voucher.used_count >= v_voucher.usage_limit THEN
-      RAISE EXCEPTION 'Mã giảm giá đã hết lượt dùng' USING ERRCODE = 'check_violation';
-    END IF;
+    FOREACH v_voucher_code IN ARRAY p_voucher_codes LOOP
+      SELECT * INTO v_voucher FROM vouchers
+       WHERE code = v_voucher_code AND is_active
+         AND starts_at <= now() AND (ends_at IS NULL OR ends_at > now())
+         AND (merchant_id IS NULL OR merchant_id = p_merchant_id)
+       FOR UPDATE;
 
-    SELECT COUNT(*) INTO v_user_redemptions FROM voucher_redemptions
-     WHERE voucher_id = v_voucher.id AND user_id = p_customer_id;
-    IF v_user_redemptions >= v_voucher.usage_limit_per_user THEN
-      RAISE EXCEPTION 'Bạn đã dùng hết lượt cho mã này' USING ERRCODE = 'check_violation';
-    END IF;
-
-    IF v_voucher.discount_type = 'percent' THEN
-      v_discount := ROUND(v_subtotal * v_voucher.discount_value / 100.0);
-      IF v_voucher.max_discount IS NOT NULL THEN
-        v_discount := LEAST(v_discount, v_voucher.max_discount);
+      IF NOT FOUND THEN
+        RAISE EXCEPTION 'Mã giảm giá % không hợp lệ hoặc đã hết hạn', v_voucher_code USING ERRCODE = 'check_violation';
       END IF;
-    ELSIF v_voucher.discount_type = 'fixed' THEN
-      v_discount := v_voucher.discount_value;
-    ELSIF v_voucher.discount_type = 'free_shipping' THEN
-      v_discount := p_delivery_fee;
-    END IF;
+
+      IF v_subtotal < v_voucher.min_order_amount THEN
+        RAISE EXCEPTION 'Đơn chưa đạt giá trị tối thiểu % để dùng mã %', v_voucher.min_order_amount, v_voucher_code
+          USING ERRCODE = 'check_violation';
+      END IF;
+
+      IF v_voucher.usage_limit IS NOT NULL AND v_voucher.used_count >= v_voucher.usage_limit THEN
+        RAISE EXCEPTION 'Mã % đã hết lượt dùng', v_voucher_code USING ERRCODE = 'check_violation';
+      END IF;
+
+      SELECT COUNT(*) INTO v_user_redemptions FROM voucher_redemptions
+       WHERE voucher_id = v_voucher.id AND user_id = p_customer_id;
+      IF v_user_redemptions >= v_voucher.usage_limit_per_user THEN
+        RAISE EXCEPTION 'Bạn đã dùng hết lượt cho mã %', v_voucher_code USING ERRCODE = 'check_violation';
+      END IF;
+
+      IF v_voucher.discount_type = 'percent' THEN
+        v_voucher_discount := ROUND(v_subtotal * v_voucher.discount_value / 100.0);
+        IF v_voucher.max_discount IS NOT NULL THEN
+          v_voucher_discount := LEAST(v_voucher_discount, v_voucher.max_discount);
+        END IF;
+      ELSIF v_voucher.discount_type = 'fixed' THEN
+        v_voucher_discount := v_voucher.discount_value;
+      ELSIF v_voucher.discount_type = 'free_shipping' THEN
+        v_voucher_discount := p_delivery_fee;
+      END IF;
+
+      v_discount := v_discount + v_voucher_discount;
+      v_redemptions_json := v_redemptions_json || jsonb_build_object(
+        'voucher_id', v_voucher.id, 'discount_amount', v_voucher_discount
+      );
+
+      UPDATE vouchers SET used_count = used_count + 1 WHERE id = v_voucher.id;
+    END LOOP;
 
     v_discount := LEAST(v_discount, v_subtotal + p_delivery_fee); -- không cho âm tiền
-
-    UPDATE vouchers SET used_count = used_count + 1 WHERE id = v_voucher.id;
   END IF;
 
   -- Bước 2: giờ mới insert orders — MỘT LẦN DUY NHẤT, với số liệu đã chốt xong,
@@ -301,7 +322,7 @@ BEGIN
     ship_recipient_name, ship_recipient_phone, ship_line1, ship_ward, ship_district,
     ship_province, ship_latitude, ship_longitude, ship_note,
     subtotal, delivery_fee, discount_amount, tax_amount, total_amount,
-    commission_amount, merchant_payout, voucher_code,
+    commission_amount, merchant_payout,
     payment_method, payment_status, scheduled_for, customer_note
   ) VALUES (
     p_customer_id, p_merchant_id, p_branch_id, p_sales_model,
@@ -309,7 +330,7 @@ BEGIN
     p_ship_recipient_name, p_ship_recipient_phone, p_ship_line1, p_ship_ward, p_ship_district,
     p_ship_province, p_ship_latitude, p_ship_longitude, p_ship_note,
     v_subtotal, p_delivery_fee, v_discount, p_tax_amount, v_subtotal + p_delivery_fee + p_tax_amount - v_discount,
-    ROUND(v_subtotal * v_commission_rate / 100.0), v_subtotal - ROUND(v_subtotal * v_commission_rate / 100.0), p_voucher_code,
+    ROUND(v_subtotal * v_commission_rate / 100.0), v_subtotal - ROUND(v_subtotal * v_commission_rate / 100.0),
     p_payment_method, 'pending', p_scheduled_for, p_customer_note
   ) RETURNING * INTO v_order;
 
@@ -329,16 +350,17 @@ BEGIN
     END IF;
   END LOOP;
 
-  IF p_voucher_code IS NOT NULL THEN
+  IF jsonb_array_length(v_redemptions_json) > 0 THEN
     INSERT INTO voucher_redemptions (voucher_id, user_id, order_id, discount_amount)
-    VALUES (v_voucher.id, p_customer_id, v_order.id, v_discount);
+    SELECT (r->>'voucher_id')::UUID, p_customer_id, v_order.id, (r->>'discount_amount')::INTEGER
+    FROM jsonb_array_elements(v_redemptions_json) r;
   END IF;
 
   RETURN v_order;
 END;
 $$ LANGUAGE plpgsql;
 COMMENT ON FUNCTION create_order IS
-  'Tạo đơn: chốt giá qua resolve_variant_price (bậc giá sỉ theo số lượng riêng món; bậc đặt trước theo tổng số lượng cả đơn + số ngày/tuần riêng món, chỉ xét đúng loại bậc theo order_kind của từng món; không khớp thì giá gốc), giữ chỗ tồn kho, áp voucher — tất cả trong 1 transaction';
+  'Tạo đơn: chốt giá qua resolve_variant_price (bậc giá sỉ theo số lượng riêng món; bậc đặt trước theo tổng số lượng cả đơn + số ngày/tuần riêng món, chỉ xét đúng loại bậc theo order_kind của từng món; không khớp thì giá gốc), giữ chỗ tồn kho, áp NHIỀU voucher cùng lúc (tối đa voucher_settings.max_vouchers_per_order) — tất cả trong 1 transaction';
 
 -- ============================================================================
 -- PHẦN 2: ĐỔI TRẠNG THÁI ĐƠN HÀNG (state machine)

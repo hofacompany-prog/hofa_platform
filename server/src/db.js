@@ -69,12 +69,12 @@ async function deleteById(table, id) {
 }
 
 /**
- * Cột kiểu mảng Postgres gốc (TEXT[], không phải jsonb) — hiện chỉ có products.tags.
- * node-postgres tự động format JS Array thành cú pháp mảng Postgres {a,b,c} khi truyền
- * thẳng (không JSON.stringify). Nếu lỡ JSON.stringify thì Postgres nhận 1 chuỗi JSON,
- * không khớp cú pháp TEXT[] và sẽ báo lỗi.
+ * Cột/tham số kiểu mảng Postgres gốc (TEXT[]/VARCHAR[], không phải jsonb) — products.tags
+ * và p_voucher_codes (tham số RPC create_order). node-postgres tự động format JS Array
+ * thành cú pháp mảng Postgres {a,b,c} khi truyền thẳng (không JSON.stringify). Nếu lỡ
+ * JSON.stringify thì Postgres nhận 1 chuỗi JSON, không khớp cú pháp mảng và sẽ báo lỗi.
  */
-const NATIVE_ARRAY_COLUMNS = new Set(['tags']);
+const NATIVE_ARRAY_COLUMNS = new Set(['tags', 'p_voucher_codes']);
 
 /** jsonb/object cần JSON.stringify trước khi gửi qua pg; mảng TEXT[] gốc thì để nguyên. */
 function serialize(key, value) {

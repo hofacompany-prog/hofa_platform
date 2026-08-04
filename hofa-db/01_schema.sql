@@ -593,7 +593,8 @@ CREATE TABLE orders (
   total_amount      INTEGER NOT NULL DEFAULT 0,   -- khách phải trả
   commission_amount INTEGER NOT NULL DEFAULT 0,   -- HOFA thu
   merchant_payout   INTEGER NOT NULL DEFAULT 0,   -- cửa hàng nhận
-  voucher_code      VARCHAR(50),
+  -- Voucher đã áp dụng (có thể nhiều) không lưu ở đây — xem bảng voucher_redemptions,
+  -- đúng 1 dòng/voucher/đơn, đủ để tra lại mọi mã đã dùng cho đơn này.
 
   payment_method    payment_method NOT NULL DEFAULT 'cod',
   payment_status    payment_status NOT NULL DEFAULT 'pending',
@@ -849,6 +850,21 @@ CREATE TABLE voucher_redemptions (
 COMMENT ON TABLE voucher_redemptions IS 'Lượt dùng mã. Dùng để chặn khách dùng quá số lần cho phép';
 
 CREATE INDEX idx_redemptions_user ON voucher_redemptions (voucher_id, user_id);
+
+-- Số voucher tối đa được áp dụng cùng lúc trên 1 đơn — admin chỉnh qua web admin, mục
+-- Voucher. create_order() đọc dòng mới nhất (theo updated_at) để chặn vượt quá.
+CREATE TABLE voucher_settings (
+  id                     UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  max_vouchers_per_order INTEGER NOT NULL DEFAULT 1,
+  updated_at             TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_by             UUID REFERENCES users(id) ON DELETE SET NULL,
+
+  CONSTRAINT voucher_settings_max_valid CHECK (max_vouchers_per_order >= 1)
+);
+COMMENT ON TABLE voucher_settings IS
+  'Số voucher tối đa được áp dụng cùng lúc trên 1 đơn — chỉ giữ 1 dòng (dòng mới nhất theo updated_at) đang áp dụng, admin sửa qua GET/PATCH /voucher-settings';
+
+INSERT INTO voucher_settings (max_vouchers_per_order) VALUES (1);
 
 -- ============================================================================
 -- PHẦN 11.5: PHÍ SHIP — cấu hình 1 dòng áp dụng toàn sàn, admin chỉnh qua web admin.

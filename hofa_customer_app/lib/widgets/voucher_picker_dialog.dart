@@ -10,8 +10,13 @@ Future<String?> showVoucherPickerDialog(
   BuildContext context, {
   required List<Voucher> vouchers,
   required int orderAmount,
+  List<String> excludeCodes = const [],
 }) {
   final customCodeCtrl = TextEditingController();
+  final excludeUpper = excludeCodes.map((c) => c.toUpperCase()).toSet();
+  final selectable = vouchers
+      .where((v) => !excludeUpper.contains(v.code.toUpperCase()))
+      .toList();
 
   return showModalBottomSheet<String>(
     context: context,
@@ -58,13 +63,17 @@ Future<String?> showVoucherPickerDialog(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (vouchers.isEmpty)
-                      const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 16),
-                        child: Text('Cửa hàng chưa có voucher công khai nào.'),
+                    if (selectable.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        child: Text(
+                          vouchers.isEmpty
+                              ? 'Cửa hàng chưa có voucher công khai nào.'
+                              : 'Đã áp dụng hết voucher công khai của cửa hàng.',
+                        ),
                       )
                     else
-                      ...vouchers.map(
+                      ...selectable.map(
                         (v) =>
                             _VoucherTile(voucher: v, orderAmount: orderAmount),
                       ),

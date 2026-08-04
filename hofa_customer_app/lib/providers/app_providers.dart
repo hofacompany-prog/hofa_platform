@@ -33,6 +33,10 @@ final publicVouchersProvider = FutureProvider.autoDispose
           ref.watch(voucherRepoProvider).publicVouchers(merchantId: merchantId),
     );
 
+final voucherMaxCountProvider = FutureProvider.autoDispose<int>(
+  (ref) => ref.watch(voucherRepoProvider).maxVouchersPerOrder(),
+);
+
 // ---- Cửa hàng ----
 
 final merchantSearchProvider = StateProvider.autoDispose<String>((ref) => '');

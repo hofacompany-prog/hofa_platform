@@ -30,6 +30,7 @@ app.use('/', require('./routes/deliveries'));
 app.use('/', require('./routes/payments'));
 app.use('/', require('./routes/reviews'));
 app.use('/', require('./routes/vouchers'));
+app.use('/', require('./routes/voucher-settings'));
 app.use('/', require('./routes/shipping'));
 app.use('/', require('./routes/uploads'));
 

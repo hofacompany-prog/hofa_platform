@@ -98,3 +98,7 @@ final shippingFeeSettingsProvider =
 final vouchersProvider = FutureProvider.autoDispose<List<Voucher>>(
   (ref) => ref.watch(adminRepoProvider).vouchers(),
 );
+
+final voucherMaxCountProvider = FutureProvider.autoDispose<int>(
+  (ref) => ref.watch(adminRepoProvider).voucherMaxCount(),
+);

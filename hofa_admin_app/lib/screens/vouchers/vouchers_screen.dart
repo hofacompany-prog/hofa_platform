@@ -450,6 +450,8 @@ class _VouchersScreenState extends ConsumerState<VouchersScreen> {
                   padding: EdgeInsets.only(bottom: 12),
                   child: LinearProgressIndicator(),
                 ),
+              const _MaxVouchersCard(),
+              const SizedBox(height: 24),
               LayoutBuilder(
                 builder: (context, constraints) {
                   final columns = constraints.maxWidth > 900
@@ -654,6 +656,123 @@ class _VouchersScreenState extends ConsumerState<VouchersScreen> {
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+/// Cài đặt số voucher tối đa 1 khách được áp dụng cùng lúc trên 1 đơn — áp dụng cho cả
+/// voucher chọn từ danh sách lẫn tự nhập mã ở app khách.
+class _MaxVouchersCard extends ConsumerStatefulWidget {
+  const _MaxVouchersCard();
+
+  @override
+  ConsumerState<_MaxVouchersCard> createState() => _MaxVouchersCardState();
+}
+
+class _MaxVouchersCardState extends ConsumerState<_MaxVouchersCard> {
+  final _ctrl = TextEditingController();
+  bool _saving = false;
+  int? _loadedValue;
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final value = int.tryParse(_ctrl.text.trim());
+    if (value == null || value < 1) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Vui lòng nhập số nguyên từ 1 trở lên')),
+      );
+      return;
+    }
+    setState(() => _saving = true);
+    try {
+      await ref.read(adminRepoProvider).updateVoucherMaxCount(value);
+      ref.invalidate(voucherMaxCountProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Đã lưu')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final maxCountAsync = ref.watch(voucherMaxCountProvider);
+    final theme = Theme.of(context);
+
+    // Điền lại ô nhập mỗi khi tải được giá trị mới từ server (chỉ lần đầu/khi đổi), tránh
+    // ghi đè lúc khách đang gõ dở.
+    maxCountAsync.whenData((value) {
+      if (_loadedValue != value) {
+        _loadedValue = value;
+        _ctrl.text = value.toString();
+      }
+    });
+
+    return Card(
+      elevation: 0,
+      color: theme.colorScheme.surfaceContainerLow,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Icon(Icons.tune, color: theme.colorScheme.primary),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Cài đặt chung', style: theme.textTheme.titleSmall),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Số voucher tối đa khách được áp dụng cùng lúc trên 1 đơn '
+                    '(gồm cả voucher chọn từ danh sách và tự nhập mã)',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 16),
+            SizedBox(
+              width: 100,
+              child: TextField(
+                controller: _ctrl,
+                keyboardType: TextInputType.number,
+                textAlign: TextAlign.center,
+                decoration: const InputDecoration(
+                  isDense: true,
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            FilledButton(
+              onPressed: _saving || maxCountAsync.isLoading ? null : _save,
+              child: _saving
+                  ? const SizedBox(
+                      height: 16,
+                      width: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Lưu'),
+            ),
+          ],
+        ),
       ),
     );
   }

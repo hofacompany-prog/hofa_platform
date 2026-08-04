@@ -18,6 +18,16 @@ class VoucherRepository {
         .toList();
   }
 
+  /// Số voucher tối đa được áp dụng cùng lúc trên 1 đơn (admin cấu hình) — mặc định 1
+  /// nếu server chưa có dòng cấu hình nào.
+  Future<int> maxVouchersPerOrder() async {
+    final data = await _api.get('/voucher-settings');
+    if (data == null) return 1;
+    return ((data as Map<String, dynamic>)['max_vouchers_per_order'] as num?)
+            ?.toInt() ??
+        1;
+  }
+
   Future<VoucherValidation> validate({
     required String code,
     required String merchantId,
