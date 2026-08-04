@@ -1258,6 +1258,12 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
   Widget build(BuildContext context) {
     final cart = ref.watch(cartProvider);
     final isPreorderCart = !cart.isEmpty && cart.salesModel == 'scheduled';
+    final wholesaleCount = cart.items
+        .where((i) => i.orderKind == 'wholesale')
+        .fold<int>(0, (sum, i) => sum + i.quantity);
+    final preorderItemCount = cart.items
+        .where((i) => i.orderKind == 'preorder')
+        .fold<int>(0, (sum, i) => sum + i.quantity);
 
     return Scaffold(
       appBar: AppBar(
@@ -1265,9 +1271,9 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
         bottom: isPreorderCart
             ? TabBar(
                 controller: _tabController,
-                tabs: const [
-                  Tab(text: 'Giá sỉ'),
-                  Tab(text: 'Đặt trước'),
+                tabs: [
+                  Tab(child: _tabLabel('Giá sỉ', wholesaleCount)),
+                  Tab(child: _tabLabel('Đặt trước', preorderItemCount)),
                 ],
               )
             : null,
@@ -1285,4 +1291,8 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
             ),
     );
   }
+
+  /// Nhãn tab kèm vòng tròn số món — giống hệt cách hiển thị ở thanh điều hướng dưới.
+  Widget _tabLabel(String text, int count) =>
+      count > 0 ? Badge(label: Text('$count'), child: Text(text)) : Text(text);
 }
