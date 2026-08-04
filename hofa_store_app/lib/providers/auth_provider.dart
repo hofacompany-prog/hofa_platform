@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/api_exception.dart';
 import '../models/user_profile.dart';
 import '../models/merchant.dart';
+import '../models/product.dart';
 import '../repositories/user_repository.dart';
 import '../repositories/merchant_repository.dart';
 
@@ -20,6 +21,10 @@ class PendingSignup {
 }
 
 final pendingSignupProvider = StateProvider<PendingSignup?>((ref) => null);
+
+/// Sản phẩm vừa được "sao chép" (xem CopiedProduct) — dùng để "dán" lại lúc tạo sản phẩm
+/// mới tương tự ở bất kỳ đâu trong app.
+final copiedProductProvider = StateProvider<CopiedProduct?>((ref) => null);
 
 /// Phát lại mỗi khi trạng thái đăng nhập Supabase đổi (login/logout/token refresh).
 final authStateProvider = StreamProvider<AuthState>((ref) {

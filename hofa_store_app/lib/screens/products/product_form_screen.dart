@@ -673,6 +673,35 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     }
   }
 
+  /// Điền lại toàn bộ form từ 1 sản phẩm đã "sao chép" ở màn danh sách sản phẩm — không
+  /// đụng đến danh mục cửa hàng vì việc dò lại danh mục chính/con tương ứng đòi hỏi gọi
+  /// thêm API, trong khi chọn lại chỉ mất 2 lần bấm.
+  void _pasteProduct(CopiedProduct c) {
+    setState(() {
+      _nameCtrl.text = c.name;
+      _descCtrl.text = c.description ?? '';
+      _unitCtrl.text = c.unit;
+      _priceCtrl.text = c.price.toString();
+      _salesModel = c.salesModel;
+      _status = c.status;
+      _imageUrl = c.imageUrl;
+      _selectedToppingGroupIds = c.toppingGroupIds;
+      _pendingVariants = c.extraVariants;
+      _tiersByVariant = {
+        'default': c.defaultVariantTiers,
+        ...c.tiersByExtraVariant,
+      };
+    });
+    ref.read(copiedProductProvider.notifier).state = null;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Đã dán thông tin sản phẩm — kiểm tra lại trước khi tạo.',
+        ),
+      ),
+    );
+  }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     if (_imageUrl == null) {
@@ -998,8 +1027,22 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final copied = ref.watch(copiedProductProvider);
     return Scaffold(
-      appBar: AppBar(title: Text(_isEdit ? 'Sửa sản phẩm' : 'Thêm sản phẩm')),
+      appBar: AppBar(
+        title: Text(_isEdit ? 'Sửa sản phẩm' : 'Thêm sản phẩm'),
+        actions: [
+          if (!_isEdit && copied != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: OutlinedButton.icon(
+                onPressed: () => _pasteProduct(copied),
+                icon: const Icon(Icons.content_paste),
+                label: const Text('Dán sản phẩm'),
+              ),
+            ),
+        ],
+      ),
       body: _loadingProduct
           ? const Center(child: CircularProgressIndicator())
           : Center(

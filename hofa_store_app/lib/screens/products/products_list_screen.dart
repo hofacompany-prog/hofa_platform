@@ -50,6 +50,96 @@ Future<void> _toggleActive(
   }
 }
 
+/// Chụp lại toàn bộ thông tin sản phẩm (giá, biến thể + bậc giá riêng, nhóm topping đang
+/// gắn) vào [copiedProductProvider] để "dán" lại lúc tạo sản phẩm mới tương tự — xem
+/// [ProductFormScreen]. Danh sách sản phẩm không kèm sẵn bậc giá/nhóm topping nên phải gọi
+/// thêm API lấy chi tiết.
+Future<void> _copyProduct(
+  BuildContext context,
+  WidgetRef ref,
+  Product p,
+) async {
+  try {
+    final full = await _repo.get(p.id);
+    if (full.variants.isEmpty) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Sản phẩm chưa có giá, không thể sao chép'),
+          ),
+        );
+      }
+      return;
+    }
+    final defaultVariant = full.variants.firstWhere(
+      (v) => v.isDefault,
+      orElse: () => full.variants.first,
+    );
+    final extraSourceVariants = full.variants
+        .where((v) => v.id != defaultVariant.id)
+        .toList();
+
+    final tierEntries = await Future.wait(
+      full.variants.map(
+        (v) async => MapEntry(v.id, await _repo.wholesaleTiers(v.id)),
+      ),
+    );
+    final tiersBySourceVariant = {for (final e in tierEntries) e.key: e.value};
+    final toppingGroups = await _repo.toppingGroups(p.id);
+
+    final extraVariants = <ProductVariant>[];
+    final tiersByExtraVariant = <String, List<WholesaleTier>>{};
+    for (final v in extraSourceVariants) {
+      final tempId =
+          'local-copy-${DateTime.now().microsecondsSinceEpoch}-${extraVariants.length}';
+      extraVariants.add(
+        ProductVariant(
+          id: tempId,
+          productId: '',
+          sku: v.sku,
+          name: v.name,
+          price: v.price,
+          comparePrice: v.comparePrice,
+          costPrice: v.costPrice,
+          wholesalePrice: v.wholesalePrice,
+          isDefault: false,
+          isActive: true,
+        ),
+      );
+      tiersByExtraVariant[tempId] = tiersBySourceVariant[v.id] ?? [];
+    }
+
+    ref.read(copiedProductProvider.notifier).state = CopiedProduct(
+      name: full.name,
+      description: full.description,
+      unit: full.unit,
+      salesModel: full.salesModel,
+      status: full.status,
+      imageUrl: full.images.isNotEmpty ? full.images.first : null,
+      price: defaultVariant.price,
+      defaultVariantTiers: tiersBySourceVariant[defaultVariant.id] ?? [],
+      extraVariants: extraVariants,
+      tiersByExtraVariant: tiersByExtraVariant,
+      toppingGroupIds: toppingGroups.map((g) => g.id).toList(),
+    );
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Đã sao chép "${full.name}" — vào "Thêm sản phẩm" để dán lại.',
+          ),
+        ),
+      );
+    }
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+    }
+  }
+}
+
 Future<void> _confirmDeleteToppingGroup(
   BuildContext context,
   WidgetRef ref,
@@ -201,6 +291,11 @@ class ProductsListScreen extends ConsumerWidget {
               Switch(
                 value: isActive,
                 onChanged: (_) => _toggleActive(context, ref, p),
+              ),
+              IconButton(
+                tooltip: 'Sao chép sản phẩm',
+                icon: const Icon(Icons.copy_outlined),
+                onPressed: () => _copyProduct(context, ref, p),
               ),
               IconButton(
                 tooltip: 'Xoá sản phẩm',

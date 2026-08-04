@@ -186,3 +186,34 @@ class Product {
       ? 0
       : variants.map((v) => v.price).reduce((a, b) => a < b ? a : b);
 }
+
+/// Ảnh chụp đầy đủ 1 sản phẩm vừa "sao chép" (chỉ giữ trong bộ nhớ, không lưu database) —
+/// dùng để "dán" lại toàn bộ thông tin (giá, biến thể, bậc giá, nhóm topping) khi tạo sản
+/// phẩm mới tương tự, tránh phải nhập lại từ đầu. Mất khi tắt app.
+class CopiedProduct {
+  final String name;
+  final String? description;
+  final String unit;
+  final String salesModel;
+  final String status;
+  final String? imageUrl;
+  final int price;
+  final List<WholesaleTier> defaultVariantTiers;
+  final List<ProductVariant> extraVariants;
+  final Map<String, List<WholesaleTier>> tiersByExtraVariant;
+  final List<String> toppingGroupIds;
+
+  CopiedProduct({
+    required this.name,
+    this.description,
+    required this.unit,
+    required this.salesModel,
+    required this.status,
+    this.imageUrl,
+    required this.price,
+    required this.defaultVariantTiers,
+    required this.extraVariants,
+    required this.tiersByExtraVariant,
+    required this.toppingGroupIds,
+  });
+}
