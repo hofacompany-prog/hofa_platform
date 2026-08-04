@@ -254,6 +254,27 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
         ? (int.tryParse(leadDaysCtrl.text.trim()) ?? 0)
         : 0;
 
+    if (minQty <= 0) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Số lượng tối thiểu phải lớn hơn 0')),
+        );
+      }
+      return;
+    }
+    if (maxQty != null && maxQty < minQty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Số lượng tối đa phải lớn hơn hoặc bằng số lượng tối thiểu',
+            ),
+          ),
+        );
+      }
+      return;
+    }
+
     // Chưa tạo sản phẩm (đang ở màn "Thêm sản phẩm") — chưa có variant_id thật để gọi API,
     // giữ tạm bậc giá trong bộ nhớ theo khoá 'default'/id tạm của biến thể, gửi kèm lên
     // cùng lúc tạo sản phẩm lúc bấm "Tạo sản phẩm" (xem _submit).
