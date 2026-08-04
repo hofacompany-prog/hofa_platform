@@ -47,6 +47,10 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
   TimeOfDay _time = const TimeOfDay(hour: 8, minute: 0);
   bool _recurringConfirmed = false;
 
+  /// Cách tính "Tổng tiền" ở tab Đặt trước — 'day': tính 1 lần giao (giống Giá sỉ),
+  /// 'week': cộng dồn theo số ngày mỗi món giao trong tuần (giống Tổng tuần).
+  String _totalBasis = 'day';
+
   // ---- Tab "Giá sỉ" — chỉ chọn 1 ngày giao + 1 giờ giao chung cho cả đơn,
   // không có khái niệm ngày trong tuần / lặp lại như tab "Đặt trước". ----
   DateTime? _wholesaleDate;
@@ -697,11 +701,13 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
     );
   }
 
-  /// Footer chung: tổng số món/tiền + nút thanh toán — dùng cho cả 2 tab, chỉ khác
-  /// hành vi khi bấm "Đến thanh toán".
+  /// Footer chung: tổng số món/tiền + nút thanh toán — dùng cho cả 2 tab, mỗi tab tự
+  /// tính [total] riêng (Giá sỉ luôn tính đơn giản, Đặt trước tính theo ngày hoặc tuần
+  /// tuỳ [_totalBasis]) và tự quyết hành vi khi bấm "Đến thanh toán".
   Widget _footer(
     BuildContext context,
     CartState cart,
+    int total,
     VoidCallback onCheckout,
   ) {
     final theme = Theme.of(context);
@@ -738,7 +744,7 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
                   style: TextStyle(fontWeight: FontWeight.bold),
                 ),
                 Text(
-                  formatVnd(cart.subtotal),
+                  formatVnd(total),
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     color: theme.colorScheme.primary,
@@ -820,7 +826,7 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
             ],
           ),
         ),
-        _footer(context, cart, () => _goCheckoutWholesale(cart)),
+        _footer(context, cart, cart.subtotal, () => _goCheckoutWholesale(cart)),
       ],
     );
   }
@@ -954,10 +960,33 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
                   ],
                 ),
               ],
+              const SizedBox(height: 16),
+              Text('Cách tính tổng tiền', style: theme.textTheme.titleSmall),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                children: [
+                  ChoiceChip(
+                    label: const Text('Tính theo ngày'),
+                    selected: _totalBasis == 'day',
+                    onSelected: (_) => setState(() => _totalBasis = 'day'),
+                  ),
+                  ChoiceChip(
+                    label: const Text('Tính theo tuần'),
+                    selected: _totalBasis == 'week',
+                    onSelected: (_) => setState(() => _totalBasis = 'week'),
+                  ),
+                ],
+              ),
             ],
           ),
         ),
-        _footer(context, cart, () => _goCheckout(cart)),
+        _footer(
+          context,
+          cart,
+          _totalBasis == 'week' ? _weekTotal(cart) : cart.subtotal,
+          () => _goCheckout(cart),
+        ),
       ],
     );
   }
