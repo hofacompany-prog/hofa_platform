@@ -26,8 +26,8 @@ String _weekdayLabelOf(int iso) =>
 /// Giỏ "đặt trước" — cùng dùng chung cartProvider với giỏ hàng thường (giỏ chỉ chứa
 /// món của 1 cửa hàng tại 1 thời điểm), chỉ hiển thị khi giỏ đang ở sales_model
 /// 'scheduled' (bán sỉ/đặt trước). Chia dọc 2 cột: trái là danh sách sản phẩm — bấm vào
-/// dòng "Ngày giao" nhỏ dưới tên mở popup chọn ngày (lịch) như bình thường, mỗi sản
-/// phẩm chọn được nhiều ngày. Phải là cột ngày — bấm vào 1 ngày CHỈ để xem những sản
+/// dòng "Ngày giao" nhỏ dưới tên mở popup danh sách T2-CN, bấm ngày nào ngày đó sáng
+/// lên (chọn). Phải là cột ngày — bấm vào 1 ngày CHỈ để xem những sản
 /// phẩm nào phải giao ngày đó. Giờ giao chỉ có đúng 1 giờ chung cho cả đơn. Chọn "Giao
 /// nhiều lần" phải xác nhận lại số tuần trước khi lịch bên phải áp dụng.
 class PreorderScreen extends ConsumerStatefulWidget {
@@ -114,43 +114,20 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen> {
     }
   }
 
-  /// Popup chọn ngày giao (lịch) như bình thường cho 1 sản phẩm — không chọn giờ ở đây,
-  /// giờ giao chung cho cả đơn chọn riêng ở phần "Hình thức giao". Thêm được nhiều ngày,
-  /// mỗi ngày chỉ giữ lại thứ trong tuần (slot lặp hàng tuần) nên không thêm trùng thứ.
+  /// Popup chọn ngày giao cho 1 sản phẩm — danh sách T2 đến CN, bấm vào ngày nào thì
+  /// ngày đó sáng lên (chọn). Không chọn giờ ở đây, giờ giao chung cho cả đơn chọn riêng
+  /// ở phần "Hình thức giao".
   Future<void> _editScheduleDialog(CartItem item) async {
     var slots = [...item.deliverySlots];
+    final theme = Theme.of(context);
 
-    Future<void> addSlot(StateSetter setInner) async {
-      final date = await showDatePicker(
-        context: context,
-        initialDate: DateTime.now().add(const Duration(days: 1)),
-        firstDate: DateTime.now().add(const Duration(days: 1)),
-        lastDate: DateTime.now().add(const Duration(days: 90)),
-      );
-      if (date == null) return;
-      if (slots.any((s) => s.weekday == date.weekday)) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                '${_weekdayLabelOf(date.weekday)} đã được chọn rồi',
-              ),
-            ),
-          );
-        }
-        return;
+    void toggleDay(int iso, StateSetter setInner) {
+      if (slots.any((s) => s.weekday == iso)) {
+        slots = slots.where((s) => s.weekday != iso).toList();
+      } else {
+        slots = [...slots, DeliverySlot(weekday: iso, time: _time)]
+          ..sort(DeliverySlot.compare);
       }
-      slots = [...slots, DeliverySlot(weekday: date.weekday, time: _time)]
-        ..sort(DeliverySlot.compare);
-      await ref
-          .read(cartProvider.notifier)
-          .updateDeliverySlots(item.lineId, slots);
-      setState(() => _recurringConfirmed = false);
-      setInner(() {});
-    }
-
-    void removeSlot(DeliverySlot slot, StateSetter setInner) {
-      slots = slots.where((s) => s.weekday != slot.weekday).toList();
       ref.read(cartProvider.notifier).updateDeliverySlots(item.lineId, slots);
       setState(() => _recurringConfirmed = false);
       setInner(() {});
@@ -161,39 +138,60 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen> {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setInner) {
-          final sorted = [...slots]..sort(DeliverySlot.compare);
           return AlertDialog(
             title: Text('Ngày giao cho "${item.productName}"'),
             content: SizedBox(
-              width: 340,
+              width: 320,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (sorted.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 8),
-                      child: Text('Chưa có ngày giao nào'),
-                    ),
-                  ...sorted.map(
-                    (s) => ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      title: Text(
-                        '${_weekdayLabelOf(s.weekday)} (${_shortDate(_nearestFutureDate(s.weekday))})',
+                children: _weekdayLabels.map((d) {
+                  final selected = slots.any((s) => s.weekday == d.iso);
+                  return InkWell(
+                    borderRadius: BorderRadius.circular(8),
+                    onTap: () => toggleDay(d.iso, setInner),
+                    child: Container(
+                      margin: const EdgeInsets.symmetric(vertical: 3),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 12,
                       ),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.delete_outline),
-                        onPressed: () => removeSlot(s, setInner),
+                      decoration: BoxDecoration(
+                        color: selected
+                            ? theme.colorScheme.primary.withValues(alpha: 0.12)
+                            : null,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: selected
+                              ? theme.colorScheme.primary
+                              : theme.colorScheme.outlineVariant,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              '${d.label} (${_shortDate(_nearestFutureDate(d.iso))})',
+                              style: TextStyle(
+                                fontWeight: selected
+                                    ? FontWeight.w600
+                                    : FontWeight.normal,
+                                color: selected
+                                    ? theme.colorScheme.primary
+                                    : null,
+                              ),
+                            ),
+                          ),
+                          if (selected)
+                            Icon(
+                              Icons.check_circle,
+                              size: 18,
+                              color: theme.colorScheme.primary,
+                            ),
+                        ],
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  OutlinedButton.icon(
-                    icon: const Icon(Icons.add),
-                    label: const Text('Thêm ngày giao'),
-                    onPressed: () => addSlot(setInner),
-                  ),
-                ],
+                  );
+                }).toList(),
               ),
             ),
             actions: [
