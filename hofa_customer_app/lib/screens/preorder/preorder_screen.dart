@@ -28,8 +28,8 @@ String _weekdayLabelOf(int iso) =>
 /// 'scheduled' (bán sỉ/đặt trước). Chia dọc 2 cột: trái là danh sách sản phẩm — bấm vào
 /// dòng "Ngày giao" nhỏ dưới tên mở popup chọn ngày (lịch) như bình thường, mỗi sản
 /// phẩm chọn được nhiều ngày. Phải là cột ngày — bấm vào 1 ngày CHỈ để xem những sản
-/// phẩm nào phải giao ngày đó. Giờ giao KHÔNG chọn theo từng món nữa — chỉ có đúng 1
-/// giờ giao chung cho cả đơn, chọn ở phần "Hình thức giao" bên dưới.
+/// phẩm nào phải giao ngày đó. Giờ giao chỉ có đúng 1 giờ chung cho cả đơn. Chọn "Giao
+/// nhiều lần" phải xác nhận lại số tuần trước khi lịch bên phải áp dụng.
 class PreorderScreen extends ConsumerStatefulWidget {
   const PreorderScreen({super.key});
 
@@ -43,6 +43,7 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen> {
   String _mode = 'once';
   int _weeks = 1;
   TimeOfDay _time = const TimeOfDay(hour: 8, minute: 0);
+  bool _recurringConfirmed = false;
 
   /// Thứ 2 của tuần chứa "ngày mai" — mốc gốc để tính ngày cho mọi tuần xem tiếp theo.
   DateTime get _baseMonday {
@@ -133,12 +134,14 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen> {
       await ref
           .read(cartProvider.notifier)
           .updateDeliverySlots(item.lineId, slots);
+      setState(() => _recurringConfirmed = false);
       setInner(() {});
     }
 
     void removeSlot(DeliverySlot slot, StateSetter setInner) {
       slots = slots.where((s) => s.weekday != slot.weekday).toList();
       ref.read(cartProvider.notifier).updateDeliverySlots(item.lineId, slots);
+      setState(() => _recurringConfirmed = false);
       setInner(() {});
     }
 
@@ -194,6 +197,71 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen> {
     );
   }
 
+  /// Toàn bộ ngày sẽ phát sinh đơn nếu xác nhận lặp lại [_weeks] tuần với lịch hiện tại
+  /// (gộp các thứ mà tất cả sản phẩm đã chọn, mỗi thứ lặp lại theo đúng số tuần).
+  List<DateTime> _recurringPreview(CartState cart) {
+    final weekdays = <int>{};
+    for (final item in cart.items) {
+      for (final s in item.deliverySlots) {
+        weekdays.add(s.weekday);
+      }
+    }
+    if (weekdays.isEmpty) return [];
+    final schedule = PreorderSchedule(
+      slots: (weekdays.toList()..sort())
+          .map((w) => DeliverySlot(weekday: w, time: _time))
+          .toList(),
+      recurring: true,
+      weeks: _weeks,
+    );
+    return schedule.occurrences;
+  }
+
+  Future<void> _confirmRecurring(CartState cart) async {
+    final occurrences = _recurringPreview(cart);
+    if (occurrences.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Chọn ngày giao cho sản phẩm trước khi xác nhận'),
+        ),
+      );
+      return;
+    }
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Giao lặp lại $_weeks tuần tới?'),
+        content: SizedBox(
+          width: 320,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Bạn muốn giao đúng theo lịch dưới đây, phải không?',
+                ),
+                const SizedBox(height: 8),
+                ...occurrences.map((d) => Text('• ${formatDateTime(d)}')),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Huỷ'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Xác nhận'),
+          ),
+        ],
+      ),
+    );
+    if (confirm == true) setState(() => _recurringConfirmed = true);
+  }
+
   void _goCheckout(CartState cart) {
     for (final item in cart.items) {
       if (item.deliverySlots.isEmpty) {
@@ -204,6 +272,16 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen> {
         );
         return;
       }
+    }
+    if (_mode == 'recurring' && !_recurringConfirmed) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Vui lòng xác nhận lịch giao lặp lại trước khi thanh toán',
+          ),
+        ),
+      );
+      return;
     }
     final allWeekdays = <int>{};
     for (final item in cart.items) {
@@ -346,6 +424,34 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen> {
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        if (_mode == 'recurring' && _recurringConfirmed)
+          Container(
+            width: double.infinity,
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primary.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  Icons.event_repeat,
+                  size: 16,
+                  color: theme.colorScheme.primary,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'Đang áp dụng lịch lặp lại $_weeks tuần tới',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.primary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         Text('Ngày giao trong tuần', style: theme.textTheme.titleSmall),
         const SizedBox(height: 8),
         Row(
@@ -501,7 +607,10 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen> {
                       OutlinedButton.icon(
                         icon: const Icon(Icons.access_time_outlined),
                         label: Text('Giờ giao: ${_time.format(context)}'),
-                        onPressed: _pickTime,
+                        onPressed: () async {
+                          await _pickTime();
+                          setState(() => _recurringConfirmed = false);
+                        },
                       ),
                       const SizedBox(height: 16),
                       Text('Hình thức giao', style: theme.textTheme.titleSmall),
@@ -512,13 +621,18 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen> {
                           ChoiceChip(
                             label: const Text('Giao 1 lần'),
                             selected: _mode == 'once',
-                            onSelected: (_) => setState(() => _mode = 'once'),
+                            onSelected: (_) => setState(() {
+                              _mode = 'once';
+                              _recurringConfirmed = false;
+                            }),
                           ),
                           ChoiceChip(
                             label: const Text('Giao nhiều lần'),
                             selected: _mode == 'recurring',
-                            onSelected: (_) =>
-                                setState(() => _mode = 'recurring'),
+                            onSelected: (_) => setState(() {
+                              _mode = 'recurring';
+                              _recurringConfirmed = false;
+                            }),
                           ),
                         ],
                       ),
@@ -531,7 +645,10 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen> {
                             IconButton(
                               icon: const Icon(Icons.remove_circle_outline),
                               onPressed: _weeks > 1
-                                  ? () => setState(() => _weeks--)
+                                  ? () => setState(() {
+                                      _weeks--;
+                                      _recurringConfirmed = false;
+                                    })
                                   : null,
                             ),
                             Text(
@@ -543,8 +660,29 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen> {
                             IconButton(
                               icon: const Icon(Icons.add_circle_outline),
                               onPressed: _weeks < 12
-                                  ? () => setState(() => _weeks++)
+                                  ? () => setState(() {
+                                      _weeks++;
+                                      _recurringConfirmed = false;
+                                    })
                                   : null,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            OutlinedButton.icon(
+                              icon: Icon(
+                                _recurringConfirmed
+                                    ? Icons.check_circle
+                                    : Icons.event_available,
+                              ),
+                              label: Text(
+                                _recurringConfirmed
+                                    ? 'Đã xác nhận'
+                                    : 'Xác nhận lịch giao',
+                              ),
+                              onPressed: () => _confirmRecurring(cart),
                             ),
                           ],
                         ),
