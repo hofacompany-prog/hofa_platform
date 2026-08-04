@@ -458,6 +458,7 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
     BuildContext context,
     CartItem item, {
     bool showSchedule = true,
+    List<CartItem> allItems = const [],
   }) {
     final theme = Theme.of(context);
     final toppingGroups =
@@ -493,6 +494,39 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
           );
     }
 
+    // Đặt trước: xem trước giá bậc tốt nhất có thể đạt được trong số các ngày món này đã
+    // chọn (ngày nào có tổng số phần cả nhóm cao nhất) — chỉ xét bậc đặt trước
+    // (minDaysPerWeek > 0), không lẫn giá bậc giá sỉ.
+    int? preorderPrice;
+    if (item.orderKind == 'preorder' && item.deliverySlots.isNotEmpty) {
+      final preorderTiers =
+          ref
+              .watch(wholesaleTiersProvider(item.variantId))
+              .valueOrNull
+              ?.where((t) => t.minDaysPerWeek > 0)
+              .toList() ??
+          const <WholesaleTier>[];
+      if (preorderTiers.isNotEmpty) {
+        var bestOrderQty = 0;
+        for (final weekday
+            in item.deliverySlots.map((s) => s.weekday).toSet()) {
+          final dayQty = allItems
+              .where((i) => i.deliverySlots.any((s) => s.weekday == weekday))
+              .fold<int>(0, (sum, i) => sum + i.quantity);
+          if (dayQty > bestOrderQty) bestOrderQty = dayQty;
+        }
+        preorderPrice = _matchedTierPrice(
+          item.quantity,
+          bestOrderQty,
+          item.deliverySlots.length,
+          item.unitPrice,
+          preorderTiers,
+        );
+      }
+    }
+    final displayPrice = preorderPrice ?? item.unitPrice;
+    final discounted = preorderPrice != null && preorderPrice != item.unitPrice;
+
     return Card(
       elevation: 0,
       color: theme.colorScheme.surfaceContainerLow,
@@ -524,8 +558,12 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
                           ),
                         ),
                       Text(
-                        formatVnd(item.unitPrice + item.toppingsTotal),
-                        style: TextStyle(color: theme.colorScheme.primary),
+                        '${formatVnd(displayPrice + item.toppingsTotal)}'
+                        '${discounted ? ' (Giá sỉ)' : ''}',
+                        style: TextStyle(
+                          color: theme.colorScheme.primary,
+                          fontWeight: discounted ? FontWeight.w700 : null,
+                        ),
                       ),
                     ],
                   ),
@@ -1044,7 +1082,10 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
                       child: ListView(
                         padding: const EdgeInsets.fromLTRB(16, 8, 8, 16),
                         children: items
-                            .map((item) => _itemCard(context, item))
+                            .map(
+                              (item) =>
+                                  _itemCard(context, item, allItems: items),
+                            )
                             .toList(),
                       ),
                     ),
