@@ -71,14 +71,17 @@ $$ LANGUAGE plpgsql;
 COMMENT ON FUNCTION reserve_inventory IS 'Giữ chỗ tồn kho lúc đặt hàng. Không trừ on_hand, chỉ tăng reserved';
 COMMENT ON FUNCTION release_inventory IS 'Nhả chỗ đã giữ khi đơn bị huỷ trước khi lấy hàng';
 
--- Giá thật của 1 biến thể khi đặt hàng: ưu tiên bậc giá (wholesale_tiers) khớp số lượng
--- (và khớp cả số ngày đặt trước tối thiểu nếu bậc đó có lead_time_days > 0), nếu không
--- có bậc nào khớp thì dùng lại giá bán gốc (p_base_price = product_variants.price).
+-- Giá thật của 1 biến thể khi đặt hàng: ưu tiên bậc giá (wholesale_tiers) khớp số lượng,
+-- nếu không có bậc nào khớp thì dùng lại giá bán gốc (p_base_price = product_variants.price).
+-- Bậc "giá sỉ" (lead_time_days = 0) so theo p_quantity — số lượng của RIÊNG món này. Bậc
+-- "đặt trước" (lead_time_days > 0) so theo p_order_quantity — TỔNG số lượng của CẢ đơn
+-- (gộp mọi món, không phân biệt sản phẩm nào), vì cửa hàng tính bậc đặt trước theo tổng
+-- số phần đặt trong cùng 1 lần giao — và còn phải khớp số ngày đặt trước tối thiểu.
 -- Nhiều bậc cùng khớp thì ưu tiên bậc có min_quantity cao nhất (đúng tinh thần "mua càng
 -- nhiều giá càng tốt"), rồi tới bậc có lead_time_days cao nhất (khớp càng nhiều điều kiện
 -- càng ưu tiên).
 CREATE OR REPLACE FUNCTION resolve_variant_price(
-  p_variant_id UUID, p_quantity INTEGER, p_scheduled_for TIMESTAMPTZ, p_base_price INTEGER
+  p_variant_id UUID, p_quantity INTEGER, p_order_quantity INTEGER, p_scheduled_for TIMESTAMPTZ, p_base_price INTEGER
 ) RETURNS INTEGER AS $$
 DECLARE
   v_lead_days INTEGER;
@@ -88,20 +91,21 @@ BEGIN
                       ELSE GREATEST(FLOOR(EXTRACT(EPOCH FROM (p_scheduled_for - now())) / 86400)::INTEGER, 0)
                  END;
 
-  SELECT unit_price INTO v_price
-    FROM wholesale_tiers
-   WHERE variant_id = p_variant_id
-     AND p_quantity >= min_quantity
-     AND (max_quantity IS NULL OR p_quantity <= max_quantity)
-     AND (lead_time_days = 0 OR (v_lead_days IS NOT NULL AND v_lead_days >= lead_time_days))
-   ORDER BY min_quantity DESC, lead_time_days DESC
+  SELECT t.unit_price INTO v_price
+    FROM wholesale_tiers t
+   WHERE t.variant_id = p_variant_id
+     AND (CASE WHEN t.lead_time_days = 0 THEN p_quantity ELSE p_order_quantity END) >= t.min_quantity
+     AND (t.max_quantity IS NULL
+          OR (CASE WHEN t.lead_time_days = 0 THEN p_quantity ELSE p_order_quantity END) <= t.max_quantity)
+     AND (t.lead_time_days = 0 OR (v_lead_days IS NOT NULL AND v_lead_days >= t.lead_time_days))
+   ORDER BY t.min_quantity DESC, t.lead_time_days DESC
    LIMIT 1;
 
   RETURN COALESCE(v_price, p_base_price);
 END;
 $$ LANGUAGE plpgsql;
 COMMENT ON FUNCTION resolve_variant_price IS
-  'Chốt giá thật theo bậc giá sỉ/đặt trước khớp số lượng (và số ngày đặt trước nếu có) — không có bậc nào khớp thì trả về giá bán gốc';
+  'Chốt giá thật theo bậc giá: bậc giá sỉ (lead_time_days=0) so theo số lượng riêng món, bậc đặt trước (lead_time_days>0) so theo tổng số lượng cả đơn — không có bậc nào khớp thì trả về giá bán gốc';
 
 -- ============================================================================
 -- PHẦN 1: TẠO ĐƠN HÀNG (SDD 7.5)
@@ -150,6 +154,7 @@ DECLARE
   v_topping_row   RECORD;
   v_elem          JSONB;
   v_order_item_id UUID;
+  v_order_quantity_total INTEGER;
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM branches WHERE id = p_branch_id AND merchant_id = p_merchant_id AND deleted_at IS NULL) THEN
     RAISE EXCEPTION 'Chi nhánh không thuộc cửa hàng này' USING ERRCODE = 'foreign_key_violation';
@@ -160,6 +165,12 @@ BEGIN
   END IF;
 
   SELECT commission_rate INTO v_commission_rate FROM merchants WHERE id = p_merchant_id;
+
+  -- Tổng số phần của CẢ đơn (gộp mọi sản phẩm) — dùng để so bậc "đặt trước"
+  -- (lead_time_days > 0), vì bậc đó tính theo tổng số phần đặt trong cùng 1 lần giao,
+  -- không phân biệt đặt món gì.
+  SELECT COALESCE(SUM((elem->>'quantity')::INTEGER), 0) INTO v_order_quantity_total
+    FROM jsonb_array_elements(p_items) elem;
 
   -- Bước 1: chốt giá + giữ tồn kho cho từng món. CHƯA insert orders/order_items ở đây,
   -- vì orders có CHECK (total_amount = subtotal + delivery_fee + tax_amount - discount_amount) —
@@ -197,7 +208,7 @@ BEGIN
     END LOOP;
 
     v_unit_price := resolve_variant_price(
-      v_variant.id, (v_item->>'quantity')::INTEGER, p_scheduled_for, v_variant.price
+      v_variant.id, (v_item->>'quantity')::INTEGER, v_order_quantity_total, p_scheduled_for, v_variant.price
     ) + v_topping_sum;
     v_line_total := v_unit_price * (v_item->>'quantity')::INTEGER;
     v_subtotal   := v_subtotal + v_line_total;
@@ -304,7 +315,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 COMMENT ON FUNCTION create_order IS
-  'Tạo đơn: chốt giá từ product_variants (không tin giá client gửi), giữ chỗ tồn kho, áp voucher — tất cả trong 1 transaction';
+  'Tạo đơn: chốt giá qua resolve_variant_price (bậc giá sỉ theo số lượng riêng món, bậc đặt trước theo tổng số lượng cả đơn, không khớp thì giá gốc), giữ chỗ tồn kho, áp voucher — tất cả trong 1 transaction';
 
 -- ============================================================================
 -- PHẦN 2: ĐỔI TRẠNG THÁI ĐƠN HÀNG (state machine)

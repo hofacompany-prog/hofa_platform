@@ -103,13 +103,23 @@ class CartNotifier extends StateNotifier<CartState> {
     await _persist();
   }
 
-  Future<void> updateQuantity(String lineId, int quantity) async {
+  /// [unitPrice] dùng để cập nhật lại giá theo bậc giá sỉ khi đổi số lượng (tab Giá sỉ) —
+  /// bỏ trống thì giữ nguyên đơn giá cũ.
+  Future<void> updateQuantity(
+    String lineId,
+    int quantity, {
+    int? unitPrice,
+  }) async {
     if (quantity <= 0) {
       await removeItem(lineId);
       return;
     }
     final items = state.items
-        .map((e) => e.lineId == lineId ? e.copyWith(quantity: quantity) : e)
+        .map(
+          (e) => e.lineId == lineId
+              ? e.copyWith(quantity: quantity, unitPrice: unitPrice)
+              : e,
+        )
         .toList();
     state = CartState(
       merchantId: state.merchantId,

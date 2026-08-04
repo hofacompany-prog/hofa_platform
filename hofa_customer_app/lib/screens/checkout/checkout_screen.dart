@@ -5,6 +5,7 @@ import '../../core/format.dart';
 import '../../models/address.dart';
 import '../../models/cart_item.dart';
 import '../../models/preorder_schedule.dart';
+import '../../models/wholesale_tier.dart';
 import '../../providers/app_providers.dart';
 import '../../providers/auth_providers.dart';
 import '../../providers/cart_provider.dart';
@@ -40,10 +41,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   @override
   void initState() {
     super.initState();
-    if (widget.preorderSchedule != null &&
-        !widget.preorderSchedule!.recurring) {
-      _scheduledFor = widget.preorderSchedule!.earliestOccurrence;
-    } else if (widget.initialScheduledFor != null) {
+    if (widget.initialScheduledFor != null) {
       _scheduledFor = widget.initialScheduledFor;
     }
   }
@@ -266,6 +264,74 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       'customer_note': _noteCtrl.text.trim(),
   };
 
+  /// Gom món theo đúng lần giao (tab Đặt trước: mỗi thứ trong tuần chỉ giao đúng những
+  /// món đã tick thứ đó, không gộp lẫn món của ngày khác vào cùng 1 đơn — quan trọng vì
+  /// backend chốt bậc giá "đặt trước" theo TỔNG số lượng của cả đơn, gộp lẫn ngày khác
+  /// vào sẽ làm sai tổng đó). Tab Giá sỉ chỉ có 1 lần giao duy nhất nên luôn ra đúng 1 đơn.
+  List<MapEntry<DateTime, List<CartItem>>> _groupByOccurrence(
+    List<CartItem> items,
+  ) {
+    final schedule = widget.preorderSchedule;
+    if (schedule == null) {
+      return [MapEntry(_scheduledFor ?? DateTime.now(), items)];
+    }
+    final result = <MapEntry<DateTime, List<CartItem>>>[];
+    for (final occurrence in schedule.occurrences) {
+      final dayItems = items
+          .where(
+            (i) => i.deliverySlots.any((s) => s.weekday == occurrence.weekday),
+          )
+          .toList();
+      if (dayItems.isNotEmpty) result.add(MapEntry(occurrence, dayItems));
+    }
+    return result;
+  }
+
+  /// Bậc giá sỉ (lead_time_days = 0) so theo [ownQty] — số lượng riêng món này. Bậc đặt
+  /// trước (lead_time_days > 0) so theo [orderQty] — tổng số lượng của cả đơn (đúng như
+  /// resolve_variant_price() phía backend), để giá xem trước ở đây khớp với giá thực chốt.
+  int _matchedTierPrice(
+    int ownQty,
+    int orderQty,
+    int fallback,
+    List<WholesaleTier> tiers,
+  ) {
+    final sorted = [...tiers]
+      ..sort(
+        (a, b) => a.leadTimeDays != b.leadTimeDays
+            ? b.leadTimeDays.compareTo(a.leadTimeDays)
+            : b.minQuantity.compareTo(a.minQuantity),
+      );
+    for (final t in sorted) {
+      final matchQty = t.leadTimeDays == 0 ? ownQty : orderQty;
+      if (matchQty >= t.minQuantity &&
+          (t.maxQuantity == null || matchQty <= t.maxQuantity!)) {
+        return t.unitPrice;
+      }
+    }
+    return fallback;
+  }
+
+  /// Xem trước tổng tiền — mỗi lần giao (đơn) tính riêng theo đúng tổng số lượng của
+  /// CHÍNH đơn đó, khớp với cách backend chốt giá khi thực sự tạo đơn.
+  int _tierAwareSubtotal(List<MapEntry<DateTime, List<CartItem>>> orders) {
+    var total = 0;
+    for (final entry in orders) {
+      final dayItems = entry.value;
+      final orderQty = dayItems.fold<int>(0, (sum, i) => sum + i.quantity);
+      for (final i in dayItems) {
+        final tiers =
+            ref.watch(wholesaleTiersProvider(i.variantId)).valueOrNull ??
+            const <WholesaleTier>[];
+        final price = tiers.isEmpty
+            ? i.unitPrice
+            : _matchedTierPrice(i.quantity, orderQty, i.unitPrice, tiers);
+        total += (price + i.toppingsTotal) * i.quantity;
+      }
+    }
+    return total;
+  }
+
   Future<void> _placeOrder(Address address) async {
     final cart = ref.read(cartProvider);
     if (cart.isEmpty || cart.merchantId == null || cart.branchId == null)
@@ -273,93 +339,76 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final items = _relevantItems(cart);
     if (items.isEmpty) return;
 
-    final schedule = widget.preorderSchedule;
-    if (schedule != null && schedule.recurring) {
-      await _placeRecurringOrders(cart, items, address, schedule);
-      return;
-    }
+    final orders = _groupByOccurrence(items);
+    if (orders.isEmpty) return;
 
-    setState(() => _placing = true);
-    try {
-      final order = await ref
-          .read(orderRepoProvider)
-          .createOrder(_orderBody(cart, items, address, _scheduledFor));
-      await ref
-          .read(cartProvider.notifier)
-          .removeItems(items.map((i) => i.lineId).toList());
-      if (mounted) context.go('/orders/${order.id}');
-    } catch (e) {
-      if (mounted)
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Lỗi đặt hàng: $e')));
-    } finally {
-      if (mounted) setState(() => _placing = false);
-    }
-  }
-
-  /// Chưa có khái niệm "đơn lặp định kỳ" ở backend — giao nhiều lần nghĩa là tạo sẵn
-  /// nhiều đơn độc lập, mỗi đơn ứng với 1 lần giao trong lịch đã chọn.
-  Future<void> _placeRecurringOrders(
-    CartState cart,
-    List<CartItem> items,
-    Address address,
-    PreorderSchedule schedule,
-  ) async {
-    final occurrences = schedule.occurrences;
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Tạo ${occurrences.length} đơn hàng?'),
-        content: SizedBox(
-          width: 320,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: occurrences
-                  .map((d) => Text('• ${formatDateTime(d)}'))
-                  .toList(),
+    if (orders.length > 1) {
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('Tạo ${orders.length} đơn hàng?'),
+          content: SizedBox(
+            width: 320,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: orders
+                    .map(
+                      (e) => Text(
+                        '• ${formatDateTime(e.key)} (${e.value.length} món)',
+                      ),
+                    )
+                    .toList(),
+              ),
             ),
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Huỷ'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Xác nhận'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Huỷ'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Xác nhận'),
-          ),
-        ],
-      ),
-    );
-    if (confirm != true) return;
+      );
+      if (confirm != true) return;
+    }
 
     setState(() => _placing = true);
     var created = 0;
+    String? lastOrderId;
     try {
-      for (final occurrence in occurrences) {
-        await ref
+      for (final entry in orders) {
+        final order = await ref
             .read(orderRepoProvider)
-            .createOrder(_orderBody(cart, items, address, occurrence));
+            .createOrder(_orderBody(cart, entry.value, address, entry.key));
+        lastOrderId = order.id;
         created++;
       }
       await ref
           .read(cartProvider.notifier)
           .removeItems(items.map((i) => i.lineId).toList());
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Đã tạo $created đơn hàng')));
-        context.go('/orders');
+        if (orders.length > 1) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Đã tạo $created đơn hàng')));
+          context.go('/orders');
+        } else {
+          context.go('/orders/$lastOrderId');
+        }
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Đã tạo $created/${occurrences.length} đơn, lỗi: $e'),
+            content: orders.length > 1
+                ? Text('Đã tạo $created/${orders.length} đơn, lỗi: $e')
+                : Text('Lỗi đặt hàng: $e'),
           ),
         );
       }
@@ -387,7 +436,12 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       );
     }
 
-    final itemsSubtotal = items.fold<int>(0, (sum, i) => sum + i.lineTotal);
+    final scheduledOrders = widget.preorderSchedule != null
+        ? _groupByOccurrence(items)
+        : null;
+    final itemsSubtotal = scheduledOrders != null
+        ? _tierAwareSubtotal(scheduledOrders)
+        : items.fold<int>(0, (sum, i) => sum + i.lineTotal);
     final total = itemsSubtotal - _voucherDiscount;
 
     return Scaffold(
@@ -520,9 +574,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             const SizedBox(height: 8),
             if (widget.preorderSchedule != null) ...[
               Text(
-                widget.preorderSchedule!.recurring
-                    ? 'Giao lặp lại ${widget.preorderSchedule!.slots.length} khung giờ/tuần, trong ${widget.preorderSchedule!.weeks} tuần tới'
-                    : 'Giao 1 lần: ${formatDateTime(_scheduledFor!)}',
+                (scheduledOrders?.length ?? 0) > 1
+                    ? 'Sẽ tạo ${scheduledOrders!.length} đơn hàng riêng, mỗi đơn đúng món của lần giao đó'
+                    : 'Giao 1 lần: ${formatDateTime(scheduledOrders!.first.key)}',
               ),
               Align(
                 alignment: Alignment.centerLeft,

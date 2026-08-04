@@ -53,6 +53,7 @@ class CartItem {
 
   CartItem copyWith({
     int? quantity,
+    int? unitPrice,
     List<ProductTopping>? toppings,
     List<DeliverySlot>? deliverySlots,
   }) => CartItem(
@@ -62,7 +63,7 @@ class CartItem {
     productImage: productImage,
     variantId: variantId,
     variantName: variantName,
-    unitPrice: unitPrice,
+    unitPrice: unitPrice ?? this.unitPrice,
     quantity: quantity ?? this.quantity,
     unit: unit,
     note: note,

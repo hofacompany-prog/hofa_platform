@@ -5,6 +5,7 @@ import '../../core/format.dart';
 import '../../models/cart_item.dart';
 import '../../models/delivery_slot.dart';
 import '../../models/preorder_schedule.dart';
+import '../../models/wholesale_tier.dart';
 import '../../providers/app_providers.dart';
 import '../../providers/cart_provider.dart';
 import '../../widgets/network_image_box.dart';
@@ -136,20 +137,57 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
     return true;
   }
 
-  /// Tổng tiền của cả tuần đang xem — mỗi món tính theo số ngày trong tuần đó mà món
-  /// này có lịch giao (1 món giao 2 ngày/tuần thì cộng 2 lần).
+  /// Tổng tiền của cả tuần đang xem — cộng dồn theo TỪNG ngày (mỗi ngày tự chốt bậc giá
+  /// theo tổng số phần của riêng ngày đó, gộp mọi món), rồi cộng các ngày lại.
   int _weekTotal(List<CartItem> items) {
     if (!_weekInRange(_weekOffset)) return 0;
     var total = 0;
-    for (final item in items) {
-      final days = item.deliverySlots.map((s) => s.weekday).toSet().length;
-      total += item.lineTotal * days;
+    for (final d in _weekdayLabels) {
+      final dayItems = items
+          .where((i) => i.deliverySlots.any((s) => s.weekday == d.iso))
+          .toList();
+      if (dayItems.isEmpty) continue;
+      final dayQty = dayItems.fold<int>(0, (sum, i) => sum + i.quantity);
+      for (final i in dayItems) {
+        final tiers =
+            ref.watch(wholesaleTiersProvider(i.variantId)).valueOrNull ??
+            const <WholesaleTier>[];
+        final price = tiers.isEmpty
+            ? i.unitPrice
+            : _matchedTierPrice(i.quantity, dayQty, i.unitPrice, tiers);
+        total += (price + i.toppingsTotal) * i.quantity;
+      }
     }
     return total;
   }
 
   int _flatTotal(List<CartItem> items) =>
       items.fold(0, (sum, i) => sum + i.lineTotal);
+
+  /// Bậc giá sỉ (lead_time_days = 0) so theo [ownQty] — số lượng riêng món này. Bậc đặt
+  /// trước (lead_time_days > 0) so theo [orderQty] — tổng số lượng của cả lần giao (gộp
+  /// mọi món cùng ngày), đúng như resolve_variant_price() phía backend chốt giá thật.
+  int _matchedTierPrice(
+    int ownQty,
+    int orderQty,
+    int fallback,
+    List<WholesaleTier> tiers,
+  ) {
+    final sorted = [...tiers]
+      ..sort(
+        (a, b) => a.leadTimeDays != b.leadTimeDays
+            ? b.leadTimeDays.compareTo(a.leadTimeDays)
+            : b.minQuantity.compareTo(a.minQuantity),
+      );
+    for (final t in sorted) {
+      final matchQty = t.leadTimeDays == 0 ? ownQty : orderQty;
+      if (matchQty >= t.minQuantity &&
+          (t.maxQuantity == null || matchQty <= t.maxQuantity!)) {
+        return t.unitPrice;
+      }
+    }
+    return fallback;
+  }
 
   /// Ngày gần nhất (từ ngày mai) khớp thứ [iso] — dùng để hiển thị ngày dương lịch cho
   /// 1 slot, không lưu ngày cụ thể (slot lặp theo thứ trong tuần).
@@ -405,6 +443,27 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
         ref.watch(toppingGroupsProvider(item.productId)).valueOrNull ?? [];
     final hasToppings = toppingGroups.isNotEmpty;
     final sortedSlots = [...item.deliverySlots]..sort(DeliverySlot.compare);
+    // Giá sỉ tính lại đơn giá theo bậc giá cửa hàng đã cài mỗi khi đổi số lượng.
+    final wholesaleTiers = item.orderKind == 'wholesale'
+        ? ref.watch(wholesaleTiersProvider(item.variantId)).valueOrNull ??
+              const <WholesaleTier>[]
+        : const <WholesaleTier>[];
+    void changeQuantity(int quantity) {
+      ref
+          .read(cartProvider.notifier)
+          .updateQuantity(
+            item.lineId,
+            quantity,
+            unitPrice: wholesaleTiers.isEmpty
+                ? null
+                : _matchedTierPrice(
+                    quantity,
+                    quantity,
+                    item.unitPrice,
+                    wholesaleTiers,
+                  ),
+          );
+    }
 
     return Card(
       elevation: 0,
@@ -474,17 +533,13 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
                 IconButton(
                   visualDensity: VisualDensity.compact,
                   icon: const Icon(Icons.remove_circle_outline, size: 20),
-                  onPressed: () => ref
-                      .read(cartProvider.notifier)
-                      .updateQuantity(item.lineId, item.quantity - 1),
+                  onPressed: () => changeQuantity(item.quantity - 1),
                 ),
                 Text('${item.quantity}'),
                 IconButton(
                   visualDensity: VisualDensity.compact,
                   icon: const Icon(Icons.add_circle_outline, size: 20),
-                  onPressed: () => ref
-                      .read(cartProvider.notifier)
-                      .updateQuantity(item.lineId, item.quantity + 1),
+                  onPressed: () => changeQuantity(item.quantity + 1),
                 ),
               ],
             ),
@@ -650,54 +705,86 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
               style: theme.textTheme.bodySmall,
             )
           else ...[
-            ...itemsForViewDay.map(
-              (i) => Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: Column(
+            () {
+              // Bậc "đặt trước" chốt theo TỔNG số phần của cả ngày này (gộp mọi món),
+              // không phân biệt sản phẩm — khớp với cách backend chốt giá thật.
+              final dayQty = itemsForViewDay.fold<int>(
+                0,
+                (sum, i) => sum + i.quantity,
+              );
+              int priceFor(CartItem i) {
+                final tiers =
+                    ref
+                        .watch(wholesaleTiersProvider(i.variantId))
+                        .valueOrNull ??
+                    const <WholesaleTier>[];
+                return tiers.isEmpty
+                    ? i.unitPrice
+                    : _matchedTierPrice(i.quantity, dayQty, i.unitPrice, tiers);
+              }
+
+              int lineTotalFor(CartItem i) =>
+                  (priceFor(i) + i.toppingsTotal) * i.quantity;
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ...itemsForViewDay.map(
+                    (i) => Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            i.productName,
-                            style: const TextStyle(fontWeight: FontWeight.w500),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  i.productName,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                Text(
+                                  '${formatVnd(priceFor(i) + i.toppingsTotal)} x ${i.quantity}',
+                                  style: theme.textTheme.bodySmall,
+                                ),
+                              ],
+                            ),
                           ),
                           Text(
-                            '${formatVnd(i.unitPrice + i.toppingsTotal)} x ${i.quantity}',
-                            style: theme.textTheme.bodySmall,
+                            formatVnd(lineTotalFor(i)),
+                            style: const TextStyle(fontWeight: FontWeight.w600),
                           ),
                         ],
                       ),
                     ),
-                    Text(
-                      formatVnd(i.lineTotal),
-                      style: const TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const Divider(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Tổng cộng ngày ${_weekdayLabelOf(viewDay)}',
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-                Text(
-                  formatVnd(
-                    itemsForViewDay.fold<int>(0, (sum, i) => sum + i.lineTotal),
                   ),
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: theme.colorScheme.primary,
+                  const Divider(height: 20),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Tổng cộng ngày ${_weekdayLabelOf(viewDay)}',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      Text(
+                        formatVnd(
+                          itemsForViewDay.fold<int>(
+                            0,
+                            (sum, i) => sum + lineTotalFor(i),
+                          ),
+                        ),
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: theme.colorScheme.primary,
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-              ],
-            ),
+                ],
+              );
+            }(),
           ],
         ],
         const Divider(height: 24),
