@@ -61,6 +61,17 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen> {
     return !date.isBefore(tomorrowDate);
   }
 
+  /// Tuần [weekOffset] có nằm trong phạm vi lịch giao hiện tại không — "giao 1 lần" chỉ
+  /// tính tuần gần nhất, "giao nhiều lần" đã xác nhận chỉ tính đúng số tuần đã chọn.
+  /// Chưa xác nhận lặp lại thì chưa giới hạn, để khách tự do chọn ngày trước.
+  bool _weekInRange(int weekOffset) {
+    if (_mode == 'once') return weekOffset == 0;
+    if (_mode == 'recurring' && _recurringConfirmed) {
+      return weekOffset >= 0 && weekOffset < _weeks;
+    }
+    return true;
+  }
+
   /// Ngày gần nhất (từ ngày mai) khớp thứ [iso] — dùng để hiển thị ngày dương lịch cho
   /// 1 slot, không lưu ngày cụ thể (slot lặp theo thứ trong tuần).
   DateTime _nearestFutureDate(int iso) {
@@ -415,7 +426,7 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen> {
   Widget _dayPicker(BuildContext context, CartState cart) {
     final theme = Theme.of(context);
     final viewDay = _selectedViewDay;
-    final itemsForViewDay = viewDay == null
+    final itemsForViewDay = (viewDay == null || !_weekInRange(_weekOffset))
         ? <CartItem>[]
         : cart.items
               .where((i) => i.deliverySlots.any((s) => s.weekday == viewDay))
@@ -483,9 +494,11 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen> {
           children: _weekdayLabels.map((d) {
             final date = _dateFor(d.iso, _weekOffset);
             final selectable = _isSelectable(date);
-            final hasAny = cart.items.any(
-              (i) => i.deliverySlots.any((s) => s.weekday == d.iso),
-            );
+            final hasAny =
+                _weekInRange(_weekOffset) &&
+                cart.items.any(
+                  (i) => i.deliverySlots.any((s) => s.weekday == d.iso),
+                );
             return FilterChip(
               label: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -531,7 +544,16 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen> {
             style: theme.textTheme.titleSmall,
           ),
           const SizedBox(height: 8),
-          if (itemsForViewDay.isEmpty)
+          if (!_weekInRange(_weekOffset))
+            Text(
+              _mode == 'once'
+                  ? 'Ngoài phạm vi — "Giao 1 lần" chỉ áp dụng tuần gần nhất'
+                  : 'Ngoài phạm vi lịch lặp lại ($_weeks tuần tới)',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.error,
+              ),
+            )
+          else if (itemsForViewDay.isEmpty)
             Text(
               'Chưa có món nào giao ngày này',
               style: theme.textTheme.bodySmall,
