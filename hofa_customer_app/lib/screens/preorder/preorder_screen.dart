@@ -72,6 +72,18 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen> {
     return true;
   }
 
+  /// Tổng tiền của cả tuần đang xem — mỗi món tính theo số ngày trong tuần đó mà món
+  /// này có lịch giao (1 món giao 2 ngày/tuần thì cộng 2 lần).
+  int _weekTotal(CartState cart) {
+    if (!_weekInRange(_weekOffset)) return 0;
+    var total = 0;
+    for (final item in cart.items) {
+      final days = item.deliverySlots.map((s) => s.weekday).toSet().length;
+      total += item.lineTotal * days;
+    }
+    return total;
+  }
+
   /// Ngày gần nhất (từ ngày mai) khớp thứ [iso] — dùng để hiển thị ngày dương lịch cho
   /// 1 slot, không lưu ngày cụ thể (slot lặp theo thứ trong tuần).
   DateTime _nearestFutureDate(int iso) {
@@ -607,6 +619,20 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen> {
             ),
           ],
         ],
+        const Divider(height: 24),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text('Tổng tuần', style: theme.textTheme.titleSmall),
+            Text(
+              formatVnd(_weekTotal(cart)),
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: theme.colorScheme.primary,
+              ),
+            ),
+          ],
+        ),
       ],
     );
   }
