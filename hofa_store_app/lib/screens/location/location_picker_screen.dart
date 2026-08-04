@@ -10,17 +10,24 @@ class PickedLocation {
   final double latitude;
   final double longitude;
   final String line1;
+  final String? ward;
+  final String? district;
   final String province;
 
   PickedLocation({
     required this.latitude,
     required this.longitude,
     required this.line1,
+    this.ward,
+    this.district,
     required this.province,
   });
 }
 
-const _defaultCenter = LatLng(10.7769, 106.7009); // trung tâm TP.HCM — điểm khởi đầu hợp lý khi chưa có vị trí
+const _defaultCenter = LatLng(
+  10.7769,
+  106.7009,
+); // trung tâm TP.HCM — điểm khởi đầu hợp lý khi chưa có vị trí
 
 /// Chọn vị trí chi nhánh bằng bản đồ (giống màn chọn địa chỉ giao hàng bên app khách):
 /// ghim cố định giữa màn hình, kéo bản đồ hoặc tìm kiếm để di chuyển ghim, xác nhận là
@@ -78,7 +85,11 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
         if (!serviceEnabled) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Vui lòng bật định vị (GPS/vị trí) trên thiết bị để dùng tính năng này.')),
+              const SnackBar(
+                content: Text(
+                  'Vui lòng bật định vị (GPS/vị trí) trên thiết bị để dùng tính năng này.',
+                ),
+              ),
             );
           }
           return;
@@ -86,20 +97,27 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
       }
 
       var permission = await Geolocator.checkPermission();
-      var granted = permission == LocationPermission.always || permission == LocationPermission.whileInUse;
-      if (!granted && (userInitiated || permission != LocationPermission.deniedForever)) {
+      var granted =
+          permission == LocationPermission.always ||
+          permission == LocationPermission.whileInUse;
+      if (!granted &&
+          (userInitiated || permission != LocationPermission.deniedForever)) {
         permission = await Geolocator.requestPermission();
-        granted = permission == LocationPermission.always || permission == LocationPermission.whileInUse;
+        granted =
+            permission == LocationPermission.always ||
+            permission == LocationPermission.whileInUse;
       }
       if (!granted) {
         if (userInitiated && mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text(
-              permission == LocationPermission.deniedForever
-                  ? 'HOFA chưa được cấp quyền vị trí — vào phần Cài đặt quyền của thiết bị/trình duyệt để bật lại.'
-                  : 'Cần cấp quyền vị trí để định vị vị trí hiện tại.',
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                permission == LocationPermission.deniedForever
+                    ? 'HOFA chưa được cấp quyền vị trí — vào phần Cài đặt quyền của thiết bị/trình duyệt để bật lại.'
+                    : 'Cần cấp quyền vị trí để định vị vị trí hiện tại.',
+              ),
             ),
-          ));
+          );
         }
         return;
       }
@@ -108,25 +126,36 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
       // thay vì đúng đơn vị nên trình duyệt hiểu 8 giây thành >2 tiếng. Tự giới hạn thời gian
       // chờ ở đây để không bị treo lâu bất thường khi trình duyệt (đặc biệt Safari) chậm trả
       // vị trí hoặc không trả lỗi rõ ràng.
-      final pos = await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(accuracy: LocationAccuracy.medium, timeLimit: Duration(seconds: 8)),
-      ).timeout(
-        const Duration(seconds: 10),
-        onTimeout: () => throw TimeoutException('Quá thời gian chờ xác định vị trí'),
-      );
+      final pos =
+          await Geolocator.getCurrentPosition(
+            locationSettings: const LocationSettings(
+              accuracy: LocationAccuracy.medium,
+              timeLimit: Duration(seconds: 8),
+            ),
+          ).timeout(
+            const Duration(seconds: 10),
+            onTimeout: () =>
+                throw TimeoutException('Quá thời gian chờ xác định vị trí'),
+          );
       final target = LatLng(pos.latitude, pos.longitude);
       _center = target;
       if (!mounted) return;
       if (animate) {
         _mapController.move(target, 16);
       } else {
-        _resolveAddressAt(target); // bản đồ chưa dựng xong lúc initState — xác định địa chỉ ngay, không đợi sự kiện kéo bản đồ
+        _resolveAddressAt(
+          target,
+        ); // bản đồ chưa dựng xong lúc initState — xác định địa chỉ ngay, không đợi sự kiện kéo bản đồ
       }
     } catch (_) {
       if (userInitiated && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-          content: Text('Không thể lấy vị trí, vui lòng nhập hoặc kéo thả để lấy vị trí nhé!'),
-        ));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Không thể lấy vị trí, vui lòng nhập hoặc kéo thả để lấy vị trí nhé!',
+            ),
+          ),
+        );
       }
       // initState: im lặng, vẫn ở toạ độ mặc định, tự kéo bản đồ.
     }
@@ -142,7 +171,10 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     // để chỉ gọi reverse-geocode sau khi ngừng kéo bản đồ ~400ms, vừa mượt vừa tránh gọi
     // dồn dập vượt giới hạn tốc độ của Nominatim (1 request/giây).
     _idleDebounce?.cancel();
-    _idleDebounce = Timer(const Duration(milliseconds: 400), () => _resolveAddressAt(_center));
+    _idleDebounce = Timer(
+      const Duration(milliseconds: 400),
+      () => _resolveAddressAt(_center),
+    );
   }
 
   Future<void> _resolveAddressAt(LatLng target) async {
@@ -150,12 +182,17 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
       _resolving = true;
       _error = null;
     });
-    final place = await _places.reverseGeocode(target.latitude, target.longitude);
+    final place = await _places.reverseGeocode(
+      target.latitude,
+      target.longitude,
+    );
     if (!mounted) return;
     setState(() {
       _selected = place;
       _resolving = false;
-      if (place == null) _error = 'Không xác định được địa chỉ ở vị trí này, thử kéo bản đồ sang chỗ khác.';
+      if (place == null)
+        _error =
+            'Không xác định được địa chỉ ở vị trí này, thử kéo bản đồ sang chỗ khác.';
     });
   }
 
@@ -167,7 +204,11 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
     }
     _searchDebounce = Timer(const Duration(milliseconds: 500), () async {
       setState(() => _searching = true);
-      final results = await _places.autocomplete(value, lat: _center.latitude, lng: _center.longitude);
+      final results = await _places.autocomplete(
+        value,
+        lat: _center.latitude,
+        lng: _center.longitude,
+      );
       if (!mounted) return;
       setState(() {
         _predictions = results;
@@ -189,12 +230,16 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   void _confirm() {
     final place = _selected;
     if (place == null) return;
-    Navigator.of(context).pop(PickedLocation(
-      latitude: place.latitude,
-      longitude: place.longitude,
-      line1: place.line1,
-      province: place.province ?? '',
-    ));
+    Navigator.of(context).pop(
+      PickedLocation(
+        latitude: place.latitude,
+        longitude: place.longitude,
+        line1: place.line1,
+        ward: place.ward,
+        district: place.district,
+        province: place.province ?? '',
+      ),
+    );
   }
 
   @override
@@ -212,7 +257,12 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
               decoration: InputDecoration(
                 hintText: 'Tìm địa chỉ, tên đường...',
                 prefixIcon: const Icon(Icons.search),
-                suffixIcon: _searching ? const Padding(padding: EdgeInsets.all(12), child: CircularProgressIndicator(strokeWidth: 2)) : null,
+                suffixIcon: _searching
+                    ? const Padding(
+                        padding: EdgeInsets.all(12),
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : null,
                 border: const OutlineInputBorder(),
                 isDense: true,
               ),
@@ -245,7 +295,8 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                     ),
                     children: [
                       TileLayer(
-                        urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                        urlTemplate:
+                            'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                         userAgentPackageName: 'com.hofa.hofa_store',
                       ),
                     ],
@@ -254,7 +305,11 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                   IgnorePointer(
                     child: Padding(
                       padding: const EdgeInsets.only(bottom: 32),
-                      child: Icon(Icons.location_pin, size: 44, color: theme.colorScheme.error),
+                      child: Icon(
+                        Icons.location_pin,
+                        size: 44,
+                        color: theme.colorScheme.error,
+                      ),
                     ),
                   ),
                   Positioned(
@@ -279,12 +334,18 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                   Text(
                     _resolving
                         ? 'Đang xác định địa chỉ...'
-                        : (_error ?? _selected?.formattedAddress ?? 'Kéo bản đồ hoặc tìm kiếm để chọn vị trí'),
-                    style: TextStyle(color: _error != null ? theme.colorScheme.error : null),
+                        : (_error ??
+                              _selected?.formattedAddress ??
+                              'Kéo bản đồ hoặc tìm kiếm để chọn vị trí'),
+                    style: TextStyle(
+                      color: _error != null ? theme.colorScheme.error : null,
+                    ),
                   ),
                   const SizedBox(height: 12),
                   FilledButton(
-                    onPressed: (_selected == null || _resolving) ? null : _confirm,
+                    onPressed: (_selected == null || _resolving)
+                        ? null
+                        : _confirm,
                     child: const Text('Xác nhận vị trí này'),
                   ),
                 ],
