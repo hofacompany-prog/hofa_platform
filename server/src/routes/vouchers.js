@@ -85,13 +85,19 @@ router.post('/vouchers/validate', asyncHandler(async (req, res) => {
     return res.json({ ok: true, data: { valid: false, reason: 'Bạn đã dùng hết lượt cho mã này' } });
   }
 
+  // deliveryFee mặc định 0 (chưa biết phí ship, vd chưa chọn địa chỉ) — khớp với cách
+  // create_order() tính discount cho mã 'free_shipping' bằng đúng p_delivery_fee.
+  const deliveryFee = Number(req.body.delivery_fee) || 0;
   let discount = 0;
   if (voucher.discount_type === 'percent') {
     discount = Math.round((req.body.order_amount * voucher.discount_value) / 100);
     if (voucher.max_discount) discount = Math.min(discount, voucher.max_discount);
   } else if (voucher.discount_type === 'fixed') {
     discount = voucher.discount_value;
+  } else if (voucher.discount_type === 'free_shipping') {
+    discount = deliveryFee;
   }
+  discount = Math.min(discount, req.body.order_amount + deliveryFee); // không cho âm tiền
   res.json({ ok: true, data: { valid: true, discount_type: voucher.discount_type, estimated_discount: discount } });
 }));
 

@@ -64,10 +64,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     return cart.items.where((i) => i.orderKind == 'preorder').toList();
   }
 
-  /// Ước tính phí ship tới địa chỉ ĐANG CHỌN — tự tính lại mỗi khi đổi địa chỉ vì đọc
-  /// thẳng [_selectedAddressId] hiện tại. CHỈ hiển thị tham khảo, chưa cộng vào "Tổng
-  /// cộng" — đơn hàng thật hiện vẫn tính phí ship 0đ (xem _orderBody). Trả về null nếu
-  /// chưa đủ dữ liệu để ước tính (chưa chọn địa chỉ, thiếu toạ độ chi nhánh/địa chỉ...).
+  /// Phí ship tới địa chỉ ĐANG CHỌN — tự tính lại mỗi khi đổi địa chỉ vì đọc thẳng
+  /// [_selectedAddressId] hiện tại. Đây là số THẬT được cộng vào "Tổng cộng" và gửi lên
+  /// server lúc tạo đơn (_orderBody) — server tự chốt lại total_amount, không tin số
+  /// client gửi mù quáng, nhưng CHƯA tự kiểm tra khoảng cách thật (xem README/ghi chú ở
+  /// PR). Trả về null nếu chưa đủ dữ liệu để tính (chưa chọn địa chỉ, thiếu toạ độ...).
   int? _estimatedShippingFee(
     CartState cart,
     List<Address> addresses,
@@ -231,7 +232,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     }
   }
 
-  Future<void> _checkVoucher(String merchantId, int orderAmount) async {
+  Future<void> _checkVoucher(
+    String merchantId,
+    int orderAmount,
+    int deliveryFee,
+  ) async {
     final code = _voucherCtrl.text.trim();
     if (code.isEmpty) return;
     setState(() {
@@ -245,6 +250,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             code: code,
             merchantId: merchantId,
             orderAmount: orderAmount,
+            deliveryFee: deliveryFee,
           );
       setState(() {
         _voucherDiscount = res.valid ? res.estimatedDiscount : 0;
@@ -265,6 +271,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     List<CartItem> items,
     Address address,
     DateTime? scheduledFor,
+    int deliveryFee,
   ) => {
     'merchant_id': cart.merchantId,
     'branch_id': cart.branchId,
@@ -296,7 +303,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     'ship_latitude': address.latitude,
     'ship_longitude': address.longitude,
     'payment_method': _paymentMethod,
-    'delivery_fee': 0,
+    'delivery_fee': deliveryFee,
     if (_voucherDiscount > 0) 'voucher_code': _voucherCtrl.text.trim(),
     if (cart.salesModel == 'scheduled' && scheduledFor != null)
       'scheduled_for': scheduledFor.toIso8601String(),
@@ -408,7 +415,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     return total;
   }
 
-  Future<void> _placeOrder(Address address) async {
+  Future<void> _placeOrder(Address address, int deliveryFee) async {
     final cart = ref.read(cartProvider);
     if (cart.isEmpty || cart.merchantId == null || cart.branchId == null)
       return;
@@ -461,7 +468,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       for (final entry in orders) {
         final order = await ref
             .read(orderRepoProvider)
-            .createOrder(_orderBody(cart, entry.value, address, entry.key));
+            .createOrder(
+              _orderBody(cart, entry.value, address, entry.key, deliveryFee),
+            );
         lastOrderId = order.id;
         created++;
       }
@@ -523,7 +532,19 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final itemsSubtotal = scheduledOrders != null
         ? _tierAwareSubtotal(scheduledOrders)
         : items.fold<int>(0, (sum, i) => sum + i.lineTotal);
-    final total = itemsSubtotal - _voucherDiscount;
+
+    // Chốt địa chỉ mặc định sớm (trước khi cần tới trong shippingFee/nút Đặt hàng) —
+    // giữ đúng logic cũ (ưu tiên is_default, không thì lấy địa chỉ đầu tiên).
+    final addresses = addressesAsync.valueOrNull ?? const <Address>[];
+    if (_selectedAddressId == null && addresses.isNotEmpty) {
+      final defaultAddr = addresses.where((a) => a.isDefault).toList();
+      _selectedAddressId = defaultAddr.isNotEmpty
+          ? defaultAddr.first.id
+          : addresses.first.id;
+    }
+    final shippingFee =
+        _estimatedShippingFee(cart, addresses, itemsSubtotal) ?? 0;
+    final total = itemsSubtotal + shippingFee - _voucherDiscount;
 
     return Scaffold(
       appBar: AppBar(
@@ -541,74 +562,59 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           addressesAsync.when(
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (e, _) => Text('Lỗi: $e'),
-            data: (addresses) {
-              if (_selectedAddressId == null && addresses.isNotEmpty) {
-                final defaultAddr = addresses
-                    .where((a) => a.isDefault)
-                    .toList();
-                _selectedAddressId = defaultAddr.isNotEmpty
-                    ? defaultAddr.first.id
-                    : addresses.first.id;
-              }
-              final shippingFee = _estimatedShippingFee(
-                cart,
-                addresses,
-                itemsSubtotal,
-              );
-              return Column(
-                children: [
-                  RadioGroup<String>(
-                    groupValue: _selectedAddressId,
-                    onChanged: (v) => setState(() => _selectedAddressId = v),
-                    child: Column(
-                      children: addresses
-                          .map(
-                            (a) => RadioListTile<String>(
-                              contentPadding: EdgeInsets.zero,
-                              value: a.id,
-                              title: Text(
-                                '${a.recipientName} · ${a.recipientPhone}',
-                              ),
-                              subtitle: Text(a.fullLine),
+            data: (addresses) => Column(
+              children: [
+                RadioGroup<String>(
+                  groupValue: _selectedAddressId,
+                  onChanged: (v) => setState(() => _selectedAddressId = v),
+                  child: Column(
+                    children: addresses
+                        .map(
+                          (a) => RadioListTile<String>(
+                            contentPadding: EdgeInsets.zero,
+                            value: a.id,
+                            title: Text(
+                              '${a.recipientName} · ${a.recipientPhone}',
                             ),
-                          )
-                          .toList(),
-                    ),
-                  ),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: TextButton.icon(
-                      onPressed: _addAddress,
-                      icon: const Icon(Icons.add),
-                      label: const Text('Thêm địa chỉ mới'),
-                    ),
-                  ),
-                  if (shippingFee != null)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4, bottom: 4),
-                      child: Row(
-                        children: [
-                          Icon(
-                            Icons.local_shipping_outlined,
-                            size: 16,
-                            color: theme.colorScheme.outline,
+                            subtitle: Text(a.fullLine),
                           ),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              'Phí giao hàng ước tính tới địa chỉ này: '
-                              '${shippingFee == 0 ? 'Miễn phí' : formatVnd(shippingFee)}',
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: theme.colorScheme.outline,
-                              ),
+                        )
+                        .toList(),
+                  ),
+                ),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: _addAddress,
+                    icon: const Icon(Icons.add),
+                    label: const Text('Thêm địa chỉ mới'),
+                  ),
+                ),
+                if (_selectedAddressId != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4, bottom: 4),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.local_shipping_outlined,
+                          size: 16,
+                          color: theme.colorScheme.outline,
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            'Phí giao hàng tới địa chỉ này: '
+                            '${shippingFee == 0 ? 'Miễn phí' : formatVnd(shippingFee)}',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.outline,
                             ),
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
-                ],
-              );
-            },
+                  ),
+              ],
+            ),
           ),
           const Divider(height: 32),
           Text('Mã giảm giá', style: theme.textTheme.titleSmall),
@@ -629,7 +635,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               OutlinedButton(
                 onPressed: _voucherChecking
                     ? null
-                    : () => _checkVoucher(cart.merchantId!, itemsSubtotal),
+                    : () => _checkVoucher(
+                        cart.merchantId!,
+                        itemsSubtotal,
+                        shippingFee,
+                      ),
                 child: _voucherChecking
                     ? const SizedBox(
                         height: 16,
@@ -741,6 +751,16 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [const Text('Tạm tính'), Text(formatVnd(itemsSubtotal))],
           ),
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Phí giao hàng'),
+                Text(shippingFee == 0 ? 'Miễn phí' : formatVnd(shippingFee)),
+              ],
+            ),
+          ),
           if (_voucherDiscount > 0)
             Padding(
               padding: const EdgeInsets.only(top: 4),
@@ -777,12 +797,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             onPressed: (_placing || _selectedAddressId == null)
                 ? null
                 : () {
-                    final addresses = addressesAsync.valueOrNull ?? [];
                     final address = addresses
                         .where((a) => a.id == _selectedAddressId)
                         .toList();
                     if (address.isEmpty) return;
-                    _placeOrder(address.first);
+                    _placeOrder(address.first, shippingFee);
                   },
             child: _placing
                 ? const SizedBox(

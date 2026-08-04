@@ -12,10 +12,11 @@ import '../../widgets/topping_picker_dialog.dart';
 class CartScreen extends ConsumerWidget {
   const CartScreen({super.key});
 
-  /// Ước tính phí ship theo khoảng cách từ chi nhánh tới địa chỉ mặc định/gần nhất của
-  /// khách — chỉ để tham khảo trước, KHÔNG phải số tiền sẽ tính vào đơn thật (đơn hàng
-  /// hiện vẫn miễn phí ship, xem checkout_screen.dart). Trả về null nếu chưa đủ dữ liệu
-  /// để ước tính (chưa có địa chỉ, thiếu toạ độ chi nhánh...).
+  /// Ước tính phí ship theo khoảng cách từ chi nhánh tới địa chỉ MẶC ĐỊNH của khách — chỉ
+  /// để xem trước ở giỏ hàng, chưa chắc đúng số tiền sẽ tính vào đơn thật vì khách có thể
+  /// đổi sang địa chỉ khác ở màn thanh toán (xem checkout_screen.dart, nơi phí ship được
+  /// tính lại theo đúng địa chỉ đã chọn và thật sự cộng vào Tổng cộng). Trả về null nếu
+  /// chưa đủ dữ liệu để ước tính (chưa có địa chỉ, thiếu toạ độ chi nhánh...).
   int? _estimatedShippingFee(WidgetRef ref, CartState cart) {
     final branchId = cart.branchId;
     if (branchId == null) return null;
