@@ -10,7 +10,9 @@ import 'screens/home/home_screen.dart';
 import 'screens/merchant/merchant_detail_screen.dart';
 import 'screens/product/product_detail_screen.dart';
 import 'screens/cart/cart_screen.dart';
+import 'screens/preorder/preorder_screen.dart';
 import 'screens/checkout/checkout_screen.dart';
+import 'models/preorder_schedule.dart';
 import 'screens/orders/orders_list_screen.dart';
 import 'screens/orders/order_detail_screen.dart';
 import 'screens/profile/profile_screen.dart';
@@ -23,7 +25,9 @@ final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     navigatorKey: navigatorKey,
     initialLocation: '/',
-    refreshListenable: GoRouterRefreshStream(Supabase.instance.client.auth.onAuthStateChange),
+    refreshListenable: GoRouterRefreshStream(
+      Supabase.instance.client.auth.onAuthStateChange,
+    ),
     redirect: (context, state) async {
       final session = Supabase.instance.client.auth.currentSession;
       final loggingIn = state.matchedLocation == '/login';
@@ -33,7 +37,8 @@ final routerProvider = Provider<GoRouter>((ref) {
 
       try {
         final profile = await ref.read(userProfileProvider.future);
-        if (profile == null) return completingProfile ? null : '/complete-profile';
+        if (profile == null)
+          return completingProfile ? null : '/complete-profile';
         if (loggingIn || completingProfile) return '/';
       } catch (_) {
         // lỗi mạng tạm thời — đừng khoá cứng người dùng
@@ -42,28 +47,55 @@ final routerProvider = Provider<GoRouter>((ref) {
     },
     routes: [
       GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
-      GoRoute(path: '/complete-profile', builder: (context, state) => const CompleteProfileScreen()),
+      GoRoute(
+        path: '/complete-profile',
+        builder: (context, state) => const CompleteProfileScreen(),
+      ),
       ShellRoute(
         builder: (context, state, child) => CustomerShell(child: child),
         routes: [
           GoRoute(path: '/', builder: (context, state) => const HomeScreen()),
           GoRoute(
             path: '/merchants/:id',
-            builder: (context, state) => MerchantDetailScreen(merchantId: state.pathParameters['id']!),
+            builder: (context, state) =>
+                MerchantDetailScreen(merchantId: state.pathParameters['id']!),
           ),
           GoRoute(
             path: '/products/:id',
-            builder: (context, state) => ProductDetailScreen(productId: state.pathParameters['id']!),
+            builder: (context, state) =>
+                ProductDetailScreen(productId: state.pathParameters['id']!),
           ),
-          GoRoute(path: '/cart', builder: (context, state) => const CartScreen()),
-          GoRoute(path: '/checkout', builder: (context, state) => const CheckoutScreen()),
-          GoRoute(path: '/orders', builder: (context, state) => const OrdersListScreen()),
+          GoRoute(
+            path: '/cart',
+            builder: (context, state) => const CartScreen(),
+          ),
+          GoRoute(
+            path: '/preorder',
+            builder: (context, state) => const PreorderScreen(),
+          ),
+          GoRoute(
+            path: '/checkout',
+            builder: (context, state) => CheckoutScreen(
+              preorderSchedule: state.extra as PreorderSchedule?,
+            ),
+          ),
+          GoRoute(
+            path: '/orders',
+            builder: (context, state) => const OrdersListScreen(),
+          ),
           GoRoute(
             path: '/orders/:id',
-            builder: (context, state) => OrderDetailScreen(orderId: state.pathParameters['id']!),
+            builder: (context, state) =>
+                OrderDetailScreen(orderId: state.pathParameters['id']!),
           ),
-          GoRoute(path: '/profile', builder: (context, state) => const ProfileScreen()),
-          GoRoute(path: '/categories', builder: (context, state) => const AllCategoriesScreen()),
+          GoRoute(
+            path: '/profile',
+            builder: (context, state) => const ProfileScreen(),
+          ),
+          GoRoute(
+            path: '/categories',
+            builder: (context, state) => const AllCategoriesScreen(),
+          ),
           GoRoute(
             path: '/categories/:id',
             builder: (context, state) => CategoryDetailScreen(

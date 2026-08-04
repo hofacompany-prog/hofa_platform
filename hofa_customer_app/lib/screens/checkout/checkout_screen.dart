@@ -3,13 +3,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/format.dart';
 import '../../models/address.dart';
+import '../../models/preorder_schedule.dart';
 import '../../providers/app_providers.dart';
 import '../../providers/auth_providers.dart';
 import '../../providers/cart_provider.dart';
 import '../address/address_picker_screen.dart';
 
 class CheckoutScreen extends ConsumerStatefulWidget {
-  const CheckoutScreen({super.key});
+  final PreorderSchedule? preorderSchedule;
+  const CheckoutScreen({super.key, this.preorderSchedule});
 
   @override
   ConsumerState<CheckoutScreen> createState() => _CheckoutScreenState();
@@ -25,6 +27,15 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   String? _voucherError;
   bool _voucherChecking = false;
   bool _placing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.preorderSchedule != null &&
+        !widget.preorderSchedule!.recurring) {
+      _scheduledFor = widget.preorderSchedule!.earliestOccurrence;
+    }
+  }
 
   @override
   void dispose() {
@@ -54,17 +65,34 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Tên người nhận')),
+                  TextField(
+                    controller: nameCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Tên người nhận',
+                    ),
+                  ),
                   const SizedBox(height: 12),
-                  TextField(controller: phoneCtrl, decoration: const InputDecoration(labelText: 'SĐT người nhận')),
+                  TextField(
+                    controller: phoneCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'SĐT người nhận',
+                    ),
+                  ),
                   const SizedBox(height: 12),
                   OutlinedButton.icon(
                     icon: const Icon(Icons.map_outlined),
-                    label: Text(pickedLat == null ? 'Chọn vị trí trên bản đồ' : 'Đã chọn vị trí trên bản đồ ✓'),
+                    label: Text(
+                      pickedLat == null
+                          ? 'Chọn vị trí trên bản đồ'
+                          : 'Đã chọn vị trí trên bản đồ ✓',
+                    ),
                     onPressed: () async {
-                      final picked = await Navigator.of(context).push<PickedAddress>(
-                        MaterialPageRoute(builder: (_) => const AddressPickerScreen()),
-                      );
+                      final picked = await Navigator.of(context)
+                          .push<PickedAddress>(
+                            MaterialPageRoute(
+                              builder: (_) => const AddressPickerScreen(),
+                            ),
+                          );
                       if (picked == null) return;
                       line1Ctrl.text = picked.line1;
                       wardCtrl.text = picked.ward ?? '';
@@ -77,27 +105,55 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     },
                   ),
                   const SizedBox(height: 12),
-                  TextField(controller: line1Ctrl, decoration: const InputDecoration(labelText: 'Số nhà, tên đường')),
+                  TextField(
+                    controller: line1Ctrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Số nhà, tên đường',
+                    ),
+                  ),
                   const SizedBox(height: 12),
-                  TextField(controller: wardCtrl, decoration: const InputDecoration(labelText: 'Phường/Xã')),
+                  TextField(
+                    controller: wardCtrl,
+                    decoration: const InputDecoration(labelText: 'Phường/Xã'),
+                  ),
                   const SizedBox(height: 12),
-                  TextField(controller: districtCtrl, decoration: const InputDecoration(labelText: 'Quận/Huyện')),
+                  TextField(
+                    controller: districtCtrl,
+                    decoration: const InputDecoration(labelText: 'Quận/Huyện'),
+                  ),
                   const SizedBox(height: 12),
-                  TextField(controller: provinceCtrl, decoration: const InputDecoration(labelText: 'Tỉnh/Thành phố')),
+                  TextField(
+                    controller: provinceCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Tỉnh/Thành phố',
+                    ),
+                  ),
                 ],
               ),
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Huỷ')),
-            FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Lưu')),
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Huỷ'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Lưu'),
+            ),
           ],
         ),
       ),
     );
     if (ok != true) return;
-    if (nameCtrl.text.trim().isEmpty || phoneCtrl.text.trim().isEmpty || line1Ctrl.text.trim().isEmpty || provinceCtrl.text.trim().isEmpty) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Thiếu thông tin bắt buộc')));
+    if (nameCtrl.text.trim().isEmpty ||
+        phoneCtrl.text.trim().isEmpty ||
+        line1Ctrl.text.trim().isEmpty ||
+        provinceCtrl.text.trim().isEmpty) {
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Thiếu thông tin bắt buộc')),
+        );
       return;
     }
     try {
@@ -106,7 +162,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         'recipient_phone': phoneCtrl.text.trim(),
         'line1': line1Ctrl.text.trim(),
         'ward': wardCtrl.text.trim().isEmpty ? null : wardCtrl.text.trim(),
-        'district': districtCtrl.text.trim().isEmpty ? null : districtCtrl.text.trim(),
+        'district': districtCtrl.text.trim().isEmpty
+            ? null
+            : districtCtrl.text.trim(),
         'province': provinceCtrl.text.trim(),
         if (pickedLat != null) 'latitude': pickedLat,
         if (pickedLng != null) 'longitude': pickedLng,
@@ -114,7 +172,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       ref.invalidate(addressesProvider);
       setState(() => _selectedAddressId = created.id);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
     }
   }
 
@@ -126,7 +187,13 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       _voucherError = null;
     });
     try {
-      final res = await ref.read(voucherRepoProvider).validate(code: code, merchantId: merchantId, orderAmount: orderAmount);
+      final res = await ref
+          .read(voucherRepoProvider)
+          .validate(
+            code: code,
+            merchantId: merchantId,
+            orderAmount: orderAmount,
+          );
       setState(() {
         _voucherDiscount = res.valid ? res.estimatedDiscount : 0;
         _voucherError = res.valid ? null : (res.reason ?? 'Mã không hợp lệ');
@@ -141,41 +208,130 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     }
   }
 
+  Map<String, dynamic> _orderBody(
+    CartState cart,
+    Address address,
+    DateTime? scheduledFor,
+  ) => {
+    'merchant_id': cart.merchantId,
+    'branch_id': cart.branchId,
+    'sales_model': cart.salesModel,
+    'items': cart.items
+        .map(
+          (e) => {
+            'variant_id': e.variantId,
+            'quantity': e.quantity,
+            if (e.note != null) 'note': e.note,
+          },
+        )
+        .toList(),
+    'ship_recipient_name': address.recipientName,
+    'ship_recipient_phone': address.recipientPhone,
+    'ship_line1': address.line1,
+    'ship_province': address.province,
+    'ship_ward': address.ward,
+    'ship_district': address.district,
+    'ship_latitude': address.latitude,
+    'ship_longitude': address.longitude,
+    'payment_method': _paymentMethod,
+    'delivery_fee': 0,
+    if (_voucherDiscount > 0) 'voucher_code': _voucherCtrl.text.trim(),
+    if (cart.salesModel == 'scheduled' && scheduledFor != null)
+      'scheduled_for': scheduledFor.toIso8601String(),
+    if (_noteCtrl.text.trim().isNotEmpty)
+      'customer_note': _noteCtrl.text.trim(),
+  };
+
   Future<void> _placeOrder(Address address) async {
     final cart = ref.read(cartProvider);
-    if (cart.isEmpty || cart.merchantId == null || cart.branchId == null) return;
+    if (cart.isEmpty || cart.merchantId == null || cart.branchId == null)
+      return;
+
+    final schedule = widget.preorderSchedule;
+    if (schedule != null && schedule.recurring) {
+      await _placeRecurringOrders(cart, address, schedule);
+      return;
+    }
 
     setState(() => _placing = true);
     try {
-      final order = await ref.read(orderRepoProvider).createOrder({
-        'merchant_id': cart.merchantId,
-        'branch_id': cart.branchId,
-        'sales_model': cart.salesModel,
-        'items': cart.items
-            .map((e) => {
-                  'variant_id': e.variantId,
-                  'quantity': e.quantity,
-                  if (e.note != null) 'note': e.note,
-                })
-            .toList(),
-        'ship_recipient_name': address.recipientName,
-        'ship_recipient_phone': address.recipientPhone,
-        'ship_line1': address.line1,
-        'ship_province': address.province,
-        'ship_ward': address.ward,
-        'ship_district': address.district,
-        'ship_latitude': address.latitude,
-        'ship_longitude': address.longitude,
-        'payment_method': _paymentMethod,
-        'delivery_fee': 0,
-        if (_voucherDiscount > 0) 'voucher_code': _voucherCtrl.text.trim(),
-        if (cart.salesModel == 'scheduled' && _scheduledFor != null) 'scheduled_for': _scheduledFor!.toIso8601String(),
-        if (_noteCtrl.text.trim().isNotEmpty) 'customer_note': _noteCtrl.text.trim(),
-      });
+      final order = await ref
+          .read(orderRepoProvider)
+          .createOrder(_orderBody(cart, address, _scheduledFor));
       await ref.read(cartProvider.notifier).clear();
       if (mounted) context.go('/orders/${order.id}');
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi đặt hàng: $e')));
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi đặt hàng: $e')));
+    } finally {
+      if (mounted) setState(() => _placing = false);
+    }
+  }
+
+  /// Chưa có khái niệm "đơn lặp định kỳ" ở backend — giao nhiều lần nghĩa là tạo sẵn
+  /// nhiều đơn độc lập, mỗi đơn ứng với 1 lần giao trong lịch đã chọn.
+  Future<void> _placeRecurringOrders(
+    CartState cart,
+    Address address,
+    PreorderSchedule schedule,
+  ) async {
+    final occurrences = schedule.occurrences;
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Tạo ${occurrences.length} đơn hàng?'),
+        content: SizedBox(
+          width: 320,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: occurrences
+                  .map((d) => Text('• ${formatDateTime(d)}'))
+                  .toList(),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Huỷ'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Xác nhận'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    setState(() => _placing = true);
+    var created = 0;
+    try {
+      for (final occurrence in occurrences) {
+        await ref
+            .read(orderRepoProvider)
+            .createOrder(_orderBody(cart, address, occurrence));
+        created++;
+      }
+      await ref.read(cartProvider.notifier).clear();
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Đã tạo $created đơn hàng')));
+        context.go('/orders');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Đã tạo $created/${occurrences.length} đơn, lỗi: $e'),
+          ),
+        );
+      }
     } finally {
       if (mounted) setState(() => _placing = false);
     }
@@ -189,7 +345,12 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
     if (cart.isEmpty) {
       return Scaffold(
-        appBar: AppBar(leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => context.pop())),
+        appBar: AppBar(
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () => context.pop(),
+          ),
+        ),
         body: const Center(child: Text('Giỏ hàng trống')),
       );
     }
@@ -198,7 +359,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => context.pop()),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => context.pop(),
+        ),
         title: const Text('Thanh toán'),
       ),
       body: ListView(
@@ -211,8 +375,12 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             error: (e, _) => Text('Lỗi: $e'),
             data: (addresses) {
               if (_selectedAddressId == null && addresses.isNotEmpty) {
-                final defaultAddr = addresses.where((a) => a.isDefault).toList();
-                _selectedAddressId = defaultAddr.isNotEmpty ? defaultAddr.first.id : addresses.first.id;
+                final defaultAddr = addresses
+                    .where((a) => a.isDefault)
+                    .toList();
+                _selectedAddressId = defaultAddr.isNotEmpty
+                    ? defaultAddr.first.id
+                    : addresses.first.id;
               }
               return Column(
                 children: [
@@ -221,18 +389,26 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     onChanged: (v) => setState(() => _selectedAddressId = v),
                     child: Column(
                       children: addresses
-                          .map((a) => RadioListTile<String>(
-                                contentPadding: EdgeInsets.zero,
-                                value: a.id,
-                                title: Text('${a.recipientName} · ${a.recipientPhone}'),
-                                subtitle: Text(a.fullLine),
-                              ))
+                          .map(
+                            (a) => RadioListTile<String>(
+                              contentPadding: EdgeInsets.zero,
+                              value: a.id,
+                              title: Text(
+                                '${a.recipientName} · ${a.recipientPhone}',
+                              ),
+                              subtitle: Text(a.fullLine),
+                            ),
+                          )
                           .toList(),
                     ),
                   ),
                   Align(
                     alignment: Alignment.centerLeft,
-                    child: TextButton.icon(onPressed: _addAddress, icon: const Icon(Icons.add), label: const Text('Thêm địa chỉ mới')),
+                    child: TextButton.icon(
+                      onPressed: _addAddress,
+                      icon: const Icon(Icons.add),
+                      label: const Text('Thêm địa chỉ mới'),
+                    ),
                   ),
                 ],
               );
@@ -246,30 +422,50 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               Expanded(
                 child: TextField(
                   controller: _voucherCtrl,
-                  decoration: const InputDecoration(hintText: 'Nhập mã voucher', border: OutlineInputBorder(), isDense: true),
+                  decoration: const InputDecoration(
+                    hintText: 'Nhập mã voucher',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
                 ),
               ),
               const SizedBox(width: 8),
               OutlinedButton(
-                onPressed: _voucherChecking ? null : () => _checkVoucher(cart.merchantId!, cart.subtotal),
+                onPressed: _voucherChecking
+                    ? null
+                    : () => _checkVoucher(cart.merchantId!, cart.subtotal),
                 child: _voucherChecking
-                    ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                    ? const SizedBox(
+                        height: 16,
+                        width: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
                     : const Text('Áp dụng'),
               ),
             ],
           ),
           if (_voucherError != null)
-            Padding(padding: const EdgeInsets.only(top: 6), child: Text(_voucherError!, style: TextStyle(color: theme.colorScheme.error))),
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                _voucherError!,
+                style: TextStyle(color: theme.colorScheme.error),
+              ),
+            ),
           if (_voucherDiscount > 0)
             Padding(
               padding: const EdgeInsets.only(top: 6),
-              child: Text('Giảm ${formatVnd(_voucherDiscount)}', style: TextStyle(color: theme.colorScheme.primary)),
+              child: Text(
+                'Giảm ${formatVnd(_voucherDiscount)}',
+                style: TextStyle(color: theme.colorScheme.primary),
+              ),
             ),
           const Divider(height: 32),
           Text('Phương thức thanh toán', style: theme.textTheme.titleSmall),
           RadioGroup<String>(
             groupValue: _paymentMethod,
-            onChanged: (v) => setState(() => _paymentMethod = v ?? _paymentMethod),
+            onChanged: (v) =>
+                setState(() => _paymentMethod = v ?? _paymentMethod),
             child: Column(
               children: const [
                 RadioListTile<String>(
@@ -287,44 +483,86 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           ),
           if (cart.salesModel == 'scheduled') ...[
             const Divider(height: 32),
-            Text('Ngày giao mong muốn', style: theme.textTheme.titleSmall),
+            Text('Lịch giao', style: theme.textTheme.titleSmall),
             const SizedBox(height: 8),
-            OutlinedButton.icon(
-              icon: const Icon(Icons.calendar_today_outlined),
-              label: Text(_scheduledFor == null ? 'Chọn ngày' : formatDate(_scheduledFor!)),
-              onPressed: () async {
-                final picked = await showDatePicker(
-                  context: context,
-                  initialDate: DateTime.now().add(const Duration(days: 2)),
-                  firstDate: DateTime.now(),
-                  lastDate: DateTime.now().add(const Duration(days: 90)),
-                );
-                if (picked != null) setState(() => _scheduledFor = picked);
-              },
-            ),
+            if (widget.preorderSchedule != null) ...[
+              Text(
+                widget.preorderSchedule!.recurring
+                    ? 'Giao lặp lại ${widget.preorderSchedule!.weekdays.length} ngày/tuần, trong ${widget.preorderSchedule!.weeks} tuần tới · ${widget.preorderSchedule!.time.format(context)}'
+                    : 'Giao 1 lần: ${formatDateTime(_scheduledFor!)}',
+              ),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: () => context.pop(),
+                  icon: const Icon(Icons.edit_outlined),
+                  label: const Text('Sửa lịch giao'),
+                ),
+              ),
+            ] else
+              OutlinedButton.icon(
+                icon: const Icon(Icons.calendar_today_outlined),
+                label: Text(
+                  _scheduledFor == null
+                      ? 'Chọn ngày'
+                      : formatDate(_scheduledFor!),
+                ),
+                onPressed: () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: DateTime.now().add(const Duration(days: 2)),
+                    firstDate: DateTime.now(),
+                    lastDate: DateTime.now().add(const Duration(days: 90)),
+                  );
+                  if (picked != null) setState(() => _scheduledFor = picked);
+                },
+              ),
           ],
           const Divider(height: 32),
           Text('Ghi chú cho cửa hàng', style: theme.textTheme.titleSmall),
           const SizedBox(height: 8),
           TextField(
             controller: _noteCtrl,
-            decoration: const InputDecoration(hintText: 'Không bắt buộc', border: OutlineInputBorder(), isDense: true),
+            decoration: const InputDecoration(
+              hintText: 'Không bắt buộc',
+              border: OutlineInputBorder(),
+              isDense: true,
+            ),
             maxLines: 2,
           ),
           const Divider(height: 32),
-          Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('Tạm tính'), Text(formatVnd(cart.subtotal))]),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [const Text('Tạm tính'), Text(formatVnd(cart.subtotal))],
+          ),
           if (_voucherDiscount > 0)
             Padding(
               padding: const EdgeInsets.only(top: 4),
-              child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text('Giảm giá'), Text('-${formatVnd(_voucherDiscount)}')]),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Giảm giá'),
+                  Text('-${formatVnd(_voucherDiscount)}'),
+                ],
+              ),
             ),
           Padding(
             padding: const EdgeInsets.only(top: 8),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Tổng cộng', style: TextStyle(fontWeight: FontWeight.bold)),
-                Text(formatVnd(total), style: TextStyle(fontWeight: FontWeight.bold, color: theme.colorScheme.primary, fontSize: 18)),
+                const Text(
+                  'Tổng cộng',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                Text(
+                  formatVnd(total),
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.primary,
+                    fontSize: 18,
+                  ),
+                ),
               ],
             ),
           ),
@@ -334,12 +572,18 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 ? null
                 : () {
                     final addresses = addressesAsync.valueOrNull ?? [];
-                    final address = addresses.where((a) => a.id == _selectedAddressId).toList();
+                    final address = addresses
+                        .where((a) => a.id == _selectedAddressId)
+                        .toList();
                     if (address.isEmpty) return;
                     _placeOrder(address.first);
                   },
             child: _placing
-                ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                ? const SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
                 : const Text('Đặt hàng'),
           ),
         ],
