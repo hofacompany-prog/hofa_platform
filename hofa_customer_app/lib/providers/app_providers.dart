@@ -9,6 +9,7 @@ import '../models/product.dart';
 import '../models/review.dart';
 import '../models/shipping_fee_settings.dart';
 import '../models/topping.dart';
+import '../models/voucher.dart';
 import '../models/wholesale_tier.dart';
 import '../repositories/merchant_repository.dart';
 import '../repositories/order_repository.dart';
@@ -24,6 +25,13 @@ final orderRepoProvider = Provider((ref) => OrderRepository());
 final voucherRepoProvider = Provider((ref) => VoucherRepository());
 final reviewRepoProvider = Provider((ref) => ReviewRepository());
 final shippingRepoProvider = Provider((ref) => ShippingRepository());
+
+/// Voucher công khai cho khách chọn ở màn thanh toán (xem voucher_picker_dialog.dart).
+final publicVouchersProvider = FutureProvider.autoDispose
+    .family<List<Voucher>, String>(
+      (ref, merchantId) =>
+          ref.watch(voucherRepoProvider).publicVouchers(merchantId: merchantId),
+    );
 
 // ---- Cửa hàng ----
 

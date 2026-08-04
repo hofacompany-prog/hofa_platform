@@ -6,10 +6,12 @@ import '../../core/geo.dart';
 import '../../models/address.dart';
 import '../../models/cart_item.dart';
 import '../../models/preorder_schedule.dart';
+import '../../models/voucher.dart';
 import '../../models/wholesale_tier.dart';
 import '../../providers/app_providers.dart';
 import '../../providers/auth_providers.dart';
 import '../../providers/cart_provider.dart';
+import '../../widgets/voucher_picker_dialog.dart';
 import '../address/address_picker_screen.dart';
 
 class CheckoutScreen extends ConsumerStatefulWidget {
@@ -266,6 +268,32 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     }
   }
 
+  /// Mở popup chọn voucher công khai/nhập mã riêng, rồi kiểm tra + áp dụng luôn mã vừa
+  /// chọn — dùng lại đúng _checkVoucher như lúc gõ tay, không tự tính giảm giá ở đây.
+  Future<void> _pickVoucher(
+    List<Voucher> publicVouchers,
+    String merchantId,
+    int orderAmount,
+    int deliveryFee,
+  ) async {
+    final code = await showVoucherPickerDialog(
+      context,
+      vouchers: publicVouchers,
+      orderAmount: orderAmount,
+    );
+    if (code == null || code.isEmpty) return;
+    _voucherCtrl.text = code;
+    await _checkVoucher(merchantId, orderAmount, deliveryFee);
+  }
+
+  void _removeVoucher() {
+    setState(() {
+      _voucherCtrl.clear();
+      _voucherDiscount = 0;
+      _voucherError = null;
+    });
+  }
+
   Map<String, dynamic> _orderBody(
     CartState cart,
     List<CartItem> items,
@@ -506,6 +534,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   Widget build(BuildContext context) {
     final cart = ref.watch(cartProvider);
     final addressesAsync = ref.watch(addressesProvider);
+    final publicVouchersAsync = cart.merchantId == null
+        ? null
+        : ref.watch(publicVouchersProvider(cart.merchantId!));
     final theme = Theme.of(context);
     final items = _relevantItems(cart);
 
@@ -619,51 +650,63 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           const Divider(height: 32),
           Text('Mã giảm giá', style: theme.textTheme.titleSmall),
           const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _voucherCtrl,
-                  decoration: const InputDecoration(
-                    hintText: 'Nhập mã voucher',
-                    border: OutlineInputBorder(),
-                    isDense: true,
+          if (_voucherDiscount > 0)
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primary.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.local_offer,
+                    color: theme.colorScheme.primary,
+                    size: 20,
                   ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              OutlinedButton(
-                onPressed: _voucherChecking
-                    ? null
-                    : () => _checkVoucher(
-                        cart.merchantId!,
-                        itemsSubtotal,
-                        shippingFee,
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Đã áp dụng mã "${_voucherCtrl.text.trim()}" — giảm '
+                      '${formatVnd(_voucherDiscount)}',
+                      style: TextStyle(
+                        color: theme.colorScheme.primary,
+                        fontWeight: FontWeight.w600,
                       ),
-                child: _voucherChecking
-                    ? const SizedBox(
-                        height: 16,
-                        width: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('Áp dụng'),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: _removeVoucher,
+                    child: const Text('Bỏ'),
+                  ),
+                ],
               ),
-            ],
-          ),
+            )
+          else
+            OutlinedButton.icon(
+              onPressed: (_voucherChecking || cart.merchantId == null)
+                  ? null
+                  : () => _pickVoucher(
+                      publicVouchersAsync?.valueOrNull ?? [],
+                      cart.merchantId!,
+                      itemsSubtotal,
+                      shippingFee,
+                    ),
+              icon: _voucherChecking
+                  ? const SizedBox(
+                      height: 16,
+                      width: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.local_offer_outlined),
+              label: const Text('Chọn hoặc nhập mã giảm giá'),
+            ),
           if (_voucherError != null)
             Padding(
               padding: const EdgeInsets.only(top: 6),
               child: Text(
                 _voucherError!,
                 style: TextStyle(color: theme.colorScheme.error),
-              ),
-            ),
-          if (_voucherDiscount > 0)
-            Padding(
-              padding: const EdgeInsets.only(top: 6),
-              child: Text(
-                'Giảm ${formatVnd(_voucherDiscount)}',
-                style: TextStyle(color: theme.colorScheme.primary),
               ),
             ),
           const Divider(height: 32),
