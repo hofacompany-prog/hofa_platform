@@ -21,9 +21,9 @@ const _weekdayLabels = [
 
 /// Giỏ "đặt trước" — cùng dùng chung cartProvider với giỏ hàng thường (giỏ chỉ chứa
 /// món của 1 cửa hàng tại 1 thời điểm), chỉ hiển thị khi giỏ đang ở sales_model
-/// 'scheduled' (bán sỉ/đặt trước). Mỗi món tự chọn ngày giao riêng trong tuần (dùng để
-/// tính đủ điều kiện bậc giá của chính món đó) — hình thức giao (1 lần/nhiều lần) +
-/// giờ giao là chung cho cả đơn vì vẫn chỉ giao 1 chuyến/lần.
+/// 'scheduled' (bán sỉ/đặt trước). Bộ chọn ngày trong tuần dùng CHUNG 1 chỗ — bấm vào
+/// món nào thì bộ chọn nhảy theo, hiển thị/sửa đúng ngày của món đó. Ngày tính từ
+/// ngày mai trở đi (không cho chọn hôm nay), có nút xem tuần kế tiếp.
 class PreorderScreen extends ConsumerStatefulWidget {
   const PreorderScreen({super.key});
 
@@ -32,19 +32,26 @@ class PreorderScreen extends ConsumerStatefulWidget {
 }
 
 class _PreorderScreenState extends ConsumerState<PreorderScreen> {
+  String? _activeLineId;
+  int _weekOffset = 0;
   String _mode = 'once';
   TimeOfDay _time = const TimeOfDay(hour: 8, minute: 0);
   int _weeks = 1;
 
-  /// Ngày dương lịch gần nhất khớp thứ [isoWeekday] (1=T2..7=CN), tính từ hôm nay —
-  /// chỉ để hiển thị trên chip chọn thứ, không phụ thuộc giờ giao đã chọn.
-  DateTime _nextDateFor(int isoWeekday) {
-    final now = DateTime.now();
-    var d = DateTime(now.year, now.month, now.day);
-    while (d.weekday != isoWeekday) {
-      d = d.add(const Duration(days: 1));
-    }
-    return d;
+  /// Thứ 2 của tuần chứa "ngày mai" — mốc gốc để tính ngày cho mọi tuần xem tiếp theo.
+  DateTime get _baseMonday {
+    final tomorrow = DateTime.now().add(const Duration(days: 1));
+    final d = DateTime(tomorrow.year, tomorrow.month, tomorrow.day);
+    return d.subtract(Duration(days: d.weekday - 1));
+  }
+
+  DateTime _dateFor(int isoWeekday, int weekOffset) =>
+      _baseMonday.add(Duration(days: 7 * weekOffset + (isoWeekday - 1)));
+
+  bool _isSelectable(DateTime date) {
+    final tomorrow = DateTime.now().add(const Duration(days: 1));
+    final tomorrowDate = DateTime(tomorrow.year, tomorrow.month, tomorrow.day);
+    return !date.isBefore(tomorrowDate);
   }
 
   String _shortDate(DateTime d) =>
@@ -120,6 +127,13 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen> {
     final theme = Theme.of(context);
     final isPreorderCart = !cart.isEmpty && cart.salesModel == 'scheduled';
 
+    CartItem? activeItem;
+    if (isPreorderCart) {
+      final matches = cart.items.where((i) => i.lineId == _activeLineId);
+      activeItem = matches.isNotEmpty ? matches.first : cart.items.first;
+      _activeLineId = activeItem.lineId;
+    }
+
     return Scaffold(
       appBar: AppBar(title: const Text('Đặt trước')),
       body: !isPreorderCart
@@ -154,169 +168,219 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen> {
                                 .valueOrNull ??
                             [];
                         final hasToppings = toppingGroups.isNotEmpty;
-                        return Card(
-                          elevation: 0,
-                          color: theme.colorScheme.surfaceContainerLow,
-                          margin: const EdgeInsets.only(bottom: 12),
-                          child: Padding(
-                            padding: const EdgeInsets.all(10),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    NetworkImageBox(
-                                      url: item.productImage,
-                                      width: 52,
-                                      height: 52,
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            item.productName,
-                                            style: const TextStyle(
-                                              fontWeight: FontWeight.w500,
-                                            ),
-                                          ),
-                                          Text(
-                                            item.variantName,
-                                            style: theme.textTheme.bodySmall,
-                                          ),
-                                          if (item.toppings.isNotEmpty)
+                        final isActive = item.lineId == activeItem?.lineId;
+                        return InkWell(
+                          onTap: () =>
+                              setState(() => _activeLineId = item.lineId),
+                          child: Card(
+                            elevation: 0,
+                            color: isActive
+                                ? theme.colorScheme.primary.withValues(
+                                    alpha: 0.08,
+                                  )
+                                : theme.colorScheme.surfaceContainerLow,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              side: isActive
+                                  ? BorderSide(color: theme.colorScheme.primary)
+                                  : BorderSide.none,
+                            ),
+                            margin: const EdgeInsets.only(bottom: 12),
+                            child: Padding(
+                              padding: const EdgeInsets.all(10),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      NetworkImageBox(
+                                        url: item.productImage,
+                                        width: 52,
+                                        height: 52,
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
                                             Text(
-                                              item.toppings
-                                                  .map((t) => t.name)
-                                                  .join(', '),
-                                              style: theme.textTheme.bodySmall
-                                                  ?.copyWith(
-                                                    color: theme
-                                                        .colorScheme
-                                                        .secondary,
-                                                  ),
+                                              item.productName,
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.w500,
+                                              ),
                                             ),
-                                          Text(
-                                            formatVnd(
-                                              item.unitPrice +
-                                                  item.toppingsTotal,
+                                            Text(
+                                              item.variantName,
+                                              style: theme.textTheme.bodySmall,
                                             ),
-                                            style: TextStyle(
-                                              color: theme.colorScheme.primary,
+                                            if (item.toppings.isNotEmpty)
+                                              Text(
+                                                item.toppings
+                                                    .map((t) => t.name)
+                                                    .join(', '),
+                                                style: theme.textTheme.bodySmall
+                                                    ?.copyWith(
+                                                      color: theme
+                                                          .colorScheme
+                                                          .secondary,
+                                                    ),
+                                              ),
+                                            Text(
+                                              formatVnd(
+                                                item.unitPrice +
+                                                    item.toppingsTotal,
+                                              ),
+                                              style: TextStyle(
+                                                color:
+                                                    theme.colorScheme.primary,
+                                              ),
                                             ),
-                                          ),
-                                        ],
+                                          ],
+                                        ),
                                       ),
-                                    ),
-                                    IconButton(
-                                      visualDensity: VisualDensity.compact,
-                                      icon: const Icon(
-                                        Icons.delete_outline,
-                                        size: 20,
-                                      ),
-                                      onPressed: () => ref
-                                          .read(cartProvider.notifier)
-                                          .removeItem(item.lineId),
-                                    ),
-                                  ],
-                                ),
-                                if (hasToppings)
-                                  Align(
-                                    alignment: Alignment.centerLeft,
-                                    child: TextButton.icon(
-                                      style: TextButton.styleFrom(
-                                        padding: EdgeInsets.zero,
+                                      IconButton(
                                         visualDensity: VisualDensity.compact,
+                                        icon: const Icon(
+                                          Icons.delete_outline,
+                                          size: 20,
+                                        ),
+                                        onPressed: () => ref
+                                            .read(cartProvider.notifier)
+                                            .removeItem(item.lineId),
                                       ),
-                                      onPressed: () => _editToppings(item),
-                                      icon: const Icon(Icons.tune, size: 16),
-                                      label: Text(
-                                        item.toppings.isEmpty
-                                            ? 'Chọn topping'
-                                            : 'Sửa topping',
+                                    ],
+                                  ),
+                                  if (hasToppings)
+                                    Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: TextButton.icon(
+                                        style: TextButton.styleFrom(
+                                          padding: EdgeInsets.zero,
+                                          visualDensity: VisualDensity.compact,
+                                        ),
+                                        onPressed: () => _editToppings(item),
+                                        icon: const Icon(Icons.tune, size: 16),
+                                        label: Text(
+                                          item.toppings.isEmpty
+                                              ? 'Chọn topping'
+                                              : 'Sửa topping',
+                                        ),
                                       ),
+                                    ),
+                                  const Divider(height: 20),
+                                  Row(
+                                    children: [
+                                      const Text('Số lượng'),
+                                      const Spacer(),
+                                      IconButton(
+                                        visualDensity: VisualDensity.compact,
+                                        icon: const Icon(
+                                          Icons.remove_circle_outline,
+                                          size: 20,
+                                        ),
+                                        onPressed: () => ref
+                                            .read(cartProvider.notifier)
+                                            .updateQuantity(
+                                              item.lineId,
+                                              item.quantity - 1,
+                                            ),
+                                      ),
+                                      Text('${item.quantity}'),
+                                      IconButton(
+                                        visualDensity: VisualDensity.compact,
+                                        icon: const Icon(
+                                          Icons.add_circle_outline,
+                                          size: 20,
+                                        ),
+                                        onPressed: () => ref
+                                            .read(cartProvider.notifier)
+                                            .updateQuantity(
+                                              item.lineId,
+                                              item.quantity + 1,
+                                            ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    item.weekdays.isEmpty
+                                        ? 'Chưa chọn ngày giao'
+                                        : 'Ngày giao: ${item.weekdays.map((iso) => _weekdayLabels.firstWhere((d) => d.iso == iso).label).join(', ')}',
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color: item.weekdays.isEmpty
+                                          ? theme.colorScheme.error
+                                          : theme.colorScheme.primary,
                                     ),
                                   ),
-                                const Divider(height: 20),
-                                Row(
-                                  children: [
-                                    const Text('Số lượng'),
-                                    const Spacer(),
-                                    IconButton(
-                                      visualDensity: VisualDensity.compact,
-                                      icon: const Icon(
-                                        Icons.remove_circle_outline,
-                                        size: 20,
-                                      ),
-                                      onPressed: () => ref
-                                          .read(cartProvider.notifier)
-                                          .updateQuantity(
-                                            item.lineId,
-                                            item.quantity - 1,
-                                          ),
-                                    ),
-                                    Text('${item.quantity}'),
-                                    IconButton(
-                                      visualDensity: VisualDensity.compact,
-                                      icon: const Icon(
-                                        Icons.add_circle_outline,
-                                        size: 20,
-                                      ),
-                                      onPressed: () => ref
-                                          .read(cartProvider.notifier)
-                                          .updateQuantity(
-                                            item.lineId,
-                                            item.quantity + 1,
-                                          ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  'Ngày giao trong tuần',
-                                  style: theme.textTheme.bodySmall,
-                                ),
-                                const SizedBox(height: 6),
-                                Wrap(
-                                  spacing: 6,
-                                  runSpacing: 6,
-                                  children: _weekdayLabels
-                                      .map(
-                                        (d) => FilterChip(
-                                          label: Column(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Text(
-                                                _shortDate(_nextDateFor(d.iso)),
-                                                style: const TextStyle(
-                                                  fontSize: 10,
-                                                ),
-                                              ),
-                                              Text(
-                                                d.label,
-                                                style: const TextStyle(
-                                                  fontWeight: FontWeight.w600,
-                                                ),
-                                              ),
-                                            ],
-                                          ),
-                                          selected: item.weekdays.contains(
-                                            d.iso,
-                                          ),
-                                          onSelected: (_) =>
-                                              _toggleDay(item, d.iso),
-                                        ),
-                                      )
-                                      .toList(),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                           ),
                         );
                       }),
+                      const Divider(height: 32),
+                      Text(
+                        'Ngày giao trong tuần cho "${activeItem?.productName ?? ''}"',
+                        style: theme.textTheme.titleSmall,
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.chevron_left),
+                            onPressed: _weekOffset > 0
+                                ? () => setState(() => _weekOffset--)
+                                : null,
+                          ),
+                          Expanded(
+                            child: Center(
+                              child: Text(
+                                '${_shortDate(_dateFor(1, _weekOffset))} - ${_shortDate(_dateFor(7, _weekOffset))}',
+                                style: theme.textTheme.bodyMedium,
+                              ),
+                            ),
+                          ),
+                          TextButton.icon(
+                            onPressed: () => setState(() => _weekOffset++),
+                            icon: const Icon(Icons.chevron_right),
+                            label: const Text('Tuần sau'),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: _weekdayLabels.map((d) {
+                          final date = _dateFor(d.iso, _weekOffset);
+                          final selectable = _isSelectable(date);
+                          return FilterChip(
+                            label: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  _shortDate(date),
+                                  style: const TextStyle(fontSize: 10),
+                                ),
+                                Text(
+                                  d.label,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            selected:
+                                activeItem?.weekdays.contains(d.iso) ?? false,
+                            onSelected: (!selectable || activeItem == null)
+                                ? null
+                                : (_) => _toggleDay(activeItem!, d.iso),
+                          );
+                        }).toList(),
+                      ),
                       const Divider(height: 32),
                       Text('Hình thức giao', style: theme.textTheme.titleSmall),
                       const SizedBox(height: 8),
