@@ -556,13 +556,56 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen> {
               'Chưa có món nào giao ngày này',
               style: theme.textTheme.bodySmall,
             )
-          else
+          else ...[
             ...itemsForViewDay.map(
               (i) => Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: Text('• ${i.productName}'),
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            i.productName,
+                            style: const TextStyle(fontWeight: FontWeight.w500),
+                          ),
+                          Text(
+                            '${formatVnd(i.unitPrice + i.toppingsTotal)} x ${i.quantity}',
+                            style: theme.textTheme.bodySmall,
+                          ),
+                        ],
+                      ),
+                    ),
+                    Text(
+                      formatVnd(i.lineTotal),
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                ),
               ),
             ),
+            const Divider(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Tổng cộng ngày ${_weekdayLabelOf(viewDay)}',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+                Text(
+                  formatVnd(
+                    itemsForViewDay.fold<int>(0, (sum, i) => sum + i.lineTotal),
+                  ),
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: theme.colorScheme.primary,
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
       ],
     );
