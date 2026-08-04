@@ -29,6 +29,12 @@ ALTER TABLE wholesale_tiers RENAME COLUMN lead_time_days TO min_days_per_week;
 ALTER TABLE wholesale_tiers ADD COLUMN unit_price_days INTEGER;
 ALTER TABLE wholesale_tiers ADD COLUMN unit_price_both INTEGER;
 
+-- Bậc "đặt trước" tạo từ trước khi có 2 giá mới — tạm lấy unit_price hiện có làm giá mặc
+-- định cho cả 2 điều kiện mới, cửa hàng vào sửa lại giá thật sau (không thể tự suy ra).
+UPDATE wholesale_tiers
+   SET unit_price_days = unit_price, unit_price_both = unit_price
+ WHERE min_days_per_week > 0 AND (unit_price_days IS NULL OR unit_price_both IS NULL);
+
 ALTER TABLE wholesale_tiers ADD CONSTRAINT tiers_price_days_valid CHECK (unit_price_days IS NULL OR unit_price_days >= 0);
 ALTER TABLE wholesale_tiers ADD CONSTRAINT tiers_price_both_valid CHECK (unit_price_both IS NULL OR unit_price_both >= 0);
 ALTER TABLE wholesale_tiers ADD CONSTRAINT tiers_preorder_prices_required
