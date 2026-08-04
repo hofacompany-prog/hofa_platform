@@ -149,8 +149,14 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
       if (dayItems.isEmpty) continue;
       final dayQty = dayItems.fold<int>(0, (sum, i) => sum + i.quantity);
       for (final i in dayItems) {
+        // Đặt trước chỉ xét bậc đặt trước (minDaysPerWeek > 0) — biến thể có thể có cả
+        // bậc giá sỉ, không được lẫn giá của tab kia.
         final tiers =
-            ref.watch(wholesaleTiersProvider(i.variantId)).valueOrNull ??
+            ref
+                .watch(wholesaleTiersProvider(i.variantId))
+                .valueOrNull
+                ?.where((t) => t.minDaysPerWeek > 0)
+                .toList() ??
             const <WholesaleTier>[];
         final price = tiers.isEmpty
             ? i.unitPrice
@@ -458,9 +464,15 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
         ref.watch(toppingGroupsProvider(item.productId)).valueOrNull ?? [];
     final hasToppings = toppingGroups.isNotEmpty;
     final sortedSlots = [...item.deliverySlots]..sort(DeliverySlot.compare);
-    // Giá sỉ tính lại đơn giá theo bậc giá cửa hàng đã cài mỗi khi đổi số lượng.
+    // Giá sỉ tính lại đơn giá theo bậc giá cửa hàng đã cài mỗi khi đổi số lượng — chỉ xét
+    // bậc giá sỉ (minDaysPerWeek = 0), biến thể có thể có cả bậc đặt trước, không được
+    // lẫn giá của tab kia vào đây.
     final wholesaleTiers = item.orderKind == 'wholesale'
-        ? ref.watch(wholesaleTiersProvider(item.variantId)).valueOrNull ??
+        ? ref
+                  .watch(wholesaleTiersProvider(item.variantId))
+                  .valueOrNull
+                  ?.where((t) => t.minDaysPerWeek == 0)
+                  .toList() ??
               const <WholesaleTier>[]
         : const <WholesaleTier>[];
     void changeQuantity(int quantity) {
@@ -729,10 +741,14 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
                 (sum, i) => sum + i.quantity,
               );
               int priceFor(CartItem i) {
+                // Chỉ xét bậc đặt trước (minDaysPerWeek > 0) — biến thể có thể có cả bậc
+                // giá sỉ, không được lẫn giá của tab kia.
                 final tiers =
                     ref
                         .watch(wholesaleTiersProvider(i.variantId))
-                        .valueOrNull ??
+                        .valueOrNull
+                        ?.where((t) => t.minDaysPerWeek > 0)
+                        .toList() ??
                     const <WholesaleTier>[];
                 return tiers.isEmpty
                     ? i.unitPrice

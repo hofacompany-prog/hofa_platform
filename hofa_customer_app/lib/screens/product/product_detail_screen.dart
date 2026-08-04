@@ -223,7 +223,14 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
               ? ref.watch(wholesaleTiersProvider(variant.id))
               : null;
           final tiers = tiersAsync?.valueOrNull ?? [];
-          final unitPrice = variant != null ? _unitPriceFor(variant, tiers) : 0;
+          // Giá xem trước ở đây chưa gắn với tab Giá sỉ/Đặt trước nào (khách chưa chọn) —
+          // chỉ ước tính theo bậc giá sỉ (minDaysPerWeek = 0), không lẫn bậc đặt trước.
+          final wholesaleOnlyTiers = tiers
+              .where((t) => t.minDaysPerWeek == 0)
+              .toList();
+          final unitPrice = variant != null
+              ? _unitPriceFor(variant, wholesaleOnlyTiers)
+              : 0;
           final toppingGroups =
               ref.watch(toppingGroupsProvider(product.id)).valueOrNull ?? [];
           final toppingsTotal = _selectedToppings.fold(

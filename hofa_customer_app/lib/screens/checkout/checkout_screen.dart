@@ -241,6 +241,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           (e) => {
             'variant_id': e.variantId,
             'quantity': e.quantity,
+            // orderKind cho backend biết chỉ xét đúng loại bậc giá (giá sỉ/đặt trước) —
+            // 1 biến thể có thể có cả 2 loại, không được lẫn giá của tab kia.
+            if (e.orderKind != null) 'order_kind': e.orderKind,
             // Số ngày/tuần khách đặt RIÊNG món này — backend dùng để so bậc "đặt trước"
             // theo điều kiện số ngày (chỉ có ý nghĩa với món ở tab Đặt trước).
             if (e.deliverySlots.isNotEmpty)
@@ -333,8 +336,14 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       final dayItems = entry.value;
       final orderQty = dayItems.fold<int>(0, (sum, i) => sum + i.quantity);
       for (final i in dayItems) {
+        // Đơn "đặt trước" chỉ được xét bậc đặt trước (minDaysPerWeek > 0) — biến thể có
+        // thể có cả bậc giá sỉ, không được lẫn giá của loại kia vào đây.
         final tiers =
-            ref.watch(wholesaleTiersProvider(i.variantId)).valueOrNull ??
+            ref
+                .watch(wholesaleTiersProvider(i.variantId))
+                .valueOrNull
+                ?.where((t) => t.minDaysPerWeek > 0)
+                .toList() ??
             const <WholesaleTier>[];
         final price = tiers.isEmpty
             ? i.unitPrice

@@ -73,17 +73,21 @@ COMMENT ON FUNCTION release_inventory IS 'Nhả chỗ đã giữ khi đơn bị 
 
 -- Giá thật của 1 biến thể khi đặt hàng: ưu tiên bậc giá (wholesale_tiers) khớp điều kiện,
 -- nếu không có bậc nào khớp thì dùng lại giá bán gốc (p_base_price = product_variants.price).
--- Bậc "giá sỉ" (min_days_per_week = 0) chỉ có 1 điều kiện số lượng, so theo p_quantity —
--- số lượng của RIÊNG món này, dùng đúng 1 giá (unit_price).
--- Bậc "đặt trước" (min_days_per_week > 0) có 2 điều kiện ĐỘC LẬP: (1) số lượng — so theo
--- p_order_quantity, TỔNG số lượng của CẢ lần giao (gộp mọi món, không phân biệt sản phẩm
--- nào); (2) số ngày/tuần — so p_days_count (số ngày/tuần khách đặt RIÊNG món này) với
--- min_days_per_week. Đạt điều kiện nào lấy giá tương ứng: chỉ số lượng -> unit_price, chỉ
--- số ngày -> unit_price_days, cả 2 -> unit_price_both (thường rẻ nhất).
+-- p_is_preorder chọn đúng LOẠI bậc được xét — 1 biến thể có thể có cả 2 loại cùng lúc
+-- (xem migration 14) nên phải cách ly hẳn, không để đơn "giá sỉ" vô tình khớp trúng bậc
+-- "đặt trước" hay ngược lại:
+--   false -> chỉ xét bậc "giá sỉ" (min_days_per_week = 0): 1 điều kiện số lượng, so theo
+--     p_quantity (số lượng RIÊNG món này), dùng đúng 1 giá (unit_price).
+--   true  -> chỉ xét bậc "đặt trước" (min_days_per_week > 0): 2 điều kiện ĐỘC LẬP —
+--     (1) số lượng, so theo p_order_quantity (TỔNG số lượng CẢ lần giao, gộp mọi món);
+--     (2) số ngày/tuần, so p_days_count (số ngày/tuần khách đặt RIÊNG món này) với
+--     min_days_per_week. Đạt điều kiện nào lấy giá tương ứng: chỉ số lượng -> unit_price,
+--     chỉ số ngày -> unit_price_days, cả 2 -> unit_price_both (thường rẻ nhất).
 -- Nhiều bậc cùng khớp thì ưu tiên bậc có min_quantity cao nhất, rồi tới min_days_per_week
 -- cao nhất (khớp càng nhiều điều kiện càng ưu tiên).
 CREATE OR REPLACE FUNCTION resolve_variant_price(
-  p_variant_id UUID, p_quantity INTEGER, p_order_quantity INTEGER, p_days_count INTEGER, p_base_price INTEGER
+  p_variant_id UUID, p_quantity INTEGER, p_order_quantity INTEGER, p_days_count INTEGER,
+  p_is_preorder BOOLEAN, p_base_price INTEGER
 ) RETURNS INTEGER AS $$
 DECLARE
   v_price INTEGER;
@@ -104,6 +108,7 @@ BEGIN
       (t.min_days_per_week > 0 AND p_days_count >= t.min_days_per_week) AS days_met
     FROM wholesale_tiers t
     WHERE t.variant_id = p_variant_id
+      AND (t.min_days_per_week > 0) = p_is_preorder
   ) r
   WHERE r.qty_met OR r.days_met
   ORDER BY r.min_quantity DESC, r.min_days_per_week DESC
@@ -113,7 +118,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 COMMENT ON FUNCTION resolve_variant_price IS
-  'Chốt giá thật theo bậc giá: bậc giá sỉ so theo số lượng riêng món; bậc đặt trước so theo tổng số lượng cả lần giao VÀ số ngày/tuần riêng món, đạt điều kiện nào lấy giá tương ứng — không có bậc nào khớp thì trả về giá bán gốc';
+  'Chốt giá thật theo bậc giá — p_is_preorder=false chỉ xét bậc giá sỉ (so số lượng riêng món), true chỉ xét bậc đặt trước (so tổng số lượng cả lần giao VÀ số ngày/tuần riêng món) — không có bậc nào khớp thì trả về giá bán gốc';
 
 -- ============================================================================
 -- PHẦN 1: TẠO ĐƠN HÀNG (SDD 7.5)
@@ -217,7 +222,9 @@ BEGIN
 
     v_unit_price := resolve_variant_price(
       v_variant.id, (v_item->>'quantity')::INTEGER, v_order_quantity_total,
-      COALESCE((v_item->>'days_count')::INTEGER, 0), v_variant.price
+      COALESCE((v_item->>'days_count')::INTEGER, 0),
+      COALESCE(v_item->>'order_kind', '') = 'preorder',
+      v_variant.price
     ) + v_topping_sum;
     v_line_total := v_unit_price * (v_item->>'quantity')::INTEGER;
     v_subtotal   := v_subtotal + v_line_total;
@@ -324,7 +331,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 COMMENT ON FUNCTION create_order IS
-  'Tạo đơn: chốt giá qua resolve_variant_price (bậc giá sỉ theo số lượng riêng món; bậc đặt trước theo tổng số lượng cả đơn + số ngày/tuần riêng món (p_items[].days_count), không khớp thì giá gốc), giữ chỗ tồn kho, áp voucher — tất cả trong 1 transaction';
+  'Tạo đơn: chốt giá qua resolve_variant_price (bậc giá sỉ theo số lượng riêng món; bậc đặt trước theo tổng số lượng cả đơn + số ngày/tuần riêng món, chỉ xét đúng loại bậc theo order_kind của từng món; không khớp thì giá gốc), giữ chỗ tồn kho, áp voucher — tất cả trong 1 transaction';
 
 -- ============================================================================
 -- PHẦN 2: ĐỔI TRẠNG THÁI ĐƠN HÀNG (state machine)
