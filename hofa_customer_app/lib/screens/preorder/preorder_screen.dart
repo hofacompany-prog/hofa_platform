@@ -181,9 +181,30 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
   /// (giống hệt giá xem trước ở từng thẻ sản phẩm), không phải giá gốc lưu tạm lúc thêm
   /// vào giỏ — tránh lệch với giá đang hiển thị trên từng món.
   int _flatTotal(List<CartItem> items) => items.fold(0, (sum, i) {
-    final price = _bestPreorderPrice(i, items) ?? i.unitPrice;
+    final price =
+        _bestPreorderPrice(i, items) ??
+        _bestWholesalePrice(i, items) ??
+        i.unitPrice;
     return sum + (price + i.toppingsTotal) * i.quantity;
   });
+
+  /// Giá sỉ: giá bậc tốt nhất đạt được, xét CẢ 2 điều kiện của bậc giá sỉ — số lượng
+  /// riêng món này VÀ (nếu bậc có cấu hình min_order_quantity) tổng số lượng CẢ đơn giá
+  /// sỉ (gộp mọi món trong [allItems]) — đúng như resolve_variant_price() phía backend.
+  /// Trả về null nếu món này không thuộc tab Giá sỉ hoặc biến thể không có bậc giá sỉ nào.
+  int? _bestWholesalePrice(CartItem item, List<CartItem> allItems) {
+    if (item.orderKind != 'wholesale') return null;
+    final tiers =
+        ref
+            .watch(wholesaleTiersProvider(item.variantId))
+            .valueOrNull
+            ?.where((t) => t.minDaysPerWeek == 0)
+            .toList() ??
+        const <WholesaleTier>[];
+    if (tiers.isEmpty) return null;
+    final orderQty = allItems.fold<int>(0, (sum, i) => sum + i.quantity);
+    return _matchedTierPrice(item.quantity, orderQty, 0, item.basePrice, tiers);
+  }
 
   /// Đặt trước: giá bậc tốt nhất có thể đạt được trong số các ngày món này đã chọn (ngày
   /// nào có tổng số phần cả nhóm cao nhất) — chỉ xét bậc đặt trước (minDaysPerWeek > 0),
@@ -231,8 +252,16 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
   ) {
     bool qtyMet(WholesaleTier t) {
       final ref = t.minDaysPerWeek == 0 ? ownQty : orderQty;
-      return ref >= t.minQuantity &&
+      final ownMet =
+          ref >= t.minQuantity &&
           (t.maxQuantity == null || ref <= t.maxQuantity!);
+      // Bậc giá sỉ có thêm điều kiện THAY THẾ theo tổng số lượng cả đơn — đạt 1 trong 2
+      // là được giá bậc này, đúng như resolve_variant_price() phía backend.
+      final orderQtyMet =
+          t.minDaysPerWeek == 0 &&
+          t.minOrderQuantity != null &&
+          orderQty >= t.minOrderQuantity!;
+      return ownMet || orderQtyMet;
     }
 
     bool daysMet(WholesaleTier t) =>
@@ -542,6 +571,13 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
         );
         if (confirm != true) return;
       }
+      // Tổng số lượng cả đơn giá sỉ SAU khi đổi số lượng món này — dùng cho điều kiện
+      // thay thế min_order_quantity (xem _matchedTierPrice), không phải chỉ số lượng
+      // riêng món này.
+      final orderQtyAfterChange = allItems.fold<int>(
+        0,
+        (sum, i) => sum + (i.lineId == item.lineId ? quantity : i.quantity),
+      );
       ref
           .read(cartProvider.notifier)
           .updateQuantity(
@@ -553,7 +589,7 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
                 ? null
                 : _matchedTierPrice(
                     quantity,
-                    quantity,
+                    orderQtyAfterChange,
                     0,
                     item.basePrice,
                     wholesaleTiers,
@@ -562,10 +598,11 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
     }
 
     final preorderPrice = _bestPreorderPrice(item, allItems);
+    final wholesalePrice = _bestWholesalePrice(item, allItems);
     // So với giá gốc (basePrice), không phải unitPrice — unitPrice bên Giá sỉ đã bị ghi
     // đè thành giá theo bậc mỗi khi đổi số lượng nên không còn phản ánh giá "mặc định".
-    // Không đạt bậc nào thì preorderPrice tự trả về basePrice (quay lại giá mặc định).
-    final displayPrice = preorderPrice ?? item.unitPrice;
+    // Không đạt bậc nào thì preorderPrice/wholesalePrice tự trả về basePrice.
+    final displayPrice = preorderPrice ?? wholesalePrice ?? item.unitPrice;
     final discounted = displayPrice != item.basePrice;
 
     return Card(
@@ -1042,7 +1079,12 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                   children: items
                       .map(
-                        (item) => _itemCard(context, item, showSchedule: false),
+                        (item) => _itemCard(
+                          context,
+                          item,
+                          showSchedule: false,
+                          allItems: items,
+                        ),
                       )
                       .toList(),
                 ),

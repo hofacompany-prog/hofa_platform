@@ -76,8 +76,10 @@ COMMENT ON FUNCTION release_inventory IS 'Nhả chỗ đã giữ khi đơn bị 
 -- p_is_preorder chọn đúng LOẠI bậc được xét — 1 biến thể có thể có cả 2 loại cùng lúc
 -- (xem migration 14) nên phải cách ly hẳn, không để đơn "giá sỉ" vô tình khớp trúng bậc
 -- "đặt trước" hay ngược lại:
---   false -> chỉ xét bậc "giá sỉ" (min_days_per_week = 0): 1 điều kiện số lượng, so theo
---     p_quantity (số lượng RIÊNG món này), dùng đúng 1 giá (unit_price).
+--   false -> chỉ xét bậc "giá sỉ" (min_days_per_week = 0): số lượng RIÊNG món này
+--     (p_quantity) >= min_quantity, HOẶC (nếu bậc có cấu hình min_order_quantity) tổng
+--     số lượng CẢ đơn (p_order_quantity, gộp mọi món) >= min_order_quantity — đạt 1
+--     trong 2 là được giá bậc này, dùng đúng 1 giá (unit_price).
 --   true  -> chỉ xét bậc "đặt trước" (min_days_per_week > 0): 2 điều kiện ĐỘC LẬP —
 --     (1) số lượng, so theo p_order_quantity (TỔNG số lượng CẢ lần giao, gộp mọi món);
 --     (2) số ngày/tuần, so p_days_count (số ngày/tuần khách đặt RIÊNG món này) với
@@ -101,9 +103,14 @@ BEGIN
     SELECT
       t.unit_price, t.unit_price_days, t.unit_price_both,
       t.min_quantity, t.min_days_per_week,
-      (CASE WHEN t.min_days_per_week = 0 THEN p_quantity ELSE p_order_quantity END) >= t.min_quantity
-        AND (t.max_quantity IS NULL
-             OR (CASE WHEN t.min_days_per_week = 0 THEN p_quantity ELSE p_order_quantity END) <= t.max_quantity)
+      (
+        (CASE WHEN t.min_days_per_week = 0 THEN p_quantity ELSE p_order_quantity END) >= t.min_quantity
+          AND (t.max_quantity IS NULL
+               OR (CASE WHEN t.min_days_per_week = 0 THEN p_quantity ELSE p_order_quantity END) <= t.max_quantity)
+      )
+      -- Bậc giá sỉ có thêm điều kiện THAY THẾ theo tổng số lượng cả đơn (xem comment cột
+      -- min_order_quantity) — đạt 1 trong 2 là được giá bậc này.
+      OR (t.min_days_per_week = 0 AND t.min_order_quantity IS NOT NULL AND p_order_quantity >= t.min_order_quantity)
         AS qty_met,
       (t.min_days_per_week > 0 AND p_days_count >= t.min_days_per_week) AS days_met
     FROM wholesale_tiers t
@@ -118,7 +125,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 COMMENT ON FUNCTION resolve_variant_price IS
-  'Chốt giá thật theo bậc giá — p_is_preorder=false chỉ xét bậc giá sỉ (so số lượng riêng món), true chỉ xét bậc đặt trước (so tổng số lượng cả lần giao VÀ số ngày/tuần riêng món) — không có bậc nào khớp thì trả về giá bán gốc';
+  'Chốt giá thật theo bậc giá — p_is_preorder=false chỉ xét bậc giá sỉ (số lượng riêng món HOẶC tổng số lượng cả đơn nếu bậc có cấu hình min_order_quantity), true chỉ xét bậc đặt trước (so tổng số lượng cả lần giao VÀ số ngày/tuần riêng món) — không có bậc nào khớp thì trả về giá bán gốc';
 
 -- ============================================================================
 -- PHẦN 1: TẠO ĐƠN HÀNG (SDD 7.5)

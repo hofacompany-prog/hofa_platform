@@ -17,7 +17,7 @@ const TOPPING_GROUP_FIELDS = ['name', 'is_required', 'allow_multiple', 'sort_ord
 const TOPPING_FIELDS = ['name', 'price', 'sort_order'];
 const TIER_FIELDS = [
   'min_quantity', 'max_quantity', 'unit_price', 'min_days_per_week', 'unit_price_days', 'unit_price_both',
-  'requires_deposit', 'deposit_percent',
+  'min_order_quantity', 'requires_deposit', 'deposit_percent',
 ];
 
 // ---- Danh mục ----

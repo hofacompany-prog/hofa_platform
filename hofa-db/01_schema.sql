@@ -391,6 +391,10 @@ CREATE TABLE wholesale_tiers (
   min_days_per_week INTEGER NOT NULL DEFAULT 0,
   unit_price_days   INTEGER,                -- giá khi chỉ đạt điều kiện số ngày/tuần (bậc đặt trước)
   unit_price_both   INTEGER,                -- giá khi đạt cả 2 điều kiện (bậc đặt trước)
+  -- Chỉ áp dụng cho bậc giá sỉ (min_days_per_week = 0) — điều kiện THAY THẾ theo tổng số
+  -- lượng cả đơn (mọi sản phẩm cộng lại): đạt 1 trong 2 (số lượng riêng món HOẶC số
+  -- lượng cả đơn) là được giá bậc này.
+  min_order_quantity INTEGER,
   requires_deposit BOOLEAN NOT NULL DEFAULT false,
   deposit_percent NUMERIC(5,2) DEFAULT 0,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -401,6 +405,7 @@ CREATE TABLE wholesale_tiers (
   CONSTRAINT tiers_price_both_valid CHECK (unit_price_both IS NULL OR unit_price_both >= 0),
   CONSTRAINT tiers_preorder_prices_required
     CHECK (min_days_per_week = 0 OR (unit_price_days IS NOT NULL AND unit_price_both IS NOT NULL)),
+  CONSTRAINT tiers_min_order_quantity_valid CHECK (min_order_quantity IS NULL OR min_order_quantity > 0),
   CONSTRAINT tiers_deposit_range CHECK (deposit_percent >= 0 AND deposit_percent <= 100),
   -- 1 biến thể được phép có CẢ bậc giá sỉ lẫn bậc đặt trước cùng lúc — chỉ trùng
   -- min_quantity mới cấm khi CÙNG loại (min_days_per_week giống nhau).

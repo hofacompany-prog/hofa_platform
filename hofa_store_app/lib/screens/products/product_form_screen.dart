@@ -189,6 +189,9 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     final priceBothCtrl = TextEditingController(
       text: existing?.unitPriceBoth?.toString() ?? '',
     );
+    final minOrderQtyCtrl = TextEditingController(
+      text: existing?.minOrderQuantity?.toString() ?? '',
+    );
     final isPreorder = _tierTab == 'preorder';
 
     final ok = await showDialog<bool>(
@@ -273,6 +276,19 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                     ),
                     keyboardType: TextInputType.number,
                   ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: minOrderQtyCtrl,
+                    decoration: const InputDecoration(
+                      labelText:
+                          'Hoặc số lượng tối thiểu CẢ ĐƠN (không bắt buộc)',
+                      helperText:
+                          'Nếu tổng số lượng mọi sản phẩm trong đơn đạt số này, sản phẩm '
+                          'vẫn được giá bậc này dù số lượng riêng chưa đạt ở trên',
+                      border: OutlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.number,
+                  ),
                 ],
               ],
             ),
@@ -304,6 +320,9 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     final priceBoth = isPreorder
         ? int.tryParse(priceBothCtrl.text.trim())
         : null;
+    final minOrderQty = isPreorder
+        ? null
+        : int.tryParse(minOrderQtyCtrl.text.trim());
 
     if (minQty <= 0) {
       if (mounted) {
@@ -320,6 +339,16 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
             content: Text(
               'Số lượng tối đa phải lớn hơn hoặc bằng số lượng tối thiểu',
             ),
+          ),
+        );
+      }
+      return;
+    }
+    if (minOrderQty != null && minOrderQty <= 0) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Số lượng tối thiểu cả đơn phải lớn hơn 0'),
           ),
         );
       }
@@ -357,6 +386,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                 minDaysPerWeek: minDays,
                 unitPriceDays: priceDays,
                 unitPriceBoth: priceBoth,
+                minOrderQuantity: minOrderQty,
               ),
             ],
           };
@@ -375,6 +405,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                           minDaysPerWeek: minDays,
                           unitPriceDays: priceDays,
                           unitPriceBoth: priceBoth,
+                          minOrderQuantity: minOrderQty,
                         )
                       : t,
                 )
@@ -395,6 +426,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
           minDaysPerWeek: minDays,
           unitPriceDays: priceDays,
           unitPriceBoth: priceBoth,
+          minOrderQuantity: minOrderQty,
         );
       } else {
         await _repo.updateWholesaleTier(existing.id, {
@@ -404,6 +436,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
           'min_days_per_week': minDays,
           'unit_price_days': priceDays,
           'unit_price_both': priceBoth,
+          'min_order_quantity': minOrderQty,
         });
       }
       await _loadWholesaleTiers();
@@ -529,7 +562,11 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                           '≥${t.minDaysPerWeek} ngày/tuần: ${formatVnd(t.unitPriceDays ?? 0)} · '
                           'Cả 2: ${formatVnd(t.unitPriceBoth ?? 0)}',
                         )
-                      : Text(formatVnd(t.unitPrice)),
+                      : Text(
+                          t.minOrderQuantity != null
+                              ? '${formatVnd(t.unitPrice)} (hoặc cả đơn ≥ ${t.minOrderQuantity})'
+                              : formatVnd(t.unitPrice),
+                        ),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [

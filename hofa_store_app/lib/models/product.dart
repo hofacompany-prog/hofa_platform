@@ -51,6 +51,10 @@ class WholesaleTier {
   final int minDaysPerWeek;
   final int? unitPriceDays;
   final int? unitPriceBoth;
+  // Chỉ áp dụng cho bậc giá sỉ (minDaysPerWeek = 0) — điều kiện THAY THẾ theo tổng số
+  // lượng cả đơn (mọi sản phẩm cộng lại): đạt 1 trong 2 (số lượng riêng món HOẶC số
+  // lượng cả đơn) là được giá bậc này.
+  final int? minOrderQuantity;
 
   WholesaleTier({
     required this.id,
@@ -61,6 +65,7 @@ class WholesaleTier {
     required this.minDaysPerWeek,
     this.unitPriceDays,
     this.unitPriceBoth,
+    this.minOrderQuantity,
   });
 
   factory WholesaleTier.fromJson(Map<String, dynamic> json) => WholesaleTier(
@@ -72,6 +77,7 @@ class WholesaleTier {
     minDaysPerWeek: (json['min_days_per_week'] as num?)?.toInt() ?? 0,
     unitPriceDays: (json['unit_price_days'] as num?)?.toInt(),
     unitPriceBoth: (json['unit_price_both'] as num?)?.toInt(),
+    minOrderQuantity: (json['min_order_quantity'] as num?)?.toInt(),
   );
 }
 

@@ -308,8 +308,16 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   ) {
     bool qtyMet(WholesaleTier t) {
       final ref = t.minDaysPerWeek == 0 ? ownQty : orderQty;
-      return ref >= t.minQuantity &&
+      final ownMet =
+          ref >= t.minQuantity &&
           (t.maxQuantity == null || ref <= t.maxQuantity!);
+      // Bậc giá sỉ có thêm điều kiện THAY THẾ theo tổng số lượng cả đơn — đạt 1 trong 2
+      // là được giá bậc này, đúng như resolve_variant_price() phía backend.
+      final orderQtyMet =
+          t.minDaysPerWeek == 0 &&
+          t.minOrderQuantity != null &&
+          orderQty >= t.minOrderQuantity!;
+      return ownMet || orderQtyMet;
     }
 
     bool daysMet(WholesaleTier t) =>
@@ -329,20 +337,27 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   }
 
   /// Xem trước tổng tiền — mỗi lần giao (đơn) tính riêng theo đúng tổng số lượng của
-  /// CHÍNH đơn đó, khớp với cách backend chốt giá khi thực sự tạo đơn.
+  /// CHÍNH đơn đó, khớp với cách backend chốt giá khi thực sự tạo đơn. Dùng chung cho cả
+  /// tab Đặt trước (mỗi entry là 1 ngày trong tuần, chỉ xét bậc đặt trước) và tab Giá sỉ
+  /// (đúng 1 entry gồm mọi món, chỉ xét bậc giá sỉ — xem _groupByOccurrence khi
+  /// preorderSchedule null) — items trong 1 entry luôn cùng 1 orderKind, không lẫn lộn
+  /// (xem _relevantItems).
   int _tierAwareSubtotal(List<MapEntry<DateTime, List<CartItem>>> orders) {
     var total = 0;
     for (final entry in orders) {
       final dayItems = entry.value;
       final orderQty = dayItems.fold<int>(0, (sum, i) => sum + i.quantity);
       for (final i in dayItems) {
-        // Đơn "đặt trước" chỉ được xét bậc đặt trước (minDaysPerWeek > 0) — biến thể có
-        // thể có cả bậc giá sỉ, không được lẫn giá của loại kia vào đây.
+        final isWholesale = i.orderKind == 'wholesale';
         final tiers =
             ref
                 .watch(wholesaleTiersProvider(i.variantId))
                 .valueOrNull
-                ?.where((t) => t.minDaysPerWeek > 0)
+                ?.where(
+                  (t) => isWholesale
+                      ? t.minDaysPerWeek == 0
+                      : t.minDaysPerWeek > 0,
+                )
                 .toList() ??
             const <WholesaleTier>[];
         final price = tiers.isEmpty
@@ -464,7 +479,12 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       );
     }
 
-    final scheduledOrders = widget.preorderSchedule != null
+    // Đặt trước dùng preorderSchedule để nhóm theo từng ngày; giá sỉ không có lịch tuần
+    // nhưng vẫn cần nhóm (đúng 1 nhóm gồm mọi món) để tính đúng điều kiện min_order_quantity
+    // theo tổng số lượng cả đơn — _groupByOccurrence tự trả về 1 nhóm duy nhất khi
+    // preorderSchedule null.
+    final scheduledOrders =
+        (widget.preorderSchedule != null || widget.initialScheduledFor != null)
         ? _groupByOccurrence(items)
         : null;
     final itemsSubtotal = scheduledOrders != null

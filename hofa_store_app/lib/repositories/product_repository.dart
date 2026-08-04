@@ -9,6 +9,7 @@ Map<String, dynamic> _tierPayload(WholesaleTier t) => {
   'min_days_per_week': t.minDaysPerWeek,
   if (t.unitPriceDays != null) 'unit_price_days': t.unitPriceDays,
   if (t.unitPriceBoth != null) 'unit_price_both': t.unitPriceBoth,
+  if (t.minOrderQuantity != null) 'min_order_quantity': t.minOrderQuantity,
 };
 
 class ProductRepository {
@@ -202,6 +203,7 @@ class ProductRepository {
     int minDaysPerWeek = 0,
     int? unitPriceDays,
     int? unitPriceBoth,
+    int? minOrderQuantity,
   }) async => WholesaleTier.fromJson(
     await _api.post(
           '/variants/$variantId/wholesale-tiers',
@@ -212,6 +214,8 @@ class ProductRepository {
             'min_days_per_week': minDaysPerWeek,
             if (unitPriceDays != null) 'unit_price_days': unitPriceDays,
             if (unitPriceBoth != null) 'unit_price_both': unitPriceBoth,
+            if (minOrderQuantity != null)
+              'min_order_quantity': minOrderQuantity,
           },
         )
         as Map<String, dynamic>,
