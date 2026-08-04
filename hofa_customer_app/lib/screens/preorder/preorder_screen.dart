@@ -25,11 +25,10 @@ String _weekdayLabelOf(int iso) =>
 
 /// Giỏ "đặt trước" — cùng dùng chung cartProvider với giỏ hàng thường (giỏ chỉ chứa
 /// món của 1 cửa hàng tại 1 thời điểm), chỉ hiển thị khi giỏ đang ở sales_model
-/// 'scheduled' (bán sỉ/đặt trước). Chia dọc 2 cột: trái là danh sách sản phẩm (bấm vào
-/// dòng "Ngày giao" nhỏ dưới tên để nhảy sang sửa đúng ngày/giờ của món đó), phải là
-/// bộ chọn ngày — bấm vào 1 ngày sẽ hiện bên dưới TOÀN BỘ món phải giao ngày đó (không
-/// chỉ món đang chọn), kèm chỗ sửa giờ riêng cho món đang chọn. Ngày tính từ ngày mai
-/// trở đi, có nút xem tuần kế tiếp.
+/// 'scheduled' (bán sỉ/đặt trước). Chia dọc 2 cột: trái là danh sách sản phẩm — bấm vào
+/// dòng "Ngày giao" nhỏ dưới tên mở popup chọn ngày (lịch) + giờ như bình thường, thêm
+/// được nhiều lần cho 1 sản phẩm nếu giao nhiều lần trong ngày/tuần. Phải là cột ngày —
+/// bấm vào 1 ngày CHỈ để xem những sản phẩm nào phải giao ngày đó, không sửa ở đây.
 class PreorderScreen extends ConsumerStatefulWidget {
   const PreorderScreen({super.key});
 
@@ -38,7 +37,6 @@ class PreorderScreen extends ConsumerStatefulWidget {
 }
 
 class _PreorderScreenState extends ConsumerState<PreorderScreen> {
-  String? _activeLineId;
   int? _selectedViewDay;
   int _weekOffset = 0;
   String _mode = 'once';
@@ -60,8 +58,8 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen> {
     return !date.isBefore(tomorrowDate);
   }
 
-  /// Ngày gần nhất (từ ngày mai) khớp thứ [iso] — dùng cho dòng tóm tắt dưới sản phẩm,
-  /// không phụ thuộc đang xem tuần nào ở bộ chọn.
+  /// Ngày gần nhất (từ ngày mai) khớp thứ [iso] — dùng để hiển thị ngày dương lịch cho
+  /// 1 slot, không lưu ngày cụ thể (slot lặp theo thứ trong tuần).
   DateTime _nearestFutureDate(int iso) {
     final tomorrow = DateTime.now().add(const Duration(days: 1));
     var d = DateTime(tomorrow.year, tomorrow.month, tomorrow.day);
@@ -73,43 +71,6 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen> {
 
   String _shortDate(DateTime d) =>
       '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}';
-
-  void _jumpToItem(CartItem item) {
-    final sorted = [...item.deliverySlots]..sort(DeliverySlot.compare);
-    setState(() {
-      _activeLineId = item.lineId;
-      if (sorted.isNotEmpty) _selectedViewDay = sorted.first.weekday;
-    });
-  }
-
-  Future<void> _addTimeForDay(CartItem item, int iso) async {
-    final time = await showTimePicker(
-      context: context,
-      initialTime: const TimeOfDay(hour: 8, minute: 0),
-    );
-    if (time == null) return;
-    final updated = [
-      ...item.deliverySlots,
-      DeliverySlot(weekday: iso, time: time),
-    ]..sort(DeliverySlot.compare);
-    await ref
-        .read(cartProvider.notifier)
-        .updateDeliverySlots(item.lineId, updated);
-  }
-
-  Future<void> _removeSlot(CartItem item, DeliverySlot slot) async {
-    final updated = item.deliverySlots
-        .where(
-          (s) =>
-              !(s.weekday == slot.weekday &&
-                  s.time.hour == slot.time.hour &&
-                  s.time.minute == slot.time.minute),
-        )
-        .toList();
-    await ref
-        .read(cartProvider.notifier)
-        .updateDeliverySlots(item.lineId, updated);
-  }
 
   Future<void> _editToppings(CartItem item) async {
     final groups = await ref
@@ -132,6 +93,100 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen> {
     if (result != null) {
       await ref.read(cartProvider.notifier).updateToppings(item.lineId, result);
     }
+  }
+
+  /// Popup chọn ngày giao (lịch) + giờ giao như bình thường cho 1 sản phẩm — thêm được
+  /// nhiều lần nếu sản phẩm giao nhiều lần trong ngày/tuần. Chỉ lưu lại thứ trong tuần
+  /// (slot lặp hàng tuần), ngày chọn trên lịch chỉ để xác định đúng thứ + xem trước.
+  Future<void> _editScheduleDialog(CartItem item) async {
+    var slots = [...item.deliverySlots];
+
+    Future<void> addSlot(StateSetter setInner) async {
+      final date = await showDatePicker(
+        context: context,
+        initialDate: DateTime.now().add(const Duration(days: 1)),
+        firstDate: DateTime.now().add(const Duration(days: 1)),
+        lastDate: DateTime.now().add(const Duration(days: 90)),
+      );
+      if (date == null) return;
+      if (!mounted) return;
+      final time = await showTimePicker(
+        context: context,
+        initialTime: const TimeOfDay(hour: 8, minute: 0),
+      );
+      if (time == null) return;
+      slots = [...slots, DeliverySlot(weekday: date.weekday, time: time)]
+        ..sort(DeliverySlot.compare);
+      await ref
+          .read(cartProvider.notifier)
+          .updateDeliverySlots(item.lineId, slots);
+      setInner(() {});
+    }
+
+    void removeSlot(DeliverySlot slot, StateSetter setInner) {
+      slots = slots
+          .where(
+            (s) =>
+                !(s.weekday == slot.weekday &&
+                    s.time.hour == slot.time.hour &&
+                    s.time.minute == slot.time.minute),
+          )
+          .toList();
+      ref.read(cartProvider.notifier).updateDeliverySlots(item.lineId, slots);
+      setInner(() {});
+    }
+
+    if (!mounted) return;
+    await showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setInner) {
+          final sorted = [...slots]..sort(DeliverySlot.compare);
+          return AlertDialog(
+            title: Text('Ngày giao cho "${item.productName}"'),
+            content: SizedBox(
+              width: 340,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (sorted.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                      child: Text('Chưa có ngày giao nào'),
+                    ),
+                  ...sorted.map(
+                    (s) => ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: Text(
+                        '${_weekdayLabelOf(s.weekday)} (${_shortDate(_nearestFutureDate(s.weekday))})',
+                      ),
+                      subtitle: Text(s.time.format(context)),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.delete_outline),
+                        onPressed: () => removeSlot(s, setInner),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    icon: const Icon(Icons.add),
+                    label: const Text('Thêm ngày giao'),
+                    onPressed: () => addSlot(setInner),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              FilledButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Xong'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
   }
 
   void _goCheckout(CartState cart) {
@@ -159,138 +214,120 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen> {
     context.push('/checkout', extra: schedule);
   }
 
-  Widget _itemCard(BuildContext context, CartItem item, bool isActive) {
+  Widget _itemCard(BuildContext context, CartItem item) {
     final theme = Theme.of(context);
     final toppingGroups =
         ref.watch(toppingGroupsProvider(item.productId)).valueOrNull ?? [];
     final hasToppings = toppingGroups.isNotEmpty;
     final sortedSlots = [...item.deliverySlots]..sort(DeliverySlot.compare);
 
-    return InkWell(
-      onTap: () => setState(() => _activeLineId = item.lineId),
-      child: Card(
-        elevation: 0,
-        color: isActive
-            ? theme.colorScheme.primary.withValues(alpha: 0.08)
-            : theme.colorScheme.surfaceContainerLow,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-          side: isActive
-              ? BorderSide(color: theme.colorScheme.primary)
-              : BorderSide.none,
-        ),
-        margin: const EdgeInsets.only(bottom: 12),
-        child: Padding(
-          padding: const EdgeInsets.all(10),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  NetworkImageBox(
-                    url: item.productImage,
-                    width: 44,
-                    height: 44,
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
+    return Card(
+      elevation: 0,
+      color: theme.colorScheme.surfaceContainerLow,
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.all(10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                NetworkImageBox(url: item.productImage, width: 44, height: 44),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item.productName,
+                        style: const TextStyle(fontWeight: FontWeight.w500),
+                      ),
+                      Text(item.variantName, style: theme.textTheme.bodySmall),
+                      if (item.toppings.isNotEmpty)
                         Text(
-                          item.productName,
-                          style: const TextStyle(fontWeight: FontWeight.w500),
-                        ),
-                        Text(
-                          item.variantName,
-                          style: theme.textTheme.bodySmall,
-                        ),
-                        if (item.toppings.isNotEmpty)
-                          Text(
-                            item.toppings.map((t) => t.name).join(', '),
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.secondary,
-                            ),
+                          item.toppings.map((t) => t.name).join(', '),
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.secondary,
                           ),
-                        Text(
-                          formatVnd(item.unitPrice + item.toppingsTotal),
-                          style: TextStyle(color: theme.colorScheme.primary),
                         ),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    visualDensity: VisualDensity.compact,
-                    icon: const Icon(Icons.delete_outline, size: 20),
-                    onPressed: () =>
-                        ref.read(cartProvider.notifier).removeItem(item.lineId),
-                  ),
-                ],
-              ),
-              if (hasToppings)
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: TextButton.icon(
-                    style: TextButton.styleFrom(
-                      padding: EdgeInsets.zero,
-                      visualDensity: VisualDensity.compact,
-                    ),
-                    onPressed: () => _editToppings(item),
-                    icon: const Icon(Icons.tune, size: 16),
-                    label: Text(
-                      item.toppings.isEmpty ? 'Chọn topping' : 'Sửa topping',
-                    ),
+                      Text(
+                        formatVnd(item.unitPrice + item.toppingsTotal),
+                        style: TextStyle(color: theme.colorScheme.primary),
+                      ),
+                    ],
                   ),
                 ),
-              const Divider(height: 20),
-              Row(
-                children: [
-                  const Text('Số lượng'),
-                  const Spacer(),
-                  IconButton(
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  icon: const Icon(Icons.delete_outline, size: 20),
+                  onPressed: () =>
+                      ref.read(cartProvider.notifier).removeItem(item.lineId),
+                ),
+              ],
+            ),
+            if (hasToppings)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  style: TextButton.styleFrom(
+                    padding: EdgeInsets.zero,
                     visualDensity: VisualDensity.compact,
-                    icon: const Icon(Icons.remove_circle_outline, size: 20),
-                    onPressed: () => ref
-                        .read(cartProvider.notifier)
-                        .updateQuantity(item.lineId, item.quantity - 1),
                   ),
-                  Text('${item.quantity}'),
-                  IconButton(
-                    visualDensity: VisualDensity.compact,
-                    icon: const Icon(Icons.add_circle_outline, size: 20),
-                    onPressed: () => ref
-                        .read(cartProvider.notifier)
-                        .updateQuantity(item.lineId, item.quantity + 1),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              InkWell(
-                onTap: () => _jumpToItem(item),
-                child: Text(
-                  sortedSlots.isEmpty
-                      ? 'Chưa chọn ngày giao — bấm để chọn'
-                      : 'Ngày giao: ${sortedSlots.map((s) => '${s.time.format(context)} ${_weekdayLabelOf(s.weekday)} (${_shortDate(_nearestFutureDate(s.weekday))})').join(', ')}',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: sortedSlots.isEmpty
-                        ? theme.colorScheme.error
-                        : theme.colorScheme.primary,
-                    decoration: TextDecoration.underline,
-                    decorationColor: sortedSlots.isEmpty
-                        ? theme.colorScheme.error
-                        : theme.colorScheme.primary,
+                  onPressed: () => _editToppings(item),
+                  icon: const Icon(Icons.tune, size: 16),
+                  label: Text(
+                    item.toppings.isEmpty ? 'Chọn topping' : 'Sửa topping',
                   ),
                 ),
               ),
-            ],
-          ),
+            const Divider(height: 20),
+            Row(
+              children: [
+                const Text('Số lượng'),
+                const Spacer(),
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  icon: const Icon(Icons.remove_circle_outline, size: 20),
+                  onPressed: () => ref
+                      .read(cartProvider.notifier)
+                      .updateQuantity(item.lineId, item.quantity - 1),
+                ),
+                Text('${item.quantity}'),
+                IconButton(
+                  visualDensity: VisualDensity.compact,
+                  icon: const Icon(Icons.add_circle_outline, size: 20),
+                  onPressed: () => ref
+                      .read(cartProvider.notifier)
+                      .updateQuantity(item.lineId, item.quantity + 1),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            InkWell(
+              onTap: () => _editScheduleDialog(item),
+              child: Text(
+                sortedSlots.isEmpty
+                    ? 'Chưa chọn ngày giao — bấm để chọn'
+                    : 'Ngày giao: ${sortedSlots.map((s) => '${s.time.format(context)} ${_weekdayLabelOf(s.weekday)} (${_shortDate(_nearestFutureDate(s.weekday))})').join(', ')}',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: sortedSlots.isEmpty
+                      ? theme.colorScheme.error
+                      : theme.colorScheme.primary,
+                  decoration: TextDecoration.underline,
+                  decorationColor: sortedSlots.isEmpty
+                      ? theme.colorScheme.error
+                      : theme.colorScheme.primary,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 
-  Widget _dayPicker(BuildContext context, CartState cart, CartItem activeItem) {
+  Widget _dayPicker(BuildContext context, CartState cart) {
     final theme = Theme.of(context);
     final viewDay = _selectedViewDay;
     final itemsForViewDay = viewDay == null
@@ -298,9 +335,6 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen> {
         : cart.items
               .where((i) => i.deliverySlots.any((s) => s.weekday == viewDay))
               .toList();
-    final activeSlotsForViewDay = viewDay == null
-        ? <DeliverySlot>[]
-        : activeItem.deliverySlots.where((s) => s.weekday == viewDay).toList();
 
     return ListView(
       padding: const EdgeInsets.all(16),
@@ -401,30 +435,6 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen> {
                 child: Text('• ${i.productName} — $times'),
               );
             }),
-          const Divider(height: 24),
-          Text(
-            'Giờ giao cho "${activeItem.productName}"',
-            style: theme.textTheme.titleSmall,
-          ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: [
-              ...activeSlotsForViewDay.map(
-                (s) => Chip(
-                  label: Text(s.time.format(context)),
-                  deleteIcon: const Icon(Icons.close, size: 16),
-                  onDeleted: () => _removeSlot(activeItem, s),
-                ),
-              ),
-              ActionChip(
-                avatar: const Icon(Icons.add, size: 16),
-                label: const Text('Thêm giờ'),
-                onPressed: () => _addTimeForDay(activeItem, viewDay),
-              ),
-            ],
-          ),
         ],
       ],
     );
@@ -435,13 +445,6 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen> {
     final cart = ref.watch(cartProvider);
     final theme = Theme.of(context);
     final isPreorderCart = !cart.isEmpty && cart.salesModel == 'scheduled';
-
-    CartItem? activeItem;
-    if (isPreorderCart) {
-      final matches = cart.items.where((i) => i.lineId == _activeLineId);
-      activeItem = matches.isNotEmpty ? matches.first : cart.items.first;
-      _activeLineId = activeItem.lineId;
-    }
 
     return Scaffold(
       appBar: AppBar(title: const Text('Đặt trước')),
@@ -476,18 +479,12 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen> {
                         child: ListView(
                           padding: const EdgeInsets.fromLTRB(16, 8, 8, 16),
                           children: cart.items
-                              .map(
-                                (item) => _itemCard(
-                                  context,
-                                  item,
-                                  item.lineId == activeItem?.lineId,
-                                ),
-                              )
+                              .map((item) => _itemCard(context, item))
                               .toList(),
                         ),
                       ),
                       const VerticalDivider(width: 1),
-                      Expanded(child: _dayPicker(context, cart, activeItem!)),
+                      Expanded(child: _dayPicker(context, cart)),
                     ],
                   ),
                 ),
