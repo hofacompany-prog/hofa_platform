@@ -134,13 +134,15 @@ INSERT INTO product_variants (id, product_id, sku, name, attributes,
   ('f0000000-0000-0000-0000-000000000007', 'e0000000-0000-0000-0000-000000000005',
    'QBR-RM-SI', 'Theo kg', '{"unit":"kg"}'::jsonb, 18000, 11000, 15000, 1000, true);
 
--- Bậc giá sỉ — đúng ví dụ trong SDD mục 7.9
+-- Bậc giá sỉ/đặt trước — dựa theo ví dụ trong SDD mục 7.9, minh hoạ thêm 2 giá theo điều
+-- kiện số ngày/tuần (unit_price_days) và đạt cả 2 điều kiện (unit_price_both).
 INSERT INTO wholesale_tiers (variant_id, min_quantity, max_quantity, unit_price,
-                             lead_time_days, requires_deposit, deposit_percent) VALUES
-  ('f0000000-0000-0000-0000-000000000007',  50,  99,  15000, 1, false,  0),
-  ('f0000000-0000-0000-0000-000000000007', 100, 499,  13500, 2, false,  0),
-  ('f0000000-0000-0000-0000-000000000007', 500, 999,  12000, 5, true,  30),
-  ('f0000000-0000-0000-0000-000000000007',1000, NULL, 10500, 7, true,  50);
+                             min_days_per_week, unit_price_days, unit_price_both,
+                             requires_deposit, deposit_percent) VALUES
+  ('f0000000-0000-0000-0000-000000000007',  50,  99,  15000, 1, 14500, 14000, false,  0),
+  ('f0000000-0000-0000-0000-000000000007', 100, 499,  13500, 2, 13000, 12500, false,  0),
+  ('f0000000-0000-0000-0000-000000000007', 500, 999,  12000, 3, 11500, 11000, true,  30),
+  ('f0000000-0000-0000-0000-000000000007',1000, NULL, 10500, 5, 10000,  9500, true,  50);
 
 -- ---------------------------------------------------------------------------
 -- 6. NHẬP KHO — dùng đúng hàm apply_stock_movement, không UPDATE tay
@@ -380,7 +382,7 @@ ORDER BY s.created_at, s.id;
 -- E. Bậc giá sỉ: khách mua 200kg thì tính giá nào
 SELECT t.min_quantity AS tu_sl, COALESCE(t.max_quantity::text,'trở lên') AS den_sl,
        to_char(t.unit_price,'FM999,999,999') || 'đ/kg' AS gia,
-       t.lead_time_days AS ngay_giao,
+       t.min_days_per_week AS ngay_toi_thieu_tuan,
        CASE WHEN t.requires_deposit THEN 'cọc ' || t.deposit_percent || '%' ELSE 'không cọc' END AS coc,
        CASE WHEN 200 BETWEEN t.min_quantity AND COALESCE(t.max_quantity, 2147483647)
             THEN '  <-- đơn 200kg dùng bậc này' ELSE '' END AS ghi_chu

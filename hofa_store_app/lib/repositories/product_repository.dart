@@ -6,7 +6,9 @@ Map<String, dynamic> _tierPayload(WholesaleTier t) => {
   'min_quantity': t.minQuantity,
   if (t.maxQuantity != null) 'max_quantity': t.maxQuantity,
   'unit_price': t.unitPrice,
-  'lead_time_days': t.leadTimeDays,
+  'min_days_per_week': t.minDaysPerWeek,
+  if (t.unitPriceDays != null) 'unit_price_days': t.unitPriceDays,
+  if (t.unitPriceBoth != null) 'unit_price_both': t.unitPriceBoth,
 };
 
 class ProductRepository {
@@ -208,7 +210,9 @@ class ProductRepository {
     required int minQuantity,
     int? maxQuantity,
     required int unitPrice,
-    int leadTimeDays = 0,
+    int minDaysPerWeek = 0,
+    int? unitPriceDays,
+    int? unitPriceBoth,
   }) async => WholesaleTier.fromJson(
     await _api.post(
           '/variants/$variantId/wholesale-tiers',
@@ -216,7 +220,9 @@ class ProductRepository {
             'min_quantity': minQuantity,
             if (maxQuantity != null) 'max_quantity': maxQuantity,
             'unit_price': unitPrice,
-            'lead_time_days': leadTimeDays,
+            'min_days_per_week': minDaysPerWeek,
+            if (unitPriceDays != null) 'unit_price_days': unitPriceDays,
+            if (unitPriceBoth != null) 'unit_price_both': unitPriceBoth,
           },
         )
         as Map<String, dynamic>,

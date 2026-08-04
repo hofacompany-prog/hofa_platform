@@ -154,7 +154,13 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
             const <WholesaleTier>[];
         final price = tiers.isEmpty
             ? i.unitPrice
-            : _matchedTierPrice(i.quantity, dayQty, i.unitPrice, tiers);
+            : _matchedTierPrice(
+                i.quantity,
+                dayQty,
+                i.deliverySlots.length,
+                i.unitPrice,
+                tiers,
+              );
         total += (price + i.toppingsTotal) * i.quantity;
       }
     }
@@ -164,29 +170,38 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
   int _flatTotal(List<CartItem> items) =>
       items.fold(0, (sum, i) => sum + i.lineTotal);
 
-  /// Bậc giá sỉ (lead_time_days = 0) so theo [ownQty] — số lượng riêng món này. Bậc đặt
-  /// trước (lead_time_days > 0) so theo [orderQty] — tổng số lượng của cả lần giao (gộp
-  /// mọi món cùng ngày), đúng như resolve_variant_price() phía backend chốt giá thật.
+  /// Bậc giá sỉ (minDaysPerWeek = 0) chỉ có điều kiện số lượng, so theo [ownQty] — số
+  /// lượng riêng món này. Bậc đặt trước (minDaysPerWeek > 0) có 2 điều kiện độc lập: số
+  /// lượng so theo [orderQty] (tổng số lượng cả lần giao, gộp mọi món) và số ngày/tuần so
+  /// theo [daysCount] (số ngày/tuần riêng món này) — đạt điều kiện nào lấy giá tương ứng,
+  /// đúng như resolve_variant_price() phía backend chốt giá thật.
   int _matchedTierPrice(
     int ownQty,
     int orderQty,
+    int daysCount,
     int fallback,
     List<WholesaleTier> tiers,
   ) {
-    final sorted = [...tiers]
-      ..sort(
-        (a, b) => a.leadTimeDays != b.leadTimeDays
-            ? b.leadTimeDays.compareTo(a.leadTimeDays)
-            : b.minQuantity.compareTo(a.minQuantity),
-      );
-    for (final t in sorted) {
-      final matchQty = t.leadTimeDays == 0 ? ownQty : orderQty;
-      if (matchQty >= t.minQuantity &&
-          (t.maxQuantity == null || matchQty <= t.maxQuantity!)) {
-        return t.unitPrice;
-      }
+    bool qtyMet(WholesaleTier t) {
+      final ref = t.minDaysPerWeek == 0 ? ownQty : orderQty;
+      return ref >= t.minQuantity &&
+          (t.maxQuantity == null || ref <= t.maxQuantity!);
     }
-    return fallback;
+
+    bool daysMet(WholesaleTier t) =>
+        t.minDaysPerWeek > 0 && daysCount >= t.minDaysPerWeek;
+
+    final candidates = tiers.where((t) => qtyMet(t) || daysMet(t)).toList()
+      ..sort(
+        (a, b) => a.minQuantity != b.minQuantity
+            ? b.minQuantity.compareTo(a.minQuantity)
+            : b.minDaysPerWeek.compareTo(a.minDaysPerWeek),
+      );
+    if (candidates.isEmpty) return fallback;
+    final t = candidates.first;
+    if (qtyMet(t) && daysMet(t)) return t.unitPriceBoth ?? t.unitPrice;
+    if (qtyMet(t)) return t.unitPrice;
+    return t.unitPriceDays ?? t.unitPrice;
   }
 
   /// Ngày gần nhất (từ ngày mai) khớp thứ [iso] — dùng để hiển thị ngày dương lịch cho
@@ -459,6 +474,7 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
                 : _matchedTierPrice(
                     quantity,
                     quantity,
+                    0,
                     item.unitPrice,
                     wholesaleTiers,
                   ),
@@ -720,7 +736,13 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
                     const <WholesaleTier>[];
                 return tiers.isEmpty
                     ? i.unitPrice
-                    : _matchedTierPrice(i.quantity, dayQty, i.unitPrice, tiers);
+                    : _matchedTierPrice(
+                        i.quantity,
+                        dayQty,
+                        i.deliverySlots.length,
+                        i.unitPrice,
+                        tiers,
+                      );
               }
 
               int lineTotalFor(CartItem i) =>
@@ -745,9 +767,24 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
                                     fontWeight: FontWeight.w500,
                                   ),
                                 ),
-                                Text(
-                                  '${formatVnd(priceFor(i) + i.toppingsTotal)} x ${i.quantity}',
-                                  style: theme.textTheme.bodySmall,
+                                Builder(
+                                  builder: (context) {
+                                    final price = priceFor(i);
+                                    final discounted = price != i.unitPrice;
+                                    return Text(
+                                      '${formatVnd(price + i.toppingsTotal)} x ${i.quantity}'
+                                      '${discounted ? ' (Giá sỉ)' : ''}',
+                                      style: theme.textTheme.bodySmall
+                                          ?.copyWith(
+                                            color: discounted
+                                                ? theme.colorScheme.primary
+                                                : null,
+                                            fontWeight: discounted
+                                                ? FontWeight.w600
+                                                : null,
+                                          ),
+                                    );
+                                  },
                                 ),
                               ],
                             ),

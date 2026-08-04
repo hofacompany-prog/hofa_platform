@@ -376,24 +376,36 @@ CREATE UNIQUE INDEX idx_variants_one_default ON product_variants (product_id) WH
 -- PHẦN 4: WHOLESALE MODULE (SDD 7.9) — Bán sỉ, bậc giá theo số lượng
 -- ============================================================================
 
+-- min_days_per_week = 0  -> bậc "giá sỉ": chỉ có điều kiện số lượng, dùng đúng 1 giá
+--   (unit_price), unit_price_days/unit_price_both bỏ trống.
+-- min_days_per_week > 0  -> bậc "đặt trước": có 2 điều kiện độc lập (số lượng tổng phần
+--   trong CÙNG 1 lần giao, gộp mọi sản phẩm — và số ngày/tuần khách đặt RIÊNG sản phẩm
+--   này) — 3 giá tương ứng: chỉ đạt số lượng (unit_price), chỉ đạt số ngày
+--   (unit_price_days), đạt cả 2 (unit_price_both, thường rẻ nhất).
 CREATE TABLE wholesale_tiers (
-  id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  variant_id      UUID NOT NULL REFERENCES product_variants(id) ON DELETE CASCADE,
-  min_quantity    INTEGER NOT NULL,       -- mua từ bao nhiêu
-  max_quantity    INTEGER,                -- đến bao nhiêu (NULL = không giới hạn)
-  unit_price      INTEGER NOT NULL,       -- giá mỗi đơn vị ở bậc này
-  lead_time_days  INTEGER NOT NULL DEFAULT 0,  -- bao nhiêu ngày mới giao được
+  id                UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  variant_id        UUID NOT NULL REFERENCES product_variants(id) ON DELETE CASCADE,
+  min_quantity      INTEGER NOT NULL,       -- mua từ bao nhiêu (tổng phần/lần giao với bậc đặt trước)
+  max_quantity      INTEGER,                -- đến bao nhiêu (NULL = không giới hạn)
+  unit_price        INTEGER NOT NULL,       -- giá khi chỉ đạt điều kiện số lượng
+  min_days_per_week INTEGER NOT NULL DEFAULT 0,
+  unit_price_days   INTEGER,                -- giá khi chỉ đạt điều kiện số ngày/tuần (bậc đặt trước)
+  unit_price_both   INTEGER,                -- giá khi đạt cả 2 điều kiện (bậc đặt trước)
   requires_deposit BOOLEAN NOT NULL DEFAULT false,
   deposit_percent NUMERIC(5,2) DEFAULT 0,
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
 
   CONSTRAINT tiers_qty_valid   CHECK (min_quantity > 0 AND (max_quantity IS NULL OR max_quantity >= min_quantity)),
   CONSTRAINT tiers_price_valid CHECK (unit_price >= 0),
+  CONSTRAINT tiers_price_days_valid CHECK (unit_price_days IS NULL OR unit_price_days >= 0),
+  CONSTRAINT tiers_price_both_valid CHECK (unit_price_both IS NULL OR unit_price_both >= 0),
+  CONSTRAINT tiers_preorder_prices_required
+    CHECK (min_days_per_week = 0 OR (unit_price_days IS NOT NULL AND unit_price_both IS NOT NULL)),
   CONSTRAINT tiers_deposit_range CHECK (deposit_percent >= 0 AND deposit_percent <= 100),
   UNIQUE (variant_id, min_quantity)
 );
 COMMENT ON TABLE wholesale_tiers IS
-  'Bậc giá sỉ. Ví dụ SDD: 100kg giao sau 2 ngày, 500kg sau 5 ngày, 1000kg theo lịch hẹn';
+  'Bậc giá sỉ/đặt trước theo số lượng (và với đặt trước, cả số ngày/tuần) — xem comment cột min_days_per_week';
 
 CREATE INDEX idx_tiers_variant ON wholesale_tiers (variant_id, min_quantity);
 

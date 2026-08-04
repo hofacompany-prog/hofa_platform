@@ -329,8 +329,11 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                                   title: Text(
                                     '${t.rangeLabel} ${product.unit}',
                                   ),
-                                  subtitle: t.leadTimeDays > 0
-                                      ? Text('Giao sau ${t.leadTimeDays} ngày')
+                                  subtitle: t.minDaysPerWeek > 0
+                                      ? Text(
+                                          'Đặt ≥${t.minDaysPerWeek} ngày/tuần: ${formatVnd(t.unitPriceDays ?? t.unitPrice)} · '
+                                          'Đạt cả 2 điều kiện: ${formatVnd(t.unitPriceBoth ?? t.unitPrice)}',
+                                        )
                                       : null,
                                   trailing: Text(
                                     formatVnd(t.unitPrice),

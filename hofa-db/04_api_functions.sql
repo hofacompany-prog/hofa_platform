@@ -71,41 +71,49 @@ $$ LANGUAGE plpgsql;
 COMMENT ON FUNCTION reserve_inventory IS 'Giữ chỗ tồn kho lúc đặt hàng. Không trừ on_hand, chỉ tăng reserved';
 COMMENT ON FUNCTION release_inventory IS 'Nhả chỗ đã giữ khi đơn bị huỷ trước khi lấy hàng';
 
--- Giá thật của 1 biến thể khi đặt hàng: ưu tiên bậc giá (wholesale_tiers) khớp số lượng,
+-- Giá thật của 1 biến thể khi đặt hàng: ưu tiên bậc giá (wholesale_tiers) khớp điều kiện,
 -- nếu không có bậc nào khớp thì dùng lại giá bán gốc (p_base_price = product_variants.price).
--- Bậc "giá sỉ" (lead_time_days = 0) so theo p_quantity — số lượng của RIÊNG món này. Bậc
--- "đặt trước" (lead_time_days > 0) so theo p_order_quantity — TỔNG số lượng của CẢ đơn
--- (gộp mọi món, không phân biệt sản phẩm nào), vì cửa hàng tính bậc đặt trước theo tổng
--- số phần đặt trong cùng 1 lần giao — và còn phải khớp số ngày đặt trước tối thiểu.
--- Nhiều bậc cùng khớp thì ưu tiên bậc có min_quantity cao nhất (đúng tinh thần "mua càng
--- nhiều giá càng tốt"), rồi tới bậc có lead_time_days cao nhất (khớp càng nhiều điều kiện
--- càng ưu tiên).
+-- Bậc "giá sỉ" (min_days_per_week = 0) chỉ có 1 điều kiện số lượng, so theo p_quantity —
+-- số lượng của RIÊNG món này, dùng đúng 1 giá (unit_price).
+-- Bậc "đặt trước" (min_days_per_week > 0) có 2 điều kiện ĐỘC LẬP: (1) số lượng — so theo
+-- p_order_quantity, TỔNG số lượng của CẢ lần giao (gộp mọi món, không phân biệt sản phẩm
+-- nào); (2) số ngày/tuần — so p_days_count (số ngày/tuần khách đặt RIÊNG món này) với
+-- min_days_per_week. Đạt điều kiện nào lấy giá tương ứng: chỉ số lượng -> unit_price, chỉ
+-- số ngày -> unit_price_days, cả 2 -> unit_price_both (thường rẻ nhất).
+-- Nhiều bậc cùng khớp thì ưu tiên bậc có min_quantity cao nhất, rồi tới min_days_per_week
+-- cao nhất (khớp càng nhiều điều kiện càng ưu tiên).
 CREATE OR REPLACE FUNCTION resolve_variant_price(
-  p_variant_id UUID, p_quantity INTEGER, p_order_quantity INTEGER, p_scheduled_for TIMESTAMPTZ, p_base_price INTEGER
+  p_variant_id UUID, p_quantity INTEGER, p_order_quantity INTEGER, p_days_count INTEGER, p_base_price INTEGER
 ) RETURNS INTEGER AS $$
 DECLARE
-  v_lead_days INTEGER;
-  v_price     INTEGER;
+  v_price INTEGER;
 BEGIN
-  v_lead_days := CASE WHEN p_scheduled_for IS NULL THEN NULL
-                      ELSE GREATEST(FLOOR(EXTRACT(EPOCH FROM (p_scheduled_for - now())) / 86400)::INTEGER, 0)
-                 END;
-
-  SELECT t.unit_price INTO v_price
+  SELECT
+    CASE WHEN r.qty_met AND r.days_met THEN r.unit_price_both
+         WHEN r.qty_met THEN r.unit_price
+         ELSE r.unit_price_days
+    END INTO v_price
+  FROM (
+    SELECT
+      t.unit_price, t.unit_price_days, t.unit_price_both,
+      t.min_quantity, t.min_days_per_week,
+      (CASE WHEN t.min_days_per_week = 0 THEN p_quantity ELSE p_order_quantity END) >= t.min_quantity
+        AND (t.max_quantity IS NULL
+             OR (CASE WHEN t.min_days_per_week = 0 THEN p_quantity ELSE p_order_quantity END) <= t.max_quantity)
+        AS qty_met,
+      (t.min_days_per_week > 0 AND p_days_count >= t.min_days_per_week) AS days_met
     FROM wholesale_tiers t
-   WHERE t.variant_id = p_variant_id
-     AND (CASE WHEN t.lead_time_days = 0 THEN p_quantity ELSE p_order_quantity END) >= t.min_quantity
-     AND (t.max_quantity IS NULL
-          OR (CASE WHEN t.lead_time_days = 0 THEN p_quantity ELSE p_order_quantity END) <= t.max_quantity)
-     AND (t.lead_time_days = 0 OR (v_lead_days IS NOT NULL AND v_lead_days >= t.lead_time_days))
-   ORDER BY t.min_quantity DESC, t.lead_time_days DESC
-   LIMIT 1;
+    WHERE t.variant_id = p_variant_id
+  ) r
+  WHERE r.qty_met OR r.days_met
+  ORDER BY r.min_quantity DESC, r.min_days_per_week DESC
+  LIMIT 1;
 
   RETURN COALESCE(v_price, p_base_price);
 END;
 $$ LANGUAGE plpgsql;
 COMMENT ON FUNCTION resolve_variant_price IS
-  'Chốt giá thật theo bậc giá: bậc giá sỉ (lead_time_days=0) so theo số lượng riêng món, bậc đặt trước (lead_time_days>0) so theo tổng số lượng cả đơn — không có bậc nào khớp thì trả về giá bán gốc';
+  'Chốt giá thật theo bậc giá: bậc giá sỉ so theo số lượng riêng món; bậc đặt trước so theo tổng số lượng cả lần giao VÀ số ngày/tuần riêng món, đạt điều kiện nào lấy giá tương ứng — không có bậc nào khớp thì trả về giá bán gốc';
 
 -- ============================================================================
 -- PHẦN 1: TẠO ĐƠN HÀNG (SDD 7.5)
@@ -208,7 +216,8 @@ BEGIN
     END LOOP;
 
     v_unit_price := resolve_variant_price(
-      v_variant.id, (v_item->>'quantity')::INTEGER, v_order_quantity_total, p_scheduled_for, v_variant.price
+      v_variant.id, (v_item->>'quantity')::INTEGER, v_order_quantity_total,
+      COALESCE((v_item->>'days_count')::INTEGER, 0), v_variant.price
     ) + v_topping_sum;
     v_line_total := v_unit_price * (v_item->>'quantity')::INTEGER;
     v_subtotal   := v_subtotal + v_line_total;
@@ -315,7 +324,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 COMMENT ON FUNCTION create_order IS
-  'Tạo đơn: chốt giá qua resolve_variant_price (bậc giá sỉ theo số lượng riêng món, bậc đặt trước theo tổng số lượng cả đơn, không khớp thì giá gốc), giữ chỗ tồn kho, áp voucher — tất cả trong 1 transaction';
+  'Tạo đơn: chốt giá qua resolve_variant_price (bậc giá sỉ theo số lượng riêng món; bậc đặt trước theo tổng số lượng cả đơn + số ngày/tuần riêng món (p_items[].days_count), không khớp thì giá gốc), giữ chỗ tồn kho, áp voucher — tất cả trong 1 transaction';
 
 -- ============================================================================
 -- PHẦN 2: ĐỔI TRẠNG THÁI ĐƠN HÀNG (state machine)

@@ -4,7 +4,10 @@ const asyncHandler = require('../asyncHandler');
 const { ApiError } = require('../errors');
 const { pickFields, requireFields, requireMerchantAccess } = require('../utils');
 
-const TIER_FIELDS = ['min_quantity', 'max_quantity', 'unit_price', 'lead_time_days', 'requires_deposit', 'deposit_percent'];
+const TIER_FIELDS = [
+  'min_quantity', 'max_quantity', 'unit_price', 'min_days_per_week', 'unit_price_days', 'unit_price_both',
+  'requires_deposit', 'deposit_percent',
+];
 
 async function merchantIdForVariant(variantId) {
   const variant = await db.queryOne('SELECT id, product_id FROM product_variants WHERE id = $1', [variantId]);

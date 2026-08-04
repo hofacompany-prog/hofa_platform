@@ -172,7 +172,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
       final key = variantId ?? 'default';
       final currentTiers = _tiersByVariant[key] ?? [];
       final hasOtherType = currentTiers.any(
-        (t) => (t.leadTimeDays > 0) != (_tierTab == 'preorder'),
+        (t) => (t.minDaysPerWeek > 0) != (_tierTab == 'preorder'),
       );
       if (hasOtherType) {
         if (mounted) {
@@ -199,10 +199,16 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     final priceCtrl = TextEditingController(
       text: existing?.unitPrice.toString() ?? '',
     );
-    final leadDaysCtrl = TextEditingController(
+    final minDaysCtrl = TextEditingController(
       text:
-          existing?.leadTimeDays.toString() ??
+          existing?.minDaysPerWeek.toString() ??
           (_tierTab == 'preorder' ? '' : '0'),
+    );
+    final priceDaysCtrl = TextEditingController(
+      text: existing?.unitPriceDays?.toString() ?? '',
+    );
+    final priceBothCtrl = TextEditingController(
+      text: existing?.unitPriceBoth?.toString() ?? '',
     );
     final isPreorder = _tierTab == 'preorder';
 
@@ -234,21 +240,56 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                   ),
                   keyboardType: TextInputType.number,
                 ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: priceCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Đơn giá (VNĐ)',
-                    border: OutlineInputBorder(),
-                  ),
-                  keyboardType: TextInputType.number,
-                ),
                 if (isPreorder) ...[
                   const SizedBox(height: 12),
                   TextField(
-                    controller: leadDaysCtrl,
+                    controller: minDaysCtrl,
                     decoration: const InputDecoration(
-                      labelText: 'Đặt trước tối thiểu bao nhiêu ngày',
+                      labelText: 'Số ngày đặt tối thiểu trong tuần',
+                      helperText:
+                          'Khách phải đặt sản phẩm này đủ số ngày/tuần này mới đạt điều kiện giá theo ngày',
+                      border: OutlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.number,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Giá theo từng điều kiện đạt được',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: priceCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Chỉ đạt điều kiện số lượng (VNĐ)',
+                      border: OutlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.number,
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: priceDaysCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Chỉ đạt điều kiện số ngày tối thiểu (VNĐ)',
+                      border: OutlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.number,
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: priceBothCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Đạt cả 2 điều kiện (VNĐ)',
+                      border: OutlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.number,
+                  ),
+                ] else ...[
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: priceCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Đơn giá (VNĐ)',
                       border: OutlineInputBorder(),
                     ),
                     keyboardType: TextInputType.number,
@@ -275,9 +316,15 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     final price = int.tryParse(priceCtrl.text.trim());
     if (minQty == null || price == null) return;
     final maxQty = int.tryParse(maxQtyCtrl.text.trim());
-    final leadDays = isPreorder
-        ? (int.tryParse(leadDaysCtrl.text.trim()) ?? 0)
+    final minDays = isPreorder
+        ? (int.tryParse(minDaysCtrl.text.trim()) ?? 0)
         : 0;
+    final priceDays = isPreorder
+        ? int.tryParse(priceDaysCtrl.text.trim())
+        : null;
+    final priceBoth = isPreorder
+        ? int.tryParse(priceBothCtrl.text.trim())
+        : null;
 
     if (minQty <= 0) {
       if (mounted) {
@@ -294,6 +341,16 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
             content: Text(
               'Số lượng tối đa phải lớn hơn hoặc bằng số lượng tối thiểu',
             ),
+          ),
+        );
+      }
+      return;
+    }
+    if (isPreorder && (priceDays == null || priceBoth == null)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Vui lòng nhập đủ 3 mức giá theo điều kiện'),
           ),
         );
       }
@@ -318,7 +375,9 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                 minQuantity: minQty,
                 maxQuantity: maxQty,
                 unitPrice: price,
-                leadTimeDays: leadDays,
+                minDaysPerWeek: minDays,
+                unitPriceDays: priceDays,
+                unitPriceBoth: priceBoth,
               ),
             ],
           };
@@ -334,7 +393,9 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                           minQuantity: minQty,
                           maxQuantity: maxQty,
                           unitPrice: price,
-                          leadTimeDays: leadDays,
+                          minDaysPerWeek: minDays,
+                          unitPriceDays: priceDays,
+                          unitPriceBoth: priceBoth,
                         )
                       : t,
                 )
@@ -352,14 +413,18 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
           minQuantity: minQty,
           maxQuantity: maxQty,
           unitPrice: price,
-          leadTimeDays: leadDays,
+          minDaysPerWeek: minDays,
+          unitPriceDays: priceDays,
+          unitPriceBoth: priceBoth,
         );
       } else {
         await _repo.updateWholesaleTier(existing.id, {
           'min_quantity': minQty,
           'max_quantity': maxQty,
           'unit_price': price,
-          'lead_time_days': leadDays,
+          'min_days_per_week': minDays,
+          'unit_price_days': priceDays,
+          'unit_price_both': priceBoth,
         });
       }
       await _loadWholesaleTiers();
@@ -431,15 +496,15 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
         allTiers
             .where(
               (t) => _tierTab == 'preorder'
-                  ? t.leadTimeDays > 0
-                  : t.leadTimeDays == 0,
+                  ? t.minDaysPerWeek > 0
+                  : t.minDaysPerWeek == 0,
             )
             .toList()
           ..sort((a, b) => a.minQuantity.compareTo(b.minQuantity));
     // 1 biến thể chỉ được 1 trong 2 loại bậc giá — đã có bậc loại kia thì khoá nút thêm
     // của tab hiện tại lại, tránh trộn giá sỉ + đặt trước trên cùng 1 biến thể.
     final hasOtherType = allTiers.any(
-      (t) => (t.leadTimeDays > 0) != (_tierTab == 'preorder'),
+      (t) => (t.minDaysPerWeek > 0) != (_tierTab == 'preorder'),
     );
     final addButton = TextButton.icon(
       onPressed: hasOtherType ? null : () => _tierDialog(variantId: variantId),
@@ -496,13 +561,13 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                         ? 'Số lượng ${t.minQuantity}–${t.maxQuantity}'
                         : 'Số lượng từ ${t.minQuantity}',
                   ),
-                  subtitle: Text(
-                    [
-                      formatVnd(t.unitPrice),
-                      if (_tierTab == 'preorder')
-                        'Đặt trước ≥ ${t.leadTimeDays} ngày',
-                    ].join(' · '),
-                  ),
+                  subtitle: _tierTab == 'preorder'
+                      ? Text(
+                          'SL: ${formatVnd(t.unitPrice)} · '
+                          '≥${t.minDaysPerWeek} ngày/tuần: ${formatVnd(t.unitPriceDays ?? 0)} · '
+                          'Cả 2: ${formatVnd(t.unitPriceBoth ?? 0)}',
+                        )
+                      : Text(formatVnd(t.unitPrice)),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -1694,7 +1759,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            '"Giá sỉ" chỉ theo số lượng mua · "Đặt trước" có thêm điều kiện đặt trước tối thiểu bao nhiêu ngày. Mỗi biến thể tự cài đặt bậc giá riêng.',
+                            '"Giá sỉ" chỉ theo số lượng mua · "Đặt trước" có thêm điều kiện số ngày đặt tối thiểu trong tuần, mỗi bậc có 3 giá tuỳ đạt điều kiện nào. Mỗi biến thể tự cài đặt bậc giá riêng.',
                             style: Theme.of(context).textTheme.bodySmall,
                           ),
                           const SizedBox(height: 8),

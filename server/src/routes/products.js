@@ -15,7 +15,10 @@ const VARIANT_FIELDS = [
 ];
 const TOPPING_GROUP_FIELDS = ['name', 'is_required', 'allow_multiple', 'sort_order'];
 const TOPPING_FIELDS = ['name', 'price', 'sort_order'];
-const TIER_FIELDS = ['min_quantity', 'max_quantity', 'unit_price', 'lead_time_days', 'requires_deposit', 'deposit_percent'];
+const TIER_FIELDS = [
+  'min_quantity', 'max_quantity', 'unit_price', 'min_days_per_week', 'unit_price_days', 'unit_price_both',
+  'requires_deposit', 'deposit_percent',
+];
 
 // ---- Danh mục ----
 

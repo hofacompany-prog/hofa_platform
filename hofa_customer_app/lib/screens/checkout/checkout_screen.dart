@@ -241,6 +241,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           (e) => {
             'variant_id': e.variantId,
             'quantity': e.quantity,
+            // Số ngày/tuần khách đặt RIÊNG món này — backend dùng để so bậc "đặt trước"
+            // theo điều kiện số ngày (chỉ có ý nghĩa với món ở tab Đặt trước).
+            if (e.deliverySlots.isNotEmpty)
+              'days_count': e.deliverySlots.length,
             if (e.note != null) 'note': e.note,
             if (e.toppings.isNotEmpty)
               'topping_ids': e.toppings.map((t) => t.id).toList(),
@@ -287,29 +291,38 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     return result;
   }
 
-  /// Bậc giá sỉ (lead_time_days = 0) so theo [ownQty] — số lượng riêng món này. Bậc đặt
-  /// trước (lead_time_days > 0) so theo [orderQty] — tổng số lượng của cả đơn (đúng như
-  /// resolve_variant_price() phía backend), để giá xem trước ở đây khớp với giá thực chốt.
+  /// Bậc giá sỉ (minDaysPerWeek = 0) chỉ có điều kiện số lượng, so theo [ownQty] — số
+  /// lượng riêng món này. Bậc đặt trước (minDaysPerWeek > 0) có 2 điều kiện độc lập: số
+  /// lượng so theo [orderQty] (tổng số lượng cả đơn) và số ngày/tuần so theo [daysCount]
+  /// (số ngày/tuần riêng món này) — đạt điều kiện nào lấy giá tương ứng, đúng như
+  /// resolve_variant_price() phía backend, để giá xem trước ở đây khớp với giá thực chốt.
   int _matchedTierPrice(
     int ownQty,
     int orderQty,
+    int daysCount,
     int fallback,
     List<WholesaleTier> tiers,
   ) {
-    final sorted = [...tiers]
-      ..sort(
-        (a, b) => a.leadTimeDays != b.leadTimeDays
-            ? b.leadTimeDays.compareTo(a.leadTimeDays)
-            : b.minQuantity.compareTo(a.minQuantity),
-      );
-    for (final t in sorted) {
-      final matchQty = t.leadTimeDays == 0 ? ownQty : orderQty;
-      if (matchQty >= t.minQuantity &&
-          (t.maxQuantity == null || matchQty <= t.maxQuantity!)) {
-        return t.unitPrice;
-      }
+    bool qtyMet(WholesaleTier t) {
+      final ref = t.minDaysPerWeek == 0 ? ownQty : orderQty;
+      return ref >= t.minQuantity &&
+          (t.maxQuantity == null || ref <= t.maxQuantity!);
     }
-    return fallback;
+
+    bool daysMet(WholesaleTier t) =>
+        t.minDaysPerWeek > 0 && daysCount >= t.minDaysPerWeek;
+
+    final candidates = tiers.where((t) => qtyMet(t) || daysMet(t)).toList()
+      ..sort(
+        (a, b) => a.minQuantity != b.minQuantity
+            ? b.minQuantity.compareTo(a.minQuantity)
+            : b.minDaysPerWeek.compareTo(a.minDaysPerWeek),
+      );
+    if (candidates.isEmpty) return fallback;
+    final t = candidates.first;
+    if (qtyMet(t) && daysMet(t)) return t.unitPriceBoth ?? t.unitPrice;
+    if (qtyMet(t)) return t.unitPrice;
+    return t.unitPriceDays ?? t.unitPrice;
   }
 
   /// Xem trước tổng tiền — mỗi lần giao (đơn) tính riêng theo đúng tổng số lượng của
@@ -325,7 +338,13 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             const <WholesaleTier>[];
         final price = tiers.isEmpty
             ? i.unitPrice
-            : _matchedTierPrice(i.quantity, orderQty, i.unitPrice, tiers);
+            : _matchedTierPrice(
+                i.quantity,
+                orderQty,
+                i.deliverySlots.length,
+                i.unitPrice,
+                tiers,
+              );
         total += (price + i.toppingsTotal) * i.quantity;
       }
     }
