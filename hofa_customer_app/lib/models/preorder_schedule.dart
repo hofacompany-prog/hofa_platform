@@ -1,18 +1,17 @@
 import 'package:flutter/material.dart';
+import 'delivery_slot.dart';
 
-/// Lịch giao cho đơn đặt trước — khách chọn các ngày trong tuần (1=T2..7=CN) +
-/// giờ giao, và chọn giao 1 lần (chốt ngày gần nhất trong các ngày đã chọn) hay
-/// giao nhiều lần (lặp lại hàng tuần trong [weeks] tuần tới, mỗi ngày đã chọn ->
-/// 1 đơn riêng cho mỗi tuần, vì hệ thống hiện chưa có khái niệm đơn lặp định kỳ).
+/// Lịch giao cho đơn đặt trước — gom lại toàn bộ DeliverySlot (thứ + giờ) của mọi món
+/// trong giỏ, và chọn giao 1 lần (chốt lần giao gần nhất trong các slot) hay giao nhiều
+/// lần (lặp lại hàng tuần trong [weeks] tuần tới, mỗi slot -> 1 đơn riêng mỗi tuần, vì
+/// hệ thống hiện chưa có khái niệm đơn lặp định kỳ thật).
 class PreorderSchedule {
-  final List<int> weekdays;
-  final TimeOfDay time;
+  final List<DeliverySlot> slots;
   final bool recurring;
   final int weeks;
 
   const PreorderSchedule({
-    required this.weekdays,
-    required this.time,
+    required this.slots,
     required this.recurring,
     this.weeks = 1,
   });
@@ -36,16 +35,16 @@ class PreorderSchedule {
     return candidate;
   }
 
-  /// Ngày giao gần nhất trong các ngày đã chọn — dùng cho chế độ "giao 1 lần".
-  DateTime get earliestOccurrence => weekdays
-      .map((w) => nextOccurrence(w, time))
+  /// Lần giao gần nhất trong các slot đã chọn — dùng cho chế độ "giao 1 lần".
+  DateTime get earliestOccurrence => slots
+      .map((s) => nextOccurrence(s.weekday, s.time))
       .reduce((a, b) => a.isBefore(b) ? a : b);
 
   /// Toàn bộ các lần giao — dùng cho chế độ "giao nhiều lần" (mỗi lần = 1 đơn hàng riêng).
   List<DateTime> get occurrences {
     final result = <DateTime>[];
-    for (final w in weekdays) {
-      final first = nextOccurrence(w, time);
+    for (final s in slots) {
+      final first = nextOccurrence(s.weekday, s.time);
       for (var i = 0; i < weeks; i++) {
         result.add(first.add(Duration(days: 7 * i)));
       }

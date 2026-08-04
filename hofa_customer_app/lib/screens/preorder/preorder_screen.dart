@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/format.dart';
 import '../../models/cart_item.dart';
+import '../../models/delivery_slot.dart';
 import '../../models/preorder_schedule.dart';
 import '../../providers/app_providers.dart';
 import '../../providers/cart_provider.dart';
@@ -19,11 +20,14 @@ const _weekdayLabels = [
   (iso: 7, label: 'CN'),
 ];
 
+String _weekdayLabelOf(int iso) =>
+    _weekdayLabels.firstWhere((d) => d.iso == iso).label;
+
 /// Giỏ "đặt trước" — cùng dùng chung cartProvider với giỏ hàng thường (giỏ chỉ chứa
 /// món của 1 cửa hàng tại 1 thời điểm), chỉ hiển thị khi giỏ đang ở sales_model
 /// 'scheduled' (bán sỉ/đặt trước). Bộ chọn ngày trong tuần dùng CHUNG 1 chỗ — bấm vào
-/// món nào thì bộ chọn nhảy theo, hiển thị/sửa đúng ngày của món đó. Ngày tính từ
-/// ngày mai trở đi (không cho chọn hôm nay), có nút xem tuần kế tiếp.
+/// món nào thì bộ chọn nhảy theo. Mỗi ngày có thể có nhiều giờ giao khác nhau (giao
+/// nhiều lần trong ngày). Ngày tính từ ngày mai trở đi, có nút xem tuần kế tiếp.
 class PreorderScreen extends ConsumerStatefulWidget {
   const PreorderScreen({super.key});
 
@@ -35,7 +39,6 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen> {
   String? _activeLineId;
   int _weekOffset = 0;
   String _mode = 'once';
-  TimeOfDay _time = const TimeOfDay(hour: 8, minute: 0);
   int _weeks = 1;
 
   /// Thứ 2 của tuần chứa "ngày mai" — mốc gốc để tính ngày cho mọi tuần xem tiếp theo.
@@ -54,24 +57,61 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen> {
     return !date.isBefore(tomorrowDate);
   }
 
+  /// Ngày gần nhất (từ ngày mai) khớp thứ [iso] — dùng cho dòng tóm tắt dưới sản phẩm,
+  /// không phụ thuộc đang xem tuần nào ở bộ chọn.
+  DateTime _nearestFutureDate(int iso) {
+    final tomorrow = DateTime.now().add(const Duration(days: 1));
+    var d = DateTime(tomorrow.year, tomorrow.month, tomorrow.day);
+    while (d.weekday != iso) {
+      d = d.add(const Duration(days: 1));
+    }
+    return d;
+  }
+
   String _shortDate(DateTime d) =>
       '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}';
 
-  Future<void> _pickTime() async {
-    final picked = await showTimePicker(context: context, initialTime: _time);
-    if (picked != null) setState(() => _time = picked);
+  Future<void> _onDayTap(CartItem item, int iso) async {
+    final hasSlot = item.deliverySlots.any((s) => s.weekday == iso);
+    if (hasSlot) {
+      final updated = item.deliverySlots
+          .where((s) => s.weekday != iso)
+          .toList();
+      await ref
+          .read(cartProvider.notifier)
+          .updateDeliverySlots(item.lineId, updated);
+      return;
+    }
+    await _addTimeForDay(item, iso);
   }
 
-  void _toggleDay(CartItem item, int iso) {
-    final days = Set<int>.from(item.weekdays);
-    if (days.contains(iso)) {
-      days.remove(iso);
-    } else {
-      days.add(iso);
-    }
-    ref
+  Future<void> _addTimeForDay(CartItem item, int iso) async {
+    final time = await showTimePicker(
+      context: context,
+      initialTime: const TimeOfDay(hour: 8, minute: 0),
+    );
+    if (time == null) return;
+    final updated = [
+      ...item.deliverySlots,
+      DeliverySlot(weekday: iso, time: time),
+    ]..sort(DeliverySlot.compare);
+    await ref
         .read(cartProvider.notifier)
-        .updateWeekdays(item.lineId, days.toList()..sort());
+        .updateDeliverySlots(item.lineId, updated);
+  }
+
+  Future<void> _removeSlot(CartItem item, DeliverySlot slot) async {
+    final updated = item.deliverySlots
+        .where(
+          (s) =>
+              !(s.weekday == slot.weekday &&
+                  s.time.hour == slot.time.hour &&
+                  s.time.minute == slot.time.minute),
+        )
+        .toList();
+    await ref
+        .read(cartProvider.notifier)
+        .updateDeliverySlots(item.lineId, updated);
   }
 
   Future<void> _editToppings(CartItem item) async {
@@ -99,7 +139,7 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen> {
 
   void _goCheckout(CartState cart) {
     for (final item in cart.items) {
-      if (item.weekdays.isEmpty) {
+      if (item.deliverySlots.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Chọn ít nhất 1 ngày giao cho "${item.productName}"'),
@@ -108,13 +148,14 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen> {
         return;
       }
     }
-    final allDays = <int>{};
+    final allSlots = <String, DeliverySlot>{};
     for (final item in cart.items) {
-      allDays.addAll(item.weekdays);
+      for (final s in item.deliverySlots) {
+        allSlots['${s.weekday}_${s.time.hour}_${s.time.minute}'] = s;
+      }
     }
     final schedule = PreorderSchedule(
-      weekdays: allDays.toList()..sort(),
-      time: _time,
+      slots: allSlots.values.toList()..sort(DeliverySlot.compare),
       recurring: _mode == 'recurring',
       weeks: _mode == 'recurring' ? _weeks : 1,
     );
@@ -133,6 +174,9 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen> {
       activeItem = matches.isNotEmpty ? matches.first : cart.items.first;
       _activeLineId = activeItem.lineId;
     }
+    final activeDays =
+        (activeItem?.deliverySlots.map((s) => s.weekday).toSet().toList() ?? [])
+          ..sort();
 
     return Scaffold(
       appBar: AppBar(title: const Text('Đặt trước')),
@@ -169,6 +213,8 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen> {
                             [];
                         final hasToppings = toppingGroups.isNotEmpty;
                         final isActive = item.lineId == activeItem?.lineId;
+                        final sortedSlots = [...item.deliverySlots]
+                          ..sort(DeliverySlot.compare);
                         return InkWell(
                           onTap: () =>
                               setState(() => _activeLineId = item.lineId),
@@ -306,11 +352,11 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen> {
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    item.weekdays.isEmpty
+                                    sortedSlots.isEmpty
                                         ? 'Chưa chọn ngày giao'
-                                        : 'Ngày giao: ${item.weekdays.map((iso) => _weekdayLabels.firstWhere((d) => d.iso == iso).label).join(', ')}',
+                                        : 'Ngày giao: ${sortedSlots.map((s) => '${s.time.format(context)} ${_weekdayLabelOf(s.weekday)} (${_shortDate(_nearestFutureDate(s.weekday))})').join(', ')}',
                                     style: theme.textTheme.bodySmall?.copyWith(
-                                      color: item.weekdays.isEmpty
+                                      color: sortedSlots.isEmpty
                                           ? theme.colorScheme.error
                                           : theme.colorScheme.primary,
                                     ),
@@ -373,14 +419,49 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen> {
                                 ),
                               ],
                             ),
-                            selected:
-                                activeItem?.weekdays.contains(d.iso) ?? false,
+                            selected: activeDays.contains(d.iso),
                             onSelected: (!selectable || activeItem == null)
                                 ? null
-                                : (_) => _toggleDay(activeItem!, d.iso),
+                                : (_) => _onDayTap(activeItem!, d.iso),
                           );
                         }).toList(),
                       ),
+                      if (activeItem != null && activeDays.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        for (final iso in activeDays)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Wrap(
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              spacing: 6,
+                              runSpacing: 6,
+                              children: [
+                                Text(
+                                  '${_weekdayLabelOf(iso)} (${_shortDate(_nearestFutureDate(iso))}):',
+                                ),
+                                ...activeItem.deliverySlots
+                                    .where((s) => s.weekday == iso)
+                                    .map(
+                                      (s) => Chip(
+                                        label: Text(s.time.format(context)),
+                                        deleteIcon: const Icon(
+                                          Icons.close,
+                                          size: 16,
+                                        ),
+                                        onDeleted: () =>
+                                            _removeSlot(activeItem!, s),
+                                      ),
+                                    ),
+                                ActionChip(
+                                  avatar: const Icon(Icons.add, size: 16),
+                                  label: const Text('Thêm giờ'),
+                                  onPressed: () =>
+                                      _addTimeForDay(activeItem!, iso),
+                                ),
+                              ],
+                            ),
+                          ),
+                      ],
                       const Divider(height: 32),
                       Text('Hình thức giao', style: theme.textTheme.titleSmall),
                       const SizedBox(height: 8),
@@ -399,12 +480,6 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen> {
                                 setState(() => _mode = 'recurring'),
                           ),
                         ],
-                      ),
-                      const SizedBox(height: 12),
-                      OutlinedButton.icon(
-                        icon: const Icon(Icons.access_time_outlined),
-                        label: Text('Giờ giao: ${_time.format(context)}'),
-                        onPressed: _pickTime,
                       ),
                       if (_mode == 'recurring') ...[
                         const SizedBox(height: 12),

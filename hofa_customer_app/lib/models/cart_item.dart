@@ -1,3 +1,4 @@
+import 'delivery_slot.dart';
 import 'topping.dart';
 
 /// Món trong giỏ — chỉ tồn tại phía client (chưa phải đơn hàng thật) nên không có fromJson
@@ -18,8 +19,9 @@ class CartItem {
   final String? note;
   final List<ProductTopping> toppings;
 
-  /// Các ngày trong tuần (1=T2..7=CN) khách muốn nhận riêng cho món này khi đặt trước.
-  final List<int> weekdays;
+  /// Các lần giao trong tuần (thứ + giờ) khách muốn nhận riêng cho món này khi đặt trước —
+  /// 1 thứ có thể có nhiều giờ khác nhau nếu món này giao nhiều lần trong ngày.
+  final List<DeliverySlot> deliverySlots;
 
   CartItem({
     required this.lineId,
@@ -33,7 +35,7 @@ class CartItem {
     required this.unit,
     this.note,
     this.toppings = const [],
-    this.weekdays = const [],
+    this.deliverySlots = const [],
   });
 
   int get toppingsTotal => toppings.fold(0, (sum, t) => sum + t.price);
@@ -46,7 +48,7 @@ class CartItem {
   CartItem copyWith({
     int? quantity,
     List<ProductTopping>? toppings,
-    List<int>? weekdays,
+    List<DeliverySlot>? deliverySlots,
   }) => CartItem(
     lineId: lineId,
     productId: productId,
@@ -59,7 +61,7 @@ class CartItem {
     unit: unit,
     note: note,
     toppings: toppings ?? this.toppings,
-    weekdays: weekdays ?? this.weekdays,
+    deliverySlots: deliverySlots ?? this.deliverySlots,
   );
 
   Map<String, dynamic> toJson() => {
@@ -74,7 +76,7 @@ class CartItem {
     'unit': unit,
     'note': note,
     'toppings': toppings.map((t) => t.toJson()).toList(),
-    'weekdays': weekdays,
+    'delivery_slots': deliverySlots.map((s) => s.toJson()).toList(),
   };
 
   factory CartItem.fromJson(Map<String, dynamic> json) => CartItem(
@@ -93,8 +95,8 @@ class CartItem {
     toppings: (json['toppings'] as List? ?? [])
         .map((e) => ProductTopping.fromJson(e as Map<String, dynamic>))
         .toList(),
-    weekdays: (json['weekdays'] as List? ?? [])
-        .map((e) => (e as num).toInt())
+    deliverySlots: (json['delivery_slots'] as List? ?? [])
+        .map((e) => DeliverySlot.fromJson(e as Map<String, dynamic>))
         .toList(),
   );
 }

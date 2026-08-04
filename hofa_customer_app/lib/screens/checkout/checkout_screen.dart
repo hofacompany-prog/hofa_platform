@@ -490,7 +490,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             if (widget.preorderSchedule != null) ...[
               Text(
                 widget.preorderSchedule!.recurring
-                    ? 'Giao lặp lại ${widget.preorderSchedule!.weekdays.length} ngày/tuần, trong ${widget.preorderSchedule!.weeks} tuần tới · ${widget.preorderSchedule!.time.format(context)}'
+                    ? 'Giao lặp lại ${widget.preorderSchedule!.slots.length} khung giờ/tuần, trong ${widget.preorderSchedule!.weeks} tuần tới'
                     : 'Giao 1 lần: ${formatDateTime(_scheduledFor!)}',
               ),
               Align(
