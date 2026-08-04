@@ -163,12 +163,12 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
                 .toList() ??
             const <WholesaleTier>[];
         final price = tiers.isEmpty
-            ? i.unitPrice
+            ? i.basePrice
             : _matchedTierPrice(
                 i.quantity,
                 dayQty,
                 i.deliverySlots.length,
-                i.unitPrice,
+                i.basePrice,
                 tiers,
               );
         total += (price + i.toppingsTotal) * i.quantity;
@@ -480,19 +480,42 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
                   .toList() ??
               const <WholesaleTier>[]
         : const <WholesaleTier>[];
-    void changeQuantity(int quantity) {
+    Future<void> changeQuantity(int quantity) async {
+      if (quantity <= 0) {
+        final confirm = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Xoá sản phẩm?'),
+            content: Text('Xoá "${item.productName}" khỏi giỏ hàng?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Huỷ'),
+              ),
+              FilledButton(
+                style: FilledButton.styleFrom(backgroundColor: Colors.red),
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Xoá'),
+              ),
+            ],
+          ),
+        );
+        if (confirm != true) return;
+      }
       ref
           .read(cartProvider.notifier)
           .updateQuantity(
             item.lineId,
             quantity,
+            // Không đạt bậc nào thì quay về giá gốc (basePrice), không phải giá bậc lần
+            // trước còn lưu lại.
             unitPrice: wholesaleTiers.isEmpty
                 ? null
                 : _matchedTierPrice(
                     quantity,
                     quantity,
                     0,
-                    item.unitPrice,
+                    item.basePrice,
                     wholesaleTiers,
                   ),
           );
@@ -523,13 +546,14 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
           item.quantity,
           bestOrderQty,
           item.deliverySlots.length,
-          item.unitPrice,
+          item.basePrice,
           preorderTiers,
         );
       }
     }
     // So với giá gốc (basePrice), không phải unitPrice — unitPrice bên Giá sỉ đã bị ghi
     // đè thành giá theo bậc mỗi khi đổi số lượng nên không còn phản ánh giá "mặc định".
+    // Không đạt bậc nào thì preorderPrice tự trả về basePrice (quay lại giá mặc định).
     final displayPrice = preorderPrice ?? item.unitPrice;
     final discounted = displayPrice != item.basePrice;
 
@@ -797,12 +821,12 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
                         .toList() ??
                     const <WholesaleTier>[];
                 return tiers.isEmpty
-                    ? i.unitPrice
+                    ? i.basePrice
                     : _matchedTierPrice(
                         i.quantity,
                         dayQty,
                         i.deliverySlots.length,
-                        i.unitPrice,
+                        i.basePrice,
                         tiers,
                       );
               }

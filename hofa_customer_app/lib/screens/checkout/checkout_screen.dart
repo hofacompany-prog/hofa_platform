@@ -346,12 +346,12 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 .toList() ??
             const <WholesaleTier>[];
         final price = tiers.isEmpty
-            ? i.unitPrice
+            ? i.basePrice
             : _matchedTierPrice(
                 i.quantity,
                 orderQty,
                 i.deliverySlots.length,
-                i.unitPrice,
+                i.basePrice,
                 tiers,
               );
         total += (price + i.toppingsTotal) * i.quantity;

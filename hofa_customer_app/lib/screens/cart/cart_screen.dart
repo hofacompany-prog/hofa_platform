@@ -38,6 +38,40 @@ class CartScreen extends ConsumerWidget {
     }
   }
 
+  /// Bấm nút trừ mà số lượng về 0 nghĩa là xoá hẳn món khỏi giỏ — hỏi xác nhận trước khi
+  /// xoá thật, tránh xoá nhầm khi lỡ tay bấm liên tục.
+  Future<void> _decreaseQuantity(
+    BuildContext context,
+    WidgetRef ref,
+    CartItem item,
+  ) async {
+    final newQuantity = item.quantity - 1;
+    if (newQuantity <= 0) {
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Xoá sản phẩm?'),
+          content: Text('Xoá "${item.productName}" khỏi giỏ hàng?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Huỷ'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Xoá'),
+            ),
+          ],
+        ),
+      );
+      if (confirm != true) return;
+    }
+    await ref
+        .read(cartProvider.notifier)
+        .updateQuantity(item.lineId, newQuantity);
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final cart = ref.watch(cartProvider);
@@ -155,12 +189,11 @@ class CartScreen extends ConsumerWidget {
                                           Icons.remove_circle_outline,
                                           size: 20,
                                         ),
-                                        onPressed: () => ref
-                                            .read(cartProvider.notifier)
-                                            .updateQuantity(
-                                              item.lineId,
-                                              item.quantity - 1,
-                                            ),
+                                        onPressed: () => _decreaseQuantity(
+                                          context,
+                                          ref,
+                                          item,
+                                        ),
                                       ),
                                       Text('${item.quantity}'),
                                       IconButton(
