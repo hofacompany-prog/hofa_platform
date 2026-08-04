@@ -27,15 +27,6 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
   bool _adding = false;
   List<ProductTopping> _selectedToppings = [];
 
-  Future<void> _pickToppings(List<ToppingGroup> groups) async {
-    final result = await showToppingPickerDialog(
-      context,
-      groups: groups,
-      initiallySelected: _selectedToppings,
-    );
-    if (result != null) setState(() => _selectedToppings = result);
-  }
-
   void _ensureVariantSelected(Product product) {
     _selectedVariant ??= product.defaultVariant;
   }
@@ -78,16 +69,17 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
     int unitPrice,
     List<ToppingGroup> toppingGroups,
   ) async {
-    for (final g in toppingGroups) {
-      if (g.isRequired &&
-          !_selectedToppings.any(
-            (t) => g.toppings.any((gt) => gt.id == t.id),
-          )) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Vui lòng chọn ${g.name}')));
-        return;
-      }
+    var toppings = _selectedToppings;
+    if (toppingGroups.isNotEmpty) {
+      final result = await showToppingPickerDialog(
+        context,
+        groups: toppingGroups,
+        initiallySelected: _selectedToppings,
+      );
+      if (result == null) return; // huỷ popup thì không thêm vào giỏ
+      if (!mounted) return;
+      toppings = result;
+      setState(() => _selectedToppings = result);
     }
 
     String? orderKind;
@@ -173,7 +165,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
           basePrice: variant.price,
           quantity: _quantity,
           unit: product.unit,
-          toppings: _selectedToppings,
+          toppings: toppings,
           orderKind: orderKind,
         ),
       );
@@ -385,27 +377,24 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                       const SizedBox(height: 16),
                       Row(
                         children: [
+                          Icon(
+                            Icons.tune,
+                            size: 16,
+                            color: theme.colorScheme.outline,
+                          ),
+                          const SizedBox(width: 6),
                           Expanded(
                             child: Text(
-                              'Topping',
-                              style: theme.textTheme.titleSmall,
-                            ),
-                          ),
-                          TextButton.icon(
-                            onPressed: () => _pickToppings(toppingGroups),
-                            icon: const Icon(
-                              Icons.add_circle_outline,
-                              size: 18,
-                            ),
-                            label: Text(
-                              _selectedToppings.isEmpty
-                                  ? 'Chọn topping'
-                                  : 'Sửa topping',
+                              'Sản phẩm này có topping — chọn khi bấm "Thêm vào giỏ"',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.outline,
+                              ),
                             ),
                           ),
                         ],
                       ),
-                      if (_selectedToppings.isNotEmpty)
+                      if (_selectedToppings.isNotEmpty) ...[
+                        const SizedBox(height: 8),
                         Wrap(
                           spacing: 6,
                           runSpacing: 6,
@@ -421,6 +410,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                               )
                               .toList(),
                         ),
+                      ],
                     ],
                     if (product.description != null &&
                         product.description!.isNotEmpty) ...[
