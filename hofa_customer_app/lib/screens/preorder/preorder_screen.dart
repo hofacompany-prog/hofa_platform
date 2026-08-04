@@ -1292,7 +1292,14 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
     );
   }
 
-  /// Nhãn tab kèm vòng tròn số món — giống hệt cách hiển thị ở thanh điều hướng dưới.
-  Widget _tabLabel(String text, int count) =>
-      count > 0 ? Badge(label: Text('$count'), child: Text(text)) : Text(text);
+  /// Nhãn tab kèm vòng tròn số món — giống hệt cách hiển thị ở thanh điều hướng dưới, chỉ
+  /// đẩy lệch ra ngoài/lên cao hơn một chút để không đè lên chữ (khác Icon vuông vắn của
+  /// thanh điều hướng, Text dài ngắn khác nhau nên vòng tròn dễ che chữ nếu để mặc định).
+  Widget _tabLabel(String text, int count) => count > 0
+      ? Badge(
+          offset: const Offset(12, -10),
+          label: Text('$count'),
+          child: Text(text),
+        )
+      : Text(text);
 }
