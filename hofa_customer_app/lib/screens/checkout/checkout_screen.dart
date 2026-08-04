@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/format.dart';
+import '../../core/geo.dart';
 import '../../models/address.dart';
 import '../../models/cart_item.dart';
 import '../../models/preorder_schedule.dart';
@@ -61,6 +62,38 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       return cart.items.where((i) => i.orderKind == 'wholesale').toList();
     }
     return cart.items.where((i) => i.orderKind == 'preorder').toList();
+  }
+
+  /// Ước tính phí ship tới địa chỉ ĐANG CHỌN — tự tính lại mỗi khi đổi địa chỉ vì đọc
+  /// thẳng [_selectedAddressId] hiện tại. CHỈ hiển thị tham khảo, chưa cộng vào "Tổng
+  /// cộng" — đơn hàng thật hiện vẫn tính phí ship 0đ (xem _orderBody). Trả về null nếu
+  /// chưa đủ dữ liệu để ước tính (chưa chọn địa chỉ, thiếu toạ độ chi nhánh/địa chỉ...).
+  int? _estimatedShippingFee(
+    CartState cart,
+    List<Address> addresses,
+    int orderAmount,
+  ) {
+    final branchId = cart.branchId;
+    if (branchId == null || _selectedAddressId == null) return null;
+    final settings = ref.watch(shippingFeeSettingsProvider).valueOrNull;
+    if (settings == null) return null;
+    final branch = ref.watch(branchDetailProvider(branchId)).valueOrNull;
+    if (branch == null || branch.latitude == null || branch.longitude == null) {
+      return null;
+    }
+    final address = addresses.where((a) => a.id == _selectedAddressId).toList();
+    if (address.isEmpty ||
+        address.first.latitude == null ||
+        address.first.longitude == null) {
+      return null;
+    }
+    final distanceKm = haversineKm(
+      branch.latitude!,
+      branch.longitude!,
+      address.first.latitude!,
+      address.first.longitude!,
+    );
+    return settings.estimate(distanceKm, orderAmount: orderAmount);
   }
 
   Future<void> _addAddress() async {
@@ -517,6 +550,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     ? defaultAddr.first.id
                     : addresses.first.id;
               }
+              final shippingFee = _estimatedShippingFee(
+                cart,
+                addresses,
+                itemsSubtotal,
+              );
               return Column(
                 children: [
                   RadioGroup<String>(
@@ -545,6 +583,29 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       label: const Text('Thêm địa chỉ mới'),
                     ),
                   ),
+                  if (shippingFee != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4, bottom: 4),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.local_shipping_outlined,
+                            size: 16,
+                            color: theme.colorScheme.outline,
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              'Phí giao hàng ước tính tới địa chỉ này: '
+                              '${shippingFee == 0 ? 'Miễn phí' : formatVnd(shippingFee)}',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.outline,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                 ],
               );
             },
