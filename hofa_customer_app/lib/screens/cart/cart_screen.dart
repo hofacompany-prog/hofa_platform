@@ -32,9 +32,12 @@ class CartScreen extends ConsumerWidget {
       context,
       groups: groups,
       initiallySelected: item.toppings,
+      initialNote: item.note,
     );
     if (result != null) {
-      await ref.read(cartProvider.notifier).updateToppings(item.lineId, result);
+      await ref
+          .read(cartProvider.notifier)
+          .updateToppings(item.lineId, result.toppings, note: result.note);
     }
   }
 

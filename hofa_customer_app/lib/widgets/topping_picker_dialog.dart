@@ -4,12 +4,15 @@ import '../models/topping.dart';
 
 /// Popup chọn topping (trượt lên từ dưới) dùng chung cho lúc thêm vào giỏ
 /// (product_detail_screen) và lúc sửa topping của 1 dòng đã có trong giỏ
-/// (cart_screen/preorder_screen). Trả về danh sách topping đã chọn, hoặc null nếu khách
+/// (cart_screen/preorder_screen). Trả về topping đã chọn + lưu ý riêng cho sản phẩm này
+/// (khác với lưu ý chung của cả đơn hàng nhập ở bước thanh toán), hoặc null nếu khách
 /// bấm Huỷ/vuốt xuống đóng popup.
-Future<List<ProductTopping>?> showToppingPickerDialog(
+Future<({List<ProductTopping> toppings, String? note})?>
+showToppingPickerDialog(
   BuildContext context, {
   required List<ToppingGroup> groups,
   List<ProductTopping> initiallySelected = const [],
+  String? initialNote,
 }) {
   final selectedByGroup = <String, Set<String>>{
     for (final g in groups)
@@ -18,8 +21,9 @@ Future<List<ProductTopping>?> showToppingPickerDialog(
           .map((t) => t.id)
           .toSet(),
   };
+  final noteCtrl = TextEditingController(text: initialNote ?? '');
 
-  return showModalBottomSheet<List<ProductTopping>>(
+  return showModalBottomSheet<({List<ProductTopping> toppings, String? note})>(
     context: context,
     isScrollControlled: true,
     shape: const RoundedRectangleBorder(
@@ -36,12 +40,16 @@ Future<List<ProductTopping>?> showToppingPickerDialog(
               return;
             }
           }
-          final result = <ProductTopping>[];
+          final toppings = <ProductTopping>[];
           for (final g in groups) {
             final ids = selectedByGroup[g.id] ?? {};
-            result.addAll(g.toppings.where((t) => ids.contains(t.id)));
+            toppings.addAll(g.toppings.where((t) => ids.contains(t.id)));
           }
-          Navigator.pop(context, result);
+          final note = noteCtrl.text.trim();
+          Navigator.pop(context, (
+            toppings: toppings,
+            note: note.isEmpty ? null : note,
+          ));
         }
 
         return DraggableScrollableSheet(
@@ -156,6 +164,29 @@ Future<List<ProductTopping>?> showToppingPickerDialog(
                             ),
                           const SizedBox(height: 8),
                         ],
+                        const Divider(height: 24),
+                        Text(
+                          'Lưu ý riêng cho sản phẩm này',
+                          style: Theme.of(context).textTheme.titleSmall,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Khác với lưu ý chung của cả đơn hàng (nhập ở bước thanh toán)',
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: Theme.of(context).colorScheme.outline,
+                              ),
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: noteCtrl,
+                          maxLines: 3,
+                          decoration: const InputDecoration(
+                            hintText: 'VD: không lấy đá, ít cay...',
+                            border: OutlineInputBorder(),
+                            isDense: true,
+                          ),
+                        ),
                       ],
                     ),
                   ),

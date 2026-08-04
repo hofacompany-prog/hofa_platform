@@ -57,11 +57,16 @@ class CartItem {
   String get lineKey =>
       '$variantId::${(toppings.map((t) => t.id).toList()..sort()).join(',')}::${orderKind ?? ''}';
 
+  /// [note] chỉ được áp dụng khi [updateNote] = true — note là String? nên không thể
+  /// dùng kiểu "?? note cũ" như các field khác (null cũng là 1 giá trị hợp lệ, nghĩa là
+  /// đã xoá lưu ý, không phải "không đổi").
   CartItem copyWith({
     int? quantity,
     int? unitPrice,
     List<ProductTopping>? toppings,
     List<DeliverySlot>? deliverySlots,
+    bool updateNote = false,
+    String? note,
   }) => CartItem(
     lineId: lineId,
     productId: productId,
@@ -73,7 +78,7 @@ class CartItem {
     basePrice: basePrice,
     quantity: quantity ?? this.quantity,
     unit: unit,
-    note: note,
+    note: updateNote ? note : this.note,
     toppings: toppings ?? this.toppings,
     deliverySlots: deliverySlots ?? this.deliverySlots,
     orderKind: orderKind,

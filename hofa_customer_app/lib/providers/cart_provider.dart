@@ -131,12 +131,19 @@ class CartNotifier extends StateNotifier<CartState> {
     await _persist();
   }
 
+  /// [note] luôn được ghi đè theo giá trị trả về từ popup chọn topping (kể cả khi khách
+  /// xoá hết chữ, note thành null) — hàm này chỉ có 1 điểm gọi duy nhất là popup đó.
   Future<void> updateToppings(
     String lineId,
-    List<ProductTopping> toppings,
-  ) async {
+    List<ProductTopping> toppings, {
+    String? note,
+  }) async {
     final items = state.items
-        .map((e) => e.lineId == lineId ? e.copyWith(toppings: toppings) : e)
+        .map(
+          (e) => e.lineId == lineId
+              ? e.copyWith(toppings: toppings, updateNote: true, note: note)
+              : e,
+        )
         .toList();
     state = CartState(
       merchantId: state.merchantId,

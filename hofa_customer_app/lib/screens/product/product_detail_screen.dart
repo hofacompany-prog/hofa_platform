@@ -26,6 +26,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
   int _quantity = 1;
   bool _adding = false;
   List<ProductTopping> _selectedToppings = [];
+  String? _note;
 
   void _ensureVariantSelected(Product product) {
     _selectedVariant ??= product.defaultVariant;
@@ -70,16 +71,22 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
     List<ToppingGroup> toppingGroups,
   ) async {
     var toppings = _selectedToppings;
+    var note = _note;
     if (toppingGroups.isNotEmpty) {
       final result = await showToppingPickerDialog(
         context,
         groups: toppingGroups,
         initiallySelected: _selectedToppings,
+        initialNote: _note,
       );
       if (result == null) return; // huỷ popup thì không thêm vào giỏ
       if (!mounted) return;
-      toppings = result;
-      setState(() => _selectedToppings = result);
+      toppings = result.toppings;
+      note = result.note;
+      setState(() {
+        _selectedToppings = result.toppings;
+        _note = result.note;
+      });
     }
 
     String? orderKind;
@@ -166,6 +173,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
           quantity: _quantity,
           unit: product.unit,
           toppings: toppings,
+          note: note,
           orderKind: orderKind,
         ),
       );
@@ -181,7 +189,10 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
             ),
           ),
         );
-        setState(() => _selectedToppings = []);
+        setState(() {
+          _selectedToppings = [];
+          _note = null;
+        });
       }
     } catch (e) {
       if (mounted)
