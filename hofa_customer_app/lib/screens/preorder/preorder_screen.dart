@@ -25,9 +25,10 @@ String _weekdayLabelOf(int iso) =>
 
 /// Giỏ "đặt trước" — cùng dùng chung cartProvider với giỏ hàng thường (giỏ chỉ chứa
 /// món của 1 cửa hàng tại 1 thời điểm), chỉ hiển thị khi giỏ đang ở sales_model
-/// 'scheduled' (bán sỉ/đặt trước). Chia dọc 2 cột: trái là danh sách sản phẩm, phải là
-/// bộ chọn ngày/giờ — bấm vào sản phẩm nào thì bộ chọn bên phải nhảy theo. Mỗi ngày có
-/// thể có nhiều giờ giao khác nhau (giao nhiều lần trong ngày). Ngày tính từ ngày mai
+/// 'scheduled' (bán sỉ/đặt trước). Chia dọc 2 cột: trái là danh sách sản phẩm (bấm vào
+/// dòng "Ngày giao" nhỏ dưới tên để nhảy sang sửa đúng ngày/giờ của món đó), phải là
+/// bộ chọn ngày — bấm vào 1 ngày sẽ hiện bên dưới TOÀN BỘ món phải giao ngày đó (không
+/// chỉ món đang chọn), kèm chỗ sửa giờ riêng cho món đang chọn. Ngày tính từ ngày mai
 /// trở đi, có nút xem tuần kế tiếp.
 class PreorderScreen extends ConsumerStatefulWidget {
   const PreorderScreen({super.key});
@@ -38,6 +39,7 @@ class PreorderScreen extends ConsumerStatefulWidget {
 
 class _PreorderScreenState extends ConsumerState<PreorderScreen> {
   String? _activeLineId;
+  int? _selectedViewDay;
   int _weekOffset = 0;
   String _mode = 'once';
   int _weeks = 1;
@@ -72,18 +74,12 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen> {
   String _shortDate(DateTime d) =>
       '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}';
 
-  Future<void> _onDayTap(CartItem item, int iso) async {
-    final hasSlot = item.deliverySlots.any((s) => s.weekday == iso);
-    if (hasSlot) {
-      final updated = item.deliverySlots
-          .where((s) => s.weekday != iso)
-          .toList();
-      await ref
-          .read(cartProvider.notifier)
-          .updateDeliverySlots(item.lineId, updated);
-      return;
-    }
-    await _addTimeForDay(item, iso);
+  void _jumpToItem(CartItem item) {
+    final sorted = [...item.deliverySlots]..sort(DeliverySlot.compare);
+    setState(() {
+      _activeLineId = item.lineId;
+      if (sorted.isNotEmpty) _selectedViewDay = sorted.first.weekday;
+    });
   }
 
   Future<void> _addTimeForDay(CartItem item, int iso) async {
@@ -270,14 +266,21 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen> {
                 ],
               ),
               const SizedBox(height: 4),
-              Text(
-                sortedSlots.isEmpty
-                    ? 'Chưa chọn ngày giao'
-                    : 'Ngày giao: ${sortedSlots.map((s) => '${s.time.format(context)} ${_weekdayLabelOf(s.weekday)} (${_shortDate(_nearestFutureDate(s.weekday))})').join(', ')}',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: sortedSlots.isEmpty
-                      ? theme.colorScheme.error
-                      : theme.colorScheme.primary,
+              InkWell(
+                onTap: () => _jumpToItem(item),
+                child: Text(
+                  sortedSlots.isEmpty
+                      ? 'Chưa chọn ngày giao — bấm để chọn'
+                      : 'Ngày giao: ${sortedSlots.map((s) => '${s.time.format(context)} ${_weekdayLabelOf(s.weekday)} (${_shortDate(_nearestFutureDate(s.weekday))})').join(', ')}',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: sortedSlots.isEmpty
+                        ? theme.colorScheme.error
+                        : theme.colorScheme.primary,
+                    decoration: TextDecoration.underline,
+                    decorationColor: sortedSlots.isEmpty
+                        ? theme.colorScheme.error
+                        : theme.colorScheme.primary,
+                  ),
                 ),
               ),
             ],
@@ -287,18 +290,22 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen> {
     );
   }
 
-  Widget _dayPicker(BuildContext context, CartItem activeItem) {
+  Widget _dayPicker(BuildContext context, CartState cart, CartItem activeItem) {
     final theme = Theme.of(context);
-    final activeDays =
-        activeItem.deliverySlots.map((s) => s.weekday).toSet().toList()..sort();
+    final viewDay = _selectedViewDay;
+    final itemsForViewDay = viewDay == null
+        ? <CartItem>[]
+        : cart.items
+              .where((i) => i.deliverySlots.any((s) => s.weekday == viewDay))
+              .toList();
+    final activeSlotsForViewDay = viewDay == null
+        ? <DeliverySlot>[]
+        : activeItem.deliverySlots.where((s) => s.weekday == viewDay).toList();
 
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        Text(
-          'Ngày giao cho "${activeItem.productName}"',
-          style: theme.textTheme.titleSmall,
-        ),
+        Text('Ngày giao trong tuần', style: theme.textTheme.titleSmall),
         const SizedBox(height: 8),
         Row(
           children: [
@@ -329,54 +336,95 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen> {
           children: _weekdayLabels.map((d) {
             final date = _dateFor(d.iso, _weekOffset);
             final selectable = _isSelectable(date);
+            final hasAny = cart.items.any(
+              (i) => i.deliverySlots.any((s) => s.weekday == d.iso),
+            );
             return FilterChip(
               label: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(_shortDate(date), style: const TextStyle(fontSize: 10)),
-                  Text(
-                    d.label,
-                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        d.label,
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      if (hasAny) ...[
+                        const SizedBox(width: 3),
+                        Icon(
+                          Icons.circle,
+                          size: 6,
+                          color: theme.colorScheme.primary,
+                        ),
+                      ],
+                    ],
                   ),
                 ],
               ),
-              selected: activeDays.contains(d.iso),
+              selected: viewDay == d.iso,
               onSelected: !selectable
                   ? null
-                  : (_) => _onDayTap(activeItem, d.iso),
+                  : (_) => setState(() => _selectedViewDay = d.iso),
             );
           }).toList(),
         ),
-        if (activeDays.isNotEmpty) ...[
-          const SizedBox(height: 12),
-          for (final iso in activeDays)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Wrap(
-                crossAxisAlignment: WrapCrossAlignment.center,
-                spacing: 6,
-                runSpacing: 6,
-                children: [
-                  Text(
-                    '${_weekdayLabelOf(iso)} (${_shortDate(_nearestFutureDate(iso))}):',
-                  ),
-                  ...activeItem.deliverySlots
-                      .where((s) => s.weekday == iso)
-                      .map(
-                        (s) => Chip(
-                          label: Text(s.time.format(context)),
-                          deleteIcon: const Icon(Icons.close, size: 16),
-                          onDeleted: () => _removeSlot(activeItem, s),
-                        ),
-                      ),
-                  ActionChip(
-                    avatar: const Icon(Icons.add, size: 16),
-                    label: const Text('Thêm giờ'),
-                    onPressed: () => _addTimeForDay(activeItem, iso),
-                  ),
-                ],
-              ),
+        const SizedBox(height: 16),
+        if (viewDay == null)
+          Text(
+            'Bấm vào 1 ngày để xem những món phải giao hôm đó',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.outline,
             ),
+          )
+        else ...[
+          Text(
+            'Ngày ${_weekdayLabelOf(viewDay)} (${_shortDate(_nearestFutureDate(viewDay))}) cần giao:',
+            style: theme.textTheme.titleSmall,
+          ),
+          const SizedBox(height: 8),
+          if (itemsForViewDay.isEmpty)
+            Text(
+              'Chưa có món nào giao ngày này',
+              style: theme.textTheme.bodySmall,
+            )
+          else
+            ...itemsForViewDay.map((i) {
+              final times =
+                  (i.deliverySlots.where((s) => s.weekday == viewDay).toList()
+                        ..sort(DeliverySlot.compare))
+                      .map((s) => s.time.format(context))
+                      .join(', ');
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text('• ${i.productName} — $times'),
+              );
+            }),
+          const Divider(height: 24),
+          Text(
+            'Giờ giao cho "${activeItem.productName}"',
+            style: theme.textTheme.titleSmall,
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              ...activeSlotsForViewDay.map(
+                (s) => Chip(
+                  label: Text(s.time.format(context)),
+                  deleteIcon: const Icon(Icons.close, size: 16),
+                  onDeleted: () => _removeSlot(activeItem, s),
+                ),
+              ),
+              ActionChip(
+                avatar: const Icon(Icons.add, size: 16),
+                label: const Text('Thêm giờ'),
+                onPressed: () => _addTimeForDay(activeItem, viewDay),
+              ),
+            ],
+          ),
         ],
       ],
     );
@@ -439,7 +487,7 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen> {
                         ),
                       ),
                       const VerticalDivider(width: 1),
-                      Expanded(child: _dayPicker(context, activeItem!)),
+                      Expanded(child: _dayPicker(context, cart, activeItem!)),
                     ],
                   ),
                 ),
