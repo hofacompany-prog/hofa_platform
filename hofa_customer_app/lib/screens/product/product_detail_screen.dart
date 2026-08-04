@@ -53,6 +53,25 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
     return matched?.unitPrice ?? variant.price;
   }
 
+  /// Sản phẩm bán sỉ/đặt trước phải chọn rõ thêm vào tab nào — Giá sỉ và Đặt trước xử lý
+  /// lịch giao khác nhau nên không thể gộp chung 1 dòng giỏ hàng.
+  Future<String?> _pickOrderKind() => showDialog<String>(
+    context: context,
+    builder: (context) => SimpleDialog(
+      title: const Text('Thêm vào'),
+      children: [
+        SimpleDialogOption(
+          onPressed: () => Navigator.pop(context, 'wholesale'),
+          child: const Text('Giá sỉ'),
+        ),
+        SimpleDialogOption(
+          onPressed: () => Navigator.pop(context, 'preorder'),
+          child: const Text('Đặt trước'),
+        ),
+      ],
+    ),
+  );
+
   Future<void> _addToCart(
     Product product,
     ProductVariant variant,
@@ -69,6 +88,13 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
         ).showSnackBar(SnackBar(content: Text('Vui lòng chọn ${g.name}')));
         return;
       }
+    }
+
+    String? orderKind;
+    if (product.isWholesale) {
+      orderKind = await _pickOrderKind();
+      if (orderKind == null) return;
+      if (!mounted) return;
     }
 
     final cartNotifier = ref.read(cartProvider.notifier);
@@ -147,13 +173,16 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
           quantity: _quantity,
           unit: product.unit,
           toppings: _selectedToppings,
+          orderKind: orderKind,
         ),
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              product.isWholesale
+              orderKind == 'wholesale'
+                  ? 'Đã thêm vào Giá sỉ'
+                  : orderKind == 'preorder'
                   ? 'Đã thêm vào Đặt trước'
                   : 'Đã thêm vào Giỏ hàng',
             ),

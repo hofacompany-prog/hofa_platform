@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/format.dart';
 import '../../models/address.dart';
+import '../../models/cart_item.dart';
 import '../../models/preorder_schedule.dart';
 import '../../providers/app_providers.dart';
 import '../../providers/auth_providers.dart';
@@ -52,6 +53,16 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     _voucherCtrl.dispose();
     _noteCtrl.dispose();
     super.dispose();
+  }
+
+  /// Giỏ "đặt trước/bán sỉ" chứa lẫn món của cả tab Giá sỉ lẫn Đặt trước — đặt hàng từ
+  /// tab nào chỉ được gửi/xoá đúng món của tab đó, không đụng tới món của tab còn lại.
+  List<CartItem> _relevantItems(CartState cart) {
+    if (cart.salesModel != 'scheduled') return cart.items;
+    if (widget.initialScheduledFor != null) {
+      return cart.items.where((i) => i.orderKind == 'wholesale').toList();
+    }
+    return cart.items.where((i) => i.orderKind == 'preorder').toList();
   }
 
   Future<void> _addAddress() async {
@@ -220,13 +231,14 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
   Map<String, dynamic> _orderBody(
     CartState cart,
+    List<CartItem> items,
     Address address,
     DateTime? scheduledFor,
   ) => {
     'merchant_id': cart.merchantId,
     'branch_id': cart.branchId,
     'sales_model': cart.salesModel,
-    'items': cart.items
+    'items': items
         .map(
           (e) => {
             'variant_id': e.variantId,
@@ -258,10 +270,12 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final cart = ref.read(cartProvider);
     if (cart.isEmpty || cart.merchantId == null || cart.branchId == null)
       return;
+    final items = _relevantItems(cart);
+    if (items.isEmpty) return;
 
     final schedule = widget.preorderSchedule;
     if (schedule != null && schedule.recurring) {
-      await _placeRecurringOrders(cart, address, schedule);
+      await _placeRecurringOrders(cart, items, address, schedule);
       return;
     }
 
@@ -269,8 +283,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     try {
       final order = await ref
           .read(orderRepoProvider)
-          .createOrder(_orderBody(cart, address, _scheduledFor));
-      await ref.read(cartProvider.notifier).clear();
+          .createOrder(_orderBody(cart, items, address, _scheduledFor));
+      await ref
+          .read(cartProvider.notifier)
+          .removeItems(items.map((i) => i.lineId).toList());
       if (mounted) context.go('/orders/${order.id}');
     } catch (e) {
       if (mounted)
@@ -286,6 +302,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   /// nhiều đơn độc lập, mỗi đơn ứng với 1 lần giao trong lịch đã chọn.
   Future<void> _placeRecurringOrders(
     CartState cart,
+    List<CartItem> items,
     Address address,
     PreorderSchedule schedule,
   ) async {
@@ -326,10 +343,12 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       for (final occurrence in occurrences) {
         await ref
             .read(orderRepoProvider)
-            .createOrder(_orderBody(cart, address, occurrence));
+            .createOrder(_orderBody(cart, items, address, occurrence));
         created++;
       }
-      await ref.read(cartProvider.notifier).clear();
+      await ref
+          .read(cartProvider.notifier)
+          .removeItems(items.map((i) => i.lineId).toList());
       if (mounted) {
         ScaffoldMessenger.of(
           context,
@@ -354,8 +373,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final cart = ref.watch(cartProvider);
     final addressesAsync = ref.watch(addressesProvider);
     final theme = Theme.of(context);
+    final items = _relevantItems(cart);
 
-    if (cart.isEmpty) {
+    if (items.isEmpty) {
       return Scaffold(
         appBar: AppBar(
           leading: IconButton(
@@ -367,7 +387,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       );
     }
 
-    final total = cart.subtotal - _voucherDiscount;
+    final itemsSubtotal = items.fold<int>(0, (sum, i) => sum + i.lineTotal);
+    final total = itemsSubtotal - _voucherDiscount;
 
     return Scaffold(
       appBar: AppBar(
@@ -445,7 +466,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               OutlinedButton(
                 onPressed: _voucherChecking
                     ? null
-                    : () => _checkVoucher(cart.merchantId!, cart.subtotal),
+                    : () => _checkVoucher(cart.merchantId!, itemsSubtotal),
                 child: _voucherChecking
                     ? const SizedBox(
                         height: 16,
@@ -555,7 +576,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           const Divider(height: 32),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [const Text('Tạm tính'), Text(formatVnd(cart.subtotal))],
+            children: [const Text('Tạm tính'), Text(formatVnd(itemsSubtotal))],
           ),
           if (_voucherDiscount > 0)
             Padding(

@@ -86,7 +86,13 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
     if (picked != null) setState(() => _wholesaleTime = picked);
   }
 
-  void _goCheckoutWholesale(CartState cart) {
+  void _goCheckoutWholesale(List<CartItem> items) {
+    if (items.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Chưa có sản phẩm giá sỉ nào trong giỏ')),
+      );
+      return;
+    }
     if (_wholesaleDate == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Chọn ngày giao trước khi thanh toán')),
@@ -132,15 +138,18 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
 
   /// Tổng tiền của cả tuần đang xem — mỗi món tính theo số ngày trong tuần đó mà món
   /// này có lịch giao (1 món giao 2 ngày/tuần thì cộng 2 lần).
-  int _weekTotal(CartState cart) {
+  int _weekTotal(List<CartItem> items) {
     if (!_weekInRange(_weekOffset)) return 0;
     var total = 0;
-    for (final item in cart.items) {
+    for (final item in items) {
       final days = item.deliverySlots.map((s) => s.weekday).toSet().length;
       total += item.lineTotal * days;
     }
     return total;
   }
+
+  int _flatTotal(List<CartItem> items) =>
+      items.fold(0, (sum, i) => sum + i.lineTotal);
 
   /// Ngày gần nhất (từ ngày mai) khớp thứ [iso] — dùng để hiển thị ngày dương lịch cho
   /// 1 slot, không lưu ngày cụ thể (slot lặp theo thứ trong tuần).
@@ -278,9 +287,9 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
 
   /// Toàn bộ ngày sẽ phát sinh đơn nếu xác nhận lặp lại [_weeks] tuần với lịch hiện tại
   /// (gộp các thứ mà tất cả sản phẩm đã chọn, mỗi thứ lặp lại theo đúng số tuần).
-  List<DateTime> _recurringPreview(CartState cart) {
+  List<DateTime> _recurringPreview(List<CartItem> items) {
     final weekdays = <int>{};
-    for (final item in cart.items) {
+    for (final item in items) {
       for (final s in item.deliverySlots) {
         weekdays.add(s.weekday);
       }
@@ -296,8 +305,8 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
     return schedule.occurrences;
   }
 
-  Future<void> _confirmRecurring(CartState cart) async {
-    final occurrences = _recurringPreview(cart);
+  Future<void> _confirmRecurring(List<CartItem> items) async {
+    final occurrences = _recurringPreview(items);
     if (occurrences.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -341,8 +350,16 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
     if (confirm == true) setState(() => _recurringConfirmed = true);
   }
 
-  void _goCheckout(CartState cart) {
-    for (final item in cart.items) {
+  void _goCheckout(List<CartItem> items) {
+    if (items.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Chưa có sản phẩm đặt trước nào trong giỏ'),
+        ),
+      );
+      return;
+    }
+    for (final item in items) {
       if (item.deliverySlots.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -363,7 +380,7 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
       return;
     }
     final allWeekdays = <int>{};
-    for (final item in cart.items) {
+    for (final item in items) {
       for (final s in item.deliverySlots) {
         allWeekdays.add(s.weekday);
       }
@@ -497,12 +514,12 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
     );
   }
 
-  Widget _dayPicker(BuildContext context, CartState cart) {
+  Widget _dayPicker(BuildContext context, List<CartItem> items) {
     final theme = Theme.of(context);
     final viewDay = _selectedViewDay;
     final itemsForViewDay = (viewDay == null || !_weekInRange(_weekOffset))
         ? <CartItem>[]
-        : cart.items
+        : items
               .where((i) => i.deliverySlots.any((s) => s.weekday == viewDay))
               .toList();
 
@@ -570,7 +587,7 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
             final selectable = _isSelectable(date);
             final hasAny =
                 _weekInRange(_weekOffset) &&
-                cart.items.any(
+                items.any(
                   (i) => i.deliverySlots.any((s) => s.weekday == d.iso),
                 );
             return FilterChip(
@@ -689,7 +706,7 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
           children: [
             Text('Tổng tuần', style: theme.textTheme.titleSmall),
             Text(
-              formatVnd(_weekTotal(cart)),
+              formatVnd(_weekTotal(items)),
               style: theme.textTheme.titleSmall?.copyWith(
                 fontWeight: FontWeight.bold,
                 color: theme.colorScheme.primary,
@@ -706,7 +723,7 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
   /// tuỳ [_totalBasis]) và tự quyết hành vi khi bấm "Đến thanh toán".
   Widget _footer(
     BuildContext context,
-    CartState cart,
+    int itemCount,
     int total,
     VoidCallback onCheckout,
   ) {
@@ -728,7 +745,7 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
           children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [const Text('Tổng số món'), Text('${cart.itemCount}')],
+              children: [const Text('Tổng số món'), Text('$itemCount')],
             ),
             const SizedBox(height: 4),
             Row(
@@ -771,6 +788,8 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
   /// trong tuần / lặp lại như tab "Đặt trước".
   Widget _wholesaleTab(BuildContext context, CartState cart) {
     final theme = Theme.of(context);
+    final items = cart.items.where((i) => i.orderKind == 'wholesale').toList();
+    final itemCount = items.fold<int>(0, (sum, i) => sum + i.quantity);
     return Column(
       children: [
         Padding(
@@ -791,12 +810,21 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
           ),
         ),
         Expanded(
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-            children: cart.items
-                .map((item) => _itemCard(context, item, showSchedule: false))
-                .toList(),
-          ),
+          child: items.isEmpty
+              ? Center(
+                  child: Text(
+                    'Chưa có sản phẩm giá sỉ nào trong giỏ',
+                    style: theme.textTheme.bodyMedium,
+                  ),
+                )
+              : ListView(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                  children: items
+                      .map(
+                        (item) => _itemCard(context, item, showSchedule: false),
+                      )
+                      .toList(),
+                ),
         ),
         const Divider(height: 1),
         Padding(
@@ -826,7 +854,12 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
             ],
           ),
         ),
-        _footer(context, cart, cart.subtotal, () => _goCheckoutWholesale(cart)),
+        _footer(
+          context,
+          itemCount,
+          _flatTotal(items),
+          () => _goCheckoutWholesale(items),
+        ),
       ],
     );
   }
@@ -835,6 +868,8 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
   /// cột ngày bên phải, chọn giao 1 lần/nhiều lần.
   Widget _preorderTab(BuildContext context, CartState cart) {
     final theme = Theme.of(context);
+    final items = cart.items.where((i) => i.orderKind == 'preorder').toList();
+    final itemCount = items.fold<int>(0, (sum, i) => sum + i.quantity);
     return Column(
       children: [
         Padding(
@@ -855,21 +890,28 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
           ),
         ),
         Expanded(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Expanded(
-                child: ListView(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 8, 16),
-                  children: cart.items
-                      .map((item) => _itemCard(context, item))
-                      .toList(),
+          child: items.isEmpty
+              ? Center(
+                  child: Text(
+                    'Chưa có sản phẩm đặt trước nào trong giỏ',
+                    style: theme.textTheme.bodyMedium,
+                  ),
+                )
+              : Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(
+                      child: ListView(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 8, 16),
+                        children: items
+                            .map((item) => _itemCard(context, item))
+                            .toList(),
+                      ),
+                    ),
+                    const VerticalDivider(width: 1),
+                    Expanded(child: _dayPicker(context, items)),
+                  ],
                 ),
-              ),
-              const VerticalDivider(width: 1),
-              Expanded(child: _dayPicker(context, cart)),
-            ],
-          ),
         ),
         const Divider(height: 1),
         Padding(
@@ -955,7 +997,7 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
                             ? 'Đã xác nhận'
                             : 'Xác nhận lịch giao',
                       ),
-                      onPressed: () => _confirmRecurring(cart),
+                      onPressed: () => _confirmRecurring(items),
                     ),
                   ],
                 ),
@@ -983,9 +1025,9 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
         ),
         _footer(
           context,
-          cart,
-          _totalBasis == 'week' ? _weekTotal(cart) : cart.subtotal,
-          () => _goCheckout(cart),
+          itemCount,
+          _totalBasis == 'week' ? _weekTotal(items) : _flatTotal(items),
+          () => _goCheckout(items),
         ),
       ],
     );

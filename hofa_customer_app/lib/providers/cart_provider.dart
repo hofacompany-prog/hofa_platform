@@ -172,6 +172,24 @@ class CartNotifier extends StateNotifier<CartState> {
     await _persist();
   }
 
+  /// Xoá đúng những dòng đã đặt hàng thành công (vd chỉ đặt xong tab Giá sỉ), giữ
+  /// nguyên các dòng khác (vd tab Đặt trước) còn dở dang trong giỏ.
+  Future<void> removeItems(List<String> lineIds) async {
+    final items = state.items
+        .where((e) => !lineIds.contains(e.lineId))
+        .toList();
+    state = items.isEmpty
+        ? const CartState()
+        : CartState(
+            merchantId: state.merchantId,
+            merchantName: state.merchantName,
+            branchId: state.branchId,
+            salesModel: state.salesModel,
+            items: items,
+          );
+    await _persist();
+  }
+
   Future<void> clear() async {
     state = const CartState();
     await _persist();

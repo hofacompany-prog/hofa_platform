@@ -23,6 +23,10 @@ class CartItem {
   /// 1 thứ có thể có nhiều giờ khác nhau nếu món này giao nhiều lần trong ngày.
   final List<DeliverySlot> deliverySlots;
 
+  /// Chỉ có giá trị khi giỏ ở sales_model 'scheduled' — khách chọn lúc thêm vào giỏ:
+  /// 'wholesale' (tab Giá sỉ) hay 'preorder' (tab Đặt trước). Món giao ngay thì null.
+  final String? orderKind;
+
   CartItem({
     required this.lineId,
     required this.productId,
@@ -36,14 +40,16 @@ class CartItem {
     this.note,
     this.toppings = const [],
     this.deliverySlots = const [],
+    this.orderKind,
   });
 
   int get toppingsTotal => toppings.fold(0, (sum, t) => sum + t.price);
   int get lineTotal => (unitPrice + toppingsTotal) * quantity;
 
-  /// Cùng biến thể + cùng bộ topping thì gộp thành 1 dòng, khác thì tách dòng riêng.
+  /// Cùng biến thể + cùng bộ topping + cùng orderKind thì gộp thành 1 dòng, khác thì
+  /// tách dòng riêng (Giá sỉ và Đặt trước không được gộp chung dù cùng biến thể).
   String get lineKey =>
-      '$variantId::${(toppings.map((t) => t.id).toList()..sort()).join(',')}';
+      '$variantId::${(toppings.map((t) => t.id).toList()..sort()).join(',')}::${orderKind ?? ''}';
 
   CartItem copyWith({
     int? quantity,
@@ -62,6 +68,7 @@ class CartItem {
     note: note,
     toppings: toppings ?? this.toppings,
     deliverySlots: deliverySlots ?? this.deliverySlots,
+    orderKind: orderKind,
   );
 
   Map<String, dynamic> toJson() => {
@@ -77,6 +84,7 @@ class CartItem {
     'note': note,
     'toppings': toppings.map((t) => t.toJson()).toList(),
     'delivery_slots': deliverySlots.map((s) => s.toJson()).toList(),
+    'order_kind': orderKind,
   };
 
   factory CartItem.fromJson(Map<String, dynamic> json) => CartItem(
@@ -98,5 +106,6 @@ class CartItem {
     deliverySlots: (json['delivery_slots'] as List? ?? [])
         .map((e) => DeliverySlot.fromJson(e as Map<String, dynamic>))
         .toList(),
+    orderKind: json['order_kind'] as String?,
   );
 }
