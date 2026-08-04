@@ -411,26 +411,27 @@ COMMENT ON TABLE wholesale_tiers IS
 
 CREATE INDEX idx_tiers_variant ON wholesale_tiers (variant_id, min_quantity);
 
--- Nhóm tuỳ chọn thêm của sản phẩm (topping, size, độ ngọt...) — vd trà sữa: trân châu,
--- thạch, pudding. Mỗi nhóm tự chọn bắt buộc hay không (is_required) và cho chọn nhiều
--- mục hay chỉ 1 (allow_multiple).
-CREATE TABLE product_topping_groups (
+-- Nhóm tuỳ chọn thêm (topping, size, độ ngọt...) — vd trà sữa: trân châu, thạch, pudding.
+-- Thuộc về 1 cửa hàng (thư viện dùng chung), gắn được vào nhiều sản phẩm qua bảng nối
+-- product_topping_group_links thay vì tạo lại từ đầu cho từng sản phẩm. Mỗi nhóm tự chọn
+-- bắt buộc hay không (is_required) và cho chọn nhiều mục hay chỉ 1 (allow_multiple).
+CREATE TABLE topping_groups (
   id             UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  product_id     UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  merchant_id    UUID NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
   name           VARCHAR(150) NOT NULL,
   is_required    BOOLEAN NOT NULL DEFAULT false,
   allow_multiple BOOLEAN NOT NULL DEFAULT false,
   sort_order     INTEGER NOT NULL DEFAULT 0,
   created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-COMMENT ON TABLE product_topping_groups IS 'Nhóm tuỳ chọn thêm của 1 sản phẩm (topping, size, độ ngọt...)';
+COMMENT ON TABLE topping_groups IS 'Nhóm tuỳ chọn thêm (topping, size, độ ngọt...) của 1 cửa hàng, dùng chung cho nhiều sản phẩm';
 
-CREATE INDEX idx_topping_groups_product ON product_topping_groups (product_id);
+CREATE INDEX idx_topping_groups_merchant ON topping_groups (merchant_id);
 
 -- Từng lựa chọn cụ thể trong 1 nhóm topping, có giá cộng thêm riêng (0 = miễn phí)
 CREATE TABLE product_toppings (
   id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  group_id   UUID NOT NULL REFERENCES product_topping_groups(id) ON DELETE CASCADE,
+  group_id   UUID NOT NULL REFERENCES topping_groups(id) ON DELETE CASCADE,
   name       VARCHAR(150) NOT NULL,
   price      INTEGER NOT NULL DEFAULT 0,
   sort_order INTEGER NOT NULL DEFAULT 0,
@@ -441,6 +442,17 @@ CREATE TABLE product_toppings (
 COMMENT ON TABLE product_toppings IS 'Từng lựa chọn cụ thể trong 1 nhóm topping, có giá cộng thêm riêng';
 
 CREATE INDEX idx_toppings_group ON product_toppings (group_id);
+
+-- Một sản phẩm dùng nhiều nhóm topping, 1 nhóm topping gắn được vào nhiều sản phẩm
+-- (SDD bổ sung, cùng pattern với product_categories).
+CREATE TABLE product_topping_group_links (
+  product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  group_id   UUID NOT NULL REFERENCES topping_groups(id) ON DELETE CASCADE,
+  PRIMARY KEY (product_id, group_id)
+);
+COMMENT ON TABLE product_topping_group_links IS 'Nối sản phẩm với nhóm topping. 1 sản phẩm dùng nhiều nhóm, 1 nhóm dùng cho nhiều sản phẩm';
+
+CREATE INDEX idx_topping_group_links_group ON product_topping_group_links (group_id);
 
 -- ============================================================================
 -- PHẦN 5: INVENTORY MODULE (SDD 7.4) — Tồn kho

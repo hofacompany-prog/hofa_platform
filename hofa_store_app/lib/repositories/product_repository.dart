@@ -94,7 +94,7 @@ class ProductRepository {
     int? comparePrice,
     int? costPrice,
     int? wholesalePrice,
-    List<ToppingGroup> toppingGroups = const [],
+    List<String> toppingGroupIds = const [],
     List<WholesaleTier> wholesaleTiers = const [],
     List<ProductVariant> extraVariants = const [],
     Map<String, List<WholesaleTier>> tiersByVariant = const {},
@@ -112,19 +112,8 @@ class ProductRepository {
             'sales_model': salesModel,
             'status': status,
             'images': [imageUrl],
-            if (toppingGroups.isNotEmpty)
-              'topping_groups': toppingGroups
-                  .map(
-                    (g) => {
-                      'name': g.name,
-                      'is_required': g.isRequired,
-                      'allow_multiple': g.allowMultiple,
-                      'toppings': g.toppings
-                          .map((t) => {'name': t.name, 'price': t.price})
-                          .toList(),
-                    },
-                  )
-                  .toList(),
+            if (toppingGroupIds.isNotEmpty)
+              'topping_group_ids': toppingGroupIds,
             'variants': [
               {
                 'name': unit,
@@ -236,6 +225,7 @@ class ProductRepository {
     await _api.delete('/wholesale-tiers/$id');
   }
 
+  /// Nhóm topping đang gắn vào 1 sản phẩm.
   Future<List<ToppingGroup>> toppingGroups(String productId) async {
     final list = await _api.get('/products/$productId/topping-groups') as List;
     return list
@@ -243,14 +233,38 @@ class ProductRepository {
         .toList();
   }
 
+  /// Đặt lại toàn bộ danh sách nhóm topping gắn vào 1 sản phẩm (thay thế, không cộng dồn).
+  Future<void> setProductToppingGroups(
+    String productId,
+    List<String> groupIds,
+  ) async {
+    await _api.put(
+      '/products/$productId/topping-groups',
+      body: {'group_ids': groupIds},
+    );
+  }
+
+  /// Toàn bộ nhóm topping (thư viện dùng chung) của 1 cửa hàng, kèm số sản phẩm đang gắn.
+  Future<List<ToppingGroup>> merchantToppingGroups(String merchantId) async {
+    final list =
+        await _api.get('/merchants/$merchantId/topping-groups') as List;
+    return list
+        .map((e) => ToppingGroup.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<ToppingGroup> toppingGroup(String id) async => ToppingGroup.fromJson(
+    await _api.get('/topping-groups/$id') as Map<String, dynamic>,
+  );
+
   Future<ToppingGroup> createToppingGroup({
-    required String productId,
+    required String merchantId,
     required String name,
     required bool isRequired,
     required bool allowMultiple,
   }) async => ToppingGroup.fromJson(
     await _api.post(
-          '/products/$productId/topping-groups',
+          '/merchants/$merchantId/topping-groups',
           body: {
             'name': name,
             'is_required': isRequired,

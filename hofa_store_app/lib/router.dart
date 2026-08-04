@@ -8,6 +8,7 @@ import 'screens/onboarding/create_store_screen.dart';
 import 'screens/dashboard/dashboard_shell.dart';
 import 'screens/products/products_list_screen.dart';
 import 'screens/products/product_form_screen.dart';
+import 'screens/toppings/topping_group_form_screen.dart';
 import 'screens/orders/orders_list_screen.dart';
 import 'screens/orders/order_detail_screen.dart';
 import 'screens/orders/order_offer_screen.dart';
@@ -77,6 +78,15 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: '/products/:id/edit',
             builder: (context, state) =>
                 ProductFormScreen(productId: state.pathParameters['id']),
+          ),
+          GoRoute(
+            path: '/topping-groups/new',
+            builder: (context, state) => const ToppingGroupFormScreen(),
+          ),
+          GoRoute(
+            path: '/topping-groups/:id/edit',
+            builder: (context, state) =>
+                ToppingGroupFormScreen(groupId: state.pathParameters['id']),
           ),
           GoRoute(
             path: '/orders',

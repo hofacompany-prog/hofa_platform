@@ -1,7 +1,7 @@
 -- ============================================================================
 -- RESET — xoá sạch toàn bộ cấu trúc HOFA để dựng lại từ đầu
 --
--- CẢNH BÁO: file này XOÁ HẾT dữ liệu trong 27 bảng. Không lấy lại được.
+-- CẢNH BÁO: file này XOÁ HẾT dữ liệu trong 28 bảng. Không lấy lại được.
 -- Chỉ dùng khi đang học với dữ liệu mẫu. TUYỆT ĐỐI không chạy khi đã có
 -- đơn hàng và khách thật.
 --
@@ -29,7 +29,8 @@ DROP TABLE IF EXISTS stock_movements       CASCADE;
 DROP TABLE IF EXISTS inventory             CASCADE;
 DROP TABLE IF EXISTS wholesale_tiers       CASCADE;
 DROP TABLE IF EXISTS product_toppings      CASCADE;
-DROP TABLE IF EXISTS product_topping_groups CASCADE;
+DROP TABLE IF EXISTS product_topping_group_links CASCADE;
+DROP TABLE IF EXISTS topping_groups        CASCADE;
 DROP TABLE IF EXISTS product_variants      CASCADE;
 DROP TABLE IF EXISTS product_categories    CASCADE;
 DROP TABLE IF EXISTS products              CASCADE;

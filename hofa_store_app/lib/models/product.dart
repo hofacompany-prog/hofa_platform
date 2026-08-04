@@ -99,32 +99,39 @@ class Topping {
   );
 }
 
+/// Nhóm topping là thư viện dùng chung của 1 cửa hàng (merchantId), gắn được vào nhiều
+/// sản phẩm — không còn thuộc riêng 1 sản phẩm như trước. [linkedProductCount] chỉ có giá
+/// trị khi tải qua ProductRepository.merchantToppingGroups (danh sách quản lý), các nơi
+/// khác (vd nhóm topping của 1 sản phẩm) luôn trả về 0.
 class ToppingGroup {
   final String id;
-  final String productId;
+  final String merchantId;
   final String name;
   final bool isRequired;
   final bool allowMultiple;
   final int sortOrder;
+  final int linkedProductCount;
   final List<Topping> toppings;
 
   ToppingGroup({
     required this.id,
-    required this.productId,
+    required this.merchantId,
     required this.name,
     required this.isRequired,
     required this.allowMultiple,
     required this.sortOrder,
+    this.linkedProductCount = 0,
     required this.toppings,
   });
 
   factory ToppingGroup.fromJson(Map<String, dynamic> json) => ToppingGroup(
     id: json['id'] as String,
-    productId: json['product_id'] as String? ?? '',
+    merchantId: json['merchant_id'] as String? ?? '',
     name: json['name'] as String? ?? '',
     isRequired: json['is_required'] as bool? ?? false,
     allowMultiple: json['allow_multiple'] as bool? ?? false,
     sortOrder: (json['sort_order'] as num?)?.toInt() ?? 0,
+    linkedProductCount: (json['linked_product_count'] as num?)?.toInt() ?? 0,
     toppings:
         (json['toppings'] as List?)
             ?.map((e) => Topping.fromJson(e as Map<String, dynamic>))
@@ -144,7 +151,6 @@ class Product {
   final String unit;
   final List<String> images;
   final List<ProductVariant> variants;
-  final List<ToppingGroup> toppingGroups;
 
   Product({
     required this.id,
@@ -157,7 +163,6 @@ class Product {
     required this.unit,
     required this.images,
     required this.variants,
-    this.toppingGroups = const [],
   });
 
   factory Product.fromJson(Map<String, dynamic> json) => Product(
@@ -170,11 +175,6 @@ class Product {
     status: json['status'] as String? ?? 'draft',
     unit: json['unit'] as String? ?? 'cái',
     images: (json['images'] as List?)?.map((e) => e.toString()).toList() ?? [],
-    toppingGroups:
-        (json['topping_groups'] as List?)
-            ?.map((e) => ToppingGroup.fromJson(e as Map<String, dynamic>))
-            .toList() ??
-        [],
     variants:
         (json['variants'] as List?)
             ?.map((e) => ProductVariant.fromJson(e as Map<String, dynamic>))

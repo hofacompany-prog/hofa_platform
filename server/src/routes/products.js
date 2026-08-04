@@ -181,21 +181,13 @@ router.post('/products', asyncHandler(async (req, res) => {
     }
   }
 
-  // Cho phép tạo luôn nhóm topping + lựa chọn bên trong ngay lúc tạo sản phẩm (màn "Thêm
-  // sản phẩm" không có product_id để gọi 2 API topping riêng như lúc sửa sản phẩm).
-  let toppingGroups = [];
-  if (Array.isArray(req.body.topping_groups) && req.body.topping_groups.length) {
-    for (const g of req.body.topping_groups) {
-      const group = await db.insertRow('product_topping_groups', { ...pickFields(g, TOPPING_GROUP_FIELDS), product_id: product.id });
-      let toppings = [];
-      if (Array.isArray(g.toppings) && g.toppings.length) {
-        toppings = await db.insertRows('product_toppings', g.toppings.map((t) => ({ ...pickFields(t, TOPPING_FIELDS), group_id: group.id })));
-      }
-      toppingGroups.push({ ...group, toppings });
-    }
+  // Gắn sản phẩm vào các nhóm topping đã có sẵn của cửa hàng (thư viện dùng chung — xem
+  // topping_groups bên dưới), cùng pattern với category_ids ở trên.
+  if (Array.isArray(req.body.topping_group_ids) && req.body.topping_group_ids.length) {
+    await db.insertRows('product_topping_group_links', req.body.topping_group_ids.map((gid) => ({ product_id: product.id, group_id: gid })));
   }
 
-  res.status(201).json({ ok: true, data: { ...product, variants, topping_groups: toppingGroups } });
+  res.status(201).json({ ok: true, data: { ...product, variants } });
 }));
 
 router.patch('/products/:id', asyncHandler(async (req, res) => {
@@ -270,14 +262,13 @@ router.delete('/variants/:id', asyncHandler(async (req, res) => {
   res.json({ ok: true, data: updated });
 }));
 
-// ---- Topping (tuỳ chọn thêm: topping, size, độ ngọt...) ----
+// ---- Nhóm topping (tuỳ chọn thêm: topping, size, độ ngọt...) ----
+// Thư viện dùng chung của 1 cửa hàng (topping_groups.merchant_id) — tạo 1 lần, gắn được
+// vào nhiều sản phẩm qua bảng nối product_topping_group_links, không phải tạo lại cho
+// từng sản phẩm như trước.
 
-router.get('/products/:productId/topping-groups', asyncHandler(async (req, res) => {
-  const groups = await db.query(
-    'SELECT * FROM product_topping_groups WHERE product_id = $1 ORDER BY sort_order ASC',
-    [req.params.productId]
-  );
-  if (!groups.length) return res.json({ ok: true, data: [] });
+async function attachToppings(groups) {
+  if (!groups.length) return [];
   const ids = groups.map((g) => g.id);
   const toppings = await db.query(
     'SELECT * FROM product_toppings WHERE group_id = ANY($1::uuid[]) ORDER BY sort_order ASC',
@@ -285,46 +276,65 @@ router.get('/products/:productId/topping-groups', asyncHandler(async (req, res) 
   );
   const byGroup = {};
   toppings.forEach((t) => { (byGroup[t.group_id] ||= []).push(t); });
-  res.json({ ok: true, data: groups.map((g) => ({ ...g, toppings: byGroup[g.id] || [] })) });
+  return groups.map((g) => ({ ...g, toppings: byGroup[g.id] || [] }));
+}
+
+/** Toàn bộ nhóm topping của 1 cửa hàng, kèm số sản phẩm đang gắn mỗi nhóm — dùng cho màn
+ * quản lý "Nhóm topping" và ô chọn nhóm lúc tạo/sửa sản phẩm. */
+router.get('/merchants/:merchantId/topping-groups', asyncHandler(async (req, res) => {
+  await requireMerchantAccess(req.ctx, req.params.merchantId);
+  const groups = await db.query(
+    `SELECT tg.*, COALESCE(lc.cnt, 0)::int AS linked_product_count
+       FROM topping_groups tg
+       LEFT JOIN (
+         SELECT group_id, COUNT(*) AS cnt FROM product_topping_group_links GROUP BY group_id
+       ) lc ON lc.group_id = tg.id
+      WHERE tg.merchant_id = $1
+      ORDER BY tg.sort_order ASC, tg.created_at ASC`,
+    [req.params.merchantId]
+  );
+  res.json({ ok: true, data: await attachToppings(groups) });
 }));
 
-router.post('/products/:productId/topping-groups', asyncHandler(async (req, res) => {
+router.post('/merchants/:merchantId/topping-groups', asyncHandler(async (req, res) => {
   requireFields(req.body, ['name']);
-  const product = await db.queryOne('SELECT id, merchant_id FROM products WHERE id = $1', [req.params.productId]);
-  if (!product) throw new ApiError('NOT_FOUND', 'Không tìm thấy sản phẩm', 404);
-  await requireMerchantAccess(req.ctx, product.merchant_id);
-
+  await requireMerchantAccess(req.ctx, req.params.merchantId);
   const data = pickFields(req.body, TOPPING_GROUP_FIELDS);
-  data.product_id = req.params.productId;
-  const created = await db.insertRow('product_topping_groups', data);
-  res.status(201).json({ ok: true, data: { ...created, toppings: [] } });
+  data.merchant_id = req.params.merchantId;
+  const created = await db.insertRow('topping_groups', data);
+  res.status(201).json({ ok: true, data: { ...created, toppings: [], linked_product_count: 0 } });
+}));
+
+router.get('/topping-groups/:id', asyncHandler(async (req, res) => {
+  const group = await db.queryOne('SELECT * FROM topping_groups WHERE id = $1', [req.params.id]);
+  if (!group) throw new ApiError('NOT_FOUND', 'Không tìm thấy nhóm topping', 404);
+  const [withToppings] = await attachToppings([group]);
+  res.json({ ok: true, data: withToppings });
 }));
 
 router.patch('/topping-groups/:id', asyncHandler(async (req, res) => {
-  const group = await db.queryOne('SELECT id, product_id FROM product_topping_groups WHERE id = $1', [req.params.id]);
+  const group = await db.queryOne('SELECT id, merchant_id FROM topping_groups WHERE id = $1', [req.params.id]);
   if (!group) throw new ApiError('NOT_FOUND', 'Không tìm thấy nhóm topping', 404);
-  const product = await db.queryOne('SELECT merchant_id FROM products WHERE id = $1', [group.product_id]);
-  await requireMerchantAccess(req.ctx, product.merchant_id);
-  const updated = await db.updateById('product_topping_groups', req.params.id, pickFields(req.body, TOPPING_GROUP_FIELDS));
+  await requireMerchantAccess(req.ctx, group.merchant_id);
+  const updated = await db.updateById('topping_groups', req.params.id, pickFields(req.body, TOPPING_GROUP_FIELDS));
   res.json({ ok: true, data: updated });
 }));
 
-/** Xoá nhóm topping — CASCADE tự xoá luôn các lựa chọn (toppings) bên trong nhóm đó. */
+/** Xoá nhóm topping — CASCADE tự xoá luôn các lựa chọn (toppings) và liên kết với sản
+ * phẩm (product_topping_group_links) đang gắn nhóm này. */
 router.delete('/topping-groups/:id', asyncHandler(async (req, res) => {
-  const group = await db.queryOne('SELECT id, product_id FROM product_topping_groups WHERE id = $1', [req.params.id]);
+  const group = await db.queryOne('SELECT id, merchant_id FROM topping_groups WHERE id = $1', [req.params.id]);
   if (!group) throw new ApiError('NOT_FOUND', 'Không tìm thấy nhóm topping', 404);
-  const product = await db.queryOne('SELECT merchant_id FROM products WHERE id = $1', [group.product_id]);
-  await requireMerchantAccess(req.ctx, product.merchant_id);
-  const deleted = await db.deleteById('product_topping_groups', req.params.id);
+  await requireMerchantAccess(req.ctx, group.merchant_id);
+  const deleted = await db.deleteById('topping_groups', req.params.id);
   res.json({ ok: true, data: deleted });
 }));
 
 router.post('/topping-groups/:groupId/toppings', asyncHandler(async (req, res) => {
   requireFields(req.body, ['name']);
-  const group = await db.queryOne('SELECT id, product_id FROM product_topping_groups WHERE id = $1', [req.params.groupId]);
+  const group = await db.queryOne('SELECT id, merchant_id FROM topping_groups WHERE id = $1', [req.params.groupId]);
   if (!group) throw new ApiError('NOT_FOUND', 'Không tìm thấy nhóm topping', 404);
-  const product = await db.queryOne('SELECT merchant_id FROM products WHERE id = $1', [group.product_id]);
-  await requireMerchantAccess(req.ctx, product.merchant_id);
+  await requireMerchantAccess(req.ctx, group.merchant_id);
 
   const data = pickFields(req.body, TOPPING_FIELDS);
   data.group_id = req.params.groupId;
@@ -335,9 +345,8 @@ router.post('/topping-groups/:groupId/toppings', asyncHandler(async (req, res) =
 router.patch('/toppings/:id', asyncHandler(async (req, res) => {
   const topping = await db.queryOne('SELECT id, group_id FROM product_toppings WHERE id = $1', [req.params.id]);
   if (!topping) throw new ApiError('NOT_FOUND', 'Không tìm thấy topping', 404);
-  const group = await db.queryOne('SELECT product_id FROM product_topping_groups WHERE id = $1', [topping.group_id]);
-  const product = await db.queryOne('SELECT merchant_id FROM products WHERE id = $1', [group.product_id]);
-  await requireMerchantAccess(req.ctx, product.merchant_id);
+  const group = await db.queryOne('SELECT merchant_id FROM topping_groups WHERE id = $1', [topping.group_id]);
+  await requireMerchantAccess(req.ctx, group.merchant_id);
   const updated = await db.updateById('product_toppings', req.params.id, pickFields(req.body, TOPPING_FIELDS));
   res.json({ ok: true, data: updated });
 }));
@@ -345,11 +354,39 @@ router.patch('/toppings/:id', asyncHandler(async (req, res) => {
 router.delete('/toppings/:id', asyncHandler(async (req, res) => {
   const topping = await db.queryOne('SELECT id, group_id FROM product_toppings WHERE id = $1', [req.params.id]);
   if (!topping) throw new ApiError('NOT_FOUND', 'Không tìm thấy topping', 404);
-  const group = await db.queryOne('SELECT product_id FROM product_topping_groups WHERE id = $1', [topping.group_id]);
-  const product = await db.queryOne('SELECT merchant_id FROM products WHERE id = $1', [group.product_id]);
-  await requireMerchantAccess(req.ctx, product.merchant_id);
+  const group = await db.queryOne('SELECT merchant_id FROM topping_groups WHERE id = $1', [topping.group_id]);
+  await requireMerchantAccess(req.ctx, group.merchant_id);
   const deleted = await db.deleteById('product_toppings', req.params.id);
   res.json({ ok: true, data: deleted });
+}));
+
+// ---- Gắn nhóm topping vào sản phẩm ----
+
+/** Nhóm topping đang gắn vào 1 sản phẩm — công khai (khách xem sản phẩm cần thấy). */
+router.get('/products/:productId/topping-groups', asyncHandler(async (req, res) => {
+  const groups = await db.query(
+    `SELECT tg.* FROM topping_groups tg
+       JOIN product_topping_group_links l ON l.group_id = tg.id
+      WHERE l.product_id = $1
+      ORDER BY tg.sort_order ASC`,
+    [req.params.productId]
+  );
+  res.json({ ok: true, data: await attachToppings(groups) });
+}));
+
+/** Đặt lại toàn bộ danh sách nhóm topping gắn vào 1 sản phẩm — cùng pattern với
+ * PUT /products/:id/categories. */
+router.put('/products/:productId/topping-groups', asyncHandler(async (req, res) => {
+  requireFields(req.body, ['group_ids']);
+  const product = await db.queryOne('SELECT id, merchant_id FROM products WHERE id = $1', [req.params.productId]);
+  if (!product) throw new ApiError('NOT_FOUND', 'Không tìm thấy sản phẩm', 404);
+  await requireMerchantAccess(req.ctx, product.merchant_id);
+
+  await db.query('DELETE FROM product_topping_group_links WHERE product_id = $1', [req.params.productId]);
+  if (req.body.group_ids.length) {
+    await db.insertRows('product_topping_group_links', req.body.group_ids.map((gid) => ({ product_id: req.params.productId, group_id: gid })));
+  }
+  res.json({ ok: true, data: { updated: true } });
 }));
 
 module.exports = router;
