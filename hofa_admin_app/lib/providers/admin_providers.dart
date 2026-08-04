@@ -8,6 +8,7 @@ import '../models/merchant.dart';
 import '../models/driver.dart';
 import '../models/order.dart';
 import '../models/category.dart';
+import '../models/shipping_fee_settings.dart';
 import '../repositories/admin_repository.dart';
 import '../repositories/user_repository.dart';
 
@@ -15,7 +16,9 @@ final adminRepoProvider = Provider((ref) => AdminRepository());
 
 // ---- Xác thực ----
 
-final authStateProvider = StreamProvider<AuthState>((ref) => Supabase.instance.client.auth.onAuthStateChange);
+final authStateProvider = StreamProvider<AuthState>(
+  (ref) => Supabase.instance.client.auth.onAuthStateChange,
+);
 
 final currentSessionProvider = Provider<Session?>((ref) {
   final auth = ref.watch(authStateProvider).valueOrNull;
@@ -35,7 +38,9 @@ final userProfileProvider = FutureProvider<UserProfile?>((ref) async {
 
 // ---- Dữ liệu từng màn hình ----
 
-final statsProvider = FutureProvider.autoDispose<AdminStats>((ref) => ref.watch(adminRepoProvider).stats());
+final statsProvider = FutureProvider.autoDispose<AdminStats>(
+  (ref) => ref.watch(adminRepoProvider).stats(),
+);
 
 final merchantSearchProvider = StateProvider.autoDispose<String>((ref) => '');
 
@@ -45,29 +50,46 @@ final merchantsProvider = FutureProvider.autoDispose<List<Merchant>>((ref) {
 });
 
 final merchantDetailProvider = FutureProvider.autoDispose
-    .family<Merchant, String>((ref, id) => ref.watch(adminRepoProvider).merchantDetail(id));
+    .family<Merchant, String>(
+      (ref, id) => ref.watch(adminRepoProvider).merchantDetail(id),
+    );
 
-final userRoleFilterProvider = StateProvider.autoDispose<String?>((ref) => null);
+final userRoleFilterProvider = StateProvider.autoDispose<String?>(
+  (ref) => null,
+);
 
 final usersProvider = FutureProvider.autoDispose<List<UserProfile>>((ref) {
   final role = ref.watch(userRoleFilterProvider);
   return ref.watch(adminRepoProvider).users(role: role);
 });
 
-final userDetailProvider =
-    FutureProvider.autoDispose.family<UserDetail, String>((ref, id) => ref.watch(adminRepoProvider).userDetail(id));
+final userDetailProvider = FutureProvider.autoDispose
+    .family<UserDetail, String>(
+      (ref, id) => ref.watch(adminRepoProvider).userDetail(id),
+    );
 
-final driversProvider = FutureProvider.autoDispose<List<Driver>>((ref) => ref.watch(adminRepoProvider).drivers());
+final driversProvider = FutureProvider.autoDispose<List<Driver>>(
+  (ref) => ref.watch(adminRepoProvider).drivers(),
+);
 
-final orderStatusFilterProvider = StateProvider.autoDispose<String?>((ref) => null);
+final orderStatusFilterProvider = StateProvider.autoDispose<String?>(
+  (ref) => null,
+);
 
 final ordersProvider = FutureProvider.autoDispose<List<Order>>((ref) {
   final status = ref.watch(orderStatusFilterProvider);
   return ref.watch(adminRepoProvider).orders(status: status);
 });
 
-final orderDetailProvider =
-    FutureProvider.autoDispose.family<Order, String>((ref, id) => ref.watch(adminRepoProvider).order(id));
+final orderDetailProvider = FutureProvider.autoDispose.family<Order, String>(
+  (ref, id) => ref.watch(adminRepoProvider).order(id),
+);
 
-final categoriesProvider =
-    FutureProvider.autoDispose<List<Category>>((ref) => ref.watch(adminRepoProvider).categories());
+final categoriesProvider = FutureProvider.autoDispose<List<Category>>(
+  (ref) => ref.watch(adminRepoProvider).categories(),
+);
+
+final shippingFeeSettingsProvider =
+    FutureProvider.autoDispose<ShippingFeeSettings>(
+      (ref) => ref.watch(adminRepoProvider).shippingFeeSettings(),
+    );

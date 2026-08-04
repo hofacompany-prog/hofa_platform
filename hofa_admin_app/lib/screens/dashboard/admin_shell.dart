@@ -9,18 +9,56 @@ class AdminShell extends ConsumerWidget {
   const AdminShell({super.key, required this.child});
 
   static const _items = [
-    (icon: Icons.dashboard_outlined, selected: Icons.dashboard, label: 'Tổng quan', path: '/'),
-    (icon: Icons.storefront_outlined, selected: Icons.storefront, label: 'Cửa hàng', path: '/merchants'),
-    (icon: Icons.receipt_long_outlined, selected: Icons.receipt_long, label: 'Đơn hàng', path: '/orders'),
-    (icon: Icons.people_outline, selected: Icons.people, label: 'Người dùng', path: '/users'),
-    (icon: Icons.two_wheeler_outlined, selected: Icons.two_wheeler, label: 'Tài xế', path: '/drivers'),
-    (icon: Icons.category_outlined, selected: Icons.category, label: 'Danh mục', path: '/categories'),
+    (
+      icon: Icons.dashboard_outlined,
+      selected: Icons.dashboard,
+      label: 'Tổng quan',
+      path: '/',
+    ),
+    (
+      icon: Icons.storefront_outlined,
+      selected: Icons.storefront,
+      label: 'Cửa hàng',
+      path: '/merchants',
+    ),
+    (
+      icon: Icons.receipt_long_outlined,
+      selected: Icons.receipt_long,
+      label: 'Đơn hàng',
+      path: '/orders',
+    ),
+    (
+      icon: Icons.people_outline,
+      selected: Icons.people,
+      label: 'Người dùng',
+      path: '/users',
+    ),
+    (
+      icon: Icons.two_wheeler_outlined,
+      selected: Icons.two_wheeler,
+      label: 'Tài xế',
+      path: '/drivers',
+    ),
+    (
+      icon: Icons.category_outlined,
+      selected: Icons.category,
+      label: 'Danh mục',
+      path: '/categories',
+    ),
+    (
+      icon: Icons.local_shipping_outlined,
+      selected: Icons.local_shipping,
+      label: 'Phí ship',
+      path: '/shipping-fee',
+    ),
   ];
 
   int _indexFor(String location) {
     // '/' chỉ khớp khi đúng bằng '/', nếu không mọi route đều khớp tiền tố này
     if (location == '/') return 0;
-    final i = _items.indexWhere((d) => d.path != '/' && location.startsWith(d.path));
+    final i = _items.indexWhere(
+      (d) => d.path != '/' && location.startsWith(d.path),
+    );
     return i < 0 ? 0 : i;
   }
 
@@ -46,7 +84,10 @@ class AdminShell extends ConsumerWidget {
                   Image.asset('assets/images/logo.png', height: 30),
                   if (wide) ...[
                     const SizedBox(height: 8),
-                    const Text('HOFA Admin', style: TextStyle(fontWeight: FontWeight.bold)),
+                    const Text(
+                      'HOFA Admin',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
                   ],
                 ],
               ),
@@ -61,14 +102,21 @@ class AdminShell extends ConsumerWidget {
                     children: [
                       if (wide && profile != null)
                         Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          child: Text(profile.fullName,
-                              textAlign: TextAlign.center, style: theme.textTheme.bodySmall),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          child: Text(
+                            profile.fullName,
+                            textAlign: TextAlign.center,
+                            style: theme.textTheme.bodySmall,
+                          ),
                         ),
                       IconButton(
                         tooltip: 'Đăng xuất',
                         icon: const Icon(Icons.logout),
-                        onPressed: () => Supabase.instance.client.auth.signOut(),
+                        onPressed: () =>
+                            Supabase.instance.client.auth.signOut(),
                       ),
                     ],
                   ),
@@ -76,11 +124,13 @@ class AdminShell extends ConsumerWidget {
               ),
             ),
             destinations: _items
-                .map((d) => NavigationRailDestination(
-                      icon: Icon(d.icon),
-                      selectedIcon: Icon(d.selected),
-                      label: Text(d.label),
-                    ))
+                .map(
+                  (d) => NavigationRailDestination(
+                    icon: Icon(d.icon),
+                    selectedIcon: Icon(d.selected),
+                    label: Text(d.label),
+                  ),
+                )
                 .toList(),
           ),
           const VerticalDivider(width: 1),

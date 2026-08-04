@@ -831,6 +831,40 @@ COMMENT ON TABLE voucher_redemptions IS 'Lượt dùng mã. Dùng để chặn k
 CREATE INDEX idx_redemptions_user ON voucher_redemptions (voucher_id, user_id);
 
 -- ============================================================================
+-- PHẦN 11.5: PHÍ SHIP — cấu hình 1 dòng áp dụng toàn sàn, admin chỉnh qua web admin.
+-- Công thức: phí ship = base_fee (cho base_distance_km đầu) + per_km_fee × (số km vượt
+-- base_distance_km, nếu > 0), làm tròn theo round_to, không vượt quá max_fee (nếu có),
+-- và bằng 0 nếu tổng đơn hàng ≥ free_ship_threshold (nếu có) — cùng công thức base+per_km
+-- đang dùng để tính phí trả tài xế (xem BASE_FEE/PER_KM_FEE trong server/src/dispatch.js)
+-- để nhất quán trong toàn hệ thống.
+-- ============================================================================
+
+CREATE TABLE shipping_fee_settings (
+  id                  UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  is_active           BOOLEAN NOT NULL DEFAULT true,   -- tắt = luôn miễn phí ship
+  base_fee            INTEGER NOT NULL DEFAULT 15000,
+  base_distance_km    NUMERIC(6,2) NOT NULL DEFAULT 2,
+  per_km_fee          INTEGER NOT NULL DEFAULT 4000,
+  free_ship_threshold INTEGER,                         -- NULL = không áp dụng miễn phí theo giá trị đơn
+  max_fee             INTEGER,                         -- NULL = không giới hạn
+  round_to            INTEGER NOT NULL DEFAULT 500,
+  updated_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_by          UUID REFERENCES users(id) ON DELETE SET NULL,
+
+  CONSTRAINT shipping_fee_base_valid      CHECK (base_fee >= 0),
+  CONSTRAINT shipping_fee_distance_valid  CHECK (base_distance_km >= 0),
+  CONSTRAINT shipping_fee_per_km_valid    CHECK (per_km_fee >= 0),
+  CONSTRAINT shipping_fee_threshold_valid CHECK (free_ship_threshold IS NULL OR free_ship_threshold >= 0),
+  CONSTRAINT shipping_fee_max_valid       CHECK (max_fee IS NULL OR max_fee >= 0),
+  CONSTRAINT shipping_fee_round_valid     CHECK (round_to > 0)
+);
+COMMENT ON TABLE shipping_fee_settings IS
+  'Cấu hình phí ship toàn sàn — chỉ giữ 1 dòng (dòng mới nhất theo updated_at) đang áp dụng, admin sửa qua GET/PATCH /shipping-fee-settings';
+
+INSERT INTO shipping_fee_settings (is_active, base_fee, base_distance_km, per_km_fee)
+VALUES (true, 15000, 2, 4000);
+
+-- ============================================================================
 -- PHẦN 12: TỰ ĐỘNG HOÁ — trigger giữ dữ liệu luôn đúng
 -- ============================================================================
 

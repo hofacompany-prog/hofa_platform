@@ -15,11 +15,14 @@ import 'screens/users/users_screen.dart';
 import 'screens/users/user_detail_screen.dart';
 import 'screens/drivers/drivers_screen.dart';
 import 'screens/catalog/categories_screen.dart';
+import 'screens/settings/shipping_fee_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     initialLocation: '/',
-    refreshListenable: GoRouterRefreshStream(Supabase.instance.client.auth.onAuthStateChange),
+    refreshListenable: GoRouterRefreshStream(
+      Supabase.instance.client.auth.onAuthStateChange,
+    ),
     redirect: (context, state) async {
       final session = Supabase.instance.client.auth.currentSession;
       final loggingIn = state.matchedLocation == '/login';
@@ -42,29 +45,60 @@ final routerProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
-      GoRoute(path: '/login', builder: (context, state) => const AdminLoginScreen()),
+      GoRoute(
+        path: '/login',
+        builder: (context, state) => const AdminLoginScreen(),
+      ),
       ShellRoute(
         builder: (context, state, child) => AdminShell(child: child),
         routes: [
-          GoRoute(path: '/', builder: (context, state) => const DashboardScreen()),
-          GoRoute(path: '/merchants', builder: (context, state) => const MerchantsScreen()),
-          GoRoute(path: '/merchants/new', builder: (context, state) => const MerchantFormScreen()),
+          GoRoute(
+            path: '/',
+            builder: (context, state) => const DashboardScreen(),
+          ),
+          GoRoute(
+            path: '/merchants',
+            builder: (context, state) => const MerchantsScreen(),
+          ),
+          GoRoute(
+            path: '/merchants/new',
+            builder: (context, state) => const MerchantFormScreen(),
+          ),
           GoRoute(
             path: '/merchants/:id',
-            builder: (context, state) => MerchantDetailScreen(merchantId: state.pathParameters['id']!),
+            builder: (context, state) =>
+                MerchantDetailScreen(merchantId: state.pathParameters['id']!),
           ),
-          GoRoute(path: '/orders', builder: (context, state) => const OrdersScreen()),
+          GoRoute(
+            path: '/orders',
+            builder: (context, state) => const OrdersScreen(),
+          ),
           GoRoute(
             path: '/orders/:id',
-            builder: (context, state) => AdminOrderDetailScreen(orderId: state.pathParameters['id']!),
+            builder: (context, state) =>
+                AdminOrderDetailScreen(orderId: state.pathParameters['id']!),
           ),
-          GoRoute(path: '/users', builder: (context, state) => const UsersScreen()),
+          GoRoute(
+            path: '/users',
+            builder: (context, state) => const UsersScreen(),
+          ),
           GoRoute(
             path: '/users/:id',
-            builder: (context, state) => UserDetailScreen(userId: state.pathParameters['id']!),
+            builder: (context, state) =>
+                UserDetailScreen(userId: state.pathParameters['id']!),
           ),
-          GoRoute(path: '/drivers', builder: (context, state) => const DriversScreen()),
-          GoRoute(path: '/categories', builder: (context, state) => const CategoriesScreen()),
+          GoRoute(
+            path: '/drivers',
+            builder: (context, state) => const DriversScreen(),
+          ),
+          GoRoute(
+            path: '/categories',
+            builder: (context, state) => const CategoriesScreen(),
+          ),
+          GoRoute(
+            path: '/shipping-fee',
+            builder: (context, state) => const ShippingFeeScreen(),
+          ),
         ],
       ),
     ],
