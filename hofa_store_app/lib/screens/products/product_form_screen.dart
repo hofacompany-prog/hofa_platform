@@ -165,6 +165,31 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   }
 
   Future<void> _tierDialog({String? variantId, WholesaleTier? existing}) async {
+    // 1 biến thể chỉ được 1 trong 2 loại bậc giá — chặn thêm mới nếu biến thể đã có bậc
+    // loại kia (nút "Thêm bậc" cũng đã khoá ở _tierVariantCard, đây là chặn thêm lần nữa
+    // cho chắc). Sửa bậc có sẵn (existing != null) thì không cần chặn vì không đổi loại.
+    if (existing == null) {
+      final key = variantId ?? 'default';
+      final currentTiers = _tiersByVariant[key] ?? [];
+      final hasOtherType = currentTiers.any(
+        (t) => (t.leadTimeDays > 0) != (_tierTab == 'preorder'),
+      );
+      if (hasOtherType) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                _tierTab == 'preorder'
+                    ? 'Biến thể này đã có bậc giá sỉ — xoá hết trước khi thêm đặt trước'
+                    : 'Biến thể này đã có bậc đặt trước — xoá hết trước khi thêm giá sỉ',
+              ),
+            ),
+          );
+        }
+        return;
+      }
+    }
+
     final minQtyCtrl = TextEditingController(
       text: existing?.minQuantity.toString() ?? '',
     );
@@ -411,8 +436,13 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
             )
             .toList()
           ..sort((a, b) => a.minQuantity.compareTo(b.minQuantity));
+    // 1 biến thể chỉ được 1 trong 2 loại bậc giá — đã có bậc loại kia thì khoá nút thêm
+    // của tab hiện tại lại, tránh trộn giá sỉ + đặt trước trên cùng 1 biến thể.
+    final hasOtherType = allTiers.any(
+      (t) => (t.leadTimeDays > 0) != (_tierTab == 'preorder'),
+    );
     final addButton = TextButton.icon(
-      onPressed: () => _tierDialog(variantId: variantId),
+      onPressed: hasOtherType ? null : () => _tierDialog(variantId: variantId),
       icon: const Icon(Icons.add, size: 18),
       label: const Text('Thêm bậc'),
     );
@@ -436,7 +466,19 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
               )
             else
               Align(alignment: Alignment.centerRight, child: addButton),
-            if (tiers.isEmpty)
+            if (hasOtherType)
+              Padding(
+                padding: const EdgeInsets.only(left: 4, bottom: 4),
+                child: Text(
+                  _tierTab == 'preorder'
+                      ? 'Biến thể này đang dùng giá sỉ — xoá hết bậc giá sỉ để đổi sang đặt trước'
+                      : 'Biến thể này đang dùng đặt trước — xoá hết bậc đặt trước để đổi sang giá sỉ',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.error,
+                  ),
+                ),
+              )
+            else if (tiers.isEmpty)
               Padding(
                 padding: const EdgeInsets.only(left: 4, bottom: 4),
                 child: Text(
