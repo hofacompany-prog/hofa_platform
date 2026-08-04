@@ -222,6 +222,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             'variant_id': e.variantId,
             'quantity': e.quantity,
             if (e.note != null) 'note': e.note,
+            if (e.toppings.isNotEmpty)
+              'topping_ids': e.toppings.map((t) => t.id).toList(),
           },
         )
         .toList(),

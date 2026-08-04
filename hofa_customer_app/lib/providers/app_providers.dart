@@ -7,6 +7,7 @@ import '../models/merchant.dart';
 import '../models/order.dart';
 import '../models/product.dart';
 import '../models/review.dart';
+import '../models/topping.dart';
 import '../models/wholesale_tier.dart';
 import '../repositories/merchant_repository.dart';
 import '../repositories/order_repository.dart';
@@ -30,65 +31,110 @@ final merchantsProvider = FutureProvider.autoDispose<List<Merchant>>((ref) {
   return ref.watch(merchantRepoProvider).merchants(q: q);
 });
 
-final merchantDetailProvider =
-    FutureProvider.autoDispose.family<Merchant, String>((ref, id) => ref.watch(merchantRepoProvider).merchant(id));
+final merchantDetailProvider = FutureProvider.autoDispose
+    .family<Merchant, String>(
+      (ref, id) => ref.watch(merchantRepoProvider).merchant(id),
+    );
 
-final merchantBranchesProvider =
-    FutureProvider.autoDispose.family<List<Branch>, String>((ref, merchantId) => ref.watch(merchantRepoProvider).branches(merchantId));
+final merchantBranchesProvider = FutureProvider.autoDispose
+    .family<List<Branch>, String>(
+      (ref, merchantId) => ref.watch(merchantRepoProvider).branches(merchantId),
+    );
 
 // ---- Sản phẩm ----
 
-final categoriesProvider = FutureProvider.autoDispose<List<Category>>((ref) => ref.watch(productRepoProvider).categories());
+final categoriesProvider = FutureProvider.autoDispose<List<Category>>(
+  (ref) => ref.watch(productRepoProvider).categories(),
+);
 
-final merchantProductsProvider =
-    FutureProvider.autoDispose.family<List<Product>, String>((ref, merchantId) => ref.watch(productRepoProvider).products(merchantId: merchantId));
+final merchantProductsProvider = FutureProvider.autoDispose
+    .family<List<Product>, String>(
+      (ref, merchantId) =>
+          ref.watch(productRepoProvider).products(merchantId: merchantId),
+    );
 
-final merchantCategoriesProvider = FutureProvider.autoDispose.family<List<MerchantCategory>, String>(
-    (ref, merchantId) => ref.watch(productRepoProvider).merchantCategories(merchantId));
+final merchantCategoriesProvider = FutureProvider.autoDispose
+    .family<List<MerchantCategory>, String>(
+      (ref, merchantId) =>
+          ref.watch(productRepoProvider).merchantCategories(merchantId),
+    );
 
-final categoryProductsProvider = FutureProvider.autoDispose.family<List<Product>, String>(
-    (ref, categoryId) => ref.watch(productRepoProvider).products(categoryId: categoryId));
+final categoryProductsProvider = FutureProvider.autoDispose
+    .family<List<Product>, String>(
+      (ref, categoryId) =>
+          ref.watch(productRepoProvider).products(categoryId: categoryId),
+    );
 
-final categoryFeaturedProductsProvider = FutureProvider.autoDispose.family<List<Product>, String>(
-    (ref, categoryId) => ref.watch(productRepoProvider).products(categoryId: categoryId, isFeatured: true, limit: 10));
+final categoryFeaturedProductsProvider = FutureProvider.autoDispose
+    .family<List<Product>, String>(
+      (ref, categoryId) => ref
+          .watch(productRepoProvider)
+          .products(categoryId: categoryId, isFeatured: true, limit: 10),
+    );
 
 final productSearchProvider = StateProvider.autoDispose<String>((ref) => '');
 
-final searchedProductsProvider = FutureProvider.autoDispose<List<Product>>((ref) {
+final searchedProductsProvider = FutureProvider.autoDispose<List<Product>>((
+  ref,
+) {
   final q = ref.watch(productSearchProvider);
   if (q.isEmpty) return Future.value(<Product>[]);
   return ref.watch(productRepoProvider).products(q: q);
 });
 
-final productDetailProvider =
-    FutureProvider.autoDispose.family<Product, String>((ref, id) => ref.watch(productRepoProvider).product(id));
+final productDetailProvider = FutureProvider.autoDispose
+    .family<Product, String>(
+      (ref, id) => ref.watch(productRepoProvider).product(id),
+    );
 
-final wholesaleTiersProvider = FutureProvider.autoDispose.family<List<WholesaleTier>, String>(
-    (ref, variantId) => ref.watch(productRepoProvider).wholesaleTiers(variantId));
+final wholesaleTiersProvider = FutureProvider.autoDispose
+    .family<List<WholesaleTier>, String>(
+      (ref, variantId) =>
+          ref.watch(productRepoProvider).wholesaleTiers(variantId),
+    );
+
+final toppingGroupsProvider = FutureProvider.autoDispose
+    .family<List<ToppingGroup>, String>(
+      (ref, productId) =>
+          ref.watch(productRepoProvider).toppingGroups(productId),
+    );
 
 // ---- Đơn hàng ----
 
-final orderStatusFilterProvider = StateProvider.autoDispose<String?>((ref) => null);
+final orderStatusFilterProvider = StateProvider.autoDispose<String?>(
+  (ref) => null,
+);
 
 final myOrdersProvider = FutureProvider.autoDispose<List<Order>>((ref) {
   final status = ref.watch(orderStatusFilterProvider);
   return ref.watch(orderRepoProvider).myOrders(status: status);
 });
 
-final orderDetailProvider =
-    FutureProvider.autoDispose.family<Order, String>((ref, id) => ref.watch(orderRepoProvider).order(id));
+final orderDetailProvider = FutureProvider.autoDispose.family<Order, String>(
+  (ref, id) => ref.watch(orderRepoProvider).order(id),
+);
 
-final orderHistoryProvider =
-    FutureProvider.autoDispose.family<List<OrderStatusEvent>, String>((ref, id) => ref.watch(orderRepoProvider).history(id));
+final orderHistoryProvider = FutureProvider.autoDispose
+    .family<List<OrderStatusEvent>, String>(
+      (ref, id) => ref.watch(orderRepoProvider).history(id),
+    );
 
-final orderDeliveryProvider =
-    FutureProvider.autoDispose.family<Delivery?, String>((ref, id) => ref.watch(orderRepoProvider).delivery(id));
+final orderDeliveryProvider = FutureProvider.autoDispose
+    .family<Delivery?, String>(
+      (ref, id) => ref.watch(orderRepoProvider).delivery(id),
+    );
 
 // ---- Địa chỉ ----
 
-final addressesProvider = FutureProvider.autoDispose<List<Address>>((ref) => ref.watch(userRepoProvider).addresses());
+final addressesProvider = FutureProvider.autoDispose<List<Address>>(
+  (ref) => ref.watch(userRepoProvider).addresses(),
+);
 
 // ---- Đánh giá ----
 
-final productReviewsProvider = FutureProvider.autoDispose.family<List<Review>, String>(
-    (ref, productId) => ref.watch(reviewRepoProvider).list(targetType: 'product', targetId: productId));
+final productReviewsProvider = FutureProvider.autoDispose
+    .family<List<Review>, String>(
+      (ref, productId) => ref
+          .watch(reviewRepoProvider)
+          .list(targetType: 'product', targetId: productId),
+    );

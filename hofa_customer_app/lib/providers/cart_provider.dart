@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/cart_item.dart';
+import '../models/topping.dart';
 
 const _cartStorageKey = 'hofa_cart_v1';
 
@@ -11,7 +12,8 @@ class CartState {
   final String? merchantId;
   final String? merchantName;
   final String? branchId;
-  final String salesModel; // 'instant' | 'scheduled' — theo sản phẩm đầu tiên bỏ vào giỏ
+  final String
+  salesModel; // 'instant' | 'scheduled' — theo sản phẩm đầu tiên bỏ vào giỏ
   final List<CartItem> items;
 
   const CartState({
@@ -27,20 +29,22 @@ class CartState {
   bool get isEmpty => items.isEmpty;
 
   Map<String, dynamic> toJson() => {
-        'merchant_id': merchantId,
-        'merchant_name': merchantName,
-        'branch_id': branchId,
-        'sales_model': salesModel,
-        'items': items.map((e) => e.toJson()).toList(),
-      };
+    'merchant_id': merchantId,
+    'merchant_name': merchantName,
+    'branch_id': branchId,
+    'sales_model': salesModel,
+    'items': items.map((e) => e.toJson()).toList(),
+  };
 
   factory CartState.fromJson(Map<String, dynamic> json) => CartState(
-        merchantId: json['merchant_id'] as String?,
-        merchantName: json['merchant_name'] as String?,
-        branchId: json['branch_id'] as String?,
-        salesModel: json['sales_model'] as String? ?? 'instant',
-        items: (json['items'] as List? ?? []).map((e) => CartItem.fromJson(e as Map<String, dynamic>)).toList(),
-      );
+    merchantId: json['merchant_id'] as String?,
+    merchantName: json['merchant_name'] as String?,
+    branchId: json['branch_id'] as String?,
+    salesModel: json['sales_model'] as String? ?? 'instant',
+    items: (json['items'] as List? ?? [])
+        .map((e) => CartItem.fromJson(e as Map<String, dynamic>))
+        .toList(),
+  );
 }
 
 class CartNotifier extends StateNotifier<CartState> {
@@ -65,7 +69,8 @@ class CartNotifier extends StateNotifier<CartState> {
   }
 
   /// Giỏ trống hoặc đang chứa món của đúng cửa hàng này thì thêm được luôn.
-  bool belongsToCurrentCart(String merchantId) => state.isEmpty || state.merchantId == merchantId;
+  bool belongsToCurrentCart(String merchantId) =>
+      state.isEmpty || state.merchantId == merchantId;
 
   Future<void> addItem({
     required String merchantId,
@@ -75,9 +80,11 @@ class CartNotifier extends StateNotifier<CartState> {
     required CartItem item,
   }) async {
     final items = List<CartItem>.from(state.items);
-    final idx = items.indexWhere((e) => e.variantId == item.variantId);
+    final idx = items.indexWhere((e) => e.lineKey == item.lineKey);
     if (idx >= 0) {
-      items[idx] = items[idx].copyWith(quantity: items[idx].quantity + item.quantity);
+      items[idx] = items[idx].copyWith(
+        quantity: items[idx].quantity + item.quantity,
+      );
     } else {
       items.add(item);
     }
@@ -91,12 +98,14 @@ class CartNotifier extends StateNotifier<CartState> {
     await _persist();
   }
 
-  Future<void> updateQuantity(String variantId, int quantity) async {
+  Future<void> updateQuantity(String lineId, int quantity) async {
     if (quantity <= 0) {
-      await removeItem(variantId);
+      await removeItem(lineId);
       return;
     }
-    final items = state.items.map((e) => e.variantId == variantId ? e.copyWith(quantity: quantity) : e).toList();
+    final items = state.items
+        .map((e) => e.lineId == lineId ? e.copyWith(quantity: quantity) : e)
+        .toList();
     state = CartState(
       merchantId: state.merchantId,
       merchantName: state.merchantName,
@@ -107,8 +116,39 @@ class CartNotifier extends StateNotifier<CartState> {
     await _persist();
   }
 
-  Future<void> removeItem(String variantId) async {
-    final items = state.items.where((e) => e.variantId != variantId).toList();
+  Future<void> updateToppings(
+    String lineId,
+    List<ProductTopping> toppings,
+  ) async {
+    final items = state.items
+        .map((e) => e.lineId == lineId ? e.copyWith(toppings: toppings) : e)
+        .toList();
+    state = CartState(
+      merchantId: state.merchantId,
+      merchantName: state.merchantName,
+      branchId: state.branchId,
+      salesModel: state.salesModel,
+      items: items,
+    );
+    await _persist();
+  }
+
+  Future<void> updateWeekdays(String lineId, List<int> weekdays) async {
+    final items = state.items
+        .map((e) => e.lineId == lineId ? e.copyWith(weekdays: weekdays) : e)
+        .toList();
+    state = CartState(
+      merchantId: state.merchantId,
+      merchantName: state.merchantName,
+      branchId: state.branchId,
+      salesModel: state.salesModel,
+      items: items,
+    );
+    await _persist();
+  }
+
+  Future<void> removeItem(String lineId) async {
+    final items = state.items.where((e) => e.lineId != lineId).toList();
     state = items.isEmpty
         ? const CartState()
         : CartState(
@@ -127,4 +167,6 @@ class CartNotifier extends StateNotifier<CartState> {
   }
 }
 
-final cartProvider = StateNotifierProvider<CartNotifier, CartState>((ref) => CartNotifier());
+final cartProvider = StateNotifierProvider<CartNotifier, CartState>(
+  (ref) => CartNotifier(),
+);

@@ -24,7 +24,10 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
         title: const Text('Huỷ đơn hàng?'),
         content: Text('Đơn ${o.orderCode} sẽ bị huỷ và không thể khôi phục.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Không')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Không'),
+          ),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () => Navigator.pop(context, true),
@@ -41,7 +44,10 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
       ref.invalidate(orderDetailProvider(widget.orderId));
       ref.invalidate(myOrdersProvider);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -65,22 +71,33 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                   children: List.generate(
                     5,
                     (i) => IconButton(
-                      icon: Icon(i < rating ? Icons.star : Icons.star_border, color: Colors.amber.shade700),
+                      icon: Icon(
+                        i < rating ? Icons.star : Icons.star_border,
+                        color: Colors.amber.shade700,
+                      ),
                       onPressed: () => setInner(() => rating = i + 1),
                     ),
                   ),
                 ),
                 TextField(
                   controller: commentCtrl,
-                  decoration: const InputDecoration(labelText: 'Nhận xét (không bắt buộc)'),
+                  decoration: const InputDecoration(
+                    labelText: 'Nhận xét (không bắt buộc)',
+                  ),
                   maxLines: 3,
                 ),
               ],
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Huỷ')),
-            FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Gửi')),
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Huỷ'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Gửi'),
+            ),
           ],
         ),
       ),
@@ -89,16 +106,24 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
 
     setState(() => _busy = true);
     try {
-      await ref.read(reviewRepoProvider).create(
+      await ref
+          .read(reviewRepoProvider)
+          .create(
             orderId: o.id,
             targetType: 'merchant',
             targetId: o.merchantId,
             rating: rating,
             comment: commentCtrl.text.trim(),
           );
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Cảm ơn bạn đã đánh giá!')));
+      if (mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Cảm ơn bạn đã đánh giá!')),
+        );
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -113,7 +138,10 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => context.go('/orders')),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => context.go('/orders'),
+        ),
         title: const Text('Chi tiết đơn hàng'),
       ),
       body: orderAsync.when(
@@ -138,11 +166,18 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(o.orderCode, style: theme.textTheme.titleLarge),
+                            Text(
+                              o.orderCode,
+                              style: theme.textTheme.titleLarge,
+                            ),
                             Chip(
-                              label: Text(orderStatusLabels[o.status] ?? o.status),
+                              label: Text(
+                                orderStatusLabels[o.status] ?? o.status,
+                              ),
                               backgroundColor: color.withValues(alpha: 0.12),
-                              side: BorderSide(color: color.withValues(alpha: 0.4)),
+                              side: BorderSide(
+                                color: color.withValues(alpha: 0.4),
+                              ),
                             ),
                           ],
                         ),
@@ -152,7 +187,9 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                         const Divider(height: 24),
                         Text('Giao đến', style: theme.textTheme.titleSmall),
                         const SizedBox(height: 4),
-                        Text('${o.shipRecipientName} · ${o.shipRecipientPhone}'),
+                        Text(
+                          '${o.shipRecipientName} · ${o.shipRecipientPhone}',
+                        ),
                         Text('${o.shipLine1}, ${o.shipProvince}'),
                       ],
                     ),
@@ -169,24 +206,47 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                       children: [
                         Text('Món hàng', style: theme.textTheme.titleSmall),
                         const SizedBox(height: 8),
-                        ...o.items.map((item) => Padding(
-                              padding: const EdgeInsets.symmetric(vertical: 3),
-                              child: Row(
-                                children: [
-                                  Text('${item.quantity}× '),
-                                  Expanded(child: Text('${item.productName} ${item.variantName ?? ''}')),
-                                  Text(formatVnd(item.lineTotal)),
-                                ],
-                              ),
-                            )),
+                        ...o.items.map(
+                          (item) => Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 3),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('${item.quantity}× '),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        '${item.productName} ${item.variantName ?? ''}',
+                                      ),
+                                      if (item.toppings.isNotEmpty)
+                                        Text(
+                                          item.toppings
+                                              .map((t) => t.name)
+                                              .join(', '),
+                                          style: theme.textTheme.bodySmall,
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                                Text(formatVnd(item.lineTotal)),
+                              ],
+                            ),
+                          ),
+                        ),
                         const Divider(height: 24),
                         _row('Tạm tính', formatVnd(o.subtotal)),
                         _row('Phí giao hàng', formatVnd(o.deliveryFee)),
-                        if (o.discountAmount > 0) _row('Giảm giá', '-${formatVnd(o.discountAmount)}'),
+                        if (o.discountAmount > 0)
+                          _row('Giảm giá', '-${formatVnd(o.discountAmount)}'),
                         _row('Tổng cộng', formatVnd(o.totalAmount), bold: true),
                         const SizedBox(height: 4),
-                        Text('Thanh toán: ${o.paymentMethod == 'cod' ? 'COD' : 'Chuyển khoản'} · ${o.paymentStatus}',
-                            style: theme.textTheme.bodySmall),
+                        Text(
+                          'Thanh toán: ${o.paymentMethod == 'cod' ? 'COD' : 'Chuyển khoản'} · ${o.paymentStatus}',
+                          style: theme.textTheme.bodySmall,
+                        ),
                       ],
                     ),
                   ),
@@ -195,18 +255,24 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                   loading: () => const SizedBox(),
                   error: (_, _) => const SizedBox(),
                   data: (delivery) {
-                    if (delivery == null || delivery.deliveryOtp == null) return const SizedBox();
+                    if (delivery == null || delivery.deliveryOtp == null)
+                      return const SizedBox();
                     return Padding(
                       padding: const EdgeInsets.only(top: 12),
                       child: Card(
                         elevation: 0,
-                        color: theme.colorScheme.secondary.withValues(alpha: 0.12),
+                        color: theme.colorScheme.secondary.withValues(
+                          alpha: 0.12,
+                        ),
                         child: Padding(
                           padding: const EdgeInsets.all(16),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('Mã giao hàng', style: theme.textTheme.titleSmall),
+                              Text(
+                                'Mã giao hàng',
+                                style: theme.textTheme.titleSmall,
+                              ),
                               const SizedBox(height: 4),
                               Text(
                                 delivery.deliveryOtp!,
@@ -237,24 +303,43 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Lịch sử trạng thái', style: theme.textTheme.titleSmall),
+                        Text(
+                          'Lịch sử trạng thái',
+                          style: theme.textTheme.titleSmall,
+                        ),
                         const SizedBox(height: 8),
                         historyAsync.when(
                           loading: () => const LinearProgressIndicator(),
                           error: (e, _) => Text('Lỗi: $e'),
                           data: (events) => Column(
                             children: events
-                                .map((ev) => Padding(
-                                      padding: const EdgeInsets.symmetric(vertical: 3),
-                                      child: Row(
-                                        children: [
-                                          Icon(Icons.circle, size: 8, color: theme.colorScheme.primary),
-                                          const SizedBox(width: 8),
-                                          Expanded(child: Text(orderStatusLabels[ev.status] ?? ev.status)),
-                                          Text(formatDateTime(ev.createdAt), style: theme.textTheme.bodySmall),
-                                        ],
-                                      ),
-                                    ))
+                                .map(
+                                  (ev) => Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 3,
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          Icons.circle,
+                                          size: 8,
+                                          color: theme.colorScheme.primary,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Expanded(
+                                          child: Text(
+                                            orderStatusLabels[ev.status] ??
+                                                ev.status,
+                                          ),
+                                        ),
+                                        Text(
+                                          formatDateTime(ev.createdAt),
+                                          style: theme.textTheme.bodySmall,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                )
                                 .toList(),
                           ),
                         ),
@@ -287,13 +372,19 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
   }
 
   Widget _row(String label, String value, {bool bold = false}) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 3),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(label, style: bold ? const TextStyle(fontWeight: FontWeight.bold) : null),
-            Text(value, style: bold ? const TextStyle(fontWeight: FontWeight.bold) : null),
-          ],
+    padding: const EdgeInsets.symmetric(vertical: 3),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: bold ? const TextStyle(fontWeight: FontWeight.bold) : null,
         ),
-      );
+        Text(
+          value,
+          style: bold ? const TextStyle(fontWeight: FontWeight.bold) : null,
+        ),
+      ],
+    ),
+  );
 }

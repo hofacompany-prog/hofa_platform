@@ -633,6 +633,24 @@ COMMENT ON COLUMN order_items.variant_id IS 'Có thể NULL nếu sản phẩm b
 CREATE INDEX idx_order_items_order   ON order_items (order_id);
 CREATE INDEX idx_order_items_variant ON order_items (variant_id);
 
+-- Topping khách đã chọn cho 1 món trong đơn — bản chụp tên/giá lúc đặt hàng, giống
+-- order_items chụp lại tên/giá sản phẩm, để sau này cửa hàng sửa/xoá topping không
+-- ảnh hưởng hoá đơn cũ. Giá topping đã được cộng vào order_items.unit_price lúc chốt
+-- đơn (xem create_order) — bảng này chỉ để hiển thị lại đã chọn topping gì.
+CREATE TABLE order_item_toppings (
+  id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  order_item_id UUID NOT NULL REFERENCES order_items(id) ON DELETE CASCADE,
+  topping_id    UUID REFERENCES product_toppings(id) ON DELETE SET NULL,
+  name          VARCHAR(150) NOT NULL,
+  price         INTEGER NOT NULL DEFAULT 0,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+  CONSTRAINT order_item_toppings_price_nonnegative CHECK (price >= 0)
+);
+COMMENT ON TABLE order_item_toppings IS 'Topping khách đã chọn cho từng món trong đơn — bản chụp tên/giá lúc đặt hàng';
+
+CREATE INDEX idx_order_item_toppings_item ON order_item_toppings (order_item_id);
+
 -- Nhật ký đổi trạng thái: ai đổi, lúc nào, từ gì sang gì
 CREATE TABLE order_status_history (
   id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

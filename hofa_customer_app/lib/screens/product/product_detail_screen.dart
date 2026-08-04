@@ -5,23 +5,36 @@ import '../../core/format.dart';
 import '../../models/cart_item.dart';
 import '../../models/product.dart';
 import '../../models/product_variant.dart';
+import '../../models/topping.dart';
 import '../../models/wholesale_tier.dart';
 import '../../providers/app_providers.dart';
 import '../../providers/cart_provider.dart';
 import '../../widgets/network_image_box.dart';
+import '../../widgets/topping_picker_dialog.dart';
 
 class ProductDetailScreen extends ConsumerStatefulWidget {
   final String productId;
   const ProductDetailScreen({super.key, required this.productId});
 
   @override
-  ConsumerState<ProductDetailScreen> createState() => _ProductDetailScreenState();
+  ConsumerState<ProductDetailScreen> createState() =>
+      _ProductDetailScreenState();
 }
 
 class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
   ProductVariant? _selectedVariant;
   int _quantity = 1;
   bool _adding = false;
+  List<ProductTopping> _selectedToppings = [];
+
+  Future<void> _pickToppings(List<ToppingGroup> groups) async {
+    final result = await showToppingPickerDialog(
+      context,
+      groups: groups,
+      initiallySelected: _selectedToppings,
+    );
+    if (result != null) setState(() => _selectedToppings = result);
+  }
 
   void _ensureVariantSelected(Product product) {
     _selectedVariant ??= product.defaultVariant;
@@ -31,7 +44,8 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
     if (tiers.isEmpty) return variant.price;
     WholesaleTier? matched;
     for (final t in tiers) {
-      if (_quantity >= t.minQuantity && (t.maxQuantity == null || _quantity <= t.maxQuantity!)) {
+      if (_quantity >= t.minQuantity &&
+          (t.maxQuantity == null || _quantity <= t.maxQuantity!)) {
         matched = t;
         break;
       }
@@ -39,7 +53,24 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
     return matched?.unitPrice ?? variant.price;
   }
 
-  Future<void> _addToCart(Product product, ProductVariant variant, int unitPrice) async {
+  Future<void> _addToCart(
+    Product product,
+    ProductVariant variant,
+    int unitPrice,
+    List<ToppingGroup> toppingGroups,
+  ) async {
+    for (final g in toppingGroups) {
+      if (g.isRequired &&
+          !_selectedToppings.any(
+            (t) => g.toppings.any((gt) => gt.id == t.id),
+          )) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Vui lòng chọn ${g.name}')));
+        return;
+      }
+    }
+
     final cartNotifier = ref.read(cartProvider.notifier);
     final cartState = ref.read(cartProvider);
 
@@ -49,10 +80,17 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
         builder: (context) => AlertDialog(
           title: const Text('Giỏ hàng có món của cửa hàng khác'),
           content: Text(
-              'Giỏ hàng hiện đang có món từ "${cartState.merchantName}". Mỗi đơn chỉ đặt được 1 cửa hàng — xoá giỏ hiện tại để thêm món mới?'),
+            'Giỏ hàng hiện đang có món từ "${cartState.merchantName}". Mỗi đơn chỉ đặt được 1 cửa hàng — xoá giỏ hiện tại để thêm món mới?',
+          ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Huỷ')),
-            FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Xoá giỏ cũ')),
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Huỷ'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Xoá giỏ cũ'),
+            ),
           ],
         ),
       );
@@ -62,16 +100,26 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
 
     setState(() => _adding = true);
     try {
-      final branches = await ref.read(merchantBranchesProvider(product.merchantId).future);
+      final branches = await ref.read(
+        merchantBranchesProvider(product.merchantId).future,
+      );
       if (branches.isEmpty) {
         if (mounted) {
-          ScaffoldMessenger.of(context)
-              .showSnackBar(const SnackBar(content: Text('Cửa hàng chưa có chi nhánh nhận đơn')));
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Cửa hàng chưa có chi nhánh nhận đơn'),
+            ),
+          );
         }
         return;
       }
-      final branch = branches.firstWhere((b) => b.isMain, orElse: () => branches.first);
-      final merchant = await ref.read(merchantDetailProvider(product.merchantId).future);
+      final branch = branches.firstWhere(
+        (b) => b.isMain,
+        orElse: () => branches.first,
+      );
+      final merchant = await ref.read(
+        merchantDetailProvider(product.merchantId).future,
+      );
 
       await cartNotifier.addItem(
         merchantId: product.merchantId,
@@ -79,6 +127,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
         branchId: branch.id,
         salesModel: product.salesModel,
         item: CartItem(
+          lineId: '${variant.id}_${DateTime.now().microsecondsSinceEpoch}',
           productId: product.id,
           productName: product.name,
           productImage: product.images.isNotEmpty ? product.images.first : null,
@@ -87,13 +136,20 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
           unitPrice: unitPrice,
           quantity: _quantity,
           unit: product.unit,
+          toppings: _selectedToppings,
         ),
       );
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Đã thêm vào giỏ hàng')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Đã thêm vào giỏ hàng')));
+        setState(() => _selectedToppings = []);
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
     } finally {
       if (mounted) setState(() => _adding = false);
     }
@@ -106,7 +162,10 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => context.pop()),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => context.pop(),
+        ),
         title: const Text('Sản phẩm'),
       ),
       body: productAsync.when(
@@ -115,10 +174,17 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
         data: (product) {
           _ensureVariantSelected(product);
           final variant = _selectedVariant ?? product.defaultVariant;
-          final tiersAsync =
-              (product.isWholesale && variant != null) ? ref.watch(wholesaleTiersProvider(variant.id)) : null;
+          final tiersAsync = (product.isWholesale && variant != null)
+              ? ref.watch(wholesaleTiersProvider(variant.id))
+              : null;
           final tiers = tiersAsync?.valueOrNull ?? [];
           final unitPrice = variant != null ? _unitPriceFor(variant, tiers) : 0;
+          final toppingGroups =
+              ref.watch(toppingGroupsProvider(product.id)).valueOrNull ?? [];
+          final toppingsTotal = _selectedToppings.fold(
+            0,
+            (sum, t) => sum + t.price,
+          );
 
           return Column(
             children: [
@@ -129,7 +195,9 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                     AspectRatio(
                       aspectRatio: 1.3,
                       child: NetworkImageBox(
-                        url: product.images.isNotEmpty ? product.images.first : null,
+                        url: product.images.isNotEmpty
+                            ? product.images.first
+                            : null,
                         width: double.infinity,
                         height: double.infinity,
                         fallbackIcon: Icons.shopping_bag_outlined,
@@ -141,25 +209,40 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                         padding: const EdgeInsets.only(bottom: 8),
                         child: Chip(
                           label: const Text('Bán sỉ / Đặt trước'),
-                          backgroundColor: theme.colorScheme.secondary.withValues(alpha: 0.15),
+                          backgroundColor: theme.colorScheme.secondary
+                              .withValues(alpha: 0.15),
                         ),
                       ),
                     Text(product.name, style: theme.textTheme.headlineSmall),
                     const SizedBox(height: 8),
                     Row(
                       children: [
-                        Text(formatVnd(unitPrice),
-                            style: theme.textTheme.titleLarge?.copyWith(color: theme.colorScheme.primary, fontWeight: FontWeight.bold)),
-                        Text(' / ${product.unit}', style: theme.textTheme.bodyMedium),
+                        Text(
+                          formatVnd(unitPrice),
+                          style: theme.textTheme.titleLarge?.copyWith(
+                            color: theme.colorScheme.primary,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Text(
+                          ' / ${product.unit}',
+                          style: theme.textTheme.bodyMedium,
+                        ),
                       ],
                     ),
                     if (product.ratingCount > 0) ...[
                       const SizedBox(height: 4),
                       Row(
                         children: [
-                          Icon(Icons.star, size: 16, color: Colors.amber.shade700),
+                          Icon(
+                            Icons.star,
+                            size: 16,
+                            color: Colors.amber.shade700,
+                          ),
                           const SizedBox(width: 4),
-                          Text('${product.ratingAvg.toStringAsFixed(1)} (${product.ratingCount} đánh giá) · Đã bán ${product.soldCount}'),
+                          Text(
+                            '${product.ratingAvg.toStringAsFixed(1)} (${product.ratingCount} đánh giá) · Đã bán ${product.soldCount}',
+                          ),
                         ],
                       ),
                     ],
@@ -170,32 +253,48 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                       Wrap(
                         spacing: 8,
                         children: product.variants
-                            .map((v) => ChoiceChip(
-                                  label: Text(v.name),
-                                  selected: _selectedVariant?.id == v.id,
-                                  onSelected: (_) => setState(() {
-                                    _selectedVariant = v;
-                                    _quantity = 1;
-                                  }),
-                                ))
+                            .map(
+                              (v) => ChoiceChip(
+                                label: Text(v.name),
+                                selected: _selectedVariant?.id == v.id,
+                                onSelected: (_) => setState(() {
+                                  _selectedVariant = v;
+                                  _quantity = 1;
+                                }),
+                              ),
+                            )
                             .toList(),
                       ),
                       const SizedBox(height: 16),
                     ],
                     if (product.isWholesale && tiers.isNotEmpty) ...[
-                      Text('Bậc giá theo số lượng', style: theme.textTheme.titleSmall),
+                      Text(
+                        'Bậc giá theo số lượng',
+                        style: theme.textTheme.titleSmall,
+                      ),
                       const SizedBox(height: 8),
                       Card(
                         elevation: 0,
                         color: theme.colorScheme.surfaceContainerLow,
                         child: Column(
                           children: tiers
-                              .map((t) => ListTile(
-                                    dense: true,
-                                    title: Text('${t.rangeLabel} ${product.unit}'),
-                                    subtitle: t.leadTimeDays > 0 ? Text('Giao sau ${t.leadTimeDays} ngày') : null,
-                                    trailing: Text(formatVnd(t.unitPrice), style: const TextStyle(fontWeight: FontWeight.w600)),
-                                  ))
+                              .map(
+                                (t) => ListTile(
+                                  dense: true,
+                                  title: Text(
+                                    '${t.rangeLabel} ${product.unit}',
+                                  ),
+                                  subtitle: t.leadTimeDays > 0
+                                      ? Text('Giao sau ${t.leadTimeDays} ngày')
+                                      : null,
+                                  trailing: Text(
+                                    formatVnd(t.unitPrice),
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              )
                               .toList(),
                         ),
                       ),
@@ -206,17 +305,69 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                     Row(
                       children: [
                         IconButton.outlined(
-                          onPressed: _quantity > 1 ? () => setState(() => _quantity--) : null,
+                          onPressed: _quantity > 1
+                              ? () => setState(() => _quantity--)
+                              : null,
                           icon: const Icon(Icons.remove),
                         ),
-                        SizedBox(width: 56, child: Center(child: Text('$_quantity', style: theme.textTheme.titleMedium))),
+                        SizedBox(
+                          width: 56,
+                          child: Center(
+                            child: Text(
+                              '$_quantity',
+                              style: theme.textTheme.titleMedium,
+                            ),
+                          ),
+                        ),
                         IconButton.outlined(
                           onPressed: () => setState(() => _quantity++),
                           icon: const Icon(Icons.add),
                         ),
                       ],
                     ),
-                    if (product.description != null && product.description!.isNotEmpty) ...[
+                    if (toppingGroups.isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              'Topping',
+                              style: theme.textTheme.titleSmall,
+                            ),
+                          ),
+                          TextButton.icon(
+                            onPressed: () => _pickToppings(toppingGroups),
+                            icon: const Icon(
+                              Icons.add_circle_outline,
+                              size: 18,
+                            ),
+                            label: Text(
+                              _selectedToppings.isEmpty
+                                  ? 'Chọn topping'
+                                  : 'Sửa topping',
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (_selectedToppings.isNotEmpty)
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: _selectedToppings
+                              .map(
+                                (t) => Chip(
+                                  label: Text(
+                                    t.price > 0
+                                        ? '${t.name} (+${formatVnd(t.price)})'
+                                        : t.name,
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                        ),
+                    ],
+                    if (product.description != null &&
+                        product.description!.isNotEmpty) ...[
                       const SizedBox(height: 20),
                       const Divider(),
                       const SizedBox(height: 8),
@@ -229,39 +380,54 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                     const SizedBox(height: 8),
                     Text('Đánh giá', style: theme.textTheme.titleSmall),
                     const SizedBox(height: 8),
-                    Consumer(builder: (context, ref, _) {
-                      final reviewsAsync = ref.watch(productReviewsProvider(product.id));
-                      return reviewsAsync.when(
-                        loading: () => const Padding(padding: EdgeInsets.all(8), child: LinearProgressIndicator()),
-                        error: (e, _) => Text('Lỗi tải đánh giá: $e'),
-                        data: (reviews) {
-                          if (reviews.isEmpty) return const Text('Chưa có đánh giá nào');
-                          return Column(
-                            children: reviews
-                                .map((r) => Padding(
+                    Consumer(
+                      builder: (context, ref, _) {
+                        final reviewsAsync = ref.watch(
+                          productReviewsProvider(product.id),
+                        );
+                        return reviewsAsync.when(
+                          loading: () => const Padding(
+                            padding: EdgeInsets.all(8),
+                            child: LinearProgressIndicator(),
+                          ),
+                          error: (e, _) => Text('Lỗi tải đánh giá: $e'),
+                          data: (reviews) {
+                            if (reviews.isEmpty)
+                              return const Text('Chưa có đánh giá nào');
+                            return Column(
+                              children: reviews
+                                  .map(
+                                    (r) => Padding(
                                       padding: const EdgeInsets.only(bottom: 8),
                                       child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
                                           Row(
                                             children: List.generate(
                                               5,
                                               (i) => Icon(
-                                                i < r.rating ? Icons.star : Icons.star_border,
+                                                i < r.rating
+                                                    ? Icons.star
+                                                    : Icons.star_border,
                                                 size: 16,
                                                 color: Colors.amber.shade700,
                                               ),
                                             ),
                                           ),
-                                          if (r.comment != null && r.comment!.isNotEmpty) Text(r.comment!),
+                                          if (r.comment != null &&
+                                              r.comment!.isNotEmpty)
+                                            Text(r.comment!),
                                         ],
                                       ),
-                                    ))
-                                .toList(),
-                          );
-                        },
-                      );
-                    }),
+                                    ),
+                                  )
+                                  .toList(),
+                            );
+                          },
+                        );
+                      },
+                    ),
                   ],
                 ),
               ),
@@ -269,11 +435,24 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: FilledButton.icon(
-                    onPressed: (variant == null || _adding) ? null : () => _addToCart(product, variant, unitPrice),
+                    onPressed: (variant == null || _adding)
+                        ? null
+                        : () => _addToCart(
+                            product,
+                            variant,
+                            unitPrice,
+                            toppingGroups,
+                          ),
                     icon: _adding
-                        ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                        ? const SizedBox(
+                            height: 18,
+                            width: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
                         : const Icon(Icons.add_shopping_cart),
-                    label: Text('Thêm vào giỏ · ${formatVnd(unitPrice * _quantity)}'),
+                    label: Text(
+                      'Thêm vào giỏ · ${formatVnd((unitPrice + toppingsTotal) * _quantity)}',
+                    ),
                   ),
                 ),
               ),

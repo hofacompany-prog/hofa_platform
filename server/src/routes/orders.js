@@ -115,6 +115,15 @@ router.get('/merchants/:merchantId/orders', asyncHandler(async (req, res) => {
 router.get('/orders/:id', asyncHandler(async (req, res) => {
   const order = await requireOrderAccess(req.ctx, req.params.id);
   const items = await db.query('SELECT * FROM order_items WHERE order_id = $1', [req.params.id]);
+  if (items.length) {
+    const toppings = await db.query(
+      'SELECT * FROM order_item_toppings WHERE order_item_id = ANY($1::uuid[]) ORDER BY created_at ASC',
+      [items.map((i) => i.id)]
+    );
+    const byItem = {};
+    toppings.forEach((t) => { (byItem[t.order_item_id] ||= []).push(t); });
+    items.forEach((i) => { i.toppings = byItem[i.id] || []; });
+  }
   res.json({ ok: true, data: { ...order, items } });
 }));
 

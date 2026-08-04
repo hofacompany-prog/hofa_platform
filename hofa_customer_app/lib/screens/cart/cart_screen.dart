@@ -2,11 +2,41 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/format.dart';
+import '../../models/cart_item.dart';
+import '../../providers/app_providers.dart';
 import '../../providers/cart_provider.dart';
 import '../../widgets/network_image_box.dart';
+import '../../widgets/topping_picker_dialog.dart';
 
 class CartScreen extends ConsumerWidget {
   const CartScreen({super.key});
+
+  Future<void> _editToppings(
+    BuildContext context,
+    WidgetRef ref,
+    CartItem item,
+  ) async {
+    final groups = await ref
+        .read(productRepoProvider)
+        .toppingGroups(item.productId);
+    if (groups.isEmpty) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Sản phẩm này không có topping')),
+        );
+      }
+      return;
+    }
+    if (!context.mounted) return;
+    final result = await showToppingPickerDialog(
+      context,
+      groups: groups,
+      initiallySelected: item.toppings,
+    );
+    if (result != null) {
+      await ref.read(cartProvider.notifier).updateToppings(item.lineId, result);
+    }
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -33,9 +63,16 @@ class CartScreen extends ConsumerWidget {
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
                   child: Row(
                     children: [
-                      Icon(Icons.storefront_outlined, size: 18, color: theme.colorScheme.primary),
+                      Icon(
+                        Icons.storefront_outlined,
+                        size: 18,
+                        color: theme.colorScheme.primary,
+                      ),
                       const SizedBox(width: 6),
-                      Text(cart.merchantName ?? '', style: const TextStyle(fontWeight: FontWeight.w600)),
+                      Text(
+                        cart.merchantName ?? '',
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
                     ],
                   ),
                 ),
@@ -53,16 +90,55 @@ class CartScreen extends ConsumerWidget {
                           padding: const EdgeInsets.all(10),
                           child: Row(
                             children: [
-                              NetworkImageBox(url: item.productImage, width: 56, height: 56),
+                              NetworkImageBox(
+                                url: item.productImage,
+                                width: 56,
+                                height: 56,
+                              ),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(item.productName, style: const TextStyle(fontWeight: FontWeight.w500)),
-                                    Text(item.variantName, style: theme.textTheme.bodySmall),
+                                    Text(
+                                      item.productName,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                    Text(
+                                      item.variantName,
+                                      style: theme.textTheme.bodySmall,
+                                    ),
+                                    if (item.toppings.isNotEmpty)
+                                      Text(
+                                        item.toppings
+                                            .map((t) => t.name)
+                                            .join(', '),
+                                        style: theme.textTheme.bodySmall
+                                            ?.copyWith(
+                                              color:
+                                                  theme.colorScheme.secondary,
+                                            ),
+                                      ),
                                     const SizedBox(height: 4),
-                                    Text(formatVnd(item.unitPrice), style: TextStyle(color: theme.colorScheme.primary)),
+                                    Text(
+                                      formatVnd(
+                                        item.unitPrice + item.toppingsTotal,
+                                      ),
+                                      style: TextStyle(
+                                        color: theme.colorScheme.primary,
+                                      ),
+                                    ),
+                                    TextButton(
+                                      style: TextButton.styleFrom(
+                                        padding: EdgeInsets.zero,
+                                        visualDensity: VisualDensity.compact,
+                                      ),
+                                      onPressed: () =>
+                                          _editToppings(context, ref, item),
+                                      child: const Text('Sửa topping'),
+                                    ),
                                   ],
                                 ),
                               ),
@@ -72,22 +148,39 @@ class CartScreen extends ConsumerWidget {
                                     children: [
                                       IconButton(
                                         visualDensity: VisualDensity.compact,
-                                        icon: const Icon(Icons.remove_circle_outline, size: 20),
+                                        icon: const Icon(
+                                          Icons.remove_circle_outline,
+                                          size: 20,
+                                        ),
                                         onPressed: () => ref
                                             .read(cartProvider.notifier)
-                                            .updateQuantity(item.variantId, item.quantity - 1),
+                                            .updateQuantity(
+                                              item.lineId,
+                                              item.quantity - 1,
+                                            ),
                                       ),
                                       Text('${item.quantity}'),
                                       IconButton(
                                         visualDensity: VisualDensity.compact,
-                                        icon: const Icon(Icons.add_circle_outline, size: 20),
+                                        icon: const Icon(
+                                          Icons.add_circle_outline,
+                                          size: 20,
+                                        ),
                                         onPressed: () => ref
                                             .read(cartProvider.notifier)
-                                            .updateQuantity(item.variantId, item.quantity + 1),
+                                            .updateQuantity(
+                                              item.lineId,
+                                              item.quantity + 1,
+                                            ),
                                       ),
                                     ],
                                   ),
-                                  Text(formatVnd(item.lineTotal), style: const TextStyle(fontWeight: FontWeight.w600)),
+                                  Text(
+                                    formatVnd(item.lineTotal),
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
                                 ],
                               ),
                             ],
@@ -102,7 +195,14 @@ class CartScreen extends ConsumerWidget {
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
                       color: theme.colorScheme.surface,
-                      boxShadow: [BoxShadow(color: theme.colorScheme.shadow.withValues(alpha: 0.08), blurRadius: 8)],
+                      boxShadow: [
+                        BoxShadow(
+                          color: theme.colorScheme.shadow.withValues(
+                            alpha: 0.08,
+                          ),
+                          blurRadius: 8,
+                        ),
+                      ],
                     ),
                     child: Row(
                       children: [
@@ -110,8 +210,16 @@ class CartScreen extends ConsumerWidget {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('Tạm tính', style: theme.textTheme.bodySmall),
-                              Text(formatVnd(cart.subtotal), style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+                              Text(
+                                'Tạm tính',
+                                style: theme.textTheme.bodySmall,
+                              ),
+                              Text(
+                                formatVnd(cart.subtotal),
+                                style: theme.textTheme.titleLarge?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
                             ],
                           ),
                         ),

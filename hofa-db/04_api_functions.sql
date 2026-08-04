@@ -145,6 +145,11 @@ DECLARE
   v_user_redemptions INTEGER;
   v_items_json    JSONB := '[]'::jsonb;   -- gom item đã chốt giá, chỉ ghi vào order_items SAU KHI có order.id
   v_commission_rate NUMERIC;
+  v_topping_sum   INTEGER;
+  v_toppings_json JSONB;
+  v_topping_row   RECORD;
+  v_elem          JSONB;
+  v_order_item_id UUID;
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM branches WHERE id = p_branch_id AND merchant_id = p_merchant_id AND deleted_at IS NULL) THEN
     RAISE EXCEPTION 'Chi nhánh không thuộc cửa hàng này' USING ERRCODE = 'foreign_key_violation';
@@ -175,9 +180,25 @@ BEGIN
 
     PERFORM reserve_inventory(p_branch_id, v_variant.id, (v_item->>'quantity')::INTEGER);
 
+    -- Topping khách chọn (nếu có) — giá cộng thêm/đơn vị, không tin giá client gửi,
+    -- chỉ nhận topping_id rồi tự tra giá thật từ product_toppings.
+    v_topping_sum := 0;
+    v_toppings_json := '[]'::jsonb;
+    FOR v_topping_row IN
+      SELECT pt.id, pt.name, pt.price FROM product_toppings pt
+       WHERE pt.id IN (
+         SELECT (jsonb_array_elements_text(COALESCE(v_item->'topping_ids', '[]'::jsonb)))::UUID
+       )
+    LOOP
+      v_topping_sum := v_topping_sum + v_topping_row.price;
+      v_toppings_json := v_toppings_json || jsonb_build_object(
+        'topping_id', v_topping_row.id, 'name', v_topping_row.name, 'price', v_topping_row.price
+      );
+    END LOOP;
+
     v_unit_price := resolve_variant_price(
       v_variant.id, (v_item->>'quantity')::INTEGER, p_scheduled_for, v_variant.price
-    );
+    ) + v_topping_sum;
     v_line_total := v_unit_price * (v_item->>'quantity')::INTEGER;
     v_subtotal   := v_subtotal + v_line_total;
 
@@ -190,7 +211,8 @@ BEGIN
       'unit_price', v_unit_price,
       'quantity', (v_item->>'quantity')::INTEGER,
       'line_total', v_line_total,
-      'note', v_item->>'note'
+      'note', v_item->>'note',
+      'toppings', v_toppings_json
     ) INTO v_items_json
     FROM products p WHERE p.id = v_variant.product_id;
   END LOOP;
@@ -257,12 +279,21 @@ BEGIN
     p_payment_method, 'pending', p_scheduled_for, p_customer_note
   ) RETURNING * INTO v_order;
 
-  -- Bước 3: giờ mới ghi order_items, dùng order.id vừa có
-  INSERT INTO order_items (order_id, variant_id, product_name, variant_name, sku, unit, unit_price, quantity, line_total, note)
-  SELECT
-    v_order.id, (elem->>'variant_id')::UUID, elem->>'product_name', elem->>'variant_name', elem->>'sku',
-    elem->>'unit', (elem->>'unit_price')::INTEGER, (elem->>'quantity')::INTEGER, (elem->>'line_total')::INTEGER, elem->>'note'
-  FROM jsonb_array_elements(v_items_json) elem;
+  -- Bước 3: giờ mới ghi order_items, dùng order.id vừa có — insert từng dòng (không
+  -- bulk) để lấy được id vừa tạo, dùng ghi order_item_toppings tương ứng ngay sau đó.
+  FOR v_elem IN SELECT * FROM jsonb_array_elements(v_items_json) LOOP
+    INSERT INTO order_items (order_id, variant_id, product_name, variant_name, sku, unit, unit_price, quantity, line_total, note)
+    VALUES (
+      v_order.id, (v_elem->>'variant_id')::UUID, v_elem->>'product_name', v_elem->>'variant_name', v_elem->>'sku',
+      v_elem->>'unit', (v_elem->>'unit_price')::INTEGER, (v_elem->>'quantity')::INTEGER, (v_elem->>'line_total')::INTEGER, v_elem->>'note'
+    ) RETURNING id INTO v_order_item_id;
+
+    IF jsonb_array_length(COALESCE(v_elem->'toppings', '[]'::jsonb)) > 0 THEN
+      INSERT INTO order_item_toppings (order_item_id, topping_id, name, price)
+      SELECT v_order_item_id, (t->>'topping_id')::UUID, t->>'name', (t->>'price')::INTEGER
+      FROM jsonb_array_elements(v_elem->'toppings') t;
+    END IF;
+  END LOOP;
 
   IF p_voucher_code IS NOT NULL THEN
     INSERT INTO voucher_redemptions (voucher_id, user_id, order_id, discount_amount)
