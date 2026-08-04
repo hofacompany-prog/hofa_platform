@@ -1297,7 +1297,7 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
   /// thanh điều hướng, Text dài ngắn khác nhau nên vòng tròn dễ che chữ nếu để mặc định).
   Widget _tabLabel(String text, int count) => count > 0
       ? Badge(
-          offset: const Offset(12, -10),
+          offset: const Offset(12, -20),
           label: Text('$count'),
           child: Text(text),
         )
