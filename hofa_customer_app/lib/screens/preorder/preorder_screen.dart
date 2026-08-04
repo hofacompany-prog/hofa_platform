@@ -177,8 +177,45 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
     return total;
   }
 
-  int _flatTotal(List<CartItem> items) =>
-      items.fold(0, (sum, i) => sum + i.lineTotal);
+  /// Tổng "tính theo ngày" — mỗi món tính 1 lần theo giá bậc TỐT NHẤT có thể đạt được
+  /// (giống hệt giá xem trước ở từng thẻ sản phẩm), không phải giá gốc lưu tạm lúc thêm
+  /// vào giỏ — tránh lệch với giá đang hiển thị trên từng món.
+  int _flatTotal(List<CartItem> items) => items.fold(0, (sum, i) {
+    final price = _bestPreorderPrice(i, items) ?? i.unitPrice;
+    return sum + (price + i.toppingsTotal) * i.quantity;
+  });
+
+  /// Đặt trước: giá bậc tốt nhất có thể đạt được trong số các ngày món này đã chọn (ngày
+  /// nào có tổng số phần cả nhóm cao nhất) — chỉ xét bậc đặt trước (minDaysPerWeek > 0),
+  /// không lẫn giá bậc giá sỉ. Trả về null nếu món này không thuộc tab Đặt trước hoặc
+  /// biến thể không có bậc đặt trước nào (khi đó dùng giá gốc/giá sỉ như bình thường).
+  int? _bestPreorderPrice(CartItem item, List<CartItem> allItems) {
+    if (item.orderKind != 'preorder' || item.deliverySlots.isEmpty) {
+      return null;
+    }
+    final preorderTiers =
+        ref
+            .watch(wholesaleTiersProvider(item.variantId))
+            .valueOrNull
+            ?.where((t) => t.minDaysPerWeek > 0)
+            .toList() ??
+        const <WholesaleTier>[];
+    if (preorderTiers.isEmpty) return null;
+    var bestOrderQty = 0;
+    for (final weekday in item.deliverySlots.map((s) => s.weekday).toSet()) {
+      final dayQty = allItems
+          .where((i) => i.deliverySlots.any((s) => s.weekday == weekday))
+          .fold<int>(0, (sum, i) => sum + i.quantity);
+      if (dayQty > bestOrderQty) bestOrderQty = dayQty;
+    }
+    return _matchedTierPrice(
+      item.quantity,
+      bestOrderQty,
+      item.deliverySlots.length,
+      item.basePrice,
+      preorderTiers,
+    );
+  }
 
   /// Bậc giá sỉ (minDaysPerWeek = 0) chỉ có điều kiện số lượng, so theo [ownQty] — số
   /// lượng riêng món này. Bậc đặt trước (minDaysPerWeek > 0) có 2 điều kiện độc lập: số
@@ -521,36 +558,7 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
           );
     }
 
-    // Đặt trước: xem trước giá bậc tốt nhất có thể đạt được trong số các ngày món này đã
-    // chọn (ngày nào có tổng số phần cả nhóm cao nhất) — chỉ xét bậc đặt trước
-    // (minDaysPerWeek > 0), không lẫn giá bậc giá sỉ.
-    int? preorderPrice;
-    if (item.orderKind == 'preorder' && item.deliverySlots.isNotEmpty) {
-      final preorderTiers =
-          ref
-              .watch(wholesaleTiersProvider(item.variantId))
-              .valueOrNull
-              ?.where((t) => t.minDaysPerWeek > 0)
-              .toList() ??
-          const <WholesaleTier>[];
-      if (preorderTiers.isNotEmpty) {
-        var bestOrderQty = 0;
-        for (final weekday
-            in item.deliverySlots.map((s) => s.weekday).toSet()) {
-          final dayQty = allItems
-              .where((i) => i.deliverySlots.any((s) => s.weekday == weekday))
-              .fold<int>(0, (sum, i) => sum + i.quantity);
-          if (dayQty > bestOrderQty) bestOrderQty = dayQty;
-        }
-        preorderPrice = _matchedTierPrice(
-          item.quantity,
-          bestOrderQty,
-          item.deliverySlots.length,
-          item.basePrice,
-          preorderTiers,
-        );
-      }
-    }
+    final preorderPrice = _bestPreorderPrice(item, allItems);
     // So với giá gốc (basePrice), không phải unitPrice — unitPrice bên Giá sỉ đã bị ghi
     // đè thành giá theo bậc mỗi khi đổi số lượng nên không còn phản ánh giá "mặc định".
     // Không đạt bậc nào thì preorderPrice tự trả về basePrice (quay lại giá mặc định).
