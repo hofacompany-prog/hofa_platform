@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/format.dart';
+import '../../core/geo.dart';
 import '../../models/cart_item.dart';
 import '../../providers/app_providers.dart';
 import '../../providers/cart_provider.dart';
@@ -10,6 +11,35 @@ import '../../widgets/topping_picker_dialog.dart';
 
 class CartScreen extends ConsumerWidget {
   const CartScreen({super.key});
+
+  /// Ước tính phí ship theo khoảng cách từ chi nhánh tới địa chỉ mặc định/gần nhất của
+  /// khách — chỉ để tham khảo trước, KHÔNG phải số tiền sẽ tính vào đơn thật (đơn hàng
+  /// hiện vẫn miễn phí ship, xem checkout_screen.dart). Trả về null nếu chưa đủ dữ liệu
+  /// để ước tính (chưa có địa chỉ, thiếu toạ độ chi nhánh...).
+  int? _estimatedShippingFee(WidgetRef ref, CartState cart) {
+    final branchId = cart.branchId;
+    if (branchId == null) return null;
+    final settings = ref.watch(shippingFeeSettingsProvider).valueOrNull;
+    if (settings == null) return null;
+    final branch = ref.watch(branchDetailProvider(branchId)).valueOrNull;
+    if (branch == null || branch.latitude == null || branch.longitude == null) {
+      return null;
+    }
+    final addresses = ref.watch(addressesProvider).valueOrNull ?? const [];
+    if (addresses.isEmpty) return null;
+    final address = addresses.firstWhere(
+      (a) => a.isDefault,
+      orElse: () => addresses.first,
+    );
+    if (address.latitude == null || address.longitude == null) return null;
+    final distanceKm = haversineKm(
+      branch.latitude!,
+      branch.longitude!,
+      address.latitude!,
+      address.longitude!,
+    );
+    return settings.estimate(distanceKm, orderAmount: cart.subtotal);
+  }
 
   Future<void> _editToppings(
     BuildContext context,
@@ -82,6 +112,7 @@ class CartScreen extends ConsumerWidget {
     // Giỏ chỉ chứa 1 hình thức bán tại 1 thời điểm (xem CartNotifier.belongsToCurrentCart)
     // — món đặt trước/bán sỉ hiển thị ở tab "Đặt trước", không lặp lại ở đây.
     final isInstantCart = !cart.isEmpty && cart.salesModel == 'instant';
+    final shippingFee = isInstantCart ? _estimatedShippingFee(ref, cart) : null;
 
     return Scaffold(
       appBar: AppBar(
@@ -248,6 +279,7 @@ class CartScreen extends ConsumerWidget {
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
                             children: [
                               Text(
                                 'Tạm tính',
@@ -259,6 +291,16 @@ class CartScreen extends ConsumerWidget {
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
+                              if (shippingFee != null) ...[
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Phí giao hàng (ước tính): '
+                                  '${shippingFee == 0 ? 'Miễn phí' : formatVnd(shippingFee)}',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.outline,
+                                  ),
+                                ),
+                              ],
                             ],
                           ),
                         ),

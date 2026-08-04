@@ -7,12 +7,14 @@ import '../models/merchant.dart';
 import '../models/order.dart';
 import '../models/product.dart';
 import '../models/review.dart';
+import '../models/shipping_fee_settings.dart';
 import '../models/topping.dart';
 import '../models/wholesale_tier.dart';
 import '../repositories/merchant_repository.dart';
 import '../repositories/order_repository.dart';
 import '../repositories/product_repository.dart';
 import '../repositories/review_repository.dart';
+import '../repositories/shipping_repository.dart';
 import '../repositories/voucher_repository.dart';
 import 'auth_providers.dart';
 
@@ -21,6 +23,7 @@ final productRepoProvider = Provider((ref) => ProductRepository());
 final orderRepoProvider = Provider((ref) => OrderRepository());
 final voucherRepoProvider = Provider((ref) => VoucherRepository());
 final reviewRepoProvider = Provider((ref) => ReviewRepository());
+final shippingRepoProvider = Provider((ref) => ShippingRepository());
 
 // ---- Cửa hàng ----
 
@@ -39,6 +42,16 @@ final merchantDetailProvider = FutureProvider.autoDispose
 final merchantBranchesProvider = FutureProvider.autoDispose
     .family<List<Branch>, String>(
       (ref, merchantId) => ref.watch(merchantRepoProvider).branches(merchantId),
+    );
+
+final branchDetailProvider = FutureProvider.autoDispose.family<Branch, String>(
+  (ref, branchId) => ref.watch(merchantRepoProvider).branch(branchId),
+);
+
+/// Cấu hình phí ship toàn sàn (chỉnh ở app admin) — dùng để ước tính phí ship ở giỏ hàng.
+final shippingFeeSettingsProvider =
+    FutureProvider.autoDispose<ShippingFeeSettings?>(
+      (ref) => ref.watch(shippingRepoProvider).feeSettings(),
     );
 
 // ---- Sản phẩm ----

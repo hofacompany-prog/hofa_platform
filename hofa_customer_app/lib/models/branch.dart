@@ -9,6 +9,8 @@ class Branch {
   final String province;
   final bool isMain;
   final bool isOpen;
+  final double? latitude;
+  final double? longitude;
 
   Branch({
     required this.id,
@@ -21,20 +23,30 @@ class Branch {
     required this.province,
     required this.isMain,
     required this.isOpen,
+    this.latitude,
+    this.longitude,
   });
 
   factory Branch.fromJson(Map<String, dynamic> json) => Branch(
-        id: json['id'] as String,
-        merchantId: json['merchant_id'] as String,
-        name: json['name'] as String? ?? '',
-        phone: json['phone'] as String?,
-        line1: json['line1'] as String? ?? '',
-        ward: json['ward'] as String?,
-        district: json['district'] as String?,
-        province: json['province'] as String? ?? '',
-        isMain: json['is_main'] as bool? ?? false,
-        isOpen: json['is_open'] as bool? ?? true,
-      );
+    id: json['id'] as String,
+    merchantId: json['merchant_id'] as String,
+    name: json['name'] as String? ?? '',
+    phone: json['phone'] as String?,
+    line1: json['line1'] as String? ?? '',
+    ward: json['ward'] as String?,
+    district: json['district'] as String?,
+    province: json['province'] as String? ?? '',
+    isMain: json['is_main'] as bool? ?? false,
+    isOpen: json['is_open'] as bool? ?? true,
+    // NUMERIC ở Postgres về qua node-postgres là String, không phải num.
+    latitude: double.tryParse('${json['latitude']}'),
+    longitude: double.tryParse('${json['longitude']}'),
+  );
 
-  String get fullLine => [line1, ward, district, province].where((e) => e != null && e.isNotEmpty).join(', ');
+  String get fullLine => [
+    line1,
+    ward,
+    district,
+    province,
+  ].where((e) => e != null && e.isNotEmpty).join(', ');
 }
