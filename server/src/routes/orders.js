@@ -97,6 +97,16 @@ router.get('/admin/orders', asyncHandler(async (req, res) => {
   res.json({ ok: true, data: rows });
 }));
 
+/** Giai đoạn MVP: xoá thẳng, không chặn theo trạng thái/thanh toán. Nếu đơn còn bị ràng
+ * buộc khoá ngoại (vd payments ON DELETE RESTRICT) thì Postgres tự chặn và trả lỗi cụ thể
+ * qua fromPgError() trong db.js — không cần tự kiểm tra trước ở đây. */
+router.delete('/admin/orders/:id', asyncHandler(async (req, res) => {
+  requireRole(req.ctx, ['admin']);
+  const deleted = await db.deleteById('orders', req.params.id);
+  if (!deleted) throw new ApiError('NOT_FOUND', 'Không tìm thấy đơn hàng', 404);
+  res.json({ ok: true, data: { deleted: true } });
+}));
+
 router.get('/merchants/:merchantId/orders', asyncHandler(async (req, res) => {
   await requireMerchantAccess(req.ctx, req.params.merchantId);
   const { limit, offset } = pagination(req.query);

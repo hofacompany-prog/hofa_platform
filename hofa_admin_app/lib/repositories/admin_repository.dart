@@ -212,6 +212,12 @@ class AdminRepository {
         as Map<String, dynamic>,
   );
 
+  /// Xoá thẳng, không chặn theo trạng thái/thanh toán (giai đoạn MVP). Nếu đơn còn bị ràng
+  /// buộc khoá ngoại (vd đã có giao dịch thanh toán) thì server trả lỗi cụ thể từ Postgres.
+  Future<void> deleteOrder(String id) async {
+    await _api.delete('/admin/orders/$id');
+  }
+
   // ---- Danh mục ngành hàng ----
 
   Future<List<Category>> categories() async {

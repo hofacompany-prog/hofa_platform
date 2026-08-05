@@ -11,10 +11,12 @@ class AdminOrderDetailScreen extends ConsumerStatefulWidget {
   const AdminOrderDetailScreen({super.key, required this.orderId});
 
   @override
-  ConsumerState<AdminOrderDetailScreen> createState() => _AdminOrderDetailScreenState();
+  ConsumerState<AdminOrderDetailScreen> createState() =>
+      _AdminOrderDetailScreenState();
 }
 
-class _AdminOrderDetailScreenState extends ConsumerState<AdminOrderDetailScreen> {
+class _AdminOrderDetailScreenState
+    extends ConsumerState<AdminOrderDetailScreen> {
   bool _busy = false;
 
   /// Admin gọi API với p_force=true nên bỏ qua được state machine — dùng khi cần
@@ -32,13 +34,23 @@ class _AdminOrderDetailScreenState extends ConsumerState<AdminOrderDetailScreen>
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Quyền admin cho phép chuyển sang bất kỳ trạng thái nào, kể cả ngược quy trình.'),
+                const Text(
+                  'Quyền admin cho phép chuyển sang bất kỳ trạng thái nào, kể cả ngược quy trình.',
+                ),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
                   initialValue: selected,
-                  decoration: const InputDecoration(border: OutlineInputBorder(), isDense: true),
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
                   items: allOrderStatuses
-                      .map((s) => DropdownMenuItem(value: s, child: Text(orderStatusLabels[s] ?? s)))
+                      .map(
+                        (s) => DropdownMenuItem(
+                          value: s,
+                          child: Text(orderStatusLabels[s] ?? s),
+                        ),
+                      )
                       .toList(),
                   onChanged: (v) => setInner(() => selected = v ?? selected),
                 ),
@@ -46,8 +58,14 @@ class _AdminOrderDetailScreenState extends ConsumerState<AdminOrderDetailScreen>
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Huỷ')),
-            FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Chuyển')),
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Huỷ'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Chuyển'),
+            ),
           ],
         ),
       ),
@@ -56,27 +74,85 @@ class _AdminOrderDetailScreenState extends ConsumerState<AdminOrderDetailScreen>
 
     setState(() => _busy = true);
     try {
-      await ref.read(adminRepoProvider).updateOrderStatus(o.id, selected, note: 'Admin chuyển thủ công');
+      await ref
+          .read(adminRepoProvider)
+          .updateOrderStatus(o.id, selected, note: 'Admin chuyển thủ công');
       ref.invalidate(orderDetailProvider(widget.orderId));
       ref.invalidate(ordersProvider);
       ref.invalidate(statsProvider);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _deleteDialog(Order o) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Xoá đơn hàng?'),
+        content: Text(
+          'Đơn ${o.orderCode} sẽ bị xoá vĩnh viễn, không thể khôi phục. Nếu đơn còn dữ liệu '
+          'liên quan chặn xoá (vd giao dịch thanh toán), hệ thống sẽ báo lỗi cụ thể.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Huỷ'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Xoá'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+
+    setState(() => _busy = true);
+    try {
+      await ref.read(adminRepoProvider).deleteOrder(o.id);
+      ref.invalidate(ordersProvider);
+      ref.invalidate(statsProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Đã xoá đơn ${o.orderCode}')));
+        context.go('/orders');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
 
   Widget _row(String label, String value, {bool bold = false}) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 3),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(label, style: bold ? const TextStyle(fontWeight: FontWeight.bold) : null),
-            Text(value, style: bold ? const TextStyle(fontWeight: FontWeight.bold) : null),
-          ],
+    padding: const EdgeInsets.symmetric(vertical: 3),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: bold ? const TextStyle(fontWeight: FontWeight.bold) : null,
         ),
-      );
+        Text(
+          value,
+          style: bold ? const TextStyle(fontWeight: FontWeight.bold) : null,
+        ),
+      ],
+    ),
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -85,7 +161,10 @@ class _AdminOrderDetailScreenState extends ConsumerState<AdminOrderDetailScreen>
 
     return Scaffold(
       appBar: AppBar(
-        leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => context.go('/orders')),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => context.go('/orders'),
+        ),
         title: const Text('Chi tiết đơn hàng'),
       ),
       body: orderAsync.when(
@@ -113,11 +192,20 @@ class _AdminOrderDetailScreenState extends ConsumerState<AdminOrderDetailScreen>
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Text(o.orderCode, style: theme.textTheme.headlineSmall),
+                                Text(
+                                  o.orderCode,
+                                  style: theme.textTheme.headlineSmall,
+                                ),
                                 Chip(
-                                  label: Text(orderStatusLabels[o.status] ?? o.status),
-                                  backgroundColor: color.withValues(alpha: 0.12),
-                                  side: BorderSide(color: color.withValues(alpha: 0.4)),
+                                  label: Text(
+                                    orderStatusLabels[o.status] ?? o.status,
+                                  ),
+                                  backgroundColor: color.withValues(
+                                    alpha: 0.12,
+                                  ),
+                                  side: BorderSide(
+                                    color: color.withValues(alpha: 0.4),
+                                  ),
                                 ),
                               ],
                             ),
@@ -126,7 +214,9 @@ class _AdminOrderDetailScreenState extends ConsumerState<AdminOrderDetailScreen>
                             const Divider(height: 28),
                             Text('Giao đến', style: theme.textTheme.titleSmall),
                             const SizedBox(height: 4),
-                            Text('${o.shipRecipientName} · ${o.shipRecipientPhone}'),
+                            Text(
+                              '${o.shipRecipientName} · ${o.shipRecipientPhone}',
+                            ),
                             Text('${o.shipLine1}, ${o.shipProvince}'),
                           ],
                         ),
@@ -143,24 +233,42 @@ class _AdminOrderDetailScreenState extends ConsumerState<AdminOrderDetailScreen>
                           children: [
                             Text('Món hàng', style: theme.textTheme.titleSmall),
                             const SizedBox(height: 8),
-                            ...o.items.map((item) => Padding(
-                                  padding: const EdgeInsets.symmetric(vertical: 3),
-                                  child: Row(
-                                    children: [
-                                      Text('${item.quantity}× '),
-                                      Expanded(child: Text('${item.productName} ${item.variantName ?? ''}')),
-                                      Text(formatVnd(item.lineTotal)),
-                                    ],
-                                  ),
-                                )),
+                            ...o.items.map(
+                              (item) => Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 3,
+                                ),
+                                child: Row(
+                                  children: [
+                                    Text('${item.quantity}× '),
+                                    Expanded(
+                                      child: Text(
+                                        '${item.productName} ${item.variantName ?? ''}',
+                                      ),
+                                    ),
+                                    Text(formatVnd(item.lineTotal)),
+                                  ],
+                                ),
+                              ),
+                            ),
                             const Divider(height: 24),
                             _row('Tạm tính', formatVnd(o.subtotal)),
                             _row('Phí giao hàng', formatVnd(o.deliveryFee)),
-                            if (o.discountAmount > 0) _row('Giảm giá', '-${formatVnd(o.discountAmount)}'),
-                            _row('Tổng cộng', formatVnd(o.totalAmount), bold: true),
+                            if (o.discountAmount > 0)
+                              _row(
+                                'Giảm giá',
+                                '-${formatVnd(o.discountAmount)}',
+                              ),
+                            _row(
+                              'Tổng cộng',
+                              formatVnd(o.totalAmount),
+                              bold: true,
+                            ),
                             const SizedBox(height: 8),
-                            Text('Thanh toán: ${o.paymentMethod.toUpperCase()} · ${o.paymentStatus}',
-                                style: theme.textTheme.bodySmall),
+                            Text(
+                              'Thanh toán: ${o.paymentMethod.toUpperCase()} · ${o.paymentStatus}',
+                              style: theme.textTheme.bodySmall,
+                            ),
                           ],
                         ),
                       ),
@@ -170,6 +278,15 @@ class _AdminOrderDetailScreenState extends ConsumerState<AdminOrderDetailScreen>
                       onPressed: _busy ? null : () => _forceStatus(o),
                       icon: const Icon(Icons.edit),
                       label: const Text('Chuyển trạng thái thủ công'),
+                    ),
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      onPressed: _busy ? null : () => _deleteDialog(o),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.red,
+                      ),
+                      icon: const Icon(Icons.delete_outline),
+                      label: const Text('Xoá đơn hàng'),
                     ),
                   ],
                 ),
