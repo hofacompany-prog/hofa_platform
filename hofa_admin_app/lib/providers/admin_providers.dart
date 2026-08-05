@@ -109,10 +109,6 @@ final orderSettingsProvider = FutureProvider.autoDispose<OrderSettings>(
   (ref) => ref.watch(adminRepoProvider).orderSettings(),
 );
 
-final notificationAudienceCountProvider = FutureProvider.autoDispose<int>(
-  (ref) => ref.watch(adminRepoProvider).notificationAudienceCount(),
-);
-
 final notificationsProvider =
     FutureProvider.autoDispose<List<AdminNotification>>(
       (ref) => ref.watch(adminRepoProvider).notifications(),

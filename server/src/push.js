@@ -71,16 +71,18 @@ async function sendPushToUser(userId, { title, body, data = {} }) {
 }
 
 /**
- * Gửi push cho TOÀN BỘ khách hàng đang có thiết bị đăng ký nhận thông báo — dùng cho màn
- * "Thông báo" ở web admin. Trả về { sent, total } để ghi vào admin_notifications.
+ * Gửi push cho TOÀN BỘ user có 1 trong các role chỉ định đang có thiết bị đăng ký nhận
+ * thông báo — dùng cho màn "Thông báo" ở web admin, target=all. [roles] vd ['customer'],
+ * ['driver'], ['merchant_owner','merchant_staff']. Trả về { sent, total }.
  */
-async function sendBroadcastToCustomers({ title, body }) {
-  const devices = await db.query(`
-    SELECT DISTINCT d.push_token
-      FROM user_devices d
-      JOIN users u ON u.id = d.user_id
-     WHERE u.role = 'customer' AND u.deleted_at IS NULL AND d.push_token IS NOT NULL
-  `);
+async function sendBroadcastToRoles(roles, { title, body }) {
+  const devices = await db.query(
+    `SELECT DISTINCT d.push_token
+       FROM user_devices d
+       JOIN users u ON u.id = d.user_id
+      WHERE u.role = ANY($1::text[]) AND u.deleted_at IS NULL AND d.push_token IS NOT NULL`,
+    [roles]
+  );
   const tokens = devices.map((d) => d.push_token).filter(Boolean);
   const { sent } = await sendToTokens(tokens, {
     title,
@@ -88,6 +90,19 @@ async function sendBroadcastToCustomers({ title, body }) {
     data: { type: 'admin_broadcast' }
   });
   return { sent, total: tokens.length };
+}
+
+/** Chủ + nhân viên của 1 danh sách cửa hàng — dùng để suy ra người nhận thật khi admin
+ * chọn "cửa hàng cụ thể" ở màn Thông báo (chọn cửa hàng, không phải chọn từng nhân viên). */
+async function resolveMerchantUserIds(merchantIds) {
+  if (!merchantIds.length) return [];
+  const rows = await db.query(
+    `SELECT owner_id AS user_id FROM merchants WHERE id = ANY($1::uuid[])
+     UNION
+     SELECT user_id FROM merchant_staff WHERE merchant_id = ANY($1::uuid[])`,
+    [merchantIds]
+  );
+  return rows.map((r) => r.user_id);
 }
 
 /**
@@ -136,4 +151,10 @@ async function notifyCustomerOrderStatus(orderId, status) {
   });
 }
 
-module.exports = { sendPushToUser, notifyCustomerOrderStatus, sendBroadcastToCustomers, sendToUserIds };
+module.exports = {
+  sendPushToUser,
+  notifyCustomerOrderStatus,
+  sendBroadcastToRoles,
+  resolveMerchantUserIds,
+  sendToUserIds
+};

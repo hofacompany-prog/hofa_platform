@@ -294,13 +294,20 @@ class AdminRepository {
 
   // ---- Thông báo đẩy ----
 
-  Future<int> notificationAudienceCount({List<String>? userIds}) async {
+  Future<int> notificationAudienceCount({
+    required String audienceType,
+    List<String>? userIds,
+    List<String>? merchantIds,
+  }) async {
     final data =
         await _api.get(
               '/admin/notifications/audience',
               query: {
+                'audience_type': audienceType,
                 if (userIds != null && userIds.isNotEmpty)
                   'user_ids': userIds.join(','),
+                if (merchantIds != null && merchantIds.isNotEmpty)
+                  'merchant_ids': merchantIds.join(','),
               },
             )
             as Map<String, dynamic>;
@@ -318,14 +325,19 @@ class AdminRepository {
   Future<AdminNotification> sendNotification({
     required String title,
     required String body,
+    required String audienceType,
     List<String>? userIds,
+    List<String>? merchantIds,
   }) async => AdminNotification.fromJson(
     await _api.post(
           '/admin/notifications',
           body: {
             'title': title,
             'body': body,
+            'audience_type': audienceType,
             if (userIds != null && userIds.isNotEmpty) 'user_ids': userIds,
+            if (merchantIds != null && merchantIds.isNotEmpty)
+              'merchant_ids': merchantIds,
           },
         )
         as Map<String, dynamic>,

@@ -2,13 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/format.dart';
 import '../../models/admin_notification.dart';
+import '../../models/merchant.dart';
 import '../../models/user_profile.dart';
 import '../../providers/admin_providers.dart';
 import '../../widgets/stat_card.dart';
 
-/// Gửi thông báo đẩy (push notification) cho khách hàng — qua Firebase Cloud Messaging
-/// (xem server/src/push.js). 2 chế độ: "Tất cả khách hàng" (mọi thiết bị đã đăng ký nhận
-/// thông báo) hoặc "Khách hàng cụ thể" (admin tự chọn 1 hoặc nhiều khách từ danh sách).
+const _userPickerRoleLabels = {'customer': 'khách hàng', 'driver': 'tài xế'};
+
+/// Gửi thông báo đẩy (push notification) — qua Firebase Cloud Messaging (xem
+/// server/src/push.js). Chọn theo 2 bước: (1) nhóm đối tượng — Khách hàng / Cửa hàng /
+/// Tài xế, (2) trong nhóm đó gửi cho "Tất cả" hay tự chọn 1 hoặc nhiều đối tượng cụ thể.
 class NotificationsScreen extends ConsumerStatefulWidget {
   const NotificationsScreen({super.key});
 
@@ -21,10 +24,22 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   final _titleCtrl = TextEditingController();
   final _bodyCtrl = TextEditingController();
   bool _sending = false;
+
+  String _audienceType = 'customer';
   bool _sendToAll = true;
   final List<UserProfile> _selectedUsers = [];
+  final List<Merchant> _selectedMerchants = [];
+
+  int? _allAudienceCount;
+  bool _loadingAllAudience = false;
   int? _specificAudienceCount;
   bool _loadingSpecificAudience = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadAllAudienceCount();
+  }
 
   @override
   void dispose() {
@@ -33,8 +48,23 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     super.dispose();
   }
 
+  Future<void> _loadAllAudienceCount() async {
+    setState(() => _loadingAllAudience = true);
+    try {
+      final count = await ref
+          .read(adminRepoProvider)
+          .notificationAudienceCount(audienceType: _audienceType);
+      if (mounted) setState(() => _allAudienceCount = count);
+    } finally {
+      if (mounted) setState(() => _loadingAllAudience = false);
+    }
+  }
+
   Future<void> _refreshSpecificAudienceCount() async {
-    if (_selectedUsers.isEmpty) {
+    final hasSelection = _audienceType == 'merchant'
+        ? _selectedMerchants.isNotEmpty
+        : _selectedUsers.isNotEmpty;
+    if (!hasSelection) {
       setState(() => _specificAudienceCount = 0);
       return;
     }
@@ -43,7 +73,13 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       final count = await ref
           .read(adminRepoProvider)
           .notificationAudienceCount(
-            userIds: _selectedUsers.map((u) => u.id).toList(),
+            audienceType: _audienceType,
+            userIds: _audienceType == 'merchant'
+                ? null
+                : _selectedUsers.map((u) => u.id).toList(),
+            merchantIds: _audienceType == 'merchant'
+                ? _selectedMerchants.map((m) => m.id).toList()
+                : null,
           );
       if (mounted) setState(() => _specificAudienceCount = count);
     } finally {
@@ -51,22 +87,64 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     }
   }
 
-  Future<void> _pickUsers() async {
-    final result = await showDialog<List<UserProfile>>(
-      context: context,
-      builder: (context) =>
-          _UserPickerDialog(initiallySelected: _selectedUsers),
-    );
-    if (result == null) return;
+  void _onAudienceTypeChanged(String type) {
+    if (type == _audienceType || _sending) return;
     setState(() {
-      _selectedUsers
-        ..clear()
-        ..addAll(result);
+      _audienceType = type;
+      _selectedUsers.clear();
+      _selectedMerchants.clear();
+      _allAudienceCount = null;
+      _specificAudienceCount = null;
     });
+    if (_sendToAll) {
+      _loadAllAudienceCount();
+    } else {
+      _refreshSpecificAudienceCount();
+    }
+  }
+
+  void _onSendToAllChanged(bool value) {
+    if (value == _sendToAll || _sending) return;
+    setState(() => _sendToAll = value);
+    if (value) {
+      if (_allAudienceCount == null) _loadAllAudienceCount();
+    } else {
+      _refreshSpecificAudienceCount();
+    }
+  }
+
+  Future<void> _pickEntities() async {
+    if (_audienceType == 'merchant') {
+      final result = await showDialog<List<Merchant>>(
+        context: context,
+        builder: (context) =>
+            _MerchantPickerDialog(initiallySelected: _selectedMerchants),
+      );
+      if (result == null) return;
+      setState(() {
+        _selectedMerchants
+          ..clear()
+          ..addAll(result);
+      });
+    } else {
+      final result = await showDialog<List<UserProfile>>(
+        context: context,
+        builder: (context) => _UserPickerDialog(
+          role: _audienceType,
+          initiallySelected: _selectedUsers,
+        ),
+      );
+      if (result == null) return;
+      setState(() {
+        _selectedUsers
+          ..clear()
+          ..addAll(result);
+      });
+    }
     await _refreshSpecificAudienceCount();
   }
 
-  Future<void> _send(int allAudienceCount) async {
+  Future<void> _send() async {
     final title = _titleCtrl.text.trim();
     final body = _bodyCtrl.text.trim();
     if (title.isEmpty) {
@@ -77,17 +155,23 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       _showError('Vui lòng nhập nội dung');
       return;
     }
-    if (!_sendToAll && _selectedUsers.isEmpty) {
-      _showError('Vui lòng chọn ít nhất 1 khách hàng');
+    final selectionCount = _audienceType == 'merchant'
+        ? _selectedMerchants.length
+        : _selectedUsers.length;
+    if (!_sendToAll && selectionCount == 0) {
+      _showError(
+        'Vui lòng chọn ít nhất 1 ${_userPickerRoleLabels[_audienceType] ?? 'cửa hàng'}',
+      );
       return;
     }
 
     final audienceCount = _sendToAll
-        ? allAudienceCount
+        ? (_allAudienceCount ?? 0)
         : (_specificAudienceCount ?? 0);
+    final typeLabel = audienceTypeLabels[_audienceType]!.toLowerCase();
     final audienceLabel = _sendToAll
-        ? 'khoảng $audienceCount thiết bị của toàn bộ khách hàng'
-        : '${_selectedUsers.length} khách hàng đã chọn (khoảng $audienceCount thiết bị)';
+        ? 'khoảng $audienceCount thiết bị của toàn bộ $typeLabel'
+        : '$selectionCount $typeLabel đã chọn (khoảng $audienceCount thiết bị)';
 
     final ok = await showDialog<bool>(
       context: context,
@@ -117,18 +201,22 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
           .sendNotification(
             title: title,
             body: body,
-            userIds: _sendToAll
-                ? null
-                : _selectedUsers.map((u) => u.id).toList(),
+            audienceType: _audienceType,
+            userIds: (!_sendToAll && _audienceType != 'merchant')
+                ? _selectedUsers.map((u) => u.id).toList()
+                : null,
+            merchantIds: (!_sendToAll && _audienceType == 'merchant')
+                ? _selectedMerchants.map((m) => m.id).toList()
+                : null,
           );
       _titleCtrl.clear();
       _bodyCtrl.clear();
       setState(() {
         _selectedUsers.clear();
+        _selectedMerchants.clear();
         _specificAudienceCount = null;
       });
       ref.invalidate(notificationsProvider);
-      ref.invalidate(notificationAudienceCountProvider);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -154,9 +242,12 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final audienceAsync = ref.watch(notificationAudienceCountProvider);
     final historyAsync = ref.watch(notificationsProvider);
-    final allAudienceCount = audienceAsync.valueOrNull ?? 0;
+    final typeLabel = audienceTypeLabels[_audienceType]!;
+    final typeLabelLower = typeLabel.toLowerCase();
+    final selectionCount = _audienceType == 'merchant'
+        ? _selectedMerchants.length
+        : _selectedUsers.length;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Thông báo')),
@@ -170,9 +261,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Gửi thông báo đẩy tới ứng dụng khách hàng — hiện ra ngay trên điện '
-                    'thoại của khách kể cả khi không mở app. Gửi cho toàn bộ khách hàng '
-                    'hoặc chọn riêng 1 nhóm khách cụ thể.',
+                    'Gửi thông báo đẩy — hiện ra ngay trên điện thoại của người nhận kể '
+                    'cả khi không mở app. Chọn nhóm (khách hàng/cửa hàng/tài xế) rồi gửi '
+                    'cho cả nhóm hoặc tự chọn 1/nhiều đối tượng cụ thể.',
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: theme.colorScheme.outline,
                     ),
@@ -187,29 +278,47 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
+                            'Nhóm đối tượng',
+                            style: theme.textTheme.titleSmall,
+                          ),
+                          const SizedBox(height: 4),
+                          Wrap(
+                            spacing: 8,
+                            children: audienceTypeLabels.entries
+                                .map(
+                                  (e) => ChoiceChip(
+                                    label: Text(e.value),
+                                    selected: _audienceType == e.key,
+                                    onSelected: _sending
+                                        ? null
+                                        : (_) => _onAudienceTypeChanged(e.key),
+                                  ),
+                                )
+                                .toList(),
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
                             'Đối tượng nhận',
                             style: theme.textTheme.titleSmall,
                           ),
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 4),
                           RadioGroup<bool>(
                             groupValue: _sendToAll,
                             onChanged: (v) {
-                              if (!_sending && v != null) {
-                                setState(() => _sendToAll = v);
-                              }
+                              if (v != null) _onSendToAllChanged(v);
                             },
-                            child: const Column(
+                            child: Column(
                               children: [
                                 RadioListTile<bool>(
                                   contentPadding: EdgeInsets.zero,
                                   dense: true,
-                                  title: Text('Tất cả khách hàng'),
+                                  title: Text('Tất cả $typeLabelLower'),
                                   value: true,
                                 ),
                                 RadioListTile<bool>(
                                   contentPadding: EdgeInsets.zero,
                                   dense: true,
-                                  title: Text('Khách hàng cụ thể'),
+                                  title: Text('$typeLabel cụ thể'),
                                   value: false,
                                 ),
                               ],
@@ -223,31 +332,48 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                               crossAxisAlignment: WrapCrossAlignment.center,
                               children: [
                                 OutlinedButton.icon(
-                                  onPressed: _sending ? null : _pickUsers,
-                                  icon: const Icon(Icons.person_add_alt_1),
+                                  onPressed: _sending ? null : _pickEntities,
+                                  icon: const Icon(Icons.add_circle_outline),
                                   label: Text(
-                                    _selectedUsers.isEmpty
-                                        ? 'Chọn khách hàng'
-                                        : 'Sửa danh sách (${_selectedUsers.length})',
+                                    selectionCount == 0
+                                        ? 'Chọn $typeLabelLower'
+                                        : 'Sửa danh sách ($selectionCount)',
                                   ),
                                 ),
-                                ..._selectedUsers.map(
-                                  (u) => Chip(
-                                    label: Text(
-                                      u.fullName.isNotEmpty
-                                          ? u.fullName
-                                          : u.phone,
+                                if (_audienceType == 'merchant')
+                                  ..._selectedMerchants.map(
+                                    (m) => Chip(
+                                      label: Text(m.name),
+                                      onDeleted: _sending
+                                          ? null
+                                          : () {
+                                              setState(
+                                                () => _selectedMerchants.remove(
+                                                  m,
+                                                ),
+                                              );
+                                              _refreshSpecificAudienceCount();
+                                            },
                                     ),
-                                    onDeleted: _sending
-                                        ? null
-                                        : () {
-                                            setState(
-                                              () => _selectedUsers.remove(u),
-                                            );
-                                            _refreshSpecificAudienceCount();
-                                          },
+                                  )
+                                else
+                                  ..._selectedUsers.map(
+                                    (u) => Chip(
+                                      label: Text(
+                                        u.fullName.isNotEmpty
+                                            ? u.fullName
+                                            : u.phone,
+                                      ),
+                                      onDeleted: _sending
+                                          ? null
+                                          : () {
+                                              setState(
+                                                () => _selectedUsers.remove(u),
+                                              );
+                                              _refreshSpecificAudienceCount();
+                                            },
+                                    ),
                                   ),
-                                ),
                               ],
                             ),
                           ],
@@ -261,15 +387,15 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                     child: StatCard(
                       label: 'Sẽ gửi tới',
                       value: _sendToAll
-                          ? (audienceAsync.isLoading
+                          ? (_loadingAllAudience
                                 ? '...'
-                                : '$allAudienceCount thiết bị')
+                                : '${_allAudienceCount ?? 0} thiết bị')
                           : (_loadingSpecificAudience
                                 ? '...'
                                 : '${_specificAudienceCount ?? 0} thiết bị'),
                       sub: _sendToAll
-                          ? 'Toàn bộ khách hàng đã bật thông báo'
-                          : '${_selectedUsers.length} khách hàng đã chọn',
+                          ? 'Toàn bộ $typeLabelLower đã bật thông báo'
+                          : '$selectionCount $typeLabelLower đã chọn',
                       icon: Icons.smartphone_outlined,
                     ),
                   ),
@@ -315,9 +441,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                           SizedBox(
                             width: double.infinity,
                             child: FilledButton.icon(
-                              onPressed: _sending
-                                  ? null
-                                  : () => _send(allAudienceCount),
+                              onPressed: _sending ? null : _send,
                               icon: _sending
                                   ? const SizedBox(
                                       height: 16,
@@ -370,8 +494,12 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
 }
 
 class _UserPickerDialog extends ConsumerStatefulWidget {
+  final String role;
   final List<UserProfile> initiallySelected;
-  const _UserPickerDialog({required this.initiallySelected});
+  const _UserPickerDialog({
+    required this.role,
+    required this.initiallySelected,
+  });
 
   @override
   ConsumerState<_UserPickerDialog> createState() => _UserPickerDialogState();
@@ -380,7 +508,7 @@ class _UserPickerDialog extends ConsumerStatefulWidget {
 class _UserPickerDialogState extends ConsumerState<_UserPickerDialog> {
   final _searchCtrl = TextEditingController();
   late final Map<String, UserProfile> _selected;
-  List<UserProfile>? _customers;
+  List<UserProfile>? _users;
   String? _error;
 
   @override
@@ -400,15 +528,15 @@ class _UserPickerDialogState extends ConsumerState<_UserPickerDialog> {
     try {
       final list = await ref
           .read(adminRepoProvider)
-          .users(role: 'customer', limit: 500);
-      if (mounted) setState(() => _customers = list);
+          .users(role: widget.role, limit: 500);
+      if (mounted) setState(() => _users = list);
     } catch (e) {
       if (mounted) setState(() => _error = '$e');
     }
   }
 
   List<UserProfile> get _filtered {
-    final all = _customers ?? const [];
+    final all = _users ?? const [];
     final q = _searchCtrl.text.trim().toLowerCase();
     if (q.isEmpty) return all;
     return all
@@ -420,8 +548,11 @@ class _UserPickerDialogState extends ConsumerState<_UserPickerDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final roleLabel = _userPickerRoleLabels[widget.role] ?? widget.role;
     return AlertDialog(
-      title: const Text('Chọn khách hàng'),
+      title: Text(
+        'Chọn ${roleLabel[0].toUpperCase()}${roleLabel.substring(1)}',
+      ),
       content: SizedBox(
         width: 480,
         height: 480,
@@ -441,10 +572,10 @@ class _UserPickerDialogState extends ConsumerState<_UserPickerDialog> {
             Expanded(
               child: _error != null
                   ? Center(child: Text('Lỗi: $_error'))
-                  : _customers == null
+                  : _users == null
                   ? const Center(child: CircularProgressIndicator())
                   : _filtered.isEmpty
-                  ? const Center(child: Text('Không tìm thấy khách hàng nào'))
+                  ? Center(child: Text('Không tìm thấy $roleLabel nào'))
                   : ListView.builder(
                       itemCount: _filtered.length,
                       itemBuilder: (context, i) {
@@ -484,6 +615,113 @@ class _UserPickerDialogState extends ConsumerState<_UserPickerDialog> {
   }
 }
 
+class _MerchantPickerDialog extends ConsumerStatefulWidget {
+  final List<Merchant> initiallySelected;
+  const _MerchantPickerDialog({required this.initiallySelected});
+
+  @override
+  ConsumerState<_MerchantPickerDialog> createState() =>
+      _MerchantPickerDialogState();
+}
+
+class _MerchantPickerDialogState extends ConsumerState<_MerchantPickerDialog> {
+  final _searchCtrl = TextEditingController();
+  late final Map<String, Merchant> _selected;
+  List<Merchant>? _merchants;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _selected = {for (final m in widget.initiallySelected) m.id: m};
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    try {
+      final list = await ref.read(adminRepoProvider).merchants(limit: 500);
+      if (mounted) setState(() => _merchants = list);
+    } catch (e) {
+      if (mounted) setState(() => _error = '$e');
+    }
+  }
+
+  List<Merchant> get _filtered {
+    final all = _merchants ?? const [];
+    final q = _searchCtrl.text.trim().toLowerCase();
+    if (q.isEmpty) return all;
+    return all.where((m) => m.name.toLowerCase().contains(q)).toList();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Chọn cửa hàng'),
+      content: SizedBox(
+        width: 480,
+        height: 480,
+        child: Column(
+          children: [
+            TextField(
+              controller: _searchCtrl,
+              onChanged: (_) => setState(() {}),
+              decoration: const InputDecoration(
+                labelText: 'Tìm theo tên cửa hàng',
+                prefixIcon: Icon(Icons.search),
+                border: OutlineInputBorder(),
+                isDense: true,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Expanded(
+              child: _error != null
+                  ? Center(child: Text('Lỗi: $_error'))
+                  : _merchants == null
+                  ? const Center(child: CircularProgressIndicator())
+                  : _filtered.isEmpty
+                  ? const Center(child: Text('Không tìm thấy cửa hàng nào'))
+                  : ListView.builder(
+                      itemCount: _filtered.length,
+                      itemBuilder: (context, i) {
+                        final m = _filtered[i];
+                        return CheckboxListTile(
+                          dense: true,
+                          value: _selected.containsKey(m.id),
+                          title: Text(m.name),
+                          onChanged: (checked) => setState(() {
+                            if (checked == true) {
+                              _selected[m.id] = m;
+                            } else {
+                              _selected.remove(m.id);
+                            }
+                          }),
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Huỷ'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, _selected.values.toList()),
+          child: Text('Xong (${_selected.length})'),
+        ),
+      ],
+    );
+  }
+}
+
 class _NotificationCard extends StatelessWidget {
   final AdminNotification notification;
   const _NotificationCard({required this.notification});
@@ -491,7 +729,13 @@ class _NotificationCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isSpecific = notification.target == 'specific_users';
+    final isSpecific = notification.target == 'specific';
+    final typeLabel =
+        audienceTypeLabels[notification.audienceType] ??
+        notification.audienceType;
+    final names = notification.audienceType == 'merchant'
+        ? notification.targetMerchantNames
+        : notification.recipientNames;
     return Card(
       elevation: 0,
       color: theme.colorScheme.surfaceContainerLow,
@@ -518,8 +762,8 @@ class _NotificationCard extends StatelessWidget {
                   visualDensity: VisualDensity.compact,
                   label: Text(
                     isSpecific
-                        ? '${notification.sentCount}/${notification.totalCount} thiết bị · ${notification.recipientNames.length} khách chọn riêng'
-                        : '${notification.sentCount}/${notification.totalCount} thiết bị · Tất cả khách hàng',
+                        ? '${notification.sentCount}/${notification.totalCount} thiết bị · $typeLabel (${names.length})'
+                        : '${notification.sentCount}/${notification.totalCount} thiết bị · Tất cả ${typeLabel.toLowerCase()}',
                   ),
                 ),
                 Chip(
@@ -533,10 +777,10 @@ class _NotificationCard extends StatelessWidget {
                   ),
               ],
             ),
-            if (isSpecific && notification.recipientNames.isNotEmpty) ...[
+            if (isSpecific && names.isNotEmpty) ...[
               const SizedBox(height: 8),
               Text(
-                'Gửi cho: ${notification.recipientNames.join(', ')}',
+                'Gửi cho: ${names.join(', ')}',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.outline,
                 ),

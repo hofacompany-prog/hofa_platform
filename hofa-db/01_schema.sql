@@ -918,33 +918,46 @@ COMMENT ON TABLE order_settings IS
 
 INSERT INTO order_settings (code_prefix_instant, code_prefix_scheduled) VALUES ('HF', 'DT');
 
--- Lịch sử thông báo đẩy (push notification) admin gửi cho khách hàng qua Firebase Cloud
--- Messaging — mỗi lần bấm "Gửi thông báo" ở web admin ghi 1 dòng, kèm số thiết bị gửi
--- thành công để admin biết kết quả.
+-- Lịch sử thông báo đẩy (push notification) admin gửi cho khách hàng/cửa hàng/tài xế qua
+-- Firebase Cloud Messaging — mỗi lần bấm "Gửi thông báo" ở web admin ghi 1 dòng, kèm số
+-- thiết bị gửi thành công để admin biết kết quả. Chọn theo 2 bước: audience_type (nhóm:
+-- khách hàng/cửa hàng/tài xế) rồi target (all = cả nhóm, specific = tự chọn 1 hoặc nhiều).
 CREATE TABLE admin_notifications (
-  id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  title       VARCHAR(150) NOT NULL,
-  body        VARCHAR(500) NOT NULL,
-  target      VARCHAR(30)  NOT NULL DEFAULT 'all_customers',
-  sent_count  INTEGER      NOT NULL DEFAULT 0,
-  total_count INTEGER      NOT NULL DEFAULT 0,
-  created_at  TIMESTAMPTZ  NOT NULL DEFAULT now(),
-  created_by  UUID REFERENCES users(id) ON DELETE SET NULL,
+  id            UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  title         VARCHAR(150) NOT NULL,
+  body          VARCHAR(500) NOT NULL,
+  audience_type VARCHAR(20)  NOT NULL DEFAULT 'customer',
+  target        VARCHAR(30)  NOT NULL DEFAULT 'all',
+  sent_count    INTEGER      NOT NULL DEFAULT 0,
+  total_count   INTEGER      NOT NULL DEFAULT 0,
+  created_at    TIMESTAMPTZ  NOT NULL DEFAULT now(),
+  created_by    UUID REFERENCES users(id) ON DELETE SET NULL,
 
-  CONSTRAINT admin_notifications_target_valid CHECK (target IN ('all_customers', 'specific_users'))
+  CONSTRAINT admin_notifications_audience_type_valid CHECK (audience_type IN ('customer', 'merchant', 'driver')),
+  CONSTRAINT admin_notifications_target_valid CHECK (target IN ('all', 'specific'))
 );
-COMMENT ON TABLE admin_notifications IS 'Lịch sử thông báo đẩy admin gửi cho khách hàng qua Firebase Cloud Messaging';
+COMMENT ON TABLE admin_notifications IS 'Lịch sử thông báo đẩy admin gửi cho khách hàng/cửa hàng/tài xế qua Firebase Cloud Messaging';
 COMMENT ON COLUMN admin_notifications.sent_count IS 'Số thiết bị nhận thành công (FCM báo về)';
-COMMENT ON COLUMN admin_notifications.total_count IS 'Tổng số thiết bị khách hàng có push_token tại thời điểm gửi';
+COMMENT ON COLUMN admin_notifications.total_count IS 'Tổng số thiết bị có push_token tại thời điểm gửi';
 
 CREATE INDEX idx_admin_notifications_created ON admin_notifications (created_at DESC);
 
--- Danh sách người nhận cụ thể khi admin_notifications.target = specific_users — chỉ dùng
--- để tra lại lịch sử, không dùng khi target = all_customers.
+-- Người nhận cụ thể khi target=specific — với audience_type=customer/driver là user được
+-- chọn thẳng, với audience_type=merchant là chủ+nhân viên các cửa hàng đã chọn (đối chiếu
+-- danh sách cửa hàng thật ở admin_notification_target_merchants). Không dùng khi target=all.
 CREATE TABLE admin_notification_recipients (
   notification_id UUID NOT NULL REFERENCES admin_notifications(id) ON DELETE CASCADE,
   user_id          UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   PRIMARY KEY (notification_id, user_id)
+);
+
+-- Cửa hàng cụ thể được chọn khi audience_type=merchant, target=specific — chỉ để hiển thị
+-- lại lịch sử (thông báo thật gửi tới chủ+nhân viên các cửa hàng này, ghi ở bảng recipients
+-- phía trên).
+CREATE TABLE admin_notification_target_merchants (
+  notification_id UUID NOT NULL REFERENCES admin_notifications(id) ON DELETE CASCADE,
+  merchant_id      UUID NOT NULL REFERENCES merchants(id) ON DELETE CASCADE,
+  PRIMARY KEY (notification_id, merchant_id)
 );
 
 -- ============================================================================
