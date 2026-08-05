@@ -10,6 +10,7 @@ import '../models/category.dart';
 import '../models/shipping_fee_settings.dart';
 import '../models/voucher.dart';
 import '../models/order_settings.dart';
+import '../models/admin_notification.dart';
 
 /// Gom mọi lời gọi API mà web admin cần. Tất cả endpoint ở đây đều yêu cầu
 /// role = 'admin' ở phía server (server/src/utils.js requireRole).
@@ -27,6 +28,7 @@ class AdminRepository {
   Future<List<UserProfile>> users({
     String? role,
     String? status,
+    String? q,
     int limit = 100,
   }) async {
     final list =
@@ -36,6 +38,7 @@ class AdminRepository {
                 'limit': limit,
                 if (role != null) 'role': role,
                 if (status != null) 'status': status,
+                if (q != null && q.isNotEmpty) 'q': q,
               },
             )
             as List;
@@ -288,6 +291,45 @@ class AdminRepository {
         await _api.patch('/order-settings', body: settings.toJson())
             as Map<String, dynamic>,
       );
+
+  // ---- Thông báo đẩy ----
+
+  Future<int> notificationAudienceCount({List<String>? userIds}) async {
+    final data =
+        await _api.get(
+              '/admin/notifications/audience',
+              query: {
+                if (userIds != null && userIds.isNotEmpty)
+                  'user_ids': userIds.join(','),
+              },
+            )
+            as Map<String, dynamic>;
+    return (data['count'] as num?)?.toInt() ?? 0;
+  }
+
+  Future<List<AdminNotification>> notifications({int limit = 50}) async {
+    final list =
+        await _api.get('/admin/notifications', query: {'limit': limit}) as List;
+    return list
+        .map((e) => AdminNotification.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<AdminNotification> sendNotification({
+    required String title,
+    required String body,
+    List<String>? userIds,
+  }) async => AdminNotification.fromJson(
+    await _api.post(
+          '/admin/notifications',
+          body: {
+            'title': title,
+            'body': body,
+            if (userIds != null && userIds.isNotEmpty) 'user_ids': userIds,
+          },
+        )
+        as Map<String, dynamic>,
+  );
 
   // ---- Voucher ----
   // GET /vouchers trả về MỌI voucher (kể cả đã tắt/hết hạn) khi gọi với quyền admin.

@@ -11,6 +11,7 @@ import '../models/category.dart';
 import '../models/shipping_fee_settings.dart';
 import '../models/voucher.dart';
 import '../models/order_settings.dart';
+import '../models/admin_notification.dart';
 import '../repositories/admin_repository.dart';
 import '../repositories/user_repository.dart';
 
@@ -107,3 +108,12 @@ final voucherMaxCountProvider = FutureProvider.autoDispose<int>(
 final orderSettingsProvider = FutureProvider.autoDispose<OrderSettings>(
   (ref) => ref.watch(adminRepoProvider).orderSettings(),
 );
+
+final notificationAudienceCountProvider = FutureProvider.autoDispose<int>(
+  (ref) => ref.watch(adminRepoProvider).notificationAudienceCount(),
+);
+
+final notificationsProvider =
+    FutureProvider.autoDispose<List<AdminNotification>>(
+      (ref) => ref.watch(adminRepoProvider).notifications(),
+    );

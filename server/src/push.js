@@ -24,37 +24,89 @@ function getApp() {
   }
 }
 
+/** FCM chỉ nhận tối đa 500 token/lần gọi sendEachForMulticast — chia nhỏ danh sách. */
+const FCM_BATCH_SIZE = 500;
+
+/**
+ * Gửi thẳng tới danh sách token (không tra cứu user_devices) — dùng chung cho cả push
+ * theo từng user (sendPushToUser) lẫn gửi hàng loạt (sendBroadcastToCustomers).
+ * Không throw — lỗi gửi push không bao giờ được làm hỏng luồng gọi nó.
+ */
+async function sendToTokens(tokens, { title, body, data = {} }) {
+  const firebaseApp = getApp();
+  if (!firebaseApp || !tokens.length) return { sent: 0 };
+
+  const admin = require('firebase-admin');
+  const stringData = Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)]));
+  let sent = 0;
+  for (let i = 0; i < tokens.length; i += FCM_BATCH_SIZE) {
+    const batch = tokens.slice(i, i + FCM_BATCH_SIZE);
+    try {
+      const result = await admin.messaging(firebaseApp).sendEachForMulticast({
+        tokens: batch,
+        notification: { title, body },
+        data: stringData,
+        android: { priority: 'high' },
+        apns: { payload: { aps: { sound: 'default' } } }
+      });
+      sent += result.successCount;
+    } catch (err) {
+      console.error('[push] Gửi push thất bại:', err.message);
+    }
+  }
+  return { sent };
+}
+
 /**
  * Gửi push notification cho MỌI thiết bị đã đăng ký (bảng user_devices) của 1 user.
  * data phải toàn giá trị string (giới hạn của FCM data payload).
- * Không throw — lỗi gửi push không bao giờ được làm hỏng luồng nghiệp vụ chính.
  */
 async function sendPushToUser(userId, { title, body, data = {} }) {
-  const firebaseApp = getApp();
-  if (!firebaseApp) return { sent: 0 };
-
   const devices = await db.query(
     'SELECT push_token FROM user_devices WHERE user_id = $1 AND push_token IS NOT NULL',
     [userId]
   );
   const tokens = devices.map((d) => d.push_token).filter(Boolean);
-  if (!tokens.length) return { sent: 0 };
+  return sendToTokens(tokens, { title, body, data });
+}
 
-  try {
-    const admin = require('firebase-admin');
-    const stringData = Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)]));
-    const result = await admin.messaging(firebaseApp).sendEachForMulticast({
-      tokens,
-      notification: { title, body },
-      data: stringData,
-      android: { priority: 'high' },
-      apns: { payload: { aps: { sound: 'default' } } }
-    });
-    return { sent: result.successCount };
-  } catch (err) {
-    console.error('[push] Gửi push thất bại:', err.message);
-    return { sent: 0 };
-  }
+/**
+ * Gửi push cho TOÀN BỘ khách hàng đang có thiết bị đăng ký nhận thông báo — dùng cho màn
+ * "Thông báo" ở web admin. Trả về { sent, total } để ghi vào admin_notifications.
+ */
+async function sendBroadcastToCustomers({ title, body }) {
+  const devices = await db.query(`
+    SELECT DISTINCT d.push_token
+      FROM user_devices d
+      JOIN users u ON u.id = d.user_id
+     WHERE u.role = 'customer' AND u.deleted_at IS NULL AND d.push_token IS NOT NULL
+  `);
+  const tokens = devices.map((d) => d.push_token).filter(Boolean);
+  const { sent } = await sendToTokens(tokens, {
+    title,
+    body,
+    data: { type: 'admin_broadcast' }
+  });
+  return { sent, total: tokens.length };
+}
+
+/**
+ * Gửi push cho 1 danh sách user_id cụ thể (admin tự chọn ở màn Thông báo) — dùng cho
+ * target = specific_users. Trả về { sent, total } để ghi vào admin_notifications.
+ */
+async function sendToUserIds(userIds, { title, body }) {
+  if (!userIds.length) return { sent: 0, total: 0 };
+  const devices = await db.query(
+    'SELECT DISTINCT push_token FROM user_devices WHERE user_id = ANY($1::uuid[]) AND push_token IS NOT NULL',
+    [userIds]
+  );
+  const tokens = devices.map((d) => d.push_token).filter(Boolean);
+  const { sent } = await sendToTokens(tokens, {
+    title,
+    body,
+    data: { type: 'admin_broadcast' }
+  });
+  return { sent, total: tokens.length };
 }
 
 /** Nội dung push cho khách theo từng mốc trạng thái đơn — chỉ những mốc khách thực
@@ -84,4 +136,4 @@ async function notifyCustomerOrderStatus(orderId, status) {
   });
 }
 
-module.exports = { sendPushToUser, notifyCustomerOrderStatus };
+module.exports = { sendPushToUser, notifyCustomerOrderStatus, sendBroadcastToCustomers, sendToUserIds };

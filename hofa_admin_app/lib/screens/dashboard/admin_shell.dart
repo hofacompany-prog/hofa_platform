@@ -63,6 +63,12 @@ class AdminShell extends ConsumerWidget {
       label: 'Mã đơn hàng',
       path: '/order-code',
     ),
+    (
+      icon: Icons.notifications_outlined,
+      selected: Icons.notifications,
+      label: 'Thông báo',
+      path: '/notifications',
+    ),
   ];
 
   int _indexFor(String location) {

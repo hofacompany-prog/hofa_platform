@@ -65,6 +65,7 @@ router.get('/admin/users', asyncHandler(async (req, res) => {
   const params = [];
   if (req.query.role) { params.push(req.query.role); clauses.push(`role = $${params.length}`); }
   if (req.query.status) { params.push(req.query.status); clauses.push(`status = $${params.length}`); }
+  if (req.query.q) { params.push(`%${req.query.q}%`); clauses.push(`(full_name ILIKE $${params.length} OR phone ILIKE $${params.length})`); }
   const where = `WHERE ${clauses.join(' AND ')}`;
   params.push(limit, offset);
   const rows = await db.query(
