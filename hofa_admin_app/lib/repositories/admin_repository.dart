@@ -9,6 +9,7 @@ import '../models/order.dart';
 import '../models/category.dart';
 import '../models/shipping_fee_settings.dart';
 import '../models/voucher.dart';
+import '../models/order_settings.dart';
 
 /// Gom mọi lời gọi API mà web admin cần. Tất cả endpoint ở đây đều yêu cầu
 /// role = 'admin' ở phía server (server/src/utils.js requireRole).
@@ -266,6 +267,21 @@ class AdminRepository {
     await _api.patch('/shipping-fee-settings', body: settings.toJson())
         as Map<String, dynamic>,
   );
+
+  // ---- Mã đơn hàng ----
+
+  Future<OrderSettings> orderSettings() async {
+    final data = await _api.get('/order-settings');
+    return data == null
+        ? OrderSettings.fallback()
+        : OrderSettings.fromJson(data as Map<String, dynamic>);
+  }
+
+  Future<OrderSettings> updateOrderSettings(OrderSettings settings) async =>
+      OrderSettings.fromJson(
+        await _api.patch('/order-settings', body: settings.toJson())
+            as Map<String, dynamic>,
+      );
 
   // ---- Voucher ----
   // GET /vouchers trả về MỌI voucher (kể cả đã tắt/hết hạn) khi gọi với quyền admin.

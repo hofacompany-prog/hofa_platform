@@ -57,6 +57,12 @@ class AdminShell extends ConsumerWidget {
       label: 'Voucher',
       path: '/vouchers',
     ),
+    (
+      icon: Icons.tag_outlined,
+      selected: Icons.tag,
+      label: 'Mã đơn hàng',
+      path: '/order-code',
+    ),
   ];
 
   int _indexFor(String location) {

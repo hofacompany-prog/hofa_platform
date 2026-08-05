@@ -566,7 +566,7 @@ CREATE INDEX idx_drivers_geo    ON drivers (current_latitude, current_longitude)
 
 CREATE TABLE orders (
   id                UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  order_code        VARCHAR(20) NOT NULL UNIQUE,   -- 'HF26073000001' để đọc qua điện thoại
+  order_code        VARCHAR(20) NOT NULL,   -- '<prefix>-482' để đọc qua điện thoại, prefix cấu hình ở order_settings
   customer_id       UUID NOT NULL REFERENCES users(id)      ON DELETE RESTRICT,
   merchant_id       UUID NOT NULL REFERENCES merchants(id)  ON DELETE RESTRICT,
   branch_id         UUID NOT NULL REFERENCES branches(id)   ON DELETE RESTRICT,
@@ -900,6 +900,21 @@ COMMENT ON TABLE shipping_fee_settings IS
 INSERT INTO shipping_fee_settings (is_active, base_fee, base_distance_km, per_km_fee)
 VALUES (true, 15000, 2, 4000);
 
+-- Chữ đầu (prefix) của mã đơn hàng hiển thị (order_code, sinh bởi generate_order_code() ở
+-- PHẦN 12) — admin chỉnh qua web admin, mục Mã đơn hàng.
+CREATE TABLE order_settings (
+  id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  code_prefix VARCHAR(10) NOT NULL DEFAULT 'HF',
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_by  UUID REFERENCES users(id) ON DELETE SET NULL,
+
+  CONSTRAINT order_settings_prefix_format CHECK (code_prefix ~ '^[A-Za-z0-9]{1,10}$')
+);
+COMMENT ON TABLE order_settings IS
+  'Chữ đầu (prefix) của mã đơn hàng — chỉ giữ 1 dòng (dòng mới nhất theo updated_at) đang áp dụng, admin sửa qua GET/PATCH /order-settings';
+
+INSERT INTO order_settings (code_prefix) VALUES ('HF');
+
 -- ============================================================================
 -- PHẦN 12: TỰ ĐỘNG HOÁ — trigger giữ dữ liệu luôn đúng
 -- ============================================================================
@@ -925,15 +940,16 @@ BEGIN
   END LOOP;
 END $$;
 
--- 2) Sinh mã đơn dạng HF + ngày + số thứ tự: HF26073000001
-CREATE SEQUENCE order_code_seq;
-
+-- 2) Sinh mã đơn ngắn để đọc qua điện thoại: <prefix>-XXX (XXX = 3 chữ số ngẫu nhiên).
+-- Chữ đầu (prefix) lấy từ order_settings, chỉnh được ở web admin. Không đảm bảo duy nhất
+-- tuyệt đối (chỉ 1000 tổ hợp) — chấp nhận vì hệ thống vẫn xử lý đơn bằng orders.id thật.
 CREATE OR REPLACE FUNCTION generate_order_code() RETURNS TRIGGER AS $$
+DECLARE
+  v_prefix VARCHAR(10);
 BEGIN
   IF NEW.order_code IS NULL OR NEW.order_code = '' THEN
-    NEW.order_code := 'HF'
-      || to_char(now(), 'YYMMDD')
-      || lpad((nextval('order_code_seq') % 100000)::TEXT, 5, '0');
+    SELECT code_prefix INTO v_prefix FROM order_settings ORDER BY updated_at DESC LIMIT 1;
+    NEW.order_code := COALESCE(v_prefix, 'HF') || '-' || lpad(floor(random() * 1000)::TEXT, 3, '0');
   END IF;
   RETURN NEW;
 END;

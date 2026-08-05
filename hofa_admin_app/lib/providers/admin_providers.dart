@@ -10,6 +10,7 @@ import '../models/order.dart';
 import '../models/category.dart';
 import '../models/shipping_fee_settings.dart';
 import '../models/voucher.dart';
+import '../models/order_settings.dart';
 import '../repositories/admin_repository.dart';
 import '../repositories/user_repository.dart';
 
@@ -101,4 +102,8 @@ final vouchersProvider = FutureProvider.autoDispose<List<Voucher>>(
 
 final voucherMaxCountProvider = FutureProvider.autoDispose<int>(
   (ref) => ref.watch(adminRepoProvider).voucherMaxCount(),
+);
+
+final orderSettingsProvider = FutureProvider.autoDispose<OrderSettings>(
+  (ref) => ref.watch(adminRepoProvider).orderSettings(),
 );
