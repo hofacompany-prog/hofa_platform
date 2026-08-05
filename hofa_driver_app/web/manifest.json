@@ -1,12 +1,14 @@
 {
-    "name": "hofa_driver",
-    "short_name": "hofa_driver",
+    "name": "HOFA Tài xế",
+    "short_name": "HOFA Tài xế",
     "start_url": ".",
+    "scope": "/",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
+    "background_color": "#FFFFFF",
+    "theme_color": "#85C100",
     "description": "HOFA — Nhận đơn, giao hàng, theo dõi thu nhập cho tài xế.",
     "orientation": "portrait-primary",
+    "lang": "vi",
     "prefer_related_applications": false,
     "icons": [
         {
