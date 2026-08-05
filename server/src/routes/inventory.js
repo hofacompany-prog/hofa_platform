@@ -2,7 +2,9 @@ const router = require('express').Router();
 const db = require('../db');
 const asyncHandler = require('../asyncHandler');
 const { ApiError } = require('../errors');
-const { requireFields, requireAuth, pagination, requireMerchantAccess } = require('../utils');
+const { pickFields, requireFields, requireAuth, pagination, requireMerchantAccess } = require('../utils');
+
+const INVENTORY_UPDATE_FIELDS = ['low_stock_threshold'];
 
 async function requireBranchAccess(ctx, branchId) {
   const branch = await db.queryOne('SELECT id, merchant_id FROM branches WHERE id = $1', [branchId]);
@@ -53,6 +55,36 @@ router.post('/inventory/adjust', asyncHandler(async (req, res) => {
     p_note: req.body.note || null
   });
   res.json({ ok: true, data: { balance_after: result.apply_stock_movement } });
+}));
+
+/** Sửa cấu hình dòng tồn kho (hiện chỉ có ngưỡng cảnh báo sắp hết hàng) — không đụng tới
+ * số lượng thật, đổi số lượng phải luôn qua /inventory/adjust để giữ sổ sách đúng. */
+router.patch('/branches/:branchId/inventory/:variantId', asyncHandler(async (req, res) => {
+  await requireBranchAccess(req.ctx, req.params.branchId);
+  const data = pickFields(req.body, INVENTORY_UPDATE_FIELDS);
+  if (Object.keys(data).length === 0) {
+    throw new ApiError('BAD_REQUEST', 'Không có gì để cập nhật', 400);
+  }
+  const updated = await db.queryOne(
+    `UPDATE inventory SET ${Object.keys(data).map((k, i) => `${k} = $${i + 3}`).join(', ')}
+     WHERE branch_id = $1 AND variant_id = $2 RETURNING *`,
+    [req.params.branchId, req.params.variantId, ...Object.values(data)]
+  );
+  if (!updated) throw new ApiError('NOT_FOUND', 'Không tìm thấy dòng tồn kho này', 404);
+  res.json({ ok: true, data: updated });
+}));
+
+/** Xoá hẳn 1 dòng tồn kho — xem delete_inventory_row() trong hofa-db/04_api_functions.sql
+ * (chặn nếu đang giữ chỗ cho đơn hàng, tự ghi sổ điều chỉnh về 0 trước khi xoá nếu còn tồn). */
+router.delete('/branches/:branchId/inventory/:variantId', asyncHandler(async (req, res) => {
+  requireAuth(req.ctx);
+  await requireBranchAccess(req.ctx, req.params.branchId);
+  await db.callRpc('delete_inventory_row', {
+    p_branch_id: req.params.branchId,
+    p_variant_id: req.params.variantId,
+    p_user_id: req.ctx.userId
+  });
+  res.json({ ok: true, data: { deleted: true } });
 }));
 
 router.get('/branches/:branchId/stock-movements', asyncHandler(async (req, res) => {
