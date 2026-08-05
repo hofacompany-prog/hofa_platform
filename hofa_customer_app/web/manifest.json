@@ -1,12 +1,14 @@
 {
-    "name": "hofa_customer",
-    "short_name": "hofa_customer",
+    "name": "HOFA - Đặt hàng",
+    "short_name": "HOFA",
     "start_url": ".",
+    "scope": "/",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#FFFFFF",
+    "theme_color": "#85C100",
+    "description": "HOFA — Đặt hàng từ cửa hàng gần bạn, giao nhanh tận nơi.",
     "orientation": "portrait-primary",
+    "lang": "vi",
     "prefer_related_applications": false,
     "icons": [
         {
