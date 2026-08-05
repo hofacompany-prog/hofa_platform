@@ -1,12 +1,14 @@
 {
-    "name": "hofa_admin",
-    "short_name": "hofa_admin",
+    "name": "HOFA Admin",
+    "short_name": "HOFA Admin",
     "start_url": ".",
+    "scope": "/",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
-    "orientation": "portrait-primary",
+    "background_color": "#FFFFFF",
+    "theme_color": "#85C100",
+    "description": "HOFA Admin — Quản trị cửa hàng, đơn hàng, người dùng và tài xế trên nền tảng HOFA.",
+    "orientation": "any",
+    "lang": "vi",
     "prefer_related_applications": false,
     "icons": [
         {
