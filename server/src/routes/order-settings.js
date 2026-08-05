@@ -3,7 +3,7 @@ const db = require('../db');
 const asyncHandler = require('../asyncHandler');
 const { pickFields, requireRole } = require('../utils');
 
-const FIELDS = ['code_prefix'];
+const FIELDS = ['code_prefix_instant', 'code_prefix_scheduled'];
 
 /** Chỉ giữ 1 dòng đang áp dụng — dòng mới nhất theo updated_at. */
 async function currentSettings() {

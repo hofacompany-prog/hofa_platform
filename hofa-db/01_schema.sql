@@ -901,19 +901,22 @@ INSERT INTO shipping_fee_settings (is_active, base_fee, base_distance_km, per_km
 VALUES (true, 15000, 2, 4000);
 
 -- Chữ đầu (prefix) của mã đơn hàng hiển thị (order_code, sinh bởi generate_order_code() ở
--- PHẦN 12) — admin chỉnh qua web admin, mục Mã đơn hàng.
+-- PHẦN 12) — admin chỉnh qua web admin, mục Mã đơn hàng. 2 loại theo sales_model: instant
+-- (giao ngay) và scheduled (đặt trước/giá sỉ) dùng chữ đầu khác nhau để phân biệt nhanh.
 CREATE TABLE order_settings (
-  id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  code_prefix VARCHAR(10) NOT NULL DEFAULT 'HF',
-  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_by  UUID REFERENCES users(id) ON DELETE SET NULL,
+  id                    UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  code_prefix_instant   VARCHAR(10) NOT NULL DEFAULT 'HF',
+  code_prefix_scheduled VARCHAR(10) NOT NULL DEFAULT 'DT',
+  updated_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_by            UUID REFERENCES users(id) ON DELETE SET NULL,
 
-  CONSTRAINT order_settings_prefix_format CHECK (code_prefix ~ '^[A-Za-z0-9]{1,10}$')
+  CONSTRAINT order_settings_prefix_instant_format   CHECK (code_prefix_instant   ~ '^[A-Za-z0-9]{1,10}$'),
+  CONSTRAINT order_settings_prefix_scheduled_format  CHECK (code_prefix_scheduled ~ '^[A-Za-z0-9]{1,10}$')
 );
 COMMENT ON TABLE order_settings IS
-  'Chữ đầu (prefix) của mã đơn hàng — chỉ giữ 1 dòng (dòng mới nhất theo updated_at) đang áp dụng, admin sửa qua GET/PATCH /order-settings';
+  'Chữ đầu (prefix) của mã đơn hàng theo sales_model (instant/scheduled) — chỉ giữ 1 dòng (dòng mới nhất theo updated_at) đang áp dụng, admin sửa qua GET/PATCH /order-settings';
 
-INSERT INTO order_settings (code_prefix) VALUES ('HF');
+INSERT INTO order_settings (code_prefix_instant, code_prefix_scheduled) VALUES ('HF', 'DT');
 
 -- ============================================================================
 -- PHẦN 12: TỰ ĐỘNG HOÁ — trigger giữ dữ liệu luôn đúng
@@ -941,15 +944,23 @@ BEGIN
 END $$;
 
 -- 2) Sinh mã đơn ngắn để đọc qua điện thoại: <prefix>-XXX (XXX = 3 chữ số ngẫu nhiên).
--- Chữ đầu (prefix) lấy từ order_settings, chỉnh được ở web admin. Không đảm bảo duy nhất
--- tuyệt đối (chỉ 1000 tổ hợp) — chấp nhận vì hệ thống vẫn xử lý đơn bằng orders.id thật.
+-- Chữ đầu (prefix) lấy từ order_settings theo sales_model, chỉnh được ở web admin. Không
+-- đảm bảo duy nhất tuyệt đối (chỉ 1000 tổ hợp) — chấp nhận vì hệ thống vẫn xử lý đơn bằng
+-- orders.id thật.
 CREATE OR REPLACE FUNCTION generate_order_code() RETURNS TRIGGER AS $$
 DECLARE
-  v_prefix VARCHAR(10);
+  v_prefix_instant   VARCHAR(10);
+  v_prefix_scheduled VARCHAR(10);
 BEGIN
   IF NEW.order_code IS NULL OR NEW.order_code = '' THEN
-    SELECT code_prefix INTO v_prefix FROM order_settings ORDER BY updated_at DESC LIMIT 1;
-    NEW.order_code := COALESCE(v_prefix, 'HF') || '-' || lpad(floor(random() * 1000)::TEXT, 3, '0');
+    SELECT code_prefix_instant, code_prefix_scheduled
+      INTO v_prefix_instant, v_prefix_scheduled
+      FROM order_settings ORDER BY updated_at DESC LIMIT 1;
+    NEW.order_code :=
+      COALESCE(
+        CASE WHEN NEW.sales_model = 'scheduled' THEN v_prefix_scheduled ELSE v_prefix_instant END,
+        CASE WHEN NEW.sales_model = 'scheduled' THEN 'DT' ELSE 'HF' END
+      ) || '-' || lpad(floor(random() * 1000)::TEXT, 3, '0');
   END IF;
   RETURN NEW;
 END;
