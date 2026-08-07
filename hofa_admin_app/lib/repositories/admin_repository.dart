@@ -13,6 +13,8 @@ import '../models/shipping_fee_settings.dart';
 import '../models/voucher.dart';
 import '../models/order_settings.dart';
 import '../models/admin_notification.dart';
+import '../models/notification_inbox_item.dart';
+import '../models/notification_settings.dart';
 
 /// Gom mọi lời gọi API mà web admin cần. Tất cả endpoint ở đây đều yêu cầu
 /// role = 'admin' ở phía server (server/src/utils.js requireRole).
@@ -410,6 +412,47 @@ class AdminRepository {
         )
         as Map<String, dynamic>,
   );
+
+  /// Hộp thư THẬT của từng người nhận thuộc 1 cửa hàng (chủ + nhân viên) — khác
+  /// notifications() ở trên (đó là log các đợt gửi). merchantId bắt buộc.
+  Future<List<NotificationInboxItem>> notificationInbox(
+    String merchantId, {
+    int limit = 100,
+    int offset = 0,
+  }) async {
+    final list = await _api.get(
+      '/admin/notifications/inbox',
+      query: {'merchant_id': merchantId, 'limit': limit, 'offset': offset},
+    ) as List;
+    return list
+        .map((e) => NotificationInboxItem.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Xoá đúng 1 trong 3 kiểu: [ids] (1 hoặc nhiều dòng cụ thể), [merchantId] (cả hộp thư của
+  /// 1 cửa hàng), hoặc [all] = true (toàn bộ hộp thư mọi người dùng trên sàn).
+  Future<int> deleteNotificationInbox({
+    List<String>? ids,
+    String? merchantId,
+    bool all = false,
+  }) async {
+    final data = await _api.post(
+      '/admin/notifications/inbox/delete',
+      body: {
+        if (ids != null && ids.isNotEmpty) 'ids': ids,
+        if (merchantId != null) 'merchant_id': merchantId,
+        if (all) 'all': true,
+      },
+    ) as Map<String, dynamic>;
+    return (data['deleted'] as num?)?.toInt() ?? 0;
+  }
+
+  Future<NotificationSettings> notificationSettings() async =>
+      NotificationSettings.fromJson(await _api.get('/notification-settings') as Map<String, dynamic>?);
+
+  Future<NotificationSettings> updateNotificationTtl(int? ttlHours) async => NotificationSettings.fromJson(
+        await _api.patch('/notification-settings', body: {'ttl_hours': ttlHours}) as Map<String, dynamic>?,
+      );
 
   // ---- Voucher ----
   // GET /vouchers trả về MỌI voucher (kể cả đã tắt/hết hạn) khi gọi với quyền admin.

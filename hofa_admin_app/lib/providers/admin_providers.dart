@@ -14,6 +14,8 @@ import '../models/shipping_fee_settings.dart';
 import '../models/voucher.dart';
 import '../models/order_settings.dart';
 import '../models/admin_notification.dart';
+import '../models/notification_inbox_item.dart';
+import '../models/notification_settings.dart';
 import '../repositories/admin_repository.dart';
 import '../repositories/user_repository.dart';
 
@@ -127,3 +129,16 @@ final notificationsProvider =
     FutureProvider.autoDispose<List<AdminNotification>>(
       (ref) => ref.watch(adminRepoProvider).notifications(),
     );
+
+/// Cửa hàng đang chọn để xem hộp thư — null nghĩa là chưa chọn, chưa gọi API (merchant_id
+/// bắt buộc ở server).
+final inboxMerchantProvider = StateProvider.autoDispose<Merchant?>((ref) => null);
+
+final notificationInboxProvider = FutureProvider.autoDispose
+    .family<List<NotificationInboxItem>, String>(
+      (ref, merchantId) => ref.watch(adminRepoProvider).notificationInbox(merchantId),
+    );
+
+final notificationSettingsProvider = FutureProvider.autoDispose<NotificationSettings>(
+  (ref) => ref.watch(adminRepoProvider).notificationSettings(),
+);

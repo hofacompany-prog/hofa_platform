@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/format.dart';
 import '../../models/admin_notification.dart';
 import '../../models/merchant.dart';
+import '../../models/notification_inbox_item.dart';
 import '../../models/user_profile.dart';
 import '../../providers/admin_providers.dart';
 import '../../widgets/stat_card.dart';
@@ -20,7 +21,9 @@ class NotificationsScreen extends ConsumerStatefulWidget {
       _NotificationsScreenState();
 }
 
-class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
+class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
+    with SingleTickerProviderStateMixin {
+  late final TabController _tabController;
   final _titleCtrl = TextEditingController();
   final _bodyCtrl = TextEditingController();
   bool _sending = false;
@@ -41,11 +44,13 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
     _loadAllAudienceCount();
   }
 
   @override
   void dispose() {
+    _tabController.dispose();
     _titleCtrl.dispose();
     _bodyCtrl.dispose();
     super.dispose();
@@ -253,15 +258,30 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final historyAsync = ref.watch(notificationsProvider);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Thông báo'),
+        bottom: TabBar(
+          controller: _tabController,
+          tabs: const [Tab(text: 'Gửi thông báo'), Tab(text: 'Hộp thư theo cửa hàng')],
+        ),
+      ),
+      body: TabBarView(
+        controller: _tabController,
+        children: [_buildSendTab(theme, historyAsync), const _InboxTab()],
+      ),
+    );
+  }
+
+  Widget _buildSendTab(ThemeData theme, AsyncValue<List<AdminNotification>> historyAsync) {
     final typeLabel = audienceTypeLabels[_audienceType]!;
     final typeLabelLower = typeLabel.toLowerCase();
     final selectionCount = _audienceType == 'merchant'
         ? _selectedMerchants.length
         : _selectedUsers.length;
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Thông báo')),
-      body: ListView(
+    return ListView(
         padding: const EdgeInsets.all(24),
         children: [
           Center(
@@ -565,8 +585,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
             ),
           ),
         ],
-      ),
-    );
+      );
   }
 }
 
@@ -881,6 +900,468 @@ class _NotificationCard extends StatelessWidget {
                 ),
               ),
             ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Hộp thư THẬT của từng người nhận thuộc 1 cửa hàng — chọn cửa hàng trước (merchant_id bắt
+/// buộc ở server, tránh tải cả bảng notifications không lọc gì), sau đó xem/chọn/xoá 1 hoặc
+/// nhiều dòng, hoặc xoá cả hộp thư của cửa hàng đó. Cài đặt tự xoá theo thời gian (TTL) nằm
+/// ngay trong tab này vì nó chỉ ảnh hưởng tới đúng dữ liệu đang xem ở đây.
+class _InboxTab extends ConsumerStatefulWidget {
+  const _InboxTab();
+
+  @override
+  ConsumerState<_InboxTab> createState() => _InboxTabState();
+}
+
+class _InboxTabState extends ConsumerState<_InboxTab> {
+  final Set<String> _selectedIds = {};
+  bool _busy = false;
+
+  Future<void> _pickMerchant() async {
+    final result = await showDialog<List<Merchant>>(
+      context: context,
+      builder: (context) => const _MerchantPickerDialog(initiallySelected: []),
+    );
+    if (result == null || result.isEmpty) return;
+    ref.read(inboxMerchantProvider.notifier).state = result.first;
+    setState(() => _selectedIds.clear());
+  }
+
+  Future<void> _deleteIds(String merchantId, List<String> ids, {String? confirmLabel}) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(confirmLabel ?? 'Xoá ${ids.length} thông báo đã chọn?'),
+        content: const Text('Không thể hoàn tác — người nhận sẽ không còn thấy các dòng này trong hộp thư nữa.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Huỷ')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Xoá'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    setState(() => _busy = true);
+    try {
+      await ref.read(adminRepoProvider).deleteNotificationInbox(ids: ids);
+      setState(() => _selectedIds.clear());
+      ref.invalidate(notificationInboxProvider(merchantId));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _deleteAllForMerchant(Merchant merchant) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Xoá TOÀN BỘ hộp thư của "${merchant.name}"?'),
+        content: const Text(
+          'Xoá hết mọi thông báo (cả cũ lẫn mới, đã đọc lẫn chưa đọc) mà chủ và nhân viên cửa '
+          'hàng này từng nhận. Không thể hoàn tác.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Huỷ')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Xoá tất cả'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    setState(() => _busy = true);
+    try {
+      final deleted = await ref.read(adminRepoProvider).deleteNotificationInbox(merchantId: merchant.id);
+      setState(() => _selectedIds.clear());
+      ref.invalidate(notificationInboxProvider(merchant.id));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Đã xoá $deleted thông báo')));
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _deleteAllGlobal() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Xoá TOÀN BỘ hộp thư của TẤT CẢ người dùng?'),
+        content: const Text(
+          'Xoá hết mọi thông báo của MỌI khách hàng, cửa hàng, tài xế trên toàn hệ thống — '
+          'không chỉ cửa hàng đang xem. Không thể hoàn tác. Chỉ dùng khi thật sự cần dọn sạch '
+          'toàn bộ dữ liệu hộp thư.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Huỷ')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Xoá toàn bộ hệ thống'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    setState(() => _busy = true);
+    try {
+      final deleted = await ref.read(adminRepoProvider).deleteNotificationInbox(all: true);
+      final merchant = ref.read(inboxMerchantProvider);
+      setState(() => _selectedIds.clear());
+      if (merchant != null) ref.invalidate(notificationInboxProvider(merchant.id));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Đã xoá $deleted thông báo trên toàn hệ thống')));
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final merchant = ref.watch(inboxMerchantProvider);
+    final itemsAsync = merchant == null
+        ? null
+        : ref.watch(notificationInboxProvider(merchant.id));
+
+    return ListView(
+      padding: const EdgeInsets.all(24),
+      children: [
+        Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 720),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const _TtlSettingsCard(),
+                const SizedBox(height: 20),
+                Card(
+                  elevation: 0,
+                  color: theme.colorScheme.surfaceContainerLow,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            merchant == null ? 'Chưa chọn cửa hàng' : merchant.name,
+                            style: theme.textTheme.titleSmall,
+                          ),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: _busy ? null : _pickMerchant,
+                          icon: const Icon(Icons.storefront_outlined),
+                          label: Text(merchant == null ? 'Chọn cửa hàng' : 'Đổi cửa hàng'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextButton.icon(
+                  onPressed: _busy ? null : _deleteAllGlobal,
+                  style: TextButton.styleFrom(foregroundColor: theme.colorScheme.error),
+                  icon: const Icon(Icons.delete_forever_outlined, size: 18),
+                  label: const Text('Xoá toàn bộ thông báo trên toàn hệ thống'),
+                ),
+                const SizedBox(height: 12),
+                if (merchant == null)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 40),
+                    child: Center(
+                      child: Text(
+                        'Chọn 1 cửa hàng ở trên để xem hộp thư của họ.',
+                        style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.outline),
+                      ),
+                    ),
+                  )
+                else
+                  itemsAsync!.when(
+                    loading: () => const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 40),
+                      child: Center(child: CircularProgressIndicator()),
+                    ),
+                    error: (e, _) => Text('Lỗi: $e'),
+                    data: (items) {
+                      if (items.isEmpty) {
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 40),
+                          child: Center(
+                            child: Text(
+                              'Cửa hàng này chưa nhận thông báo nào.',
+                              style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.outline),
+                            ),
+                          ),
+                        );
+                      }
+                      final allSelected = _selectedIds.length == items.length;
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Checkbox(
+                                value: allSelected,
+                                onChanged: _busy
+                                    ? null
+                                    : (v) => setState(() {
+                                          if (v == true) {
+                                            _selectedIds
+                                              ..clear()
+                                              ..addAll(items.map((e) => e.id));
+                                          } else {
+                                            _selectedIds.clear();
+                                          }
+                                        }),
+                              ),
+                              Text('Chọn tất cả (${items.length})', style: theme.textTheme.bodySmall),
+                              const Spacer(),
+                              if (_selectedIds.isNotEmpty)
+                                TextButton.icon(
+                                  onPressed: _busy ? null : () => _deleteIds(merchant.id, _selectedIds.toList()),
+                                  style: TextButton.styleFrom(foregroundColor: theme.colorScheme.error),
+                                  icon: const Icon(Icons.delete_outline, size: 18),
+                                  label: Text('Xoá đã chọn (${_selectedIds.length})'),
+                                ),
+                              const SizedBox(width: 8),
+                              OutlinedButton.icon(
+                                onPressed: _busy ? null : () => _deleteAllForMerchant(merchant),
+                                style: OutlinedButton.styleFrom(foregroundColor: theme.colorScheme.error),
+                                icon: const Icon(Icons.delete_sweep_outlined, size: 18),
+                                label: const Text('Xoá tất cả của cửa hàng này'),
+                              ),
+                            ],
+                          ),
+                          const Divider(height: 1),
+                          ...items.map((n) => _InboxRow(
+                                item: n,
+                                selected: _selectedIds.contains(n.id),
+                                onSelectedChanged: _busy
+                                    ? null
+                                    : (v) => setState(() {
+                                          if (v == true) {
+                                            _selectedIds.add(n.id);
+                                          } else {
+                                            _selectedIds.remove(n.id);
+                                          }
+                                        }),
+                                onDelete: _busy ? null : () => _deleteIds(merchant.id, [n.id], confirmLabel: 'Xoá thông báo này?'),
+                              )),
+                        ],
+                      );
+                    },
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _InboxRow extends StatelessWidget {
+  final NotificationInboxItem item;
+  final bool selected;
+  final ValueChanged<bool?>? onSelectedChanged;
+  final VoidCallback? onDelete;
+
+  const _InboxRow({
+    required this.item,
+    required this.selected,
+    required this.onSelectedChanged,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: theme.colorScheme.outlineVariant))),
+      child: CheckboxListTile(
+        value: selected,
+        onChanged: onSelectedChanged,
+        controlAffinity: ListTileControlAffinity.leading,
+        title: Text(item.title, style: TextStyle(fontWeight: item.isRead ? FontWeight.normal : FontWeight.bold)),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(item.body, maxLines: 2, overflow: TextOverflow.ellipsis),
+            const SizedBox(height: 4),
+            Wrap(
+              spacing: 6,
+              children: [
+                Chip(
+                  visualDensity: VisualDensity.compact,
+                  label: Text(item.recipientName),
+                ),
+                Chip(
+                  visualDensity: VisualDensity.compact,
+                  label: Text(notificationCategoryLabels[item.category] ?? item.category),
+                ),
+                Chip(
+                  visualDensity: VisualDensity.compact,
+                  label: Text(item.isRead ? 'Đã đọc' : 'Chưa đọc'),
+                  backgroundColor: item.isRead ? null : theme.colorScheme.primary.withValues(alpha: 0.12),
+                ),
+                Chip(
+                  visualDensity: VisualDensity.compact,
+                  label: Text(formatDateTime(item.createdAt)),
+                ),
+              ],
+            ),
+          ],
+        ),
+        secondary: IconButton(
+          tooltip: 'Xoá thông báo này',
+          icon: const Icon(Icons.delete_outline, size: 18),
+          onPressed: onDelete,
+        ),
+      ),
+    );
+  }
+}
+
+/// Cấu hình số ngày/giờ 1 thông báo được giữ trong hộp thư trước khi bị sweep nền tự xoá
+/// (server/src/push.js sweepOldNotifications, quét mỗi giờ) — để trống nghĩa là không tự xoá.
+class _TtlSettingsCard extends ConsumerStatefulWidget {
+  const _TtlSettingsCard();
+
+  @override
+  ConsumerState<_TtlSettingsCard> createState() => _TtlSettingsCardState();
+}
+
+class _TtlSettingsCardState extends ConsumerState<_TtlSettingsCard> {
+  final _valueCtrl = TextEditingController();
+  String _unit = 'days';
+  bool _saving = false;
+  bool _initialized = false;
+
+  @override
+  void dispose() {
+    _valueCtrl.dispose();
+    super.dispose();
+  }
+
+  void _applySettings(int? ttlHours) {
+    if (ttlHours == null) {
+      _valueCtrl.text = '';
+      _unit = 'days';
+    } else if (ttlHours % 24 == 0) {
+      _valueCtrl.text = (ttlHours ~/ 24).toString();
+      _unit = 'days';
+    } else {
+      _valueCtrl.text = ttlHours.toString();
+      _unit = 'hours';
+    }
+  }
+
+  Future<void> _save() async {
+    final raw = _valueCtrl.text.trim();
+    int? ttlHours;
+    if (raw.isNotEmpty) {
+      final value = int.tryParse(raw);
+      if (value == null || value <= 0) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Nhập số nguyên dương, hoặc để trống để không tự xoá')));
+        return;
+      }
+      ttlHours = _unit == 'days' ? value * 24 : value;
+    }
+    setState(() => _saving = true);
+    try {
+      await ref.read(adminRepoProvider).updateNotificationTtl(ttlHours);
+      ref.invalidate(notificationSettingsProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(ttlHours == null ? 'Đã tắt tự xoá' : 'Đã lưu — tự xoá sau $raw ${_unit == 'days' ? 'ngày' : 'giờ'}')),
+        );
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final settingsAsync = ref.watch(notificationSettingsProvider);
+
+    settingsAsync.whenData((s) {
+      if (!_initialized) {
+        _initialized = true;
+        _applySettings(s.ttlHours);
+      }
+    });
+
+    return Card(
+      elevation: 0,
+      color: theme.colorScheme.surfaceContainerLow,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Tự động xoá thông báo cũ', style: theme.textTheme.titleSmall),
+            const SizedBox(height: 4),
+            Text(
+              'Sau khoảng thời gian này, thông báo tự bị xoá khỏi hộp thư của MỌI người dùng '
+              '(kiểm tra mỗi giờ). Để trống thì không bao giờ tự xoá.',
+              style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                SizedBox(
+                  width: 120,
+                  child: TextField(
+                    controller: _valueCtrl,
+                    enabled: !_saving,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Sống được',
+                      hintText: 'Để trống',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                DropdownButton<String>(
+                  value: _unit,
+                  onChanged: _saving ? null : (v) => setState(() => _unit = v ?? _unit),
+                  items: const [
+                    DropdownMenuItem(value: 'days', child: Text('Ngày')),
+                    DropdownMenuItem(value: 'hours', child: Text('Giờ')),
+                  ],
+                ),
+                const SizedBox(width: 16),
+                FilledButton(
+                  onPressed: _saving ? null : _save,
+                  child: _saving
+                      ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Text('Lưu'),
+                ),
+              ],
+            ),
           ],
         ),
       ),

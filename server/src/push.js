@@ -200,10 +200,24 @@ async function notifyCustomerOrderStatus(orderId, status) {
   });
 }
 
+/** Tự xoá các dòng hộp thư (bảng notifications) cũ hơn notification_settings.ttl_hours — bỏ
+ * qua lặng lẽ nếu chưa cấu hình (ttl_hours NULL, mặc định) hoặc chưa có dòng settings nào.
+ * Gọi định kỳ từ index.js, cùng kiểu sweepExpiredOffers/sweepExpiredOrderOffers. */
+async function sweepOldNotifications() {
+  const settings = await db.queryOne('SELECT ttl_hours FROM notification_settings ORDER BY updated_at DESC LIMIT 1');
+  if (!settings?.ttl_hours) return { deleted: 0 };
+  const deleted = await db.query(
+    `DELETE FROM notifications WHERE created_at < now() - ($1 || ' hours')::interval RETURNING id`,
+    [settings.ttl_hours]
+  );
+  return { deleted: deleted.length };
+}
+
 module.exports = {
   sendPushToUser,
   notifyCustomerOrderStatus,
   sendBroadcastToRoles,
   resolveMerchantUserIds,
-  sendToUserIds
+  sendToUserIds,
+  sweepOldNotifications
 };

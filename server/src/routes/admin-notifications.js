@@ -133,4 +133,54 @@ router.post('/admin/notifications', asyncHandler(async (req, res) => {
   res.status(201).json({ ok: true, data: saved });
 }));
 
+/** Hộp thư CỦA TỪNG NGƯỜI NHẬN (bảng notifications) lọc theo 1 cửa hàng cụ thể — khác hẳn
+ * GET /admin/notifications ở trên (đó là log các đợt gửi, không phải từng dòng người nhận
+ * thật sự thấy). merchant_id bắt buộc — không cho duyệt toàn sàn không lọc gì để tránh tải
+ * về quá nhiều dòng cùng lúc. */
+router.get('/admin/notifications/inbox', asyncHandler(async (req, res) => {
+  requireRole(req.ctx, ['admin']);
+  requireFields(req.query, ['merchant_id']);
+  const { limit, offset } = pagination(req.query);
+  const userIds = await push.resolveMerchantUserIds([req.query.merchant_id]);
+  if (!userIds.length) return res.json({ ok: true, data: [] });
+  const rows = await db.query(
+    `SELECT n.*, u.full_name AS recipient_name
+       FROM notifications n
+       JOIN users u ON u.id = n.user_id
+      WHERE n.user_id = ANY($1::uuid[])
+      ORDER BY n.created_at DESC
+      LIMIT $2 OFFSET $3`,
+    [userIds, limit, offset]
+  );
+  res.json({ ok: true, data: rows });
+}));
+
+/** Xoá 1/nhiều/tất cả dòng trong hộp thư người nhận — đúng 1 trong 3 kiểu body:
+ * {ids: [...]} xoá đúng các dòng đó, {merchant_id} xoá hết hộp thư của 1 cửa hàng,
+ * {all: true} xoá TOÀN BỘ hộp thư mọi người dùng trên sàn (nặng tay nhất, admin app phải tự
+ * xác nhận rõ ràng trước khi gọi). */
+router.post('/admin/notifications/inbox/delete', asyncHandler(async (req, res) => {
+  requireRole(req.ctx, ['admin']);
+  const { ids, merchant_id: merchantId, all } = req.body;
+
+  if (Array.isArray(ids) && ids.length) {
+    const deleted = await db.query('DELETE FROM notifications WHERE id = ANY($1::uuid[]) RETURNING id', [ids]);
+    return res.json({ ok: true, data: { deleted: deleted.length } });
+  }
+  if (merchantId) {
+    const userIds = await push.resolveMerchantUserIds([merchantId]);
+    if (!userIds.length) return res.json({ ok: true, data: { deleted: 0 } });
+    const deleted = await db.query(
+      'DELETE FROM notifications WHERE user_id = ANY($1::uuid[]) RETURNING id',
+      [userIds]
+    );
+    return res.json({ ok: true, data: { deleted: deleted.length } });
+  }
+  if (all === true) {
+    const deleted = await db.query('DELETE FROM notifications RETURNING id');
+    return res.json({ ok: true, data: { deleted: deleted.length } });
+  }
+  throw new ApiError('BAD_REQUEST', 'Cần đúng 1 trong: ids, merchant_id, all', 400);
+}));
+
 module.exports = router;

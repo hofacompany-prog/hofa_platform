@@ -8,6 +8,7 @@ const { attachContext } = require('./middleware/auth');
 const { ApiError } = require('./errors');
 const dispatch = require('./dispatch');
 const orderOffer = require('./orderOffer');
+const push = require('./push');
 
 const app = express();
 app.use(helmet());
@@ -35,6 +36,7 @@ app.use('/', require('./routes/shipping'));
 app.use('/', require('./routes/order-settings'));
 app.use('/', require('./routes/admin-notifications'));
 app.use('/', require('./routes/notifications'));
+app.use('/', require('./routes/notification-settings'));
 app.use('/', require('./routes/uploads'));
 
 app.use((req, res) => {
@@ -68,3 +70,10 @@ setInterval(() => {
 setInterval(() => {
   orderOffer.sweepExpiredOrderOffers().catch((e) => console.error('[sweep-expired-order-offers]', e));
 }, 10_000);
+
+// Tự dọn hộp thư thông báo theo notification_settings.ttl_hours (admin cấu hình ở web admin,
+// mục Thông báo > Hộp thư theo cửa hàng) — không cấp bách như 2 sweep trên nên quét thưa hơn
+// nhiều, mỗi giờ 1 lần là đủ.
+setInterval(() => {
+  push.sweepOldNotifications().catch((e) => console.error('[sweep-old-notifications]', e));
+}, 60 * 60 * 1000);
