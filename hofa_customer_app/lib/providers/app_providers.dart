@@ -4,6 +4,7 @@ import '../models/branch.dart';
 import '../models/category.dart';
 import '../models/delivery.dart';
 import '../models/merchant.dart';
+import '../models/merchant_fee_tier.dart';
 import '../models/order.dart';
 import '../models/product.dart';
 import '../models/review.dart';
@@ -59,6 +60,12 @@ final merchantBranchesProvider = FutureProvider.autoDispose
 final branchDetailProvider = FutureProvider.autoDispose.family<Branch, String>(
   (ref, branchId) => ref.watch(merchantRepoProvider).branch(branchId),
 );
+
+/// Bảng bậc phí mua hộ — chỉ có ý nghĩa với cửa hàng merchantType == 'buy_on_behalf'.
+final merchantFeeTiersProvider = FutureProvider.autoDispose
+    .family<List<MerchantFeeTier>, String>(
+      (ref, merchantId) => ref.watch(merchantRepoProvider).feeTiers(merchantId),
+    );
 
 /// Cấu hình phí ship toàn sàn (chỉnh ở app admin) — dùng để ước tính phí ship ở giỏ hàng.
 final shippingFeeSettingsProvider =

@@ -9,6 +9,7 @@ import '../../models/topping.dart';
 import '../../models/wholesale_tier.dart';
 import '../../providers/app_providers.dart';
 import '../../providers/cart_provider.dart';
+import '../../widgets/buy_on_behalf_fee_notice.dart';
 import '../../widgets/network_image_box.dart';
 import '../../widgets/topping_picker_dialog.dart';
 
@@ -222,6 +223,9 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
         error: (e, _) => Center(child: Text('Lỗi: $e')),
         data: (product) {
           _ensureVariantSelected(product);
+          final merchant = ref
+              .watch(merchantDetailProvider(product.merchantId))
+              .valueOrNull;
           final variant = _selectedVariant ?? product.defaultVariant;
           final tiersAsync = (product.isWholesale && variant != null)
               ? ref.watch(wholesaleTiersProvider(variant.id))
@@ -302,6 +306,8 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                         ],
                       ),
                     ],
+                    if (merchant != null && merchant.isBuyOnBehalf)
+                      BuyOnBehalfFeeNotice(merchant: merchant),
                     const SizedBox(height: 16),
                     if (product.variants.length > 1) ...[
                       Text('Chọn loại', style: theme.textTheme.titleSmall),

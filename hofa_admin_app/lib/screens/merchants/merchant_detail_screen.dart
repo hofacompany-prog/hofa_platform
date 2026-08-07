@@ -7,12 +7,14 @@ import '../../models/branch_hours.dart';
 import '../../providers/admin_providers.dart';
 import '../../widgets/image_upload_field.dart';
 import '../../widgets/multi_image_upload_field.dart';
+import 'merchant_fee_tiers_card.dart';
 import 'merchants_screen.dart' show merchantStatusLabels;
 
 const merchantTypeLabels = {
   'standard': 'HOFA Standard',
   'regular': 'Cửa hàng thường',
   'wholesale': 'Cửa hàng bán sỉ',
+  'buy_on_behalf': 'Mua hộ',
 };
 
 class MerchantDetailScreen extends ConsumerStatefulWidget {
@@ -473,9 +475,29 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
                                         ],
                                       ),
                                       const SizedBox(height: 4),
-                                      Chip(
-                                        label: Text(merchantStatusLabels[m.status] ?? m.status),
-                                        visualDensity: VisualDensity.compact,
+                                      Wrap(
+                                        spacing: 6,
+                                        children: [
+                                          Chip(
+                                            label: Text(merchantStatusLabels[m.status] ?? m.status),
+                                            visualDensity: VisualDensity.compact,
+                                          ),
+                                          if (m.isBuyOnBehalf)
+                                            Chip(
+                                              avatar: Icon(
+                                                Icons.shopping_bag_outlined,
+                                                size: 16,
+                                                color: theme.colorScheme.secondary,
+                                              ),
+                                              label: const Text('Mua hộ'),
+                                              visualDensity: VisualDensity.compact,
+                                              backgroundColor: theme.colorScheme.secondary.withValues(alpha: 0.12),
+                                              labelStyle: TextStyle(
+                                                color: theme.colorScheme.secondary,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                        ],
                                       ),
                                     ],
                                   ),
@@ -652,6 +674,10 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
                         ),
                       ),
                     ),
+                    if (m.isBuyOnBehalf) ...[
+                      const SizedBox(height: 16),
+                      MerchantFeeTiersCard(merchant: m),
+                    ],
                   ],
                 ),
               ),

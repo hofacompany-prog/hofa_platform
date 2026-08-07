@@ -239,6 +239,8 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                         const Divider(height: 24),
                         _row('Tạm tính', formatVnd(o.subtotal)),
                         _row('Phí giao hàng', formatVnd(o.deliveryFee)),
+                        if (o.buyOnBehalfFee > 0)
+                          _row('Phí mua hộ', formatVnd(o.buyOnBehalfFee)),
                         if (o.discountAmount > 0)
                           _row('Giảm giá', '-${formatVnd(o.discountAmount)}'),
                         _row('Tổng cộng', formatVnd(o.totalAmount), bold: true),

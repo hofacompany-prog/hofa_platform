@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 import '../../models/category.dart';
 import '../../models/product.dart';
 import '../../providers/app_providers.dart';
+import '../../widgets/buy_on_behalf_badge.dart';
+import '../../widgets/buy_on_behalf_fee_notice.dart';
 import '../../widgets/network_image_box.dart';
 import '../../widgets/product_card.dart';
 
@@ -45,6 +47,10 @@ class MerchantDetailScreen extends ConsumerWidget {
                             if (merchant.isStandard) Icon(Icons.verified, color: theme.colorScheme.primary),
                           ],
                         ),
+                        if (merchant.isBuyOnBehalf) ...[
+                          const SizedBox(height: 4),
+                          const BuyOnBehalfBadge(),
+                        ],
                         if (merchant.description != null && merchant.description!.isNotEmpty)
                           Padding(
                             padding: const EdgeInsets.only(top: 4),
@@ -72,6 +78,7 @@ class MerchantDetailScreen extends ConsumerWidget {
                   ),
                 ],
               ),
+              if (merchant.isBuyOnBehalf) BuyOnBehalfFeeNotice(merchant: merchant),
               const SizedBox(height: 20),
               const Divider(),
               const SizedBox(height: 8),

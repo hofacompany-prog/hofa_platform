@@ -1,5 +1,6 @@
 import '../core/api_client.dart';
 import '../models/merchant.dart';
+import '../models/merchant_fee_tier.dart';
 import '../models/branch.dart';
 
 class MerchantRepository {
@@ -36,4 +37,11 @@ class MerchantRepository {
 
   Future<Branch> branch(String id) async =>
       Branch.fromJson(await _api.get('/branches/$id') as Map<String, dynamic>);
+
+  Future<List<MerchantFeeTier>> feeTiers(String merchantId) async {
+    final list = await _api.get('/merchants/$merchantId/fee-tiers') as List;
+    return list
+        .map((e) => MerchantFeeTier.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
 }

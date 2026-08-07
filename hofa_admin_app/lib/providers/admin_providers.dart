@@ -5,6 +5,7 @@ import '../models/admin_stats.dart';
 import '../models/user_profile.dart';
 import '../models/user_detail.dart';
 import '../models/merchant.dart';
+import '../models/merchant_fee_tier.dart';
 import '../models/driver.dart';
 import '../models/order.dart';
 import '../models/category.dart';
@@ -55,6 +56,12 @@ final merchantsProvider = FutureProvider.autoDispose<List<Merchant>>((ref) {
 final merchantDetailProvider = FutureProvider.autoDispose
     .family<Merchant, String>(
       (ref, id) => ref.watch(adminRepoProvider).merchantDetail(id),
+    );
+
+final merchantFeeTiersProvider = FutureProvider.autoDispose
+    .family<List<MerchantFeeTier>, String>(
+      (ref, merchantId) =>
+          ref.watch(adminRepoProvider).merchantFeeTiers(merchantId),
     );
 
 final userRoleFilterProvider = StateProvider.autoDispose<String?>(

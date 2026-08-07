@@ -5,12 +5,14 @@ import '../../core/format.dart';
 import '../../core/geo.dart';
 import '../../models/address.dart';
 import '../../models/cart_item.dart';
+import '../../models/merchant_fee_tier.dart';
 import '../../models/preorder_schedule.dart';
 import '../../models/voucher.dart';
 import '../../models/wholesale_tier.dart';
 import '../../providers/app_providers.dart';
 import '../../providers/auth_providers.dart';
 import '../../providers/cart_provider.dart';
+import '../../widgets/buy_on_behalf_fee_notice.dart';
 import '../../widgets/voucher_picker_dialog.dart';
 import '../address/address_picker_screen.dart';
 
@@ -589,7 +591,27 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     }
     final shippingFee =
         _estimatedShippingFee(cart, addresses, itemsSubtotal) ?? 0;
-    final total = itemsSubtotal + shippingFee - _voucherDiscount;
+
+    // Phí mua hộ chỉ để KHÁCH XEM TRƯỚC — server tự tính lại số thật lúc tạo đơn (không
+    // gửi lên như delivery_fee), nên sai khác nhỏ do làm tròn không ảnh hưởng số tiền thu
+    // thật. Xem BuyOnBehalfFeeEstimate.compute — mirror đúng cách chọn bậc phía server.
+    final merchant = cart.merchantId == null
+        ? null
+        : ref.watch(merchantDetailProvider(cart.merchantId!)).valueOrNull;
+    final feeTiers = (merchant != null && merchant.isBuyOnBehalf)
+        ? ref.watch(merchantFeeTiersProvider(cart.merchantId!)).valueOrNull ?? const []
+        : const <MerchantFeeTier>[];
+    final buyOnBehalfEstimate = merchant == null
+        ? const BuyOnBehalfFeeEstimate(tier: null, fee: 0)
+        : BuyOnBehalfFeeEstimate.compute(
+            merchant: merchant,
+            tiers: feeTiers,
+            quantityTotal: items.fold<int>(0, (sum, i) => sum + i.quantity),
+            subtotal: itemsSubtotal,
+          );
+    final buyOnBehalfFee = buyOnBehalfEstimate.fee;
+
+    final total = itemsSubtotal + shippingFee + buyOnBehalfFee - _voucherDiscount;
 
     return Scaffold(
       appBar: AppBar(
@@ -837,6 +859,17 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               ],
             ),
           ),
+          if (buyOnBehalfFee > 0)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Phí mua hộ'),
+                  Text(formatVnd(buyOnBehalfFee)),
+                ],
+              ),
+            ),
           if (_voucherDiscount > 0)
             Padding(
               padding: const EdgeInsets.only(top: 4),

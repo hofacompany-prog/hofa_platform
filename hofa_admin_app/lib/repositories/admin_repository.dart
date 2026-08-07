@@ -3,6 +3,7 @@ import '../models/admin_stats.dart';
 import '../models/user_profile.dart';
 import '../models/user_detail.dart';
 import '../models/merchant.dart';
+import '../models/merchant_fee_tier.dart';
 import '../models/branch_hours.dart';
 import '../models/driver.dart';
 import '../models/order.dart';
@@ -159,6 +160,34 @@ class AdminRepository {
     return list
         .map((e) => BranchHour.fromJson(e as Map<String, dynamic>))
         .toList();
+  }
+
+  // ---- Bậc phí mua hộ (merchant_type = 'buy_on_behalf') ----
+
+  Future<List<MerchantFeeTier>> merchantFeeTiers(String merchantId) async {
+    final list = await _api.get('/merchants/$merchantId/fee-tiers') as List;
+    return list
+        .map((e) => MerchantFeeTier.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<MerchantFeeTier> createFeeTier(
+    String merchantId,
+    Map<String, dynamic> data,
+  ) async => MerchantFeeTier.fromJson(
+    await _api.post('/merchants/$merchantId/fee-tiers', body: data)
+        as Map<String, dynamic>,
+  );
+
+  Future<MerchantFeeTier> updateFeeTier(
+    String id,
+    Map<String, dynamic> data,
+  ) async => MerchantFeeTier.fromJson(
+    await _api.patch('/fee-tiers/$id', body: data) as Map<String, dynamic>,
+  );
+
+  Future<void> deleteFeeTier(String id) async {
+    await _api.delete('/fee-tiers/$id');
   }
 
   // ---- Tài xế ----

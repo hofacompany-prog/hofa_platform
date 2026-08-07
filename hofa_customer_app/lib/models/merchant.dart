@@ -13,6 +13,9 @@ class Merchant {
   final double ratingAvg;
   final int ratingCount;
   final DateTime? standardCertifiedAt;
+  // 'quantity' hoặc 'value' — chỉ có ý nghĩa khi merchantType == 'buy_on_behalf', quyết
+  // định bảng phí mua hộ (merchant_fee_tiers) tính ngưỡng theo gì.
+  final String? buyOnBehalfFeeBasis;
 
   Merchant({
     required this.id,
@@ -29,9 +32,11 @@ class Merchant {
     required this.ratingAvg,
     required this.ratingCount,
     this.standardCertifiedAt,
+    this.buyOnBehalfFeeBasis,
   });
 
   bool get isStandard => standardCertifiedAt != null;
+  bool get isBuyOnBehalf => merchantType == 'buy_on_behalf';
 
   factory Merchant.fromJson(Map<String, dynamic> json) => Merchant(
         id: json['id'] as String,
@@ -50,5 +55,6 @@ class Merchant {
         ratingCount: (json['rating_count'] as num?)?.toInt() ?? 0,
         standardCertifiedAt:
             json['standard_certified_at'] != null ? DateTime.tryParse(json['standard_certified_at'] as String) : null,
+        buyOnBehalfFeeBasis: json['buy_on_behalf_fee_basis'] as String?,
       );
 }

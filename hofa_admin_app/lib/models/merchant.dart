@@ -88,6 +88,9 @@ class Merchant {
   final num ratingAvg;
   final int ratingCount;
   final DateTime? standardCertifiedAt;
+  // Chỉ có ý nghĩa khi merchantType == 'buy_on_behalf' — 'quantity' hoặc 'value', xem
+  // merchant_fee_tiers (bậc phí mua hộ, admin cấu hình riêng ở màn chi tiết cửa hàng).
+  final String? buyOnBehalfFeeBasis;
   final DateTime? createdAt;
   // Chỉ có khi gọi GET /merchants/:id với quyền admin/chủ (server nhúng sẵn).
   final MerchantOwner? owner;
@@ -117,12 +120,14 @@ class Merchant {
     required this.ratingAvg,
     required this.ratingCount,
     this.standardCertifiedAt,
+    this.buyOnBehalfFeeBasis,
     this.createdAt,
     this.owner,
     this.branches,
   });
 
   bool get isStandard => standardCertifiedAt != null;
+  bool get isBuyOnBehalf => merchantType == 'buy_on_behalf';
 
   factory Merchant.fromJson(Map<String, dynamic> json) => Merchant(
         id: json['id'] as String,
@@ -150,6 +155,7 @@ class Merchant {
         ratingCount: (json['rating_count'] as num?)?.toInt() ?? 0,
         standardCertifiedAt:
             json['standard_certified_at'] != null ? DateTime.tryParse(json['standard_certified_at'] as String) : null,
+        buyOnBehalfFeeBasis: json['buy_on_behalf_fee_basis'] as String?,
         createdAt: json['created_at'] != null ? DateTime.tryParse(json['created_at'] as String) : null,
         owner: json['owner'] != null ? MerchantOwner.fromJson(json['owner'] as Map<String, dynamic>) : null,
         branches: json['branches'] != null

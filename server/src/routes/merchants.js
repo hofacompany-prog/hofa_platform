@@ -8,12 +8,17 @@ const MERCHANT_FIELDS = [
   'name', 'slug', 'description', 'merchant_type', 'logo_url', 'cover_url', 'phone', 'email',
   'business_license_no', 'tax_code', 'legal_doc_urls',
   'bank_name', 'bank_account_no', 'bank_account_name',
-  'commission_rate', 'min_order_amount', 'avg_prep_minutes'
+  'commission_rate', 'min_order_amount', 'avg_prep_minutes',
+  'buy_on_behalf_fee_basis'
 ];
 
 const BRANCH_FIELDS = [
   'name', 'phone', 'line1', 'ward', 'district', 'province',
   'latitude', 'longitude', 'is_main', 'is_open', 'delivery_radius_km', 'auto_accept_orders'
+];
+
+const FEE_TIER_FIELDS = [
+  'min_threshold', 'max_threshold', 'fee_type', 'fee_fixed_amount', 'fee_percent'
 ];
 
 // ---- Cửa hàng ----
@@ -229,6 +234,40 @@ router.post('/merchants/:merchantId/staff', asyncHandler(async (req, res) => {
 router.delete('/merchants/:merchantId/staff/:id', asyncHandler(async (req, res) => {
   await requireMerchantAccess(req.ctx, req.params.merchantId);
   await db.deleteById('merchant_staff', req.params.id);
+  res.json({ ok: true, data: { deleted: true } });
+}));
+
+// ---- Bậc phí mua hộ (merchant_type = 'buy_on_behalf') ----
+// Khác wholesale_tiers (chủ cửa hàng tự cấu hình) — bậc phí mua hộ do ADMIN cấu hình lúc
+// tạo/sửa cửa hàng ở web admin, nên chỉ admin mới được ghi; đọc thì công khai vì app khách
+// cần hiển thị bảng phí ở màn sản phẩm/thanh toán trước khi đặt.
+
+router.get('/merchants/:merchantId/fee-tiers', asyncHandler(async (req, res) => {
+  const rows = await db.query(
+    'SELECT * FROM merchant_fee_tiers WHERE merchant_id = $1 ORDER BY min_threshold ASC',
+    [req.params.merchantId]
+  );
+  res.json({ ok: true, data: rows });
+}));
+
+router.post('/merchants/:merchantId/fee-tiers', asyncHandler(async (req, res) => {
+  requireRole(req.ctx, ['admin']);
+  requireFields(req.body, ['min_threshold', 'fee_type']);
+  const data = pickFields(req.body, FEE_TIER_FIELDS);
+  data.merchant_id = req.params.merchantId;
+  const created = await db.insertRow('merchant_fee_tiers', data);
+  res.status(201).json({ ok: true, data: created });
+}));
+
+router.patch('/fee-tiers/:id', asyncHandler(async (req, res) => {
+  requireRole(req.ctx, ['admin']);
+  const updated = await db.updateById('merchant_fee_tiers', req.params.id, pickFields(req.body, FEE_TIER_FIELDS));
+  res.json({ ok: true, data: updated });
+}));
+
+router.delete('/fee-tiers/:id', asyncHandler(async (req, res) => {
+  requireRole(req.ctx, ['admin']);
+  await db.deleteById('merchant_fee_tiers', req.params.id);
   res.json({ ok: true, data: { deleted: true } });
 }));
 

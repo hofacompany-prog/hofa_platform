@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/merchant.dart';
+import 'buy_on_behalf_badge.dart';
 import 'network_image_box.dart';
 
 class MerchantCard extends StatelessWidget {
@@ -37,6 +38,10 @@ class MerchantCard extends StatelessWidget {
                           Icon(Icons.verified, size: 16, color: theme.colorScheme.primary),
                       ],
                     ),
+                    if (merchant.isBuyOnBehalf) ...[
+                      const SizedBox(height: 4),
+                      const BuyOnBehalfBadge(),
+                    ],
                     const SizedBox(height: 4),
                     if (merchant.description != null && merchant.description!.isNotEmpty)
                       Text(merchant.description!,
