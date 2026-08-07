@@ -46,6 +46,12 @@ class AdminShell extends ConsumerWidget {
       path: '/categories',
     ),
     (
+      icon: Icons.account_balance_wallet_outlined,
+      selected: Icons.account_balance_wallet,
+      label: 'Tài chính',
+      path: '/finance',
+    ),
+    (
       icon: Icons.local_shipping_outlined,
       selected: Icons.local_shipping,
       label: 'Phí ship',
