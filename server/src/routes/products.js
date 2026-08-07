@@ -126,7 +126,15 @@ router.get('/products', asyncHandler(async (req, res) => {
   if (!isOwnerViewingOwn) clauses.push(`status = 'active'`);
 
   if (req.query.merchant_id) { params.push(req.query.merchant_id); clauses.push(`merchant_id = $${params.length}`); }
-  if (req.query.q) { params.push(`%${req.query.q}%`); clauses.push(`name ILIKE $${params.length}`); }
+  if (req.query.q) {
+    // Khớp tên sản phẩm HOẶC tên cửa hàng — cùng 1 tham số dùng lại 2 lần trong truy vấn,
+    // Postgres cho phép tham chiếu lại placeholder đã đánh số ($N) nhiều lần.
+    params.push(`%${req.query.q}%`);
+    const qIdx = params.length;
+    clauses.push(
+      `(name ILIKE $${qIdx} OR merchant_id IN (SELECT id FROM merchants WHERE name ILIKE $${qIdx} AND deleted_at IS NULL))`
+    );
+  }
   if (req.query.sales_model) { params.push(req.query.sales_model); clauses.push(`sales_model = $${params.length}`); }
   if (req.query.category_id) {
     params.push(req.query.category_id);
