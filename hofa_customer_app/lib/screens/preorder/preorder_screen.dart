@@ -299,6 +299,29 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
     if (picked != null) setState(() => _time = picked);
   }
 
+  /// Dùng chung cho cả nút xoá món lẫn giảm số lượng về 0 — tránh xoá nhầm khi lỡ tay bấm.
+  Future<bool> _confirmDeleteItem(CartItem item) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Xoá sản phẩm?'),
+        content: Text('Xoá "${item.productName}" khỏi giỏ hàng?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Huỷ'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Xoá'),
+          ),
+        ],
+      ),
+    );
+    return confirm == true;
+  }
+
   Future<void> _editToppings(CartItem item) async {
     final groups = await ref
         .read(productRepoProvider)
@@ -551,25 +574,8 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
         : const <WholesaleTier>[];
     Future<void> changeQuantity(int quantity) async {
       if (quantity <= 0) {
-        final confirm = await showDialog<bool>(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Xoá sản phẩm?'),
-            content: Text('Xoá "${item.productName}" khỏi giỏ hàng?'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text('Huỷ'),
-              ),
-              FilledButton(
-                style: FilledButton.styleFrom(backgroundColor: Colors.red),
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text('Xoá'),
-              ),
-            ],
-          ),
-        );
-        if (confirm != true) return;
+        final confirmed = await _confirmDeleteItem(item);
+        if (!confirmed) return;
       }
       // Tổng số lượng cả đơn giá sỉ SAU khi đổi số lượng món này — dùng cho điều kiện
       // thay thế min_order_quantity (xem _matchedTierPrice), không phải chỉ số lượng
@@ -651,8 +657,10 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
                 IconButton(
                   visualDensity: VisualDensity.compact,
                   icon: const Icon(Icons.delete_outline, size: 20),
-                  onPressed: () =>
-                      ref.read(cartProvider.notifier).removeItem(item.lineId),
+                  onPressed: () async {
+                    if (!await _confirmDeleteItem(item)) return;
+                    ref.read(cartProvider.notifier).removeItem(item.lineId);
+                  },
                 ),
               ],
             ),

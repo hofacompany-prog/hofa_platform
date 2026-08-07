@@ -106,6 +106,31 @@ class CartScreen extends ConsumerWidget {
         .updateQuantity(item.lineId, newQuantity);
   }
 
+  /// Xoá cả giỏ là hành động không hoàn tác được và mất hết lựa chọn đã thêm — luôn hỏi
+  /// xác nhận trước, tránh xoá nhầm khi lỡ tay bấm icon trên AppBar.
+  Future<void> _clearCart(BuildContext context, WidgetRef ref) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Xoá giỏ hàng?'),
+        content: const Text('Toàn bộ sản phẩm trong giỏ sẽ bị xoá.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Huỷ'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Xoá'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+    await ref.read(cartProvider.notifier).clear();
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final cart = ref.watch(cartProvider);
@@ -123,7 +148,7 @@ class CartScreen extends ConsumerWidget {
             IconButton(
               tooltip: 'Xoá giỏ hàng',
               icon: const Icon(Icons.delete_outline),
-              onPressed: () => ref.read(cartProvider.notifier).clear(),
+              onPressed: () => _clearCart(context, ref),
             ),
         ],
       ),
