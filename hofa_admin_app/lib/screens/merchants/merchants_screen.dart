@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/format.dart';
 import '../../models/merchant.dart';
 import '../../providers/admin_providers.dart';
+import 'merchant_detail_screen.dart' show merchantTypeLabels;
 
 const merchantStatusLabels = {
   'draft': 'Nháp',
@@ -30,8 +32,33 @@ class MerchantsScreen extends ConsumerStatefulWidget {
 }
 
 class _MerchantsScreenState extends ConsumerState<MerchantsScreen> {
+  final _searchCtrl = TextEditingController();
+  Timer? _searchDebounce;
   String _statusFilter = 'all';
+  String _typeFilter = 'all';
   bool _busy = false;
+
+  @override
+  void dispose() {
+    _searchDebounce?.cancel();
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  void _onSearchChanged(String value) {
+    setState(() {}); // cập nhật nút xoá (X) ngay khi gõ/xoá chữ
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(
+      const Duration(milliseconds: 400),
+      () => ref.read(merchantSearchProvider.notifier).state = value,
+    );
+  }
+
+  void _clearSearch() {
+    _searchDebounce?.cancel();
+    _searchCtrl.clear();
+    ref.read(merchantSearchProvider.notifier).state = '';
+  }
 
   Future<void> _run(Future<void> Function() action) async {
     setState(() => _busy = true);
@@ -119,14 +146,32 @@ class _MerchantsScreenState extends ConsumerState<MerchantsScreen> {
               children: [
                 Expanded(
                   child: TextField(
-                    decoration: const InputDecoration(
+                    controller: _searchCtrl,
+                    decoration: InputDecoration(
                       hintText: 'Tìm theo tên cửa hàng...',
-                      prefixIcon: Icon(Icons.search),
-                      border: OutlineInputBorder(),
+                      prefixIcon: const Icon(Icons.search),
+                      suffixIcon: _searchCtrl.text.isEmpty
+                          ? null
+                          : IconButton(
+                              tooltip: 'Xoá tìm kiếm',
+                              icon: const Icon(Icons.close, size: 18),
+                              onPressed: _clearSearch,
+                            ),
+                      border: const OutlineInputBorder(),
                       isDense: true,
                     ),
-                    onSubmitted: (v) => ref.read(merchantSearchProvider.notifier).state = v,
+                    onChanged: _onSearchChanged,
                   ),
+                ),
+                const SizedBox(width: 16),
+                DropdownButton<String>(
+                  value: _typeFilter,
+                  onChanged: (v) => setState(() => _typeFilter = v ?? 'all'),
+                  items: [
+                    const DropdownMenuItem(value: 'all', child: Text('Mọi loại cửa hàng')),
+                    ...merchantTypeLabels.entries
+                        .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value))),
+                  ],
                 ),
                 const SizedBox(width: 16),
                 DropdownButton<String>(
@@ -147,8 +192,10 @@ class _MerchantsScreenState extends ConsumerState<MerchantsScreen> {
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (e, _) => Center(child: Text('Lỗi: $e')),
               data: (all) {
-                final list =
-                    _statusFilter == 'all' ? all : all.where((m) => m.status == _statusFilter).toList();
+                final list = all
+                    .where((m) => _statusFilter == 'all' || m.status == _statusFilter)
+                    .where((m) => _typeFilter == 'all' || m.merchantType == _typeFilter)
+                    .toList();
                 if (list.isEmpty) {
                   return const Center(child: Text('Không có cửa hàng nào khớp bộ lọc'));
                 }
@@ -205,6 +252,13 @@ class _MerchantsScreenState extends ConsumerState<MerchantsScreen> {
                               ),
                             ),
                             const SizedBox(width: 12),
+                            Chip(
+                              label: Text(merchantTypeLabels[m.merchantType] ?? m.merchantType),
+                              backgroundColor: theme.colorScheme.secondary.withValues(alpha: 0.12),
+                              labelStyle: TextStyle(color: theme.colorScheme.secondary),
+                              visualDensity: VisualDensity.compact,
+                            ),
+                            const SizedBox(width: 8),
                             Chip(
                               label: Text(merchantStatusLabels[m.status] ?? m.status),
                               backgroundColor: color.withValues(alpha: 0.12),
