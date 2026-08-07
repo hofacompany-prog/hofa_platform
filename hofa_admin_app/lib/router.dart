@@ -19,6 +19,7 @@ import 'screens/catalog/categories_screen.dart';
 import 'screens/settings/finance_settings_screen.dart';
 import 'screens/settings/shipping_fee_screen.dart';
 import 'screens/settings/order_code_screen.dart';
+import 'screens/settings/auto_accept_settings_screen.dart';
 import 'screens/vouchers/vouchers_screen.dart';
 import 'screens/notifications/notifications_screen.dart';
 
@@ -122,6 +123,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/notifications',
             builder: (context, state) => const NotificationsScreen(),
+          ),
+          GoRoute(
+            path: '/auto-accept-settings',
+            builder: (context, state) => const AutoAcceptSettingsScreen(),
           ),
         ],
       ),

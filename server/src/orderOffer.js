@@ -22,13 +22,9 @@ async function offerOrderToMerchant(orderId) {
   const order = await db.queryOne('SELECT * FROM orders WHERE id = $1', [orderId]);
   if (!order || order.status !== 'placed') return;
   const branch = await db.queryOne('SELECT * FROM branches WHERE id = $1', [order.branch_id]);
-  const merchant = await db.queryOne(
-    `SELECT owner_id, auto_accept_default_minutes, auto_accept_prep_base_minutes,
-            auto_accept_prep_increment_minutes, auto_accept_prep_max_minutes, manual_confirm_window_minutes
-     FROM merchants WHERE id = $1`,
-    [order.merchant_id]
-  );
-  if (!branch || !merchant) return;
+  const merchant = await db.queryOne('SELECT owner_id FROM merchants WHERE id = $1', [order.merchant_id]);
+  const settings = await db.queryOne('SELECT * FROM auto_accept_settings ORDER BY updated_at DESC LIMIT 1');
+  if (!branch || !merchant || !settings) return;
   const userIds = await getMerchantUserIds(order.merchant_id);
 
   let minutes;
@@ -36,12 +32,12 @@ async function offerOrderToMerchant(orderId) {
     const itemCountRow = await db.queryOne('SELECT COUNT(*)::int AS c FROM order_items WHERE order_id = $1', [orderId]);
     const itemCount = itemCountRow?.c || 1;
     const tierCap = Math.min(
-      merchant.auto_accept_prep_base_minutes + merchant.auto_accept_prep_increment_minutes * Math.max(0, itemCount - 1),
-      merchant.auto_accept_prep_max_minutes
+      settings.auto_accept_prep_base_minutes + settings.auto_accept_prep_increment_minutes * Math.max(0, itemCount - 1),
+      settings.auto_accept_prep_max_minutes
     );
-    minutes = Math.min(merchant.auto_accept_default_minutes, tierCap);
+    minutes = Math.min(settings.auto_accept_default_minutes, tierCap);
   } else {
-    minutes = merchant.manual_confirm_window_minutes;
+    minutes = settings.manual_confirm_window_minutes;
   }
 
   const deadline = new Date(Date.now() + minutes * 60_000).toISOString();

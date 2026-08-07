@@ -13,6 +13,7 @@ import '../models/category.dart';
 import '../models/shipping_fee_settings.dart';
 import '../models/voucher.dart';
 import '../models/order_settings.dart';
+import '../models/auto_accept_settings.dart';
 import '../models/admin_notification.dart';
 import '../models/notification_settings.dart';
 import '../repositories/admin_repository.dart';
@@ -122,6 +123,10 @@ final voucherMaxCountProvider = FutureProvider.autoDispose<int>(
 
 final orderSettingsProvider = FutureProvider.autoDispose<OrderSettings>(
   (ref) => ref.watch(adminRepoProvider).orderSettings(),
+);
+
+final autoAcceptSettingsProvider = FutureProvider.autoDispose<AutoAcceptSettings>(
+  (ref) => ref.watch(adminRepoProvider).autoAcceptSettings(),
 );
 
 final notificationsProvider =

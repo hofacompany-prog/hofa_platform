@@ -75,6 +75,12 @@ class AdminShell extends ConsumerWidget {
       label: 'Thông báo',
       path: '/notifications',
     ),
+    (
+      icon: Icons.tune_outlined,
+      selected: Icons.tune,
+      label: 'Thông số',
+      path: '/auto-accept-settings',
+    ),
   ];
 
   int _indexFor(String location) {

@@ -5,8 +5,8 @@ import 'package:go_router/go_router.dart';
 import 'package:slide_to_act/slide_to_act.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/format.dart';
+import '../../models/auto_accept_settings.dart';
 import '../../models/branch.dart';
-import '../../models/merchant.dart';
 import '../../models/order.dart';
 import '../../providers/auth_provider.dart';
 import '../../repositories/merchant_repository.dart';
@@ -26,10 +26,10 @@ final _offerBranchProvider = FutureProvider.autoDispose
   return null;
 });
 
-int _tierCapMinutes(Merchant merchant, int itemCount) {
+int _tierCapMinutes(AutoAcceptSettings settings, int itemCount) {
   final extraItems = itemCount > 1 ? itemCount - 1 : 0;
-  final cap = merchant.autoAcceptPrepBaseMinutes + merchant.autoAcceptPrepIncrementMinutes * extraItems;
-  return cap < merchant.autoAcceptPrepMaxMinutes ? cap : merchant.autoAcceptPrepMaxMinutes;
+  final cap = settings.autoAcceptPrepBaseMinutes + settings.autoAcceptPrepIncrementMinutes * extraItems;
+  return cap < settings.autoAcceptPrepMaxMinutes ? cap : settings.autoAcceptPrepMaxMinutes;
 }
 
 /// Màn hình đơn mới cần xác nhận — mở toàn màn hình ngay khi có push (kể cả khi app đang mở
@@ -171,8 +171,9 @@ class _OrderOfferScreenState extends ConsumerState<OrderOfferScreen> {
               return const Center(child: CircularProgressIndicator());
             }
             final merchant = merchantAsync.valueOrNull;
+            final settings = ref.watch(autoAcceptSettingsProvider).valueOrNull;
             _prepMinutes ??= merchant?.avgPrepMinutes ?? _defaultPrepMinutes;
-            final prepMinutesMax = merchant != null ? _tierCapMinutes(merchant, order.items.length) : 60;
+            final prepMinutesMax = settings != null ? _tierCapMinutes(settings, order.items.length) : 60;
             if (_prepMinutes! > prepMinutesMax) _prepMinutes = prepMinutesMax;
 
             final branch = merchant == null

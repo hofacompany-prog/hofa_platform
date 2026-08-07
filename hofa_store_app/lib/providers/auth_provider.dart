@@ -6,6 +6,7 @@ import '../models/merchant.dart';
 import '../models/merchant_today_stats.dart';
 import '../models/finance_summary.dart';
 import '../models/product.dart';
+import '../models/auto_accept_settings.dart';
 import '../repositories/user_repository.dart';
 import '../repositories/merchant_repository.dart';
 
@@ -74,3 +75,9 @@ final financeSummaryProvider = FutureProvider.autoDispose
       if (merchant == null) return null;
       return _merchantRepo.financeSummary(merchant.id, period: period);
     });
+
+/// Tham số toàn sàn cho "Tự động nhận đơn" (admin cấu hình) — dùng ở màn nhận đơn để tính trần
+/// thời gian chuẩn bị và hiện đúng kiểu đếm ngược theo chế độ của chi nhánh.
+final autoAcceptSettingsProvider = FutureProvider.autoDispose<AutoAcceptSettings>(
+  (ref) => _merchantRepo.autoAcceptSettings(),
+);

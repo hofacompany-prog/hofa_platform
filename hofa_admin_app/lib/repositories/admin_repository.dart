@@ -12,6 +12,7 @@ import '../models/category.dart';
 import '../models/shipping_fee_settings.dart';
 import '../models/voucher.dart';
 import '../models/order_settings.dart';
+import '../models/auto_accept_settings.dart';
 import '../models/admin_notification.dart';
 import '../models/notification_inbox_item.dart';
 import '../models/notification_settings.dart';
@@ -353,6 +354,21 @@ class AdminRepository {
   Future<OrderSettings> updateOrderSettings(OrderSettings settings) async =>
       OrderSettings.fromJson(
         await _api.patch('/order-settings', body: settings.toJson())
+            as Map<String, dynamic>,
+      );
+
+  // ---- Thông số "Tự động nhận đơn" ----
+
+  Future<AutoAcceptSettings> autoAcceptSettings() async {
+    final data = await _api.get('/auto-accept-settings');
+    return data == null
+        ? AutoAcceptSettings.fallback()
+        : AutoAcceptSettings.fromJson(data as Map<String, dynamic>);
+  }
+
+  Future<AutoAcceptSettings> updateAutoAcceptSettings(AutoAcceptSettings settings) async =>
+      AutoAcceptSettings.fromJson(
+        await _api.patch('/auto-accept-settings', body: settings.toJson())
             as Map<String, dynamic>,
       );
 
