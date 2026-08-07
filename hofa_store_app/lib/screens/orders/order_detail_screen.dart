@@ -97,7 +97,15 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Text(o.orderCode, style: Theme.of(context).textTheme.titleLarge),
+                                Expanded(
+                                  child: Text(
+                                    o.orderCode,
+                                    style: Theme.of(context).textTheme.titleLarge,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
                                 Chip(label: Text(orderStatusLabels[o.status] ?? o.status)),
                               ],
                             ),
