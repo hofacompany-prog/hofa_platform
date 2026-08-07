@@ -7,7 +7,6 @@ const config = require('./config');
 const { attachContext } = require('./middleware/auth');
 const { ApiError } = require('./errors');
 const dispatch = require('./dispatch');
-const orderOffer = require('./orderOffer');
 const push = require('./push');
 
 const app = express();
@@ -65,14 +64,8 @@ setInterval(() => {
   dispatch.sweepExpiredOffers().catch((e) => console.error('[sweep-expired-offers]', e));
 }, 10_000);
 
-// Tương tự nhưng cho đơn hàng chờ cửa hàng xác nhận (accept_deadline 120s) — quá hạn
-// mà không bấm "Nhận đơn" thì tự huỷ, vì không có "cửa hàng khác" để chuyển sang.
-setInterval(() => {
-  orderOffer.sweepExpiredOrderOffers().catch((e) => console.error('[sweep-expired-order-offers]', e));
-}, 10_000);
-
 // Tự dọn hộp thư thông báo theo notification_settings.ttl_hours (admin cấu hình ở web admin,
-// mục Thông báo > Hộp thư theo cửa hàng) — không cấp bách như 2 sweep trên nên quét thưa hơn
+// mục Thông báo > Hộp thư theo cửa hàng) — không cấp bách như sweep trên nên quét thưa hơn
 // nhiều, mỗi giờ 1 lần là đủ.
 setInterval(() => {
   push.sweepOldNotifications().catch((e) => console.error('[sweep-old-notifications]', e));

@@ -176,16 +176,6 @@ router.patch('/orders/:id/status', asyncHandler(async (req, res) => {
     }
   }
 
-  // Cửa hàng bấm "Nhận đơn" đúng lúc quá 20s — kết quả mong muốn (confirmed) giống hệt
-  // đường tự động, nên cứ tự xác nhận hộ luôn thay vì báo lỗi rồi bắt bấm lại. Nếu vòng
-  // quét nền (sweepExpiredOrderOffers) đã lo trước rồi thì autoConfirmExpiredOrder trả về
-  // null (không còn 'placed' nữa) — lấy lại bản ghi hiện tại để trả về cho đúng.
-  if (req.body.status === 'confirmed' && order.accept_deadline && new Date(order.accept_deadline) < new Date()) {
-    await orderOffer.autoConfirmExpiredOrder(req.params.id);
-    const updated = await db.queryOne('SELECT * FROM orders WHERE id = $1', [req.params.id]);
-    return res.json({ ok: true, data: updated });
-  }
-
   const updated = await db.callRpc('update_order_status', {
     p_order_id: req.params.id,
     p_new_status: req.body.status,
@@ -196,15 +186,16 @@ router.patch('/orders/:id/status', asyncHandler(async (req, res) => {
   });
   if (req.body.status === 'confirmed') {
     // estimated_prep_minutes: cửa hàng tự chỉnh lúc trượt nhận đơn (màn nhận đơn store app) —
-    // không bắt buộc, đơn quá hạn tự xác nhận (autoConfirmExpiredOrder) hay admin ép trạng
-    // thái thì không có giá trị này, cứ để NULL.
+    // không bắt buộc, admin ép trạng thái thì không có giá trị này, cứ để NULL.
     const prepMinutes = Number.isInteger(req.body.estimated_prep_minutes) && req.body.estimated_prep_minutes > 0
       ? req.body.estimated_prep_minutes
       : null;
-    await db.query(
-      'UPDATE orders SET accept_deadline = NULL, estimated_prep_minutes = COALESCE($2, estimated_prep_minutes) WHERE id = $1',
-      [req.params.id, prepMinutes]
-    );
+    if (prepMinutes !== null) {
+      await db.query(
+        'UPDATE orders SET estimated_prep_minutes = $2 WHERE id = $1',
+        [req.params.id, prepMinutes]
+      );
+    }
   }
 
   // Không tự báo cho khách khi chính khách là người vừa bấm huỷ — họ đã biết rồi.

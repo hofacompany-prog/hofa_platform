@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -15,12 +14,12 @@ const _defaultPrepMinutes = 15; // dùng khi chưa tải được merchant.avgPr
 final _offerOrderProvider = FutureProvider.autoDispose.family<Order, String>((ref, id) => OrderRepository().get(id));
 
 /// Màn hình đơn mới cần xác nhận — mở toàn màn hình ngay khi có push (kể cả khi app đang mở
-/// sẵn), có đếm ngược khớp với accept_deadline phía server. Trượt thanh dưới cùng để nhận,
-/// bấm "Huỷ đơn" ở menu "...", hoặc bấm X để BỎ QUA (không quyết định gì — đơn vẫn còn hạn,
-/// hết giờ server tự nhận hộ như cũ). Khác các bản trước: bấm X không còn bị chặn — cửa hàng
-/// có thể lỡ 1 đơn mà không bị kẹt màn hình, nhưng khi đó badge đỏ ở "Đơn hàng" (Trang chủ +
-/// thanh điều hướng) vẫn còn nguyên vì notification CHƯA được đánh dấu đã đọc — chỉ đánh dấu
-/// khi thực sự trượt nhận/huỷ/hết giờ (xem _markNotificationRead).
+/// sẵn). Trượt thanh dưới cùng để nhận, bấm "Huỷ đơn" ở menu "...", hoặc bấm X để BỎ QUA
+/// (không quyết định gì — không có thời hạn nào ép hệ thống tự xác nhận thay, cửa hàng phải
+/// tự vào lại màn Đơn hàng để xử lý). Bấm X không bị chặn — cửa hàng có thể lỡ xem 1 đơn mà
+/// không bị kẹt màn hình, nhưng khi đó badge đỏ ở "Đơn hàng" (Trang chủ + thanh điều hướng)
+/// vẫn còn nguyên vì notification CHƯA được đánh dấu đã đọc — chỉ đánh dấu khi thực sự trượt
+/// nhận/huỷ (xem _markNotificationRead).
 class OrderOfferScreen extends ConsumerStatefulWidget {
   final String orderId;
   final String? notificationId;
@@ -32,51 +31,13 @@ class OrderOfferScreen extends ConsumerStatefulWidget {
 
 class _OrderOfferScreenState extends ConsumerState<OrderOfferScreen> {
   final _repo = OrderRepository();
-  Timer? _timer;
-  int _secondsLeft = 0;
   bool _resolved = false;
   bool _busy = false;
   int? _prepMinutes;
 
-  void _startCountdown(Order order) {
-    _timer?.cancel();
-    final deadline = order.acceptDeadline;
-    if (deadline == null) return;
-    void tick() {
-      final remaining = deadline.difference(DateTime.now()).inSeconds;
-      if (!mounted) return;
-      setState(() => _secondsLeft = remaining < 0 ? 0 : remaining);
-      if (remaining <= 0) {
-        _timer?.cancel();
-        _autoConfirmOnExpiry();
-      }
-    }
-
-    tick();
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) => tick());
-  }
-
   void _markNotificationRead() {
     final id = widget.notificationId;
     if (id != null) NotificationRepository().markRead(id).catchError((_) {});
-  }
-
-  /// Hết 20s mà không trượt nhận/huỷ — TỰ ĐỘNG NHẬN (không tự huỷ), vì mất đơn của khách
-  /// chỉ vì chậm 20s là trải nghiệm tệ hơn nhiều so với việc cửa hàng phải tự lo 1 đơn lỡ
-  /// quên trượt. Chủ động gọi ngay ở đây để khách/cửa hàng biết sớm, không phải chờ server
-  /// (route tự xử lý y hệt nếu bấm trễ) hay vòng quét nền. Chỉ chạy khi màn hình còn mở —
-  /// nếu cửa hàng đã bấm X bỏ qua thì timer này đã bị huỷ ở dispose(), server tự lo hết qua
-  /// sweepExpiredOrderOffers.
-  Future<void> _autoConfirmOnExpiry() async {
-    if (_resolved) return;
-    _resolved = true;
-    try {
-      await _repo.updateStatus(widget.orderId, 'confirmed', estimatedPrepMinutes: _prepMinutes);
-    } catch (_) {
-      // im lặng — server/vòng quét nền tự xác nhận hộ được, không chặn màn hình vì lỗi mạng thoáng qua
-    }
-    _markNotificationRead();
-    if (mounted) context.pushReplacement('/orders/${widget.orderId}');
   }
 
   Future<void> _accept() async {
@@ -137,12 +98,6 @@ class _OrderOfferScreenState extends ConsumerState<OrderOfferScreen> {
   }
 
   @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     final orderAsync = ref.watch(_offerOrderProvider(widget.orderId));
     final merchantAsync = ref.watch(myMerchantProvider);
@@ -177,11 +132,9 @@ class _OrderOfferScreenState extends ConsumerState<OrderOfferScreen> {
               });
               return const Center(child: CircularProgressIndicator());
             }
-            if (_timer == null) _startCountdown(order);
             _prepMinutes ??= merchantAsync.valueOrNull?.avgPrepMinutes ?? _defaultPrepMinutes;
             return _OfferBody(
               order: order,
-              secondsLeft: _secondsLeft,
               busy: _busy,
               prepMinutes: _prepMinutes!,
               onPrepMinutesChanged: (v) => setState(() => _prepMinutes = v),
@@ -201,7 +154,6 @@ class _OrderOfferScreenState extends ConsumerState<OrderOfferScreen> {
 
 class _OfferBody extends StatelessWidget {
   final Order order;
-  final int secondsLeft;
   final bool busy;
   final int prepMinutes;
   final ValueChanged<int> onPrepMinutesChanged;
@@ -214,7 +166,6 @@ class _OfferBody extends StatelessWidget {
 
   const _OfferBody({
     required this.order,
-    required this.secondsLeft,
     required this.busy,
     required this.prepMinutes,
     required this.onPrepMinutesChanged,
@@ -407,7 +358,7 @@ class _OfferBody extends StatelessWidget {
               SlideAction(
                 key: ValueKey(order.id),
                 enabled: !busy,
-                text: 'Xác nhận ($secondsLeft s)',
+                text: 'Xác nhận',
                 textStyle: theme.textTheme.titleMedium?.copyWith(color: Colors.white, fontWeight: FontWeight.w600),
                 outerColor: theme.colorScheme.primary,
                 innerColor: Colors.white,
