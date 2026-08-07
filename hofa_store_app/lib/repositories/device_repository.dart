@@ -1,7 +1,15 @@
 import 'dart:math';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter/foundation.dart' show defaultTargetPlatform, TargetPlatform;
+import 'package:flutter/foundation.dart'
+    show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import '../core/api_client.dart';
+
+/// kIsWeb PHẢI kiểm tra trước — defaultTargetPlatform trên web vẫn trả về iOS/Android
+/// theo User-Agent trình duyệt, không phải giá trị 'web' riêng, dễ ghi nhầm platform.
+String _currentPlatform() {
+  if (kIsWeb) return 'web';
+  return defaultTargetPlatform == TargetPlatform.iOS ? 'ios' : 'android';
+}
 
 const _deviceIdKey = 'hofa_store_device_id';
 
@@ -11,7 +19,10 @@ Future<String> _localDeviceId() async {
   final prefs = await SharedPreferences.getInstance();
   final existing = prefs.getString(_deviceIdKey);
   if (existing != null) return existing;
-  final generated = List.generate(24, (_) => Random.secure().nextInt(16).toRadixString(16)).join();
+  final generated = List.generate(
+    24,
+    (_) => Random.secure().nextInt(16).toRadixString(16),
+  ).join();
   await prefs.setString(_deviceIdKey, generated);
   return generated;
 }
@@ -21,11 +32,14 @@ class DeviceRepository {
 
   Future<void> registerPushToken(String pushToken) async {
     final deviceId = await _localDeviceId();
-    await _api.post('/devices', body: {
-      'device_id': deviceId,
-      'device_name': 'HOFA Store',
-      'platform': defaultTargetPlatform == TargetPlatform.iOS ? 'ios' : 'android',
-      'push_token': pushToken,
-    });
+    await _api.post(
+      '/devices',
+      body: {
+        'device_id': deviceId,
+        'device_name': 'HOFA Store',
+        'platform': _currentPlatform(),
+        'push_token': pushToken,
+      },
+    );
   }
 }
