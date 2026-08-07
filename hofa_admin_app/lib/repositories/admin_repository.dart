@@ -122,12 +122,26 @@ class AdminRepository {
     await _api.get('/merchants/$id') as Map<String, dynamic>,
   );
 
-  /// [ownerPhone] = SĐT của user có sẵn sẽ làm chủ cửa hàng — bắt buộc khi admin tự tạo hộ.
+  /// [ownerPhone] = SĐT chủ cửa hàng — bắt buộc khi admin tự tạo hộ. Nếu [ownerPassword]
+  /// có giá trị, server tạo THẲNG 1 tài khoản hoàn toàn mới với SĐT/mật khẩu này (báo lỗi
+  /// nếu SĐT đã có tài khoản); để trống thì gắn cửa hàng vào 1 tài khoản đã có sẵn như cũ.
   Future<Merchant> createMerchant(
     Map<String, dynamic> data, {
     required String ownerPhone,
+    String? ownerPassword,
+    String? ownerFullName,
   }) async => Merchant.fromJson(
-    await _api.post('/merchants', body: {...data, 'owner_phone': ownerPhone})
+    await _api.post(
+          '/merchants',
+          body: {
+            ...data,
+            'owner_phone': ownerPhone,
+            if (ownerPassword != null && ownerPassword.isNotEmpty)
+              'owner_password': ownerPassword,
+            if (ownerFullName != null && ownerFullName.isNotEmpty)
+              'owner_full_name': ownerFullName,
+          },
+        )
         as Map<String, dynamic>,
   );
 

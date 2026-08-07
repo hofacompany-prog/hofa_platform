@@ -1,0 +1,54 @@
+const config = require('./config');
+
+let client = null;
+let initTried = false;
+
+/** Client Supabase dùng Service Role key — CHỈ để gọi Admin API (auth.admin.createUser),
+ * bỏ qua RLS. Lười khởi tạo giống push.js/getApp() — server vẫn phải boot được khi chưa
+ * cấu hình SUPABASE_SERVICE_ROLE_KEY, chỉ luồng "admin tạo chủ cửa hàng mới" bị chặn. */
+function getClient() {
+  if (initTried) return client;
+  initTried = true;
+  if (!config.supabaseServiceRoleKey) {
+    console.warn('[supabaseAdmin] SUPABASE_SERVICE_ROLE_KEY chưa cấu hình — không tạo được tài khoản chủ cửa hàng mới từ admin.');
+    return null;
+  }
+  const { createClient } = require('@supabase/supabase-js');
+  client = createClient(config.supabaseUrl, config.supabaseServiceRoleKey, {
+    auth: { autoRefreshToken: false, persistSession: false }
+  });
+  return client;
+}
+
+/** Email giả lập từ SĐT — PHẢI khớp đúng phoneToAuthEmail() ở phía Flutter
+ * (hofa_customer_app/hofa_store_app lib/core/phone_auth.dart). Toàn hệ thống chưa nối SMS
+ * OTP thật nên dùng chung mẹo này: đăng nhập lại luôn là signInWithPassword(email:
+ * phoneToAuthEmail(phone), password) — tạo tài khoản ở đây phải theo đúng công thức đó,
+ * nếu không chủ cửa hàng mới sẽ không đăng nhập được vào app Cửa hàng. */
+function phoneToAuthEmail(phone) {
+  const digits = String(phone).replace(/[^0-9]/g, '');
+  return `${digits}@hofa.local`;
+}
+
+/**
+ * Tạo thẳng 1 tài khoản Supabase Auth mới kèm mật khẩu (không qua OTP/xác nhận email) —
+ * dùng khi admin tạo cửa hàng cho 1 chủ HOÀN TOÀN MỚI, chưa từng có tài khoản, để họ đăng
+ * nhập app Cửa hàng thêm sản phẩm được ngay. Trả về auth user id — server/routes/merchants.js
+ * dùng chính id này làm public.users.id (quy ước bắt buộc trùng, xem middleware/auth.js).
+ * Throw nếu SUPABASE_SERVICE_ROLE_KEY chưa cấu hình hoặc email (SĐT) đã tồn tại.
+ */
+async function createAuthUser(phone, password) {
+  const supabase = getClient();
+  if (!supabase) {
+    throw new Error('Server chưa cấu hình SUPABASE_SERVICE_ROLE_KEY — không tạo được tài khoản mới.');
+  }
+  const { data, error } = await supabase.auth.admin.createUser({
+    email: phoneToAuthEmail(phone),
+    password,
+    email_confirm: true
+  });
+  if (error) throw error;
+  return data.user.id;
+}
+
+module.exports = { createAuthUser, phoneToAuthEmail };

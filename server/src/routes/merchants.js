@@ -3,6 +3,7 @@ const db = require('../db');
 const asyncHandler = require('../asyncHandler');
 const { ApiError } = require('../errors');
 const { pickFields, requireFields, pagination, requireAuth, requireRole, requireMerchantAccess } = require('../utils');
+const supabaseAdmin = require('../supabaseAdmin');
 
 const MERCHANT_FIELDS = [
   'name', 'slug', 'description', 'merchant_type', 'logo_url', 'cover_url', 'phone', 'email',
@@ -80,12 +81,46 @@ router.post('/merchants', asyncHandler(async (req, res) => {
   requireFields(req.body, ['name', 'slug']);
   const data = pickFields(req.body, MERCHANT_FIELDS);
 
-  // Admin tạo hộ cửa hàng cho 1 chủ có sẵn (chọn theo SĐT) — mọi role khác luôn tự làm owner.
+  // Admin tạo hộ cửa hàng — 2 trường hợp theo SĐT (owner_phone):
+  // (1) có owner_password kèm theo → chủ HOÀN TOÀN MỚI, chưa từng có tài khoản: tự tạo
+  //     thẳng tài khoản Supabase Auth + public.users, không đụng gì tới tài khoản có sẵn.
+  //     SĐT trùng tài khoản đã có thì báo lỗi rõ ràng để admin đổi SĐT khác, không âm thầm
+  //     gắn nhầm vào tài khoản người khác.
+  // (2) không có owner_password → giữ nguyên hành vi cũ: gắn vào 1 chủ đã có tài khoản sẵn.
+  // Mọi role khác (không phải admin) luôn tự làm owner của chính mình.
   let ownerId = req.ctx.userId;
   if (req.ctx.role === 'admin' && req.body.owner_phone) {
-    const owner = await db.queryOne('SELECT id FROM users WHERE phone = $1', [req.body.owner_phone]);
-    if (!owner) throw new ApiError('NOT_FOUND', 'Không tìm thấy người dùng với SĐT này', 404);
-    ownerId = owner.id;
+    if (req.body.owner_password) {
+      const existing = await db.queryOne('SELECT id FROM users WHERE phone = $1', [req.body.owner_phone]);
+      if (existing) {
+        throw new ApiError(
+          'CONFLICT',
+          'Số điện thoại này đã có tài khoản — dùng số khác, hoặc để trống mật khẩu để gắn vào tài khoản có sẵn',
+          409
+        );
+      }
+      if (String(req.body.owner_password).length < 6) {
+        throw new ApiError('BAD_REQUEST', 'Mật khẩu ban đầu phải từ 6 ký tự', 400);
+      }
+      let authUserId;
+      try {
+        authUserId = await supabaseAdmin.createAuthUser(req.body.owner_phone, req.body.owner_password);
+      } catch (err) {
+        throw new ApiError('CONFLICT', `Không tạo được tài khoản mới: ${err.message}`, 409);
+      }
+      const created = await db.insertRow('users', {
+        id: authUserId,
+        phone: req.body.owner_phone,
+        full_name: req.body.owner_full_name || req.body.name,
+        role: 'customer',
+        status: 'active'
+      });
+      ownerId = created.id;
+    } else {
+      const owner = await db.queryOne('SELECT id FROM users WHERE phone = $1', [req.body.owner_phone]);
+      if (!owner) throw new ApiError('NOT_FOUND', 'Không tìm thấy người dùng với SĐT này', 404);
+      ownerId = owner.id;
+    }
   }
   data.owner_id = ownerId;
   data.status = 'draft';
