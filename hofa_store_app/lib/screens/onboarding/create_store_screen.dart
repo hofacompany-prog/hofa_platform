@@ -121,7 +121,7 @@ class _CreateStoreScreenState extends ConsumerState<CreateStoreScreen> {
       // Chỉ invalidate provider KHÔNG tự kích hoạt lại redirect của GoRouter (router chỉ
       // tự chạy lại khi có điều hướng hoặc auth state đổi) — phải tự điều hướng sang màn
       // chính, nếu không sẽ đứng yên ở màn "Tạo cửa hàng" dù đã tạo xong.
-      if (mounted) context.go('/products');
+      if (mounted) context.go('/home');
     } on ApiException catch (e) {
       setState(() => _error = e.message);
     } catch (e) {

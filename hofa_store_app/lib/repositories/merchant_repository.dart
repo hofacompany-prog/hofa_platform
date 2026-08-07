@@ -1,5 +1,6 @@
 import '../core/api_client.dart';
 import '../models/merchant.dart';
+import '../models/merchant_today_stats.dart';
 import '../models/branch.dart';
 import '../models/branch_hours.dart';
 
@@ -28,6 +29,11 @@ class MerchantRepository {
 
   Future<Merchant> updateMerchant(String id, Map<String, dynamic> data) async =>
       Merchant.fromJson(await _api.patch('/merchants/$id', body: data) as Map<String, dynamic>);
+
+  Future<MerchantTodayStats> todayStats(String merchantId) async =>
+      MerchantTodayStats.fromJson(
+        await _api.get('/merchants/$merchantId/stats/today') as Map<String, dynamic>,
+      );
 
   Future<List<Branch>> branches(String merchantId) async {
     final list = await _api.get('/merchants/$merchantId/branches') as List;

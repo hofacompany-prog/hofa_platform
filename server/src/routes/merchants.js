@@ -182,6 +182,39 @@ router.delete('/merchants/:id', asyncHandler(async (req, res) => {
   res.json({ ok: true, data: updated });
 }));
 
+/** Số liệu nhanh cho màn Trang chủ store app — đơn đang chuẩn bị (không tính riêng theo
+ * ngày, cửa hàng cần biết đang có bao nhiêu đơn tồn đọng) và thu nhập/số đơn HÔM NAY theo
+ * giờ Việt Nam (không dùng giờ server, tránh lệch múi giờ làm sai mốc "hôm nay"). Thu nhập
+ * loại trừ đơn đã huỷ/hoàn tiền, số đơn "hôm nay" thì tính luôn cả đơn huỷ để đúng số đơn
+ * thực nhận trong ngày (khớp cảm nhận thông thường của cửa hàng: "hôm nay có bao nhiêu đơn").
+ */
+router.get('/merchants/:merchantId/stats/today', asyncHandler(async (req, res) => {
+  await requireMerchantAccess(req.ctx, req.params.merchantId);
+  const [preparing, today] = await Promise.all([
+    db.queryOne(
+      `SELECT COUNT(*)::int AS count FROM orders WHERE merchant_id = $1 AND status = 'preparing'`,
+      [req.params.merchantId]
+    ),
+    db.queryOne(
+      `SELECT
+         COUNT(*)::int AS order_count,
+         COALESCE(SUM(total_amount) FILTER (WHERE status NOT IN ('cancelled', 'refunded')), 0)::bigint AS revenue
+       FROM orders
+       WHERE merchant_id = $1
+         AND (created_at AT TIME ZONE 'Asia/Ho_Chi_Minh')::date = (now() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date`,
+      [req.params.merchantId]
+    )
+  ]);
+  res.json({
+    ok: true,
+    data: {
+      preparing_count: preparing.count,
+      today_order_count: today.order_count,
+      today_revenue: Number(today.revenue)
+    }
+  });
+}));
+
 // ---- Chi nhánh ----
 
 router.get('/merchants/:merchantId/branches', asyncHandler(async (req, res) => {

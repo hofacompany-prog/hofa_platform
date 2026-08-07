@@ -6,6 +6,7 @@ import 'providers/auth_provider.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/onboarding/create_store_screen.dart';
 import 'screens/dashboard/dashboard_shell.dart';
+import 'screens/home/home_screen.dart';
 import 'screens/products/products_list_screen.dart';
 import 'screens/products/product_form_screen.dart';
 import 'screens/toppings/topping_group_form_screen.dart';
@@ -27,7 +28,7 @@ import 'main.dart' show navigatorKey;
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     navigatorKey: navigatorKey,
-    initialLocation: '/products',
+    initialLocation: '/home',
     refreshListenable: GoRouterRefreshStream(
       Supabase.instance.client.auth.onAuthStateChange,
     ),
@@ -37,7 +38,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       final onOnboarding = state.matchedLocation == '/onboarding';
 
       if (session == null) return loggingIn ? null : '/login';
-      if (loggingIn) return '/products';
+      if (loggingIn) return '/home';
 
       try {
         final profile = await ref.read(userProfileProvider.future);
@@ -48,7 +49,7 @@ final routerProvider = Provider<GoRouter>((ref) {
 
         final merchant = await ref.read(myMerchantProvider.future);
         if (merchant == null && !onOnboarding) return '/onboarding';
-        if (merchant != null && onOnboarding) return '/products';
+        if (merchant != null && onOnboarding) return '/home';
       } catch (_) {
         // lỗi mạng tạm thời — đừng khoá cứng người dùng
       }
@@ -68,6 +69,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       ShellRoute(
         builder: (context, state, child) => DashboardShell(child: child),
         routes: [
+          GoRoute(
+            path: '/home',
+            builder: (context, state) => const HomeScreen(),
+          ),
           GoRoute(
             path: '/products',
             builder: (context, state) => const ProductsListScreen(),

@@ -3,6 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/api_exception.dart';
 import '../models/user_profile.dart';
 import '../models/merchant.dart';
+import '../models/merchant_today_stats.dart';
 import '../models/product.dart';
 import '../repositories/user_repository.dart';
 import '../repositories/merchant_repository.dart';
@@ -55,4 +56,11 @@ final myMerchantProvider = FutureProvider.autoDispose<Merchant?>((ref) async {
   final profile = await ref.watch(userProfileProvider.future);
   if (profile == null) return null;
   return _merchantRepo.myMerchant();
+});
+
+/// Số liệu nhanh (đơn đang chuẩn bị, thu nhập/số đơn hôm nay) cho màn Trang chủ.
+final merchantTodayStatsProvider = FutureProvider.autoDispose<MerchantTodayStats?>((ref) async {
+  final merchant = await ref.watch(myMerchantProvider.future);
+  if (merchant == null) return null;
+  return _merchantRepo.todayStats(merchant.id);
 });
