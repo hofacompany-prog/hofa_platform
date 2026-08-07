@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../providers/admin_providers.dart';
 import '../../widgets/image_upload_field.dart';
+import 'location_picker_screen.dart';
+import 'merchant_detail_screen.dart' show merchantTypeLabels;
 
 /// Admin tạo hộ 1 cửa hàng cho chủ đã có tài khoản (tìm theo SĐT) — cửa hàng tạo ra
 /// ở trạng thái draft như bình thường, admin tự duyệt sau ở màn hình chi tiết.
@@ -21,12 +23,15 @@ class _MerchantFormScreenState extends ConsumerState<MerchantFormScreen> {
   final _branchNameCtrl = TextEditingController();
   final _line1Ctrl = TextEditingController();
   final _provinceCtrl = TextEditingController();
-  final _latCtrl = TextEditingController();
-  final _lngCtrl = TextEditingController();
 
   bool _loading = false;
   String? _error;
   String? _logoUrl;
+  String _merchantType = 'regular';
+  double? _pickedLat;
+  double? _pickedLng;
+  String? _pickedWard;
+  String? _pickedDistrict;
 
   @override
   void dispose() {
@@ -36,8 +41,6 @@ class _MerchantFormScreenState extends ConsumerState<MerchantFormScreen> {
     _branchNameCtrl.dispose();
     _line1Ctrl.dispose();
     _provinceCtrl.dispose();
-    _latCtrl.dispose();
-    _lngCtrl.dispose();
     super.dispose();
   }
 
@@ -52,8 +55,27 @@ class _MerchantFormScreenState extends ConsumerState<MerchantFormScreen> {
     return s;
   }
 
+  Future<void> _pickLocation() async {
+    final picked = await Navigator.of(context).push<PickedLocation>(
+      MaterialPageRoute(builder: (_) => const LocationPickerScreen()),
+    );
+    if (picked == null) return;
+    setState(() {
+      _pickedLat = picked.latitude;
+      _pickedLng = picked.longitude;
+      _pickedWard = picked.ward;
+      _pickedDistrict = picked.district;
+      if (picked.line1.isNotEmpty) _line1Ctrl.text = picked.line1;
+      if (picked.province.isNotEmpty) _provinceCtrl.text = picked.province;
+    });
+  }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_pickedLat == null || _pickedLng == null) {
+      setState(() => _error = 'Vui lòng chọn vị trí chi nhánh trên bản đồ');
+      return;
+    }
     setState(() {
       _loading = true;
       _error = null;
@@ -65,6 +87,7 @@ class _MerchantFormScreenState extends ConsumerState<MerchantFormScreen> {
           'name': _nameCtrl.text.trim(),
           'slug': slug,
           'phone': _phoneCtrl.text.trim(),
+          'merchant_type': _merchantType,
           if (_logoUrl != null) 'logo_url': _logoUrl,
         },
         ownerPhone: _ownerPhoneCtrl.text.trim(),
@@ -72,9 +95,11 @@ class _MerchantFormScreenState extends ConsumerState<MerchantFormScreen> {
       await ref.read(adminRepoProvider).createBranch(merchant.id, {
         'name': _branchNameCtrl.text.trim(),
         'line1': _line1Ctrl.text.trim(),
+        'ward': _pickedWard,
+        'district': _pickedDistrict,
         'province': _provinceCtrl.text.trim(),
-        'latitude': double.tryParse(_latCtrl.text.trim()) ?? 0,
-        'longitude': double.tryParse(_lngCtrl.text.trim()) ?? 0,
+        'latitude': _pickedLat,
+        'longitude': _pickedLng,
         'is_main': true,
         'phone': _phoneCtrl.text.trim(),
       });
@@ -90,6 +115,7 @@ class _MerchantFormScreenState extends ConsumerState<MerchantFormScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => context.go('/merchants')),
@@ -105,7 +131,7 @@ class _MerchantFormScreenState extends ConsumerState<MerchantFormScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text('Chủ cửa hàng', style: Theme.of(context).textTheme.labelLarge),
+                  Text('Chủ cửa hàng', style: theme.textTheme.labelLarge),
                   const SizedBox(height: 8),
                   TextFormField(
                     controller: _ownerPhoneCtrl,
@@ -117,12 +143,21 @@ class _MerchantFormScreenState extends ConsumerState<MerchantFormScreen> {
                     validator: (v) => (v == null || v.trim().isEmpty) ? 'Nhập số điện thoại' : null,
                   ),
                   const SizedBox(height: 24),
-                  Text('Cửa hàng', style: Theme.of(context).textTheme.labelLarge),
+                  Text('Cửa hàng', style: theme.textTheme.labelLarge),
                   const SizedBox(height: 8),
                   TextFormField(
                     controller: _nameCtrl,
                     decoration: const InputDecoration(labelText: 'Tên cửa hàng', border: OutlineInputBorder()),
                     validator: (v) => (v == null || v.trim().isEmpty) ? 'Nhập tên cửa hàng' : null,
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    initialValue: _merchantType,
+                    decoration: const InputDecoration(labelText: 'Loại cửa hàng', border: OutlineInputBorder()),
+                    items: merchantTypeLabels.entries
+                        .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))
+                        .toList(),
+                    onChanged: (v) => setState(() => _merchantType = v ?? _merchantType),
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
@@ -138,7 +173,7 @@ class _MerchantFormScreenState extends ConsumerState<MerchantFormScreen> {
                     onChanged: (url) => setState(() => _logoUrl = url),
                   ),
                   const SizedBox(height: 24),
-                  Text('Chi nhánh chính', style: Theme.of(context).textTheme.labelLarge),
+                  Text('Chi nhánh chính', style: theme.textTheme.labelLarge),
                   const SizedBox(height: 8),
                   TextFormField(
                     controller: _branchNameCtrl,
@@ -146,6 +181,27 @@ class _MerchantFormScreenState extends ConsumerState<MerchantFormScreen> {
                         labelText: 'Tên chi nhánh', hintText: 'VD: Cửa hàng chính', border: OutlineInputBorder()),
                     validator: (v) => (v == null || v.trim().isEmpty) ? 'Nhập tên chi nhánh' : null,
                   ),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: _loading ? null : _pickLocation,
+                    icon: const Icon(Icons.location_on_outlined),
+                    label: Text(_pickedLat == null ? 'Chọn vị trí trên bản đồ' : 'Đổi vị trí trên bản đồ'),
+                  ),
+                  if (_pickedLat != null) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Icon(Icons.check_circle, size: 16, color: theme.colorScheme.primary),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            'Đã xác nhận vị trí (${_pickedLat!.toStringAsFixed(5)}, ${_pickedLng!.toStringAsFixed(5)})',
+                            style: theme.textTheme.bodySmall,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: _line1Ctrl,
@@ -158,31 +214,9 @@ class _MerchantFormScreenState extends ConsumerState<MerchantFormScreen> {
                     decoration: const InputDecoration(labelText: 'Tỉnh/Thành phố', border: OutlineInputBorder()),
                     validator: (v) => (v == null || v.trim().isEmpty) ? 'Nhập tỉnh/thành' : null,
                   ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextFormField(
-                          controller: _latCtrl,
-                          decoration: const InputDecoration(labelText: 'Vĩ độ (latitude)', border: OutlineInputBorder()),
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
-                          validator: (v) => (double.tryParse(v ?? '') == null) ? 'Không hợp lệ' : null,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: TextFormField(
-                          controller: _lngCtrl,
-                          decoration: const InputDecoration(labelText: 'Kinh độ (longitude)', border: OutlineInputBorder()),
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
-                          validator: (v) => (double.tryParse(v ?? '') == null) ? 'Không hợp lệ' : null,
-                        ),
-                      ),
-                    ],
-                  ),
                   if (_error != null) ...[
                     const SizedBox(height: 16),
-                    Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                    Text(_error!, style: TextStyle(color: theme.colorScheme.error)),
                   ],
                   const SizedBox(height: 24),
                   FilledButton(
