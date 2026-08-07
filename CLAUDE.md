@@ -57,12 +57,21 @@ cho mọi màn hình (không dùng dữ liệu giả), tối giản – hiện �
 cd hofa_admin_app
 cp env.example.json env.json   # điền SUPABASE_URL, SUPABASE_ANON_KEY, API_BASE_URL thật
 flutter run -d chrome --dart-define-from-file=env.json
-flutter build web --dart-define-from-file=env.json
+./build_web.sh   # build + ghi version (git commit hash) vào web/app-version.json, xem PWA update-check bên dưới
 ```
 
 `env.json` chứa anon key (public) và URL — không phải secret tuyệt mật, nhưng vẫn không nên
 commit; hiện chưa có dòng riêng trong `.gitignore` cho `env.json`, cân nhắc thêm nếu sắp commit
 thư mục `hofa_admin_app/`.
+
+- **PWA update-check**: cả 4 app (admin/customer/driver/store) đều có `PwaVersionService`
+  ([pwa_version_service.dart](hofa_admin_app/lib/core/pwa_version_service.dart)) — lúc mở web,
+  so `Env.appVersion` (đóng cứng lúc build) với `web/app-version.json` (đọc runtime, fetch bỏ
+  cache). Khớp thì bỏ qua; lệch thì báo "Đã có phiên bản mới" với nút "Cập nhật ngay" duy nhất,
+  bấm vào sẽ xoá Cache Storage rồi reload (giữ nguyên session Supabase/token FCM vì 2 thứ đó
+  không nằm trong Cache Storage). Version luôn lấy từ git commit hash qua `./build_web.sh` của
+  từng app — **luôn build bằng script này khi deploy web, không gọi `flutter build web` trực
+  tiếp**, nếu không `app-version.json` sẽ không khớp bản vừa build.
 
 ## Backend (server/)
 
