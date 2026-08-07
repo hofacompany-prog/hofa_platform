@@ -96,7 +96,7 @@ async function sendToTokens(tokens, { title, body, data = {}, badge = false }) {
  */
 async function sendPushToUser(userId, { title, body, data = {}, badge = true, category = 'order' }) {
   const devices = await db.query(
-    'SELECT push_token FROM user_devices WHERE user_id = $1 AND push_token IS NOT NULL',
+    'SELECT DISTINCT push_token FROM user_devices WHERE user_id = $1 AND push_token IS NOT NULL',
     [userId]
   );
   const tokens = devices.map((d) => d.push_token).filter(Boolean);

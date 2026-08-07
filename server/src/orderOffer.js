@@ -72,6 +72,10 @@ async function autoConfirmExpiredOrder(orderId) {
     p_actor_role: 'merchant_owner',
     p_note: `Tự động xác nhận do quá ${ACCEPT_WINDOW_SECONDS}s cửa hàng không phản hồi`
   });
+  // Xoá ngay accept_deadline — để lại giá trị đã quá hạn sẽ khiến 1 request "xác nhận" khác
+  // đến sau (vd cửa hàng bấm tay đúng lúc quét nền vừa xử lý xong) đọc lại order.status vẫn
+  // kịp thấy 'placed' trong lúc RPC trên chưa commit xong, gây gửi trùng push xác nhận.
+  await db.query('UPDATE orders SET accept_deadline = NULL WHERE id = $1', [orderId]);
 
   const userIds = await getMerchantUserIds(order.merchant_id);
   await Promise.all(userIds.map((uid) => push.sendPushToUser(uid, {

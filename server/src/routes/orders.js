@@ -164,7 +164,6 @@ router.patch('/orders/:id/status', asyncHandler(async (req, res) => {
   // null (không còn 'placed' nữa) — lấy lại bản ghi hiện tại để trả về cho đúng.
   if (req.body.status === 'confirmed' && order.accept_deadline && new Date(order.accept_deadline) < new Date()) {
     await orderOffer.autoConfirmExpiredOrder(req.params.id);
-    await db.query('UPDATE orders SET accept_deadline = NULL WHERE id = $1', [req.params.id]);
     const updated = await db.queryOne('SELECT * FROM orders WHERE id = $1', [req.params.id]);
     return res.json({ ok: true, data: updated });
   }
