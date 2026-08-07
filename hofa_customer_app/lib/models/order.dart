@@ -55,8 +55,12 @@ class OrderStatusEvent {
 
   factory OrderStatusEvent.fromJson(Map<String, dynamic> json) =>
       OrderStatusEvent(
-        status:
-            json['status'] as String? ?? json['new_status'] as String? ?? '',
+        // Cột thật trong order_status_history là to_status — status/new_status chỉ giữ lại
+        // để tương thích ngược nếu API từng trả tên khác trước đây.
+        status: json['to_status'] as String? ??
+            json['status'] as String? ??
+            json['new_status'] as String? ??
+            '',
         note: json['note'] as String?,
         createdAt:
             DateTime.tryParse(json['created_at']?.toString() ?? '') ??

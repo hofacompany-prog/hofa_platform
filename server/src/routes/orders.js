@@ -158,9 +158,15 @@ router.patch('/orders/:id/status', asyncHandler(async (req, res) => {
     }
   }
 
+  // Cửa hàng bấm "Nhận đơn" đúng lúc quá 20s — kết quả mong muốn (confirmed) giống hệt
+  // đường tự động, nên cứ tự xác nhận hộ luôn thay vì báo lỗi rồi bắt bấm lại. Nếu vòng
+  // quét nền (sweepExpiredOrderOffers) đã lo trước rồi thì autoConfirmExpiredOrder trả về
+  // null (không còn 'placed' nữa) — lấy lại bản ghi hiện tại để trả về cho đúng.
   if (req.body.status === 'confirmed' && order.accept_deadline && new Date(order.accept_deadline) < new Date()) {
-    await orderOffer.autoCancelExpiredOrder(req.params.id);
-    throw new ApiError('OFFER_EXPIRED', 'Đã quá hạn xác nhận — đơn đã tự huỷ', 409);
+    await orderOffer.autoConfirmExpiredOrder(req.params.id);
+    await db.query('UPDATE orders SET accept_deadline = NULL WHERE id = $1', [req.params.id]);
+    const updated = await db.queryOne('SELECT * FROM orders WHERE id = $1', [req.params.id]);
+    return res.json({ ok: true, data: updated });
   }
 
   const updated = await db.callRpc('update_order_status', {

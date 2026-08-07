@@ -2,17 +2,19 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:slide_to_act/slide_to_act.dart';
 import '../../core/format.dart';
 import '../../models/order.dart';
 import '../../repositories/order_repository.dart';
 
-const _acceptWindowSeconds = 120; // khớp ACCEPT_WINDOW_SECONDS trong server/src/orderOffer.js
+const _acceptWindowSeconds = 20; // khớp ACCEPT_WINDOW_SECONDS trong server/src/orderOffer.js
 
 final _offerOrderProvider = FutureProvider.autoDispose.family<Order, String>((ref, id) => OrderRepository().get(id));
 
 /// Màn hình đơn mới cần xác nhận — mở toàn màn hình ngay khi có push (kể cả khi app đang
-/// mở sẵn), có đếm ngược khớp với accept_deadline phía server. Hết giờ mà không bấm gì
-/// thì tự huỷ (server cũng tự làm điều này nếu app bị đóng — xem sweepExpiredOrderOffers).
+/// mở sẵn), có đếm ngược khớp với accept_deadline phía server. Trượt thanh dưới cùng để
+/// nhận, hoặc bấm "Huỷ đơn"; hết giờ mà không làm gì thì TỰ ĐỘNG NHẬN (server cũng tự làm
+/// điều này nếu app bị đóng — xem sweepExpiredOrderOffers).
 class OrderOfferScreen extends ConsumerStatefulWidget {
   final String orderId;
   const OrderOfferScreen({super.key, required this.orderId});
@@ -38,7 +40,7 @@ class _OrderOfferScreenState extends ConsumerState<OrderOfferScreen> {
       setState(() => _secondsLeft = remaining < 0 ? 0 : remaining);
       if (remaining <= 0) {
         _timer?.cancel();
-        _autoCancelOnExpiry();
+        _autoConfirmOnExpiry();
       }
     }
 
@@ -46,17 +48,19 @@ class _OrderOfferScreenState extends ConsumerState<OrderOfferScreen> {
     _timer = Timer.periodic(const Duration(seconds: 1), (_) => tick());
   }
 
-  Future<void> _autoCancelOnExpiry() async {
+  /// Hết 20s mà không trượt nhận/huỷ — TỰ ĐỘNG NHẬN (không tự huỷ), vì mất đơn của khách
+  /// chỉ vì chậm 20s là trải nghiệm tệ hơn nhiều so với việc cửa hàng phải tự lo 1 đơn lỡ
+  /// quên trượt. Chủ động gọi ngay ở đây để khách/cửa hàng biết sớm, không phải chờ server
+  /// (route tự xử lý y hệt nếu bấm trễ) hay vòng quét nền.
+  Future<void> _autoConfirmOnExpiry() async {
     if (_resolved) return;
     _resolved = true;
-    // Chủ động huỷ ngay để khách biết sớm, không phải chờ tới lần bấm "Nhận đơn" trễ
-    // (server mới phát hiện quá hạn) hoặc chờ vòng quét nền.
     try {
-      await _repo.updateStatus(widget.orderId, 'cancelled', note: 'Tự huỷ do cửa hàng không xác nhận kịp thời');
+      await _repo.updateStatus(widget.orderId, 'confirmed');
     } catch (_) {
-      // im lặng — server tự chặn xác nhận trễ + vòng quét nền vẫn dọn được
+      // im lặng — server/vòng quét nền tự xác nhận hộ được, không chặn màn hình vì lỗi mạng thoáng qua
     }
-    if (mounted) context.pop();
+    if (mounted) context.pushReplacement('/orders/${widget.orderId}');
   }
 
   Future<void> _accept() async {
@@ -147,7 +151,7 @@ class _OfferBody extends StatelessWidget {
   final Order order;
   final int secondsLeft;
   final bool busy;
-  final VoidCallback onAccept;
+  final Future<void> Function() onAccept;
   final VoidCallback onCancel;
 
   const _OfferBody({
@@ -220,27 +224,24 @@ class _OfferBody extends StatelessWidget {
               ),
             ),
           ),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: busy ? null : onCancel,
-                  style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16), foregroundColor: theme.colorScheme.error),
-                  child: const Text('Huỷ'),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: FilledButton(
-                  onPressed: busy ? null : onAccept,
-                  style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
-                  child: busy
-                      ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Text('Nhận đơn'),
-                ),
-              ),
-            ],
+          TextButton(
+            onPressed: busy ? null : onCancel,
+            style: TextButton.styleFrom(foregroundColor: theme.colorScheme.error),
+            child: const Text('Huỷ đơn'),
+          ),
+          const SizedBox(height: 8),
+          // Kiểu Grab: trượt hết thanh mới tính là nhận đơn — tránh nhận nhầm khi lỡ chạm.
+          SlideAction(
+            key: ValueKey(order.id),
+            enabled: !busy,
+            text: 'Trượt để nhận đơn ($secondsLeft s)',
+            textStyle: theme.textTheme.titleMedium?.copyWith(color: Colors.white, fontWeight: FontWeight.w600),
+            outerColor: theme.colorScheme.primary,
+            innerColor: Colors.white,
+            sliderButtonIcon: Icon(Icons.arrow_forward, color: theme.colorScheme.primary),
+            height: 64,
+            borderRadius: 32,
+            onSubmit: onAccept,
           ),
         ],
       ),
@@ -268,7 +269,11 @@ class _CountdownRing extends StatelessWidget {
               value: secondsLeft.clamp(0, _acceptWindowSeconds) / _acceptWindowSeconds,
               strokeWidth: 6,
               backgroundColor: theme.colorScheme.surfaceContainerHighest,
-              color: secondsLeft <= 15 ? theme.colorScheme.error : theme.colorScheme.primary,
+              // Đỏ khi còn dưới 1/4 thời gian — tỉ lệ, không phải số giây cố định, để không
+              // bị đỏ gần hết vòng đời nếu sau này đổi _acceptWindowSeconds.
+              color: secondsLeft <= (_acceptWindowSeconds * 0.25).round()
+                  ? theme.colorScheme.error
+                  : theme.colorScheme.primary,
             ),
           ),
           Text('${secondsLeft}s', style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),

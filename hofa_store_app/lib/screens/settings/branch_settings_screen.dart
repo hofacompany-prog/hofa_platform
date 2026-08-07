@@ -117,7 +117,7 @@ class BranchSettingsScreen extends ConsumerWidget {
                                     SwitchListTile(
                                       title: const Text('Tự động nhận đơn'),
                                       subtitle: const Text(
-                                          'Bật: đơn mới tự xác nhận ngay.\nTắt: có 2 phút để bấm "Nhận đơn" trước khi đơn tự huỷ.'),
+                                          'Bật: đơn mới tự xác nhận ngay.\nTắt: có 20 giây để trượt "Nhận đơn", quá giờ hệ thống tự nhận hộ.'),
                                       value: b.autoAcceptOrders,
                                       onChanged: (val) async {
                                         try {
