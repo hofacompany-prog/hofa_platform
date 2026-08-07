@@ -17,6 +17,27 @@ function parseCsv(value) {
   return value ? String(value).split(',').map((s) => s.trim()).filter(Boolean) : [];
 }
 
+/** Ra đúng danh sách user_id theo 3 kiểu chọn đối tượng dùng chung cho gửi/xem/xoá hộp thư:
+ * "cửa hàng cụ thể" (merchantIds), "khách hàng/tài xế cụ thể" (userIds), hoặc để trống cả 2
+ * thì hiểu là TOÀN BỘ audienceType đó (mọi user có role tương ứng, kể cả chủ + nhân viên nếu
+ * là 'merchant'). */
+async function resolveAudienceUserIds({ audienceType, merchantIds, userIds }) {
+  if (!AUDIENCE_ROLES[audienceType]) {
+    throw new ApiError('BAD_REQUEST', 'audience_type không hợp lệ', 400);
+  }
+  if (audienceType === 'merchant' && merchantIds && merchantIds.length) {
+    return push.resolveMerchantUserIds(merchantIds);
+  }
+  if (audienceType !== 'merchant' && userIds && userIds.length) {
+    return userIds;
+  }
+  const rows = await db.query(
+    `SELECT id FROM users WHERE role::text = ANY($1::text[]) AND deleted_at IS NULL`,
+    [AUDIENCE_ROLES[audienceType]]
+  );
+  return rows.map((r) => r.id);
+}
+
 /** Số thiết bị đang có push_token cho 1 nhóm — hiện cho admin xem trước khi bấm gửi.
  * ?merchant_ids=... (nhóm cửa hàng, cụ thể) hoặc ?user_ids=... (khách hàng/tài xế, cụ thể)
  * — không truyền thì đếm toàn bộ nhóm audience_type. */
@@ -133,15 +154,20 @@ router.post('/admin/notifications', asyncHandler(async (req, res) => {
   res.status(201).json({ ok: true, data: saved });
 }));
 
-/** Hộp thư CỦA TỪNG NGƯỜI NHẬN (bảng notifications) lọc theo 1 cửa hàng cụ thể — khác hẳn
+/** Hộp thư CỦA TỪNG NGƯỜI NHẬN (bảng notifications) lọc theo 1 phạm vi đối tượng — khác hẳn
  * GET /admin/notifications ở trên (đó là log các đợt gửi, không phải từng dòng người nhận
- * thật sự thấy). merchant_id bắt buộc — không cho duyệt toàn sàn không lọc gì để tránh tải
- * về quá nhiều dòng cùng lúc. */
+ * thật sự thấy). audience_type bắt buộc (customer/merchant/driver); không truyền
+ * merchant_ids/user_ids thì hiểu là TOÀN BỘ audience_type đó — không cho duyệt toàn sàn
+ * không lọc gì theo audience_type để tránh tải về quá nhiều dòng cùng lúc. */
 router.get('/admin/notifications/inbox', asyncHandler(async (req, res) => {
   requireRole(req.ctx, ['admin']);
-  requireFields(req.query, ['merchant_id']);
+  requireFields(req.query, ['audience_type']);
   const { limit, offset } = pagination(req.query);
-  const userIds = await push.resolveMerchantUserIds([req.query.merchant_id]);
+  const userIds = await resolveAudienceUserIds({
+    audienceType: req.query.audience_type,
+    merchantIds: parseCsv(req.query.merchant_ids),
+    userIds: parseCsv(req.query.user_ids)
+  });
   if (!userIds.length) return res.json({ ok: true, data: [] });
   const rows = await db.query(
     `SELECT n.*, u.full_name AS recipient_name
@@ -156,19 +182,24 @@ router.get('/admin/notifications/inbox', asyncHandler(async (req, res) => {
 }));
 
 /** Xoá 1/nhiều/tất cả dòng trong hộp thư người nhận — đúng 1 trong 3 kiểu body:
- * {ids: [...]} xoá đúng các dòng đó, {merchant_id} xoá hết hộp thư của 1 cửa hàng,
- * {all: true} xoá TOÀN BỘ hộp thư mọi người dùng trên sàn (nặng tay nhất, admin app phải tự
- * xác nhận rõ ràng trước khi gọi). */
+ * {ids: [...]} xoá đúng các dòng đó, {audience_type, merchant_ids?, user_ids?} xoá hết hộp
+ * thư của 1 phạm vi đối tượng (toàn bộ audience_type đó nếu bỏ trống 2 tham số kia, hoặc chỉ
+ * các cửa hàng/người dùng/tài xế cụ thể nếu có), {all: true} xoá TOÀN BỘ hộp thư mọi người
+ * dùng trên sàn (nặng tay nhất, admin app phải tự xác nhận rõ ràng trước khi gọi). */
 router.post('/admin/notifications/inbox/delete', asyncHandler(async (req, res) => {
   requireRole(req.ctx, ['admin']);
-  const { ids, merchant_id: merchantId, all } = req.body;
+  const { ids, audience_type: audienceType, merchant_ids: merchantIds, user_ids: userIdsBody, all } = req.body;
 
   if (Array.isArray(ids) && ids.length) {
     const deleted = await db.query('DELETE FROM notifications WHERE id = ANY($1::uuid[]) RETURNING id', [ids]);
     return res.json({ ok: true, data: { deleted: deleted.length } });
   }
-  if (merchantId) {
-    const userIds = await push.resolveMerchantUserIds([merchantId]);
+  if (audienceType) {
+    const userIds = await resolveAudienceUserIds({
+      audienceType,
+      merchantIds: Array.isArray(merchantIds) ? merchantIds : [],
+      userIds: Array.isArray(userIdsBody) ? userIdsBody : []
+    });
     if (!userIds.length) return res.json({ ok: true, data: { deleted: 0 } });
     const deleted = await db.query(
       'DELETE FROM notifications WHERE user_id = ANY($1::uuid[]) RETURNING id',
@@ -180,7 +211,7 @@ router.post('/admin/notifications/inbox/delete', asyncHandler(async (req, res) =
     const deleted = await db.query('DELETE FROM notifications RETURNING id');
     return res.json({ ok: true, data: { deleted: deleted.length } });
   }
-  throw new ApiError('BAD_REQUEST', 'Cần đúng 1 trong: ids, merchant_id, all', 400);
+  throw new ApiError('BAD_REQUEST', 'Cần đúng 1 trong: ids, audience_type, all', 400);
 }));
 
 module.exports = router;

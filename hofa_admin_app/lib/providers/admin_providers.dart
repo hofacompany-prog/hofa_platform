@@ -14,7 +14,6 @@ import '../models/shipping_fee_settings.dart';
 import '../models/voucher.dart';
 import '../models/order_settings.dart';
 import '../models/admin_notification.dart';
-import '../models/notification_inbox_item.dart';
 import '../models/notification_settings.dart';
 import '../repositories/admin_repository.dart';
 import '../repositories/user_repository.dart';
@@ -130,14 +129,9 @@ final notificationsProvider =
       (ref) => ref.watch(adminRepoProvider).notifications(),
     );
 
-/// Cửa hàng đang chọn để xem hộp thư — null nghĩa là chưa chọn, chưa gọi API (merchant_id
-/// bắt buộc ở server).
-final inboxMerchantProvider = StateProvider.autoDispose<Merchant?>((ref) => null);
-
-final notificationInboxProvider = FutureProvider.autoDispose
-    .family<List<NotificationInboxItem>, String>(
-      (ref, merchantId) => ref.watch(adminRepoProvider).notificationInbox(merchantId),
-    );
+// Hộp thư theo phạm vi đối tượng (audience_type + chọn cụ thể/tất cả) không dùng provider —
+// lựa chọn quá phức tạp để làm key cho .family gọn gàng, _InboxTab tự fetch + setState cục
+// bộ (giống _UserPickerDialog/_MerchantPickerDialog cùng file screens/notifications).
 
 final notificationSettingsProvider = FutureProvider.autoDispose<NotificationSettings>(
   (ref) => ref.watch(adminRepoProvider).notificationSettings(),

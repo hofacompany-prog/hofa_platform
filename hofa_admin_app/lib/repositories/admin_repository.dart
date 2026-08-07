@@ -413,34 +413,49 @@ class AdminRepository {
         as Map<String, dynamic>,
   );
 
-  /// Hộp thư THẬT của từng người nhận thuộc 1 cửa hàng (chủ + nhân viên) — khác
-  /// notifications() ở trên (đó là log các đợt gửi). merchantId bắt buộc.
-  Future<List<NotificationInboxItem>> notificationInbox(
-    String merchantId, {
-    int limit = 100,
+  /// Hộp thư THẬT của từng người nhận trong 1 phạm vi đối tượng — khác notifications() ở
+  /// trên (đó là log các đợt gửi). audienceType bắt buộc; bỏ trống cả merchantIds lẫn
+  /// userIds nghĩa là TOÀN BỘ audienceType đó (mọi khách hàng/cửa hàng/tài xế).
+  Future<List<NotificationInboxItem>> notificationInbox({
+    required String audienceType,
+    List<String>? merchantIds,
+    List<String>? userIds,
+    int limit = 200,
     int offset = 0,
   }) async {
     final list = await _api.get(
       '/admin/notifications/inbox',
-      query: {'merchant_id': merchantId, 'limit': limit, 'offset': offset},
+      query: {
+        'audience_type': audienceType,
+        if (merchantIds != null && merchantIds.isNotEmpty) 'merchant_ids': merchantIds.join(','),
+        if (userIds != null && userIds.isNotEmpty) 'user_ids': userIds.join(','),
+        'limit': limit,
+        'offset': offset,
+      },
     ) as List;
     return list
         .map((e) => NotificationInboxItem.fromJson(e as Map<String, dynamic>))
         .toList();
   }
 
-  /// Xoá đúng 1 trong 3 kiểu: [ids] (1 hoặc nhiều dòng cụ thể), [merchantId] (cả hộp thư của
-  /// 1 cửa hàng), hoặc [all] = true (toàn bộ hộp thư mọi người dùng trên sàn).
+  /// Xoá đúng 1 trong 3 kiểu: [ids] (1 hoặc nhiều dòng cụ thể), [audienceType] (cả hộp thư
+  /// của 1 phạm vi đối tượng — toàn bộ audienceType đó nếu bỏ trống merchantIds/userIds, hoặc
+  /// chỉ các cửa hàng/người dùng/tài xế cụ thể nếu có), hoặc [all] = true (toàn bộ hộp thư
+  /// mọi người dùng trên sàn).
   Future<int> deleteNotificationInbox({
     List<String>? ids,
-    String? merchantId,
+    String? audienceType,
+    List<String>? merchantIds,
+    List<String>? userIds,
     bool all = false,
   }) async {
     final data = await _api.post(
       '/admin/notifications/inbox/delete',
       body: {
         if (ids != null && ids.isNotEmpty) 'ids': ids,
-        if (merchantId != null) 'merchant_id': merchantId,
+        if (audienceType != null) 'audience_type': audienceType,
+        if (merchantIds != null && merchantIds.isNotEmpty) 'merchant_ids': merchantIds,
+        if (userIds != null && userIds.isNotEmpty) 'user_ids': userIds,
         if (all) 'all': true,
       },
     ) as Map<String, dynamic>;
