@@ -24,6 +24,25 @@ Future<String?> fetchDeployedVersion() async {
   }
 }
 
+/// Gỡ các service worker cache asset cũ của Flutter (từ bản build trước khi tắt
+/// --pwa-strategy) — bản build mới không đăng ký lại nó nữa nên nó sẽ đứng yên mãi nếu không
+/// gỡ tay, tranh giành scope gốc với firebase-messaging-sw.js và gây push đến chập chờn/lặp.
+/// firebase-messaging-sw.js không đụng tới, vẫn phải sống để nhận push tiếp.
+Future<void> _unregisterStaleServiceWorkers() async {
+  final container = html.window.navigator.serviceWorker;
+  if (container == null) return;
+  final registrations = await container.getRegistrations();
+  for (final registration in registrations) {
+    final scriptUrl = registration.active?.scriptURL ??
+        registration.waiting?.scriptURL ??
+        registration.installing?.scriptURL ??
+        '';
+    if (scriptUrl.contains('flutter_service_worker.js')) {
+      await registration.unregister();
+    }
+  }
+}
+
 /// Cache Storage tách biệt với localStorage/IndexedDB, nên việc này giữ nguyên
 /// phiên Supabase và token FCM nhưng buộc PWA tải lại toàn bộ asset mới.
 Future<void> clearCacheAndReload() async {
@@ -31,6 +50,11 @@ Future<void> clearCacheAndReload() async {
   if (caches != null) {
     final cacheNames = await caches.keys();
     await Future.wait(cacheNames.map(caches.delete));
+  }
+  try {
+    await _unregisterStaleServiceWorkers();
+  } catch (_) {
+    // Không chặn luồng cập nhật chính nếu gỡ service worker cũ thất bại.
   }
   html.window.location.reload();
 }
