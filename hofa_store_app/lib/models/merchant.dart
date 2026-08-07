@@ -26,6 +26,11 @@ class Merchant {
   final int avgPrepMinutes;
   final num ratingAvg;
   final int ratingCount;
+  final int autoAcceptDefaultMinutes;
+  final int autoAcceptPrepBaseMinutes;
+  final int autoAcceptPrepIncrementMinutes;
+  final int autoAcceptPrepMaxMinutes;
+  final int manualConfirmWindowMinutes;
 
   Merchant({
     required this.id,
@@ -50,6 +55,11 @@ class Merchant {
     required this.avgPrepMinutes,
     required this.ratingAvg,
     required this.ratingCount,
+    this.autoAcceptDefaultMinutes = 8,
+    this.autoAcceptPrepBaseMinutes = 10,
+    this.autoAcceptPrepIncrementMinutes = 2,
+    this.autoAcceptPrepMaxMinutes = 30,
+    this.manualConfirmWindowMinutes = 5,
   });
 
   factory Merchant.fromJson(Map<String, dynamic> json) => Merchant(
@@ -75,5 +85,10 @@ class Merchant {
         avgPrepMinutes: (json['avg_prep_minutes'] as num?)?.toInt() ?? 15,
         ratingAvg: num.tryParse('${json['rating_avg']}') ?? 0,
         ratingCount: (json['rating_count'] as num?)?.toInt() ?? 0,
+        autoAcceptDefaultMinutes: (json['auto_accept_default_minutes'] as num?)?.toInt() ?? 8,
+        autoAcceptPrepBaseMinutes: (json['auto_accept_prep_base_minutes'] as num?)?.toInt() ?? 10,
+        autoAcceptPrepIncrementMinutes: (json['auto_accept_prep_increment_minutes'] as num?)?.toInt() ?? 2,
+        autoAcceptPrepMaxMinutes: (json['auto_accept_prep_max_minutes'] as num?)?.toInt() ?? 30,
+        manualConfirmWindowMinutes: (json['manual_confirm_window_minutes'] as num?)?.toInt() ?? 5,
       );
 }

@@ -110,7 +110,13 @@ class OrdersListScreen extends ConsumerWidget {
                             style: TextStyle(fontWeight: isUnread ? FontWeight.bold : FontWeight.normal),
                           ),
                           subtitle: Text('${formatVnd(o.totalAmount)} · ${formatDateTime(o.createdAt)}'),
-                          trailing: Chip(label: Text(orderStatusLabels[o.status] ?? o.status)),
+                          trailing: (o.lateMinutes ?? 0) > 0
+                              ? Chip(
+                                  label: Text('${orderStatusLabels[o.status] ?? o.status} · Trễ ${o.lateMinutes}p'),
+                                  backgroundColor: Theme.of(context).colorScheme.errorContainer,
+                                  labelStyle: TextStyle(color: Theme.of(context).colorScheme.onErrorContainer),
+                                )
+                              : Chip(label: Text(orderStatusLabels[o.status] ?? o.status)),
                         ),
                       );
                     },

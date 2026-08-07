@@ -11,7 +11,10 @@ const MERCHANT_FIELDS = [
   'business_license_no', 'tax_code', 'legal_doc_urls',
   'bank_name', 'bank_account_no', 'bank_account_name',
   'commission_rate', 'min_order_amount', 'avg_prep_minutes',
-  'buy_on_behalf_fee_basis', 'max_devices', 'vat_rate', 'pit_rate'
+  'buy_on_behalf_fee_basis', 'max_devices', 'vat_rate', 'pit_rate',
+  'auto_accept_default_minutes', 'auto_accept_prep_base_minutes',
+  'auto_accept_prep_increment_minutes', 'auto_accept_prep_max_minutes',
+  'manual_confirm_window_minutes'
 ];
 
 const BRANCH_FIELDS = [

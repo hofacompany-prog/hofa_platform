@@ -119,7 +119,9 @@ class BranchSettingsScreen extends ConsumerWidget {
                                     SwitchListTile(
                                       title: const Text('Tự động nhận đơn'),
                                       subtitle: const Text(
-                                          'Bật: đơn mới tự xác nhận ngay.\nTắt: có 20 giây để trượt "Nhận đơn", quá giờ hệ thống tự nhận hộ.'),
+                                          'Bật: vẫn hiện màn nhận đơn, đếm ngược bằng màu trên thanh trượt — hết giờ hệ thống tự nhận hộ.\n'
+                                          'Tắt: có ít phút để tự xác nhận thủ công — hết giờ đơn tự huỷ và chi nhánh tự đóng cửa.\n'
+                                          'Xem/chỉnh số phút cụ thể ở mục Thông số bên dưới.'),
                                       value: b.autoAcceptOrders,
                                       onChanged: (val) async {
                                         try {
@@ -180,6 +182,24 @@ class BranchSettingsScreen extends ConsumerWidget {
                     subtitle: const Text('Xem và gỡ các thiết bị đang nhận thông báo'),
                     trailing: const Icon(Icons.chevron_right),
                   ),
+                ),
+                const SizedBox(height: 16),
+                merchantAsync.when(
+                  loading: () => const SizedBox(),
+                  error: (_, _) => const SizedBox(),
+                  data: (m) => m == null
+                      ? const SizedBox()
+                      : Card(
+                          elevation: 0,
+                          color: theme.colorScheme.surfaceContainerLow,
+                          child: ListTile(
+                            onTap: () => context.push('/settings/params', extra: m),
+                            leading: Icon(Icons.tune, color: theme.colorScheme.primary),
+                            title: const Text('Thông số'),
+                            subtitle: const Text('Cấu hình số phút cho "Tự động nhận đơn"'),
+                            trailing: const Icon(Icons.chevron_right),
+                          ),
+                        ),
                 ),
                 const SizedBox(height: 24),
                 // Bottom bar mobile không có nút đăng xuất riêng (khác NavigationRail ở màn

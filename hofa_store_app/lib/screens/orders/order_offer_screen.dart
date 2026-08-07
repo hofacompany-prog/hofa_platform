@@ -1,11 +1,15 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:slide_to_act/slide_to_act.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/format.dart';
+import '../../models/branch.dart';
+import '../../models/merchant.dart';
 import '../../models/order.dart';
 import '../../providers/auth_provider.dart';
+import '../../repositories/merchant_repository.dart';
 import '../../repositories/notification_repository.dart';
 import '../../repositories/order_repository.dart';
 
@@ -13,13 +17,31 @@ const _defaultPrepMinutes = 15; // dùng khi chưa tải được merchant.avgPr
 
 final _offerOrderProvider = FutureProvider.autoDispose.family<Order, String>((ref, id) => OrderRepository().get(id));
 
+final _offerBranchProvider = FutureProvider.autoDispose
+    .family<Branch?, ({String merchantId, String branchId})>((ref, params) async {
+  final branches = await MerchantRepository().branches(params.merchantId);
+  for (final b in branches) {
+    if (b.id == params.branchId) return b;
+  }
+  return null;
+});
+
+int _tierCapMinutes(Merchant merchant, int itemCount) {
+  final extraItems = itemCount > 1 ? itemCount - 1 : 0;
+  final cap = merchant.autoAcceptPrepBaseMinutes + merchant.autoAcceptPrepIncrementMinutes * extraItems;
+  return cap < merchant.autoAcceptPrepMaxMinutes ? cap : merchant.autoAcceptPrepMaxMinutes;
+}
+
 /// Màn hình đơn mới cần xác nhận — mở toàn màn hình ngay khi có push (kể cả khi app đang mở
-/// sẵn). Trượt thanh dưới cùng để nhận, bấm "Huỷ đơn" ở menu "...", hoặc bấm X để BỎ QUA
-/// (không quyết định gì — không có thời hạn nào ép hệ thống tự xác nhận thay, cửa hàng phải
-/// tự vào lại màn Đơn hàng để xử lý). Bấm X không bị chặn — cửa hàng có thể lỡ xem 1 đơn mà
-/// không bị kẹt màn hình, nhưng khi đó badge đỏ ở "Đơn hàng" (Trang chủ + thanh điều hướng)
-/// vẫn còn nguyên vì notification CHƯA được đánh dấu đã đọc — chỉ đánh dấu khi thực sự trượt
-/// nhận/huỷ (xem _markNotificationRead).
+/// sẵn). Trượt thanh dưới cùng để nhận, bấm "Huỷ đơn" ở menu "...", hoặc bấm X để BỎ QUA.
+/// Có 2 chế độ đếm ngược theo công tắc "Tự động nhận đơn" của chi nhánh (branch.autoAcceptOrders):
+/// bật thì đếm ngược hiện bằng màu chạy trên thanh trượt (hết giờ SERVER tự nhận hộ — xem
+/// orderOffer.js, sweepExpiredOrderOffers); tắt thì hiện 1 đồng hồ nhỏ 5 phút cạnh mã đơn (hết
+/// giờ SERVER tự huỷ đơn + tự đóng chi nhánh). Đồng hồ ở đây thuần hiển thị, KHÔNG tự trigger
+/// hành động gì — tránh đua (race) giữa client và vòng quét nền phía server. Bấm X không bị
+/// chặn — cửa hàng có thể lỡ xem 1 đơn mà không bị kẹt màn hình, nhưng khi đó badge đỏ ở
+/// "Đơn hàng" (Trang chủ + thanh điều hướng) vẫn còn nguyên vì notification CHƯA được đánh dấu
+/// đã đọc — chỉ đánh dấu khi thực sự trượt nhận/huỷ (xem _markNotificationRead).
 class OrderOfferScreen extends ConsumerStatefulWidget {
   final String orderId;
   final String? notificationId;
@@ -31,9 +53,25 @@ class OrderOfferScreen extends ConsumerStatefulWidget {
 
 class _OrderOfferScreenState extends ConsumerState<OrderOfferScreen> {
   final _repo = OrderRepository();
+  Timer? _tickTimer;
   bool _resolved = false;
   bool _busy = false;
   int? _prepMinutes;
+
+  @override
+  void initState() {
+    super.initState();
+    // Chỉ để làm mới hiển thị đếm ngược mỗi giây — không gắn hành động nào ở đây.
+    _tickTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _tickTimer?.cancel();
+    super.dispose();
+  }
 
   void _markNotificationRead() {
     final id = widget.notificationId;
@@ -132,11 +170,22 @@ class _OrderOfferScreenState extends ConsumerState<OrderOfferScreen> {
               });
               return const Center(child: CircularProgressIndicator());
             }
-            _prepMinutes ??= merchantAsync.valueOrNull?.avgPrepMinutes ?? _defaultPrepMinutes;
+            final merchant = merchantAsync.valueOrNull;
+            _prepMinutes ??= merchant?.avgPrepMinutes ?? _defaultPrepMinutes;
+            final prepMinutesMax = merchant != null ? _tierCapMinutes(merchant, order.items.length) : 60;
+            if (_prepMinutes! > prepMinutesMax) _prepMinutes = prepMinutesMax;
+
+            final branch = merchant == null
+                ? null
+                : ref.watch(_offerBranchProvider((merchantId: merchant.id, branchId: order.branchId))).valueOrNull;
+            final autoAccept = branch?.autoAcceptOrders ?? false;
+
             return _OfferBody(
               order: order,
+              autoAccept: autoAccept,
               busy: _busy,
               prepMinutes: _prepMinutes!,
+              prepMinutesMax: prepMinutesMax,
               onPrepMinutesChanged: (v) => setState(() => _prepMinutes = v),
               onAccept: _accept,
               onCancel: _confirmCancel,
@@ -154,8 +203,10 @@ class _OrderOfferScreenState extends ConsumerState<OrderOfferScreen> {
 
 class _OfferBody extends StatelessWidget {
   final Order order;
+  final bool autoAccept;
   final bool busy;
   final int prepMinutes;
+  final int prepMinutesMax;
   final ValueChanged<int> onPrepMinutesChanged;
   final Future<void> Function() onAccept;
   final VoidCallback onCancel;
@@ -166,8 +217,10 @@ class _OfferBody extends StatelessWidget {
 
   const _OfferBody({
     required this.order,
+    required this.autoAccept,
     required this.busy,
     required this.prepMinutes,
+    required this.prepMinutesMax,
     required this.onPrepMinutesChanged,
     required this.onAccept,
     required this.onCancel,
@@ -189,6 +242,10 @@ class _OfferBody extends StatelessWidget {
               IconButton(tooltip: 'Bỏ qua', icon: const Icon(Icons.close), onPressed: onSkip),
               const SizedBox(width: 4),
               Text(order.orderCode, style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
+              if (!autoAccept && order.acceptDeadline != null) ...[
+                const SizedBox(width: 10),
+                _ManualCountdownChip(deadline: order.acceptDeadline!),
+              ],
               const Spacer(),
               IconButton(
                 tooltip: 'Xem chi tiết đơn',
@@ -345,7 +402,10 @@ class _OfferBody extends StatelessWidget {
                       ),
                     ),
                   ),
-                  _StepperButton(icon: Icons.add, onPressed: () => onPrepMinutesChanged(prepMinutes + 1)),
+                  _StepperButton(
+                    icon: Icons.add,
+                    onPressed: prepMinutes < prepMinutesMax ? () => onPrepMinutesChanged(prepMinutes + 1) : null,
+                  ),
                 ],
               ),
               const SizedBox(height: 4),
@@ -355,22 +415,103 @@ class _OfferBody extends StatelessWidget {
               ),
               const SizedBox(height: 16),
               // Kiểu Grab: trượt hết thanh mới tính là nhận đơn — tránh nhận nhầm khi lỡ chạm.
-              SlideAction(
-                key: ValueKey(order.id),
-                enabled: !busy,
-                text: 'Xác nhận',
-                textStyle: theme.textTheme.titleMedium?.copyWith(color: Colors.white, fontWeight: FontWeight.w600),
-                outerColor: theme.colorScheme.primary,
-                innerColor: Colors.white,
-                sliderButtonIcon: Icon(Icons.arrow_forward, color: theme.colorScheme.primary),
-                height: 60,
-                borderRadius: 30,
+              _SlideToConfirm(
+                order: order,
+                busy: busy,
+                autoAccept: autoAccept,
                 onSubmit: onAccept,
               ),
             ],
           ),
         ),
       ],
+    );
+  }
+}
+
+/// Thanh trượt xác nhận — khi bật "Tự động nhận đơn", đếm ngược hạn xác nhận (order.acceptDeadline)
+/// được vẽ bằng 1 lớp màu cảnh báo chạy dần từ trái sang phải phía sau thanh trượt (không hiện số
+/// giây, đúng yêu cầu — chỉ hiện bằng màu). Hết giờ mà chưa trượt thì SERVER tự nhận hộ, không có
+/// hành động gì kích hoạt từ đây.
+class _SlideToConfirm extends StatelessWidget {
+  final Order order;
+  final bool busy;
+  final bool autoAccept;
+  final Future<void> Function() onSubmit;
+
+  const _SlideToConfirm({required this.order, required this.busy, required this.autoAccept, required this.onSubmit});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final slide = SlideAction(
+      key: ValueKey(order.id),
+      enabled: !busy,
+      text: 'Xác nhận',
+      textStyle: theme.textTheme.titleMedium?.copyWith(color: Colors.white, fontWeight: FontWeight.w600),
+      outerColor: autoAccept ? Colors.transparent : theme.colorScheme.primary,
+      innerColor: Colors.white,
+      sliderButtonIcon: Icon(Icons.arrow_forward, color: theme.colorScheme.primary),
+      height: 60,
+      borderRadius: 30,
+      onSubmit: onSubmit,
+    );
+
+    if (!autoAccept || order.acceptDeadline == null) return slide;
+
+    final total = order.acceptDeadline!.difference(order.createdAt).inMilliseconds;
+    final remaining = order.acceptDeadline!.difference(DateTime.now()).inMilliseconds;
+    final elapsedFraction = total > 0 ? (1 - remaining / total).clamp(0.0, 1.0) : 1.0;
+    final usedFlex = (elapsedFraction * 1000).round().clamp(0, 1000);
+
+    return Stack(
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(30),
+          child: SizedBox(
+            height: 60,
+            child: Row(
+              children: [
+                if (usedFlex > 0) Expanded(flex: usedFlex, child: Container(color: theme.colorScheme.error.withValues(alpha: 0.55))),
+                if (usedFlex < 1000) Expanded(flex: 1000 - usedFlex, child: Container(color: theme.colorScheme.primary)),
+              ],
+            ),
+          ),
+        ),
+        slide,
+      ],
+    );
+  }
+}
+
+class _ManualCountdownChip extends StatelessWidget {
+  final DateTime deadline;
+  const _ManualCountdownChip({required this.deadline});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    var remaining = deadline.difference(DateTime.now());
+    if (remaining.isNegative) remaining = Duration.zero;
+    final mm = remaining.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final ss = remaining.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.errorContainer,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.timer_outlined, size: 14, color: theme.colorScheme.onErrorContainer),
+          const SizedBox(width: 4),
+          Text(
+            '$mm:$ss',
+            style: theme.textTheme.labelMedium?.copyWith(color: theme.colorScheme.onErrorContainer, fontWeight: FontWeight.bold),
+          ),
+        ],
+      ),
     );
   }
 }

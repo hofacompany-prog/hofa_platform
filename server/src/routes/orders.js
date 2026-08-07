@@ -198,6 +198,17 @@ router.patch('/orders/:id/status', asyncHandler(async (req, res) => {
     }
   }
 
+  // Đơn "làm xong" trễ hơn estimated_prep_minutes đã hứa lúc xác nhận — đánh dấu trễ bao
+  // nhiêu phút để hiện badge ở danh sách đơn hàng (orders_list_screen.dart).
+  if (req.body.status === 'ready_for_pickup' && updated.confirmed_at && updated.estimated_prep_minutes != null) {
+    const elapsedMinutes = (new Date(updated.ready_at) - new Date(updated.confirmed_at)) / 60000;
+    const lateMinutes = Math.round(elapsedMinutes - updated.estimated_prep_minutes);
+    if (lateMinutes > 0) {
+      await db.query('UPDATE orders SET late_minutes = $2 WHERE id = $1', [req.params.id, lateMinutes]);
+      updated.late_minutes = lateMinutes;
+    }
+  }
+
   // Không tự báo cho khách khi chính khách là người vừa bấm huỷ — họ đã biết rồi.
   if (!(req.body.status === 'cancelled' && req.ctx.role === 'customer')) {
     push.notifyCustomerOrderStatus(req.params.id, req.body.status).catch((err) => {

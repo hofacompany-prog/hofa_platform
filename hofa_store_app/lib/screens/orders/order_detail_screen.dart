@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/format.dart';
@@ -19,11 +20,45 @@ class OrderDetailScreen extends ConsumerStatefulWidget {
 
 class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
   bool _updating = false;
+  Timer? _tickTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    // Chỉ để làm mới đồng hồ đếm ngược chuẩn bị đơn mỗi giây, không gắn hành động nào.
+    _tickTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() {});
+    });
+  }
+
+  @override
+  void dispose() {
+    _tickTimer?.cancel();
+    super.dispose();
+  }
 
   Future<void> _updateStatus(String status) async {
     setState(() => _updating = true);
     try {
       await OrderRepository().updateStatus(widget.orderId, status);
+      ref.invalidate(_orderProvider(widget.orderId));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+    } finally {
+      if (mounted) setState(() => _updating = false);
+    }
+  }
+
+  /// Bấm 1 lần là "báo xong" — đi thẳng tới "Chờ tài xế lấy" (thông báo khách + tự tìm tài xế,
+  /// xem PATCH /orders/:id/status), dù state machine DB vẫn bắt buộc qua 'preparing' trước
+  /// (hofa-db/04_api_functions.sql) nên nếu đơn còn ở 'confirmed' thì gọi ngầm 2 bước liền nhau.
+  Future<void> _markDone(String currentStatus) async {
+    setState(() => _updating = true);
+    try {
+      if (currentStatus == 'confirmed') {
+        await OrderRepository().updateStatus(widget.orderId, 'preparing');
+      }
+      await OrderRepository().updateStatus(widget.orderId, 'ready_for_pickup');
       ref.invalidate(_orderProvider(widget.orderId));
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
@@ -80,6 +115,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
         data: (o) {
           final next = nextMerchantStatus[o.status];
           final canCancel = ['placed', 'confirmed', 'preparing'].contains(o.status);
+          final isPrepPhase = o.status == 'confirmed' || o.status == 'preparing';
           return Center(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(24),
@@ -200,17 +236,29 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                         ),
                       ),
                     ],
+                    if (isPrepPhase && o.confirmedAt != null && o.estimatedPrepMinutes != null) ...[
+                      const SizedBox(height: 16),
+                      _PrepCountdownCard(confirmedAt: o.confirmedAt!, estimatedPrepMinutes: o.estimatedPrepMinutes!),
+                    ],
                     const SizedBox(height: 24),
                     Row(
                       children: [
-                        if (next != null)
+                        if (isPrepPhase)
+                          Expanded(
+                            child: FilledButton.icon(
+                              onPressed: _updating ? null : () => _markDone(o.status),
+                              icon: const Icon(Icons.check_circle_outline),
+                              label: const Text('Đã làm xong'),
+                            ),
+                          )
+                        else if (next != null)
                           Expanded(
                             child: FilledButton(
                               onPressed: _updating ? null : () => _updateStatus(next),
                               child: Text('Chuyển sang "${orderStatusLabels[next]}"'),
                             ),
                           ),
-                        if (next != null && canCancel) const SizedBox(width: 12),
+                        if ((isPrepPhase || next != null) && canCancel) const SizedBox(width: 12),
                         if (canCancel)
                           Expanded(
                             child: OutlinedButton(
@@ -241,4 +289,50 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
           ],
         ),
       );
+}
+
+/// Đồng hồ chuẩn bị đơn — chạy từ lúc xác nhận (confirmedAt), hạn là estimatedPrepMinutes.
+/// Còn hạn thì hiện "Còn lại MM:SS", quá hạn thì chuyển đỏ "Đã trễ N phút" (chỉ hiển thị —
+/// late_minutes thật sự được server chốt khi bấm "Đã làm xong", xem PATCH /orders/:id/status).
+class _PrepCountdownCard extends StatelessWidget {
+  final DateTime confirmedAt;
+  final int estimatedPrepMinutes;
+  const _PrepCountdownCard({required this.confirmedAt, required this.estimatedPrepMinutes});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final deadline = confirmedAt.add(Duration(minutes: estimatedPrepMinutes));
+    final remaining = deadline.difference(DateTime.now());
+    final isLate = remaining.isNegative;
+    final shown = isLate ? -remaining : remaining;
+    final mm = shown.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final ss = shown.inSeconds.remainder(60).toString().padLeft(2, '0');
+
+    return Card(
+      elevation: 0,
+      color: isLate ? theme.colorScheme.errorContainer : theme.colorScheme.primary.withValues(alpha: 0.10),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Icon(
+              isLate ? Icons.warning_amber_rounded : Icons.timer_outlined,
+              color: isLate ? theme.colorScheme.onErrorContainer : theme.colorScheme.primary,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                isLate ? 'Đã trễ ${shown.inMinutes} phút' : 'Còn lại $mm:$ss để chuẩn bị đơn',
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: isLate ? theme.colorScheme.onErrorContainer : null,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
