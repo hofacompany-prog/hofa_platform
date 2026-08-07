@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/format.dart';
 import '../../models/order.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/notification_providers.dart';
 import '../../repositories/order_repository.dart';
 import '../../widgets/nav_back_button.dart';
 
@@ -16,6 +17,17 @@ final _ordersProvider = FutureProvider.autoDispose<List<Order>>((ref) async {
   return OrderRepository().listForMerchant(merchant.id, status: status);
 });
 
+/// order_id của mọi thông báo danh mục "Đơn hàng" CHƯA ĐỌC — dùng để chấm đỏ đúng dòng đơn
+/// tương ứng trong danh sách, không phải cờ riêng trên bảng orders (không có cột nào như vậy).
+final _unreadOrderIdsProvider = FutureProvider.autoDispose<Set<String>>((ref) async {
+  final notifications = await ref.watch(notificationRepoProvider).list(category: 'order', limit: 100);
+  return notifications
+      .where((n) => !n.isRead)
+      .map((n) => n.data['order_id'] as String?)
+      .whereType<String>()
+      .toSet();
+});
+
 class OrdersListScreen extends ConsumerWidget {
   const OrdersListScreen({super.key});
 
@@ -23,6 +35,7 @@ class OrdersListScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final ordersAsync = ref.watch(_ordersProvider);
     final selectedStatus = ref.watch(_selectedStatusProvider);
+    final unreadOrderIds = ref.watch(_unreadOrderIdsProvider).valueOrNull ?? const <String>{};
 
     final filters = <String?, String>{
       null: 'Tất cả',
@@ -73,10 +86,29 @@ class OrdersListScreen extends ConsumerWidget {
                     separatorBuilder: (_, __) => const SizedBox(height: 8),
                     itemBuilder: (context, i) {
                       final o = orders[i];
+                      final isUnread = unreadOrderIds.contains(o.id);
                       return Card(
                         child: ListTile(
-                          onTap: () => context.push('/orders/${o.id}'),
-                          title: Text('${o.orderCode} — ${o.shipRecipientName}'),
+                          onTap: () async {
+                            if (isUnread) {
+                              final notifications = await ref.read(notificationRepoProvider).list(category: 'order', limit: 100);
+                              for (final n in notifications) {
+                                if (!n.isRead && n.data['order_id'] == o.id) {
+                                  ref.read(notificationRepoProvider).markRead(n.id).catchError((_) {});
+                                }
+                              }
+                              ref.invalidate(_unreadOrderIdsProvider);
+                              ref.invalidate(unreadOrderCountProvider);
+                            }
+                            if (context.mounted) context.push('/orders/${o.id}');
+                          },
+                          leading: isUnread
+                              ? const CircleAvatar(radius: 5, backgroundColor: Colors.red)
+                              : const SizedBox(width: 10),
+                          title: Text(
+                            '${o.orderCode} — ${o.shipRecipientName}',
+                            style: TextStyle(fontWeight: isUnread ? FontWeight.bold : FontWeight.normal),
+                          ),
                           subtitle: Text('${formatVnd(o.totalAmount)} · ${formatDateTime(o.createdAt)}'),
                           trailing: Chip(label: Text(orderStatusLabels[o.status] ?? o.status)),
                         ),
