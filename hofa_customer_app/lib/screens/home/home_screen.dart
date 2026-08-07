@@ -192,7 +192,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   child: Center(child: CircularProgressIndicator()),
                 ),
                 error: (e, _) => Padding(padding: const EdgeInsets.only(top: 40), child: Center(child: Text('Lỗi: $e'))),
-                data: (merchants) {
+                data: (allMerchants) {
+                  // Cửa hàng tạm đóng (không còn chi nhánh nào mở) chỉ hiện lại khi khách chủ
+                  // động tìm kiếm (xem MerchantCard vẫn xám nó ở đó) — ở đây là danh sách
+                  // duyệt mặc định của trang chủ nên ẩn hẳn, đỡ dẫn khách bấm vào rồi thất vọng.
+                  final merchants = allMerchants.where((m) => m.hasOpenBranch).toList();
                   if (merchants.isEmpty) {
                     return const Padding(
                       padding: EdgeInsets.only(top: 40),
