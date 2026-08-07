@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/format.dart';
 import '../../models/branch.dart';
 import '../../providers/auth_provider.dart';
@@ -179,6 +180,20 @@ class BranchSettingsScreen extends ConsumerWidget {
                     subtitle: const Text('Xem và gỡ các thiết bị đang nhận thông báo'),
                     trailing: const Icon(Icons.chevron_right),
                   ),
+                ),
+                const SizedBox(height: 24),
+                // Bottom bar mobile không có nút đăng xuất riêng (khác NavigationRail ở màn
+                // rộng đã có sẵn icon logout) — đây là cách duy nhất đăng xuất được trên điện
+                // thoại, nên để màu nổi bật (error) thay vì lẫn vào các nút khác.
+                FilledButton.icon(
+                  onPressed: () => Supabase.instance.client.auth.signOut(),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: theme.colorScheme.error,
+                    foregroundColor: theme.colorScheme.onError,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  icon: const Icon(Icons.logout),
+                  label: const Text('Đăng xuất'),
                 ),
               ],
             ),
