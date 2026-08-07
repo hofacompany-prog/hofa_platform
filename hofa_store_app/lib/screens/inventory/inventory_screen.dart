@@ -8,6 +8,7 @@ import '../../providers/auth_provider.dart';
 import '../../repositories/inventory_repository.dart';
 import '../../repositories/merchant_repository.dart';
 import '../../repositories/product_repository.dart';
+import '../../widgets/nav_back_button.dart';
 
 class _InventoryData {
   final List<Branch> branches;
@@ -488,6 +489,7 @@ class InventoryScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
+        leading: const NavBackButton(),
         title: const Text('Kho hàng'),
         actions: [
           dataAsync.maybeWhen(

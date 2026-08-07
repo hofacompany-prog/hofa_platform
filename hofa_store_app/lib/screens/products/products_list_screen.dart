@@ -5,6 +5,7 @@ import '../../core/format.dart';
 import '../../models/product.dart';
 import '../../providers/auth_provider.dart';
 import '../../repositories/product_repository.dart';
+import '../../widgets/nav_back_button.dart';
 import '../../widgets/notification_bell.dart';
 
 final _productsProvider = FutureProvider.autoDispose<List<Product>>((
@@ -341,13 +342,7 @@ class ProductsListScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
-        // Products là 1 tab điều hướng chính (không phải màn được push vào) nên
-        // không tự có nút back mặc định — canPop() phòng trường hợp có vào từ 1 chỗ
-        // khác bằng push thật, còn lại quay thẳng về Trang chủ cho dễ đoán.
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.canPop() ? context.pop() : context.go('/home'),
-        ),
+        leading: const NavBackButton(),
         title: const Text('Sản phẩm'),
         actions: const [NotificationBell()],
       ),

@@ -5,6 +5,7 @@ import '../../core/format.dart';
 import '../../models/order.dart';
 import '../../providers/auth_provider.dart';
 import '../../repositories/order_repository.dart';
+import '../../widgets/nav_back_button.dart';
 
 final _selectedStatusProvider = StateProvider.autoDispose<String?>((ref) => null);
 
@@ -35,7 +36,7 @@ class OrdersListScreen extends ConsumerWidget {
     };
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Đơn hàng')),
+      appBar: AppBar(leading: const NavBackButton(), title: const Text('Đơn hàng')),
       body: Column(
         children: [
           SizedBox(

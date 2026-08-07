@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/category.dart';
 import '../../providers/auth_provider.dart';
 import '../../repositories/product_repository.dart';
+import '../../widgets/nav_back_button.dart';
 
 class _CategoriesData {
   final String merchantId;
@@ -211,6 +212,7 @@ class CategoriesScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
+        leading: const NavBackButton(),
         title: const Text('Danh mục'),
         actions: [
           dataAsync.maybeWhen(

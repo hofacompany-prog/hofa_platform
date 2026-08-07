@@ -5,6 +5,7 @@ import '../../core/format.dart';
 import '../../models/branch.dart';
 import '../../providers/auth_provider.dart';
 import '../../repositories/merchant_repository.dart';
+import '../../widgets/nav_back_button.dart';
 
 final _branchesProvider = FutureProvider.autoDispose<List<Branch>>((ref) async {
   final merchant = await ref.watch(myMerchantProvider.future);
@@ -22,7 +23,7 @@ class BranchSettingsScreen extends ConsumerWidget {
     final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Cài đặt')),
+      appBar: AppBar(leading: const NavBackButton(), title: const Text('Cài đặt')),
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
