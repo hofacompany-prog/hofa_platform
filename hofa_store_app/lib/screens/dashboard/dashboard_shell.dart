@@ -47,16 +47,31 @@ class DashboardShell extends ConsumerWidget {
     if (isMobile) {
       return Scaffold(
         body: child,
-        bottomNavigationBar: NavigationBar(
-          selectedIndex: selectedIndex,
-          onDestinationSelected: (i) => context.go(_shellDestinations[i].path),
-          destinations: _shellDestinations
-              .map((d) => NavigationDestination(
-                    icon: _destinationIcon(d, d.icon, unreadOrders),
-                    selectedIcon: _destinationIcon(d, d.selected, unreadOrders),
-                    label: d.label,
-                  ))
-              .toList(),
+        // 6 mục là hơi nhiều cho 1 thanh tab điện thoại — alwaysShow (mặc định) làm nhãn
+        // các mục chưa chọn chen nhau/dính vào nhau khi màn hẹp. onlyShowSelected chỉ hiện
+        // chữ cho mục đang chọn, mỗi icon có đều không gian như nhau, gọn gàng hơn hẳn.
+        bottomNavigationBar: NavigationBarTheme(
+          data: NavigationBarThemeData(
+            height: 64,
+            labelTextStyle: WidgetStateProperty.resolveWith(
+              (states) => TextStyle(
+                fontSize: 11,
+                fontWeight: states.contains(WidgetState.selected) ? FontWeight.w600 : FontWeight.w400,
+              ),
+            ),
+          ),
+          child: NavigationBar(
+            selectedIndex: selectedIndex,
+            onDestinationSelected: (i) => context.go(_shellDestinations[i].path),
+            labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
+            destinations: _shellDestinations
+                .map((d) => NavigationDestination(
+                      icon: _destinationIcon(d, d.icon, unreadOrders, size: 22),
+                      selectedIcon: _destinationIcon(d, d.selected, unreadOrders, size: 22),
+                      label: d.label,
+                    ))
+                .toList(),
+          ),
         ),
       );
     }
@@ -122,8 +137,9 @@ class DashboardShell extends ConsumerWidget {
     );
   }
 
-  Widget _destinationIcon(NavDestination d, IconData icon, int unreadOrders) {
+  Widget _destinationIcon(NavDestination d, IconData icon, int unreadOrders, {double? size}) {
     final showBadge = d.path == '/orders' && unreadOrders > 0;
-    return showBadge ? Badge(label: Text('$unreadOrders'), child: Icon(icon)) : Icon(icon);
+    final iconWidget = Icon(icon, size: size);
+    return showBadge ? Badge(label: Text('$unreadOrders'), child: iconWidget) : iconWidget;
   }
 }
