@@ -37,7 +37,14 @@ router.get('/merchants', asyncHandler(async (req, res) => {
 
   params.push(limit, offset);
   const rows = await db.query(
-    `SELECT * FROM merchants WHERE ${clauses.join(' AND ')} ORDER BY rating_avg DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
+    `SELECT m.*,
+            EXISTS (
+              SELECT 1 FROM branches b
+               WHERE b.merchant_id = m.id AND b.deleted_at IS NULL AND b.is_open = true
+            ) AS has_open_branch
+       FROM merchants m
+      WHERE ${clauses.join(' AND ')}
+      ORDER BY m.rating_avg DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
     params
   );
   res.json({ ok: true, data: rows });
@@ -67,7 +74,16 @@ router.get('/merchants/:id', asyncHandler(async (req, res) => {
   const isPrivileged = req.ctx.authenticated && (req.ctx.role === 'admin' || row.owner_id === req.ctx.userId);
   if (!isPrivileged) {
     SENSITIVE_MERCHANT_FIELDS.forEach((f) => delete row[f]);
-    return res.json({ ok: true, data: row });
+    // Khách vẫn xem được sản phẩm của cửa hàng đang tạm đóng (chỉ không đặt hàng được, xem
+    // POST /orders) — nên app khách cần biết trạng thái này để tự xám giao diện/khoá nút đặt,
+    // không lộ branches thật (địa chỉ/SĐT từng chi nhánh không cần thiết cho khách).
+    const hasOpenBranch = await db.queryOne(
+      `SELECT EXISTS (
+         SELECT 1 FROM branches WHERE merchant_id = $1 AND deleted_at IS NULL AND is_open = true
+       ) AS value`,
+      [req.params.id]
+    );
+    return res.json({ ok: true, data: { ...row, has_open_branch: hasOpenBranch.value } });
   }
 
   const [owner, branches] = await Promise.all([

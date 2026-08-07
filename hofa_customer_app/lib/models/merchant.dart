@@ -16,6 +16,10 @@ class Merchant {
   // 'quantity' hoặc 'value' — chỉ có ý nghĩa khi merchantType == 'buy_on_behalf', quyết
   // định bảng phí mua hộ (merchant_fee_tiers) tính ngưỡng theo gì.
   final String? buyOnBehalfFeeBasis;
+  // true nếu còn ít nhất 1 chi nhánh đang mở cửa (branches.is_open) — cửa hàng không còn chi
+  // nhánh nào mở thì khách vẫn xem được sản phẩm nhưng không đặt hàng được (server chặn thật
+  // ở POST /orders, đây chỉ để app tự xám giao diện/khoá nút trước khi khách bấm).
+  final bool hasOpenBranch;
 
   Merchant({
     required this.id,
@@ -33,6 +37,7 @@ class Merchant {
     required this.ratingCount,
     this.standardCertifiedAt,
     this.buyOnBehalfFeeBasis,
+    this.hasOpenBranch = true,
   });
 
   bool get isStandard => standardCertifiedAt != null;
@@ -56,5 +61,6 @@ class Merchant {
         standardCertifiedAt:
             json['standard_certified_at'] != null ? DateTime.tryParse(json['standard_certified_at'] as String) : null,
         buyOnBehalfFeeBasis: json['buy_on_behalf_fee_basis'] as String?,
+        hasOpenBranch: json['has_open_branch'] as bool? ?? true,
       );
 }

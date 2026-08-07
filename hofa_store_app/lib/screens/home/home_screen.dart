@@ -137,9 +137,13 @@ class _PreparingCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isOpen = branch?.isOpen ?? true;
+    // Tạm đóng: cửa hàng bị ẩn khỏi kết quả tìm kiếm/xám đi ở app khách, khách vẫn xem được
+    // sản phẩm nhưng không đặt hàng được (xem GET /merchants has_open_branch và POST /orders
+    // chặn tạo đơn khi chi nhánh đóng) — nền đỏ ở đây để chủ cửa hàng nhận ra ngay tình trạng
+    // này thay vì lỡ quên bật lại.
     return Card(
       elevation: 0,
-      color: theme.colorScheme.primary,
+      color: isOpen ? theme.colorScheme.primary : theme.colorScheme.error,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -147,35 +151,26 @@ class _PreparingCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            InkWell(
-              onTap: onToggleOpen,
-              borderRadius: BorderRadius.circular(20),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      Icons.circle,
-                      size: 10,
-                      color: isOpen ? theme.colorScheme.primary : theme.colorScheme.error,
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    isOpen ? 'Đang mở cửa' : 'Tạm đóng cửa',
+                    style: theme.textTheme.labelLarge?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
                     ),
-                    const SizedBox(width: 6),
-                    Text(
-                      isOpen ? 'Đang mở cửa' : 'Tạm đóng',
-                      style: theme.textTheme.labelMedium?.copyWith(
-                        color: Colors.black87,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const Icon(Icons.keyboard_arrow_down, size: 16, color: Colors.black54),
-                  ],
+                  ),
                 ),
-              ),
+                Switch(
+                  value: isOpen,
+                  onChanged: onToggleOpen == null ? null : (_) => onToggleOpen!(),
+                  activeThumbColor: Colors.white,
+                  activeTrackColor: Colors.white.withValues(alpha: 0.4),
+                  inactiveThumbColor: Colors.white,
+                  inactiveTrackColor: Colors.white.withValues(alpha: 0.4),
+                ),
+              ],
             ),
             const Spacer(),
             Text(

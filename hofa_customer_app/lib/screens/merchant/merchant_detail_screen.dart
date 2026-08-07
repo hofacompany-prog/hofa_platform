@@ -79,6 +79,28 @@ class MerchantDetailScreen extends ConsumerWidget {
                 ],
               ),
               if (merchant.isBuyOnBehalf) BuyOnBehalfFeeNotice(merchant: merchant),
+              if (!merchant.hasOpenBranch) ...[
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.errorContainer,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.storefront_outlined, size: 18, color: theme.colorScheme.onErrorContainer),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Cửa hàng đang tạm đóng cửa — bạn vẫn xem được sản phẩm nhưng chưa đặt hàng được lúc này.',
+                          style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onErrorContainer),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               const SizedBox(height: 20),
               const Divider(),
               const SizedBox(height: 8),

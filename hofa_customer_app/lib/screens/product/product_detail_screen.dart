@@ -245,6 +245,10 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
             0,
             (sum, t) => sum + t.price,
           );
+          // Cửa hàng tạm đóng (mọi chi nhánh is_open=false) — vẫn xem được sản phẩm/đánh giá
+          // nhưng khoá nút thêm vào giỏ, server cũng chặn thật ở POST /orders nếu lỡ bỏ qua
+          // được khoá này (vd giỏ hàng thêm từ trước lúc cửa hàng còn mở).
+          final isClosed = merchant != null && !merchant.hasOpenBranch;
 
           return Column(
             children: [
@@ -496,26 +500,42 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
               ),
               SafeArea(
                 child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: FilledButton.icon(
-                    onPressed: (variant == null || _adding)
-                        ? null
-                        : () => _addToCart(
-                            product,
-                            variant,
-                            unitPrice,
-                            toppingGroups,
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (isClosed)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Text(
+                            'Cửa hàng đang tạm đóng cửa, chưa thể đặt hàng lúc này.',
+                            textAlign: TextAlign.center,
+                            style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error),
                           ),
-                    icon: _adding
-                        ? const SizedBox(
-                            height: 18,
-                            width: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.add_shopping_cart),
-                    label: Text(
-                      'Thêm vào giỏ · ${formatVnd((unitPrice + toppingsTotal) * _quantity)}',
-                    ),
+                        ),
+                      FilledButton.icon(
+                        onPressed: (variant == null || _adding || isClosed)
+                            ? null
+                            : () => _addToCart(
+                                product,
+                                variant,
+                                unitPrice,
+                                toppingGroups,
+                              ),
+                        icon: _adding
+                            ? const SizedBox(
+                                height: 18,
+                                width: 18,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.add_shopping_cart),
+                        label: Text(
+                          isClosed
+                              ? 'Cửa hàng đang đóng cửa'
+                              : 'Thêm vào giỏ · ${formatVnd((unitPrice + toppingsTotal) * _quantity)}',
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),

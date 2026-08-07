@@ -25,6 +25,14 @@ router.post('/orders', asyncHandler(async (req, res) => {
     throw new ApiError('BAD_REQUEST', 'items phải là mảng và có ít nhất 1 món', 400);
   }
 
+  // Chặn thật ở server, không chỉ dựa vào UI app khách đã xám nút đặt hàng — khách vẫn có
+  // thể gọi thẳng API. Chi nhánh tạm đóng (is_open=false, công tắc ở màn Trang chủ store
+  // app) thì không tạo đơn mới được, dù vẫn xem được sản phẩm bình thường.
+  const branch = await db.queryOne('SELECT is_open FROM branches WHERE id = $1', [body.branch_id]);
+  if (!branch || !branch.is_open) {
+    throw new ApiError('BRANCH_CLOSED', 'Cửa hàng đang tạm đóng, chưa thể đặt hàng lúc này', 409);
+  }
+
   const order = await db.callRpc('create_order', {
     p_customer_id: req.ctx.userId,
     p_merchant_id: body.merchant_id,
