@@ -8,13 +8,24 @@ import '../../providers/notification_providers.dart';
 import '../../repositories/order_repository.dart';
 import '../../widgets/nav_back_button.dart';
 
-final _selectedStatusProvider = StateProvider.autoDispose<String?>((ref) => null);
+/// Gom 12 trạng thái đơn (order_status, xem 01_schema.sql) lại còn 5 nhóm dễ hiểu cho cửa
+/// hàng — mỗi trạng thái thật thuộc đúng 1 nhóm. "Sắp tới" = đơn mới chưa xác nhận, "Đang
+/// chuẩn bị" = đã nhận đang làm, "Đã làm xong" = đã sẵn sàng, từ lúc chờ tài xế tới lúc đang
+/// giao (không còn là việc của bếp nữa), "Đã hoàn tất"/"Đã hủy" giữ nguyên ý nghĩa gốc.
+const _statusGroups = <String, List<String>>{
+  'Đang chuẩn bị': ['confirmed', 'preparing'],
+  'Đã làm xong': ['ready_for_pickup', 'assigned', 'picked_up', 'delivering', 'delivered'],
+  'Sắp tới': ['pending_payment', 'placed'],
+  'Đã hoàn tất': ['completed'],
+  'Đã hủy': ['cancelled', 'refunded'],
+};
+
+final _selectedGroupProvider = StateProvider.autoDispose<String>((ref) => _statusGroups.keys.first);
 
 final _ordersProvider = FutureProvider.autoDispose<List<Order>>((ref) async {
   final merchant = await ref.watch(myMerchantProvider.future);
   if (merchant == null) return [];
-  final status = ref.watch(_selectedStatusProvider);
-  return OrderRepository().listForMerchant(merchant.id, status: status);
+  return OrderRepository().listForMerchant(merchant.id);
 });
 
 /// order_id của mọi thông báo danh mục "Đơn hàng" CHƯA ĐỌC — dùng để chấm đỏ đúng dòng đơn
@@ -34,19 +45,8 @@ class OrdersListScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final ordersAsync = ref.watch(_ordersProvider);
-    final selectedStatus = ref.watch(_selectedStatusProvider);
+    final selectedGroup = ref.watch(_selectedGroupProvider);
     final unreadOrderIds = ref.watch(_unreadOrderIdsProvider).valueOrNull ?? const <String>{};
-
-    final filters = <String?, String>{
-      null: 'Tất cả',
-      'placed': 'Đơn mới',
-      'confirmed': 'Đã xác nhận',
-      'preparing': 'Đang chuẩn bị',
-      'ready_for_pickup': 'Chờ lấy hàng',
-      'delivering': 'Đang giao',
-      'completed': 'Hoàn tất',
-      'cancelled': 'Đã huỷ',
-    };
 
     return Scaffold(
       appBar: AppBar(leading: const NavBackButton(), title: const Text('Đơn hàng')),
@@ -57,13 +57,13 @@ class OrdersListScreen extends ConsumerWidget {
             child: ListView(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              children: filters.entries
-                  .map((e) => Padding(
+              children: _statusGroups.keys
+                  .map((name) => Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 4),
                         child: ChoiceChip(
-                          label: Text(e.value),
-                          selected: selectedStatus == e.key,
-                          onSelected: (_) => ref.read(_selectedStatusProvider.notifier).state = e.key,
+                          label: Text(name),
+                          selected: selectedGroup == name,
+                          onSelected: (_) => ref.read(_selectedGroupProvider.notifier).state = name,
                         ),
                       ))
                   .toList(),
@@ -74,7 +74,9 @@ class OrdersListScreen extends ConsumerWidget {
             child: ordersAsync.when(
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (e, _) => Center(child: Text('Lỗi tải đơn hàng: $e')),
-              data: (orders) {
+              data: (allOrders) {
+                final statuses = _statusGroups[selectedGroup]!;
+                final orders = allOrders.where((o) => statuses.contains(o.status)).toList();
                 if (orders.isEmpty) {
                   return const Center(child: Text('Không có đơn nào'));
                 }
