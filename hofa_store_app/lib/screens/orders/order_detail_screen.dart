@@ -136,7 +136,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                 Expanded(
                                   child: Text(
                                     o.orderCode,
-                                    style: Theme.of(context).textTheme.titleLarge,
+                                    style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                   ),
@@ -145,12 +145,13 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                 Chip(label: Text(orderStatusLabels[o.status] ?? o.status)),
                               ],
                             ),
-                            const SizedBox(height: 8),
-                            Text('Đặt lúc ${formatDateTime(o.createdAt)}'),
-                            const Divider(height: 24),
-                            Text('Người nhận: ${o.shipRecipientName}'),
-                            Text('SĐT: ${o.shipRecipientPhone}'),
-                            Text('Địa chỉ: ${o.shipLine1}, ${o.shipProvince}'),
+                            const SizedBox(height: 4),
+                            Text(
+                              '${o.items.length} món · Đặt lúc ${formatDateTime(o.createdAt)}',
+                              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: Theme.of(context).colorScheme.outline,
+                                  ),
+                            ),
                           ],
                         ),
                       ),
@@ -164,21 +165,68 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                           children: [
                             Text('Món hàng', style: Theme.of(context).textTheme.titleMedium),
                             const SizedBox(height: 8),
-                            ...o.items.map((item) => Padding(
-                                  padding: const EdgeInsets.symmetric(vertical: 4),
-                                  child: Row(
-                                    children: [
-                                      Text('${item.quantity}x '),
-                                      Expanded(child: Text('${item.productName} ${item.variantName ?? ''}')),
-                                      Text(formatVnd(item.lineTotal)),
-                                    ],
-                                  ),
-                                )),
+                            ...o.items.map(
+                              (item) => Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 6),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text('${item.quantity} x ', style: const TextStyle(fontWeight: FontWeight.bold)),
+                                        Expanded(
+                                          child: Text(
+                                            item.variantName != null && item.variantName!.isNotEmpty
+                                                ? '${item.productName} (${item.variantName})'
+                                                : item.productName,
+                                            style: const TextStyle(fontWeight: FontWeight.bold),
+                                          ),
+                                        ),
+                                        Text(formatVnd(item.lineTotal), style: const TextStyle(fontWeight: FontWeight.bold)),
+                                      ],
+                                    ),
+                                    for (final t in item.toppings)
+                                      Padding(
+                                        padding: const EdgeInsets.only(top: 4, left: 20),
+                                        child: Row(
+                                          children: [
+                                            Expanded(
+                                              child: Text(
+                                                t.name,
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .bodyMedium
+                                                    ?.copyWith(color: Theme.of(context).colorScheme.outline),
+                                              ),
+                                            ),
+                                            Text(
+                                              t.price > 0 ? '+${formatVnd(t.price)}' : '0',
+                                              style: Theme.of(context)
+                                                  .textTheme
+                                                  .bodyMedium
+                                                  ?.copyWith(color: Theme.of(context).colorScheme.outline),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    if (item.note != null && item.note!.trim().isNotEmpty)
+                                      Padding(
+                                        padding: const EdgeInsets.only(top: 4, left: 20),
+                                        child: Text(
+                                          'Ghi chú: ${item.note}',
+                                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                                color: Theme.of(context).colorScheme.outline,
+                                                fontStyle: FontStyle.italic,
+                                              ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ),
                             const Divider(),
-                            _totalRow('Tạm tính', o.subtotal),
-                            _totalRow('Phí giao hàng', o.deliveryFee),
-                            if (o.discountAmount > 0) _totalRow('Giảm giá', -o.discountAmount),
-                            _totalRow('Tổng cộng', o.totalAmount, bold: true),
+                            _totalRow('Tổng tiền món', o.subtotal, bold: true),
                             const SizedBox(height: 4),
                             Text('Thanh toán: ${o.paymentMethod.toUpperCase()} · ${o.paymentStatus}'),
                           ],
