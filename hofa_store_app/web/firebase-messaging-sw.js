@@ -55,6 +55,12 @@ function writeBadgeCount(count) {
  * worker không có sẵn access token); ngay khi app mở lên, unreadOrderCountProvider (xem
  * lib/providers/notification_providers.dart, BadgeService) tự chỉnh lại đúng số thật.
  */
+// KHÔNG tự gọi self.registration.showNotification() ở đây — payload luôn có sẵn field
+// "notification" (xem server/src/push.js sendToTokens), nên firebase-messaging-compat.js đã
+// TỰ hiện thông báo trước khi callback này chạy. Gọi thêm 1 lần nữa sẽ hiện lặp 2 thông báo
+// giống hệt nhau cho MỌI push (bug thật đã xảy ra, xác nhận qua log server chỉ gửi 1 lần).
+// onBackgroundMessage ở đây chỉ còn dùng để cộng dồn badge — side effect độc lập, không đụng
+// gì tới việc hiển thị.
 messaging.onBackgroundMessage(async (payload) => {
   const data = payload.data || {};
 
@@ -62,16 +68,6 @@ messaging.onBackgroundMessage(async (payload) => {
     const count = (await readBadgeCount()) + 1;
     await writeBadgeCount(count);
     self.registration.setAppBadge(count).catch(() => {});
-  }
-
-  const title = (payload.notification && payload.notification.title) || data.title;
-  const body = (payload.notification && payload.notification.body) || data.body;
-  if (title) {
-    self.registration.showNotification(title, {
-      body,
-      icon: 'icons/Icon-192.png',
-      data,
-    });
   }
 });
 
