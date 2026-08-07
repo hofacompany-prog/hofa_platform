@@ -70,6 +70,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final categoriesAsync = ref.watch(categoriesProvider);
     final searchQuery = ref.watch(productSearchProvider);
     final searchedProductsAsync = ref.watch(searchedProductsProvider);
+    final searchedMerchantsAsync = ref.watch(searchedMerchantsProvider);
     final isSearching = searchQuery.isNotEmpty;
     final showSuggestions = _suggestions.isNotEmpty || _suggesting;
 
@@ -145,32 +146,68 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             if (showSuggestions)
               const SizedBox()
             else if (isSearching)
-              searchedProductsAsync.when(
-                loading: () => const Padding(
-                  padding: EdgeInsets.only(top: 40),
-                  child: Center(child: CircularProgressIndicator()),
-                ),
-                error: (e, _) => Padding(padding: const EdgeInsets.only(top: 40), child: Center(child: Text('Lỗi: $e'))),
-                data: (products) {
-                  if (products.isEmpty) {
+              Builder(
+                builder: (context) {
+                  final merchants = searchedMerchantsAsync.valueOrNull ?? [];
+                  final productsLoading = searchedProductsAsync.isLoading;
+                  final merchantsLoading = searchedMerchantsAsync.isLoading;
+                  if (productsLoading && merchantsLoading) {
                     return const Padding(
                       padding: EdgeInsets.only(top: 40),
-                      child: Center(child: Text('Không tìm thấy sản phẩm nào')),
+                      child: Center(child: CircularProgressIndicator()),
                     );
                   }
-                  return GridView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: products.length,
-                    gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                      maxCrossAxisExtent: 220,
-                      mainAxisSpacing: 12,
-                      crossAxisSpacing: 12,
-                      childAspectRatio: 0.68,
+                  return searchedProductsAsync.when(
+                    loading: () => const Padding(
+                      padding: EdgeInsets.only(top: 40),
+                      child: Center(child: CircularProgressIndicator()),
                     ),
-                    itemBuilder: (context, i) {
-                      final p = products[i];
-                      return ProductCard(product: p, onTap: () => context.push('/products/${p.id}'));
+                    error: (e, _) =>
+                        Padding(padding: const EdgeInsets.only(top: 40), child: Center(child: Text('Lỗi: $e'))),
+                    data: (products) {
+                      if (products.isEmpty && merchants.isEmpty) {
+                        return const Padding(
+                          padding: EdgeInsets.only(top: 40),
+                          child: Center(child: Text('Không tìm thấy cửa hàng hay sản phẩm nào')),
+                        );
+                      }
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Cửa hàng khớp tên tìm kiếm — hiện cả cửa hàng đang tạm đóng (khác
+                          // danh sách duyệt mặc định phía dưới, MerchantCard tự xám nó lại).
+                          if (merchants.isNotEmpty) ...[
+                            Text('Cửa hàng', style: Theme.of(context).textTheme.titleMedium),
+                            const SizedBox(height: 8),
+                            ...merchants.map(
+                              (m) => Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: MerchantCard(merchant: m, onTap: () => context.push('/merchants/${m.id}')),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                          ],
+                          if (products.isNotEmpty) ...[
+                            Text('Sản phẩm', style: Theme.of(context).textTheme.titleMedium),
+                            const SizedBox(height: 8),
+                            GridView.builder(
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              itemCount: products.length,
+                              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                                maxCrossAxisExtent: 220,
+                                mainAxisSpacing: 12,
+                                crossAxisSpacing: 12,
+                                childAspectRatio: 0.68,
+                              ),
+                              itemBuilder: (context, i) {
+                                final p = products[i];
+                                return ProductCard(product: p, onTap: () => context.push('/products/${p.id}'));
+                              },
+                            ),
+                          ],
+                        ],
+                      );
                     },
                   );
                 },

@@ -127,6 +127,18 @@ final searchedProductsProvider = FutureProvider.autoDispose<List<Product>>((
   return ref.watch(productRepoProvider).products(q: q);
 });
 
+/// Dùng CHUNG ô tìm kiếm/state với searchedProductsProvider (productSearchProvider) — khách
+/// gõ 1 lần ra cả cửa hàng khớp tên lẫn sản phẩm khớp tên/thuộc cửa hàng đó, không cần 2 ô
+/// tìm kiếm riêng. Không lọc has_open_branch — tìm kiếm chủ động thì vẫn phải ra cả cửa hàng
+/// đang tạm đóng (MerchantCard tự xám nó), khác với danh sách duyệt mặc định ở trang chủ.
+final searchedMerchantsProvider = FutureProvider.autoDispose<List<Merchant>>((
+  ref,
+) {
+  final q = ref.watch(productSearchProvider);
+  if (q.isEmpty) return Future.value(<Merchant>[]);
+  return ref.watch(merchantRepoProvider).merchants(q: q);
+});
+
 final productDetailProvider = FutureProvider.autoDispose
     .family<Product, String>(
       (ref, id) => ref.watch(productRepoProvider).product(id),
