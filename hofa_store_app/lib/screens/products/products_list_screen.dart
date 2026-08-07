@@ -5,6 +5,7 @@ import '../../core/format.dart';
 import '../../models/product.dart';
 import '../../providers/auth_provider.dart';
 import '../../repositories/product_repository.dart';
+import '../../widgets/notification_bell.dart';
 
 final _productsProvider = FutureProvider.autoDispose<List<Product>>((
   ref,
@@ -342,6 +343,7 @@ class ProductsListScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Sản phẩm'),
         actions: [
+          const NotificationBell(),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
             child: OutlinedButton.icon(

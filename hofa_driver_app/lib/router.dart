@@ -12,6 +12,7 @@ import 'screens/earnings/earnings_screen.dart';
 import 'screens/profile/profile_screen.dart';
 import 'screens/delivery/delivery_detail_screen.dart';
 import 'screens/offer/offer_screen.dart';
+import 'screens/notifications/notifications_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
@@ -53,6 +54,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(path: '/', builder: (context, state) => const HomeScreen()),
           GoRoute(path: '/earnings', builder: (context, state) => const EarningsScreen()),
           GoRoute(path: '/profile', builder: (context, state) => const ProfileScreen()),
+          GoRoute(path: '/notifications', builder: (context, state) => const NotificationsScreen()),
         ],
       ),
     ],

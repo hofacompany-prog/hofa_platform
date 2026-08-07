@@ -38,7 +38,7 @@ class PushService {
         ),
         onDidReceiveNotificationResponse: (response) {
           if (response.payload != null)
-            _handleData(jsonDecode(response.payload!) as Map<String, dynamic>);
+            handleData(jsonDecode(response.payload!) as Map<String, dynamic>);
         },
       );
       await _local
@@ -65,14 +65,14 @@ class PushService {
     );
 
     FirebaseMessaging.onMessage.listen(_onForegroundMessage);
-    FirebaseMessaging.onMessageOpenedApp.listen((m) => _handleData(m.data));
+    FirebaseMessaging.onMessageOpenedApp.listen((m) => handleData(m.data));
 
     final initial = await FirebaseMessaging.instance.getInitialMessage();
     // init() được gọi và await TRƯỚC runApp() (xem main.dart) — Navigator chưa tồn tại lúc
-    // này, điều hướng ngay sẽ bị _handleData() âm thầm bỏ qua (context == null). Đợi 1 khung
+    // này, điều hướng ngay sẽ bị handleData() âm thầm bỏ qua (context == null). Đợi 1 khung
     // hình đầu tiên vẽ xong (luôn sau runApp) rồi mới điều hướng.
     if (initial != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _handleData(initial.data));
+      WidgetsBinding.instance.addPostFrameCallback((_) => handleData(initial.data));
     }
   }
 
@@ -115,10 +115,10 @@ class PushService {
     }
     // Đơn mới cần xác nhận: mở thẳng màn nhận đơn, không chờ người dùng bấm vào thông báo —
     // đúng kiểu Grab/Shopee (app tự bật lên khi đang mở sẵn). Áp dụng cả trên web.
-    if (message.data['type'] == 'delivery_offer') _handleData(message.data);
+    if (message.data['type'] == 'delivery_offer') handleData(message.data);
   }
 
-  void _handleData(Map<String, dynamic> data) {
+  void handleData(Map<String, dynamic> data) {
     final context = _navigatorKey?.currentContext;
     if (context == null) return;
     // Thông báo admin gửi tay (màn "Thông báo" ở web admin) — screen là route admin tự chọn

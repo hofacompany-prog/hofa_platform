@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/format.dart';
 import '../../models/product.dart';
 import '../../providers/app_providers.dart';
+import '../../widgets/notification_bell.dart';
 import '../../widgets/category_grid.dart';
 import '../../widgets/merchant_card.dart';
 import '../../widgets/network_image_box.dart';
@@ -83,6 +84,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ],
         ),
         centerTitle: false,
+        actions: const [NotificationBell()],
       ),
       body: RefreshIndicator(
         onRefresh: () async => ref.invalidate(merchantsProvider),

@@ -3,6 +3,7 @@ import '../models/address.dart';
 import '../models/branch.dart';
 import '../models/category.dart';
 import '../models/delivery.dart';
+import '../models/app_notification.dart';
 import '../models/merchant.dart';
 import '../models/merchant_fee_tier.dart';
 import '../models/order.dart';
@@ -13,6 +14,7 @@ import '../models/topping.dart';
 import '../models/voucher.dart';
 import '../models/wholesale_tier.dart';
 import '../repositories/merchant_repository.dart';
+import '../repositories/notification_repository.dart';
 import '../repositories/order_repository.dart';
 import '../repositories/product_repository.dart';
 import '../repositories/review_repository.dart';
@@ -26,6 +28,17 @@ final orderRepoProvider = Provider((ref) => OrderRepository());
 final voucherRepoProvider = Provider((ref) => VoucherRepository());
 final reviewRepoProvider = Provider((ref) => ReviewRepository());
 final shippingRepoProvider = Provider((ref) => ShippingRepository());
+final notificationRepoProvider = Provider((ref) => NotificationRepository());
+
+/// Hộp thư thông báo — autoDispose để mỗi lần vào lại màn Thông báo đều lấy dữ liệu mới.
+final notificationsProvider = FutureProvider.autoDispose<List<AppNotification>>(
+  (ref) => ref.watch(notificationRepoProvider).list(),
+);
+
+/// Số chưa đọc — hiện badge trên icon chuông ở màn chủ.
+final unreadNotificationCountProvider = FutureProvider.autoDispose<int>(
+  (ref) => ref.watch(notificationRepoProvider).unreadCount(),
+);
 
 /// Voucher công khai cho khách chọn ở màn thanh toán (xem voucher_picker_dialog.dart).
 final publicVouchersProvider = FutureProvider.autoDispose

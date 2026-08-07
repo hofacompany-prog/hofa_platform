@@ -8,6 +8,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/delivery_providers.dart';
 import '../../repositories/delivery_repository.dart';
 import '../../repositories/driver_repository.dart';
+import '../../widgets/notification_bell.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -108,6 +109,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             const Text('HOFA Tài xế', style: TextStyle(fontWeight: FontWeight.bold)),
           ],
         ),
+        actions: const [NotificationBell()],
       ),
       body: RefreshIndicator(
         onRefresh: () async {

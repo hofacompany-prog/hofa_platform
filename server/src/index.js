@@ -34,6 +34,7 @@ app.use('/', require('./routes/voucher-settings'));
 app.use('/', require('./routes/shipping'));
 app.use('/', require('./routes/order-settings'));
 app.use('/', require('./routes/admin-notifications'));
+app.use('/', require('./routes/notifications'));
 app.use('/', require('./routes/uploads'));
 
 app.use((req, res) => {
