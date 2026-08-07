@@ -6,6 +6,8 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'env.dart';
+import 'format.dart';
+import '../models/user_device.dart';
 import '../repositories/device_repository.dart';
 import '../repositories/notification_repository.dart';
 
@@ -57,7 +59,12 @@ class PushService {
           );
     }
 
-    await _registerTokenIfLoggedIn();
+    // Đợi runApp() vẽ xong khung hình đầu (như getInitialMessage bên dưới) — _registerDevice
+    // có thể cần mở dialog hỏi gỡ thiết bị cũ (đạt giới hạn max_devices), gọi ngay lúc này thì
+    // navigatorKey.currentContext vẫn null vì init() được await TRƯỚC runApp() (xem main.dart).
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _registerTokenIfLoggedIn(),
+    );
     FirebaseMessaging.instance.onTokenRefresh.listen(
       (_) => _registerTokenIfLoggedIn(),
     );
@@ -85,9 +92,55 @@ class PushService {
       final token = await FirebaseMessaging.instance.getToken(
         vapidKey: kIsWeb ? Env.firebaseVapidKey : null,
       );
-      if (token != null) await DeviceRepository().registerPushToken(token);
+      if (token != null) await _registerDevice(token);
     } catch (e) {
       debugPrint('[push] Không đăng ký được push token: $e');
+    }
+  }
+
+  /// Đăng ký thiết bị — nếu cửa hàng đã đủ max_devices thiết bị, server từ chối và trả về
+  /// thiết bị cũ nhất; hỏi người dùng có muốn gỡ nó để đăng ký thiết bị này hay không. Từ
+  /// chối thì không đăng ký được push trên máy này (KHÔNG chặn dùng app), tránh trường hợp
+  /// nhiều thiết bị cùng nhận trùng thông báo đơn hàng.
+  Future<void> _registerDevice(
+    String token, {
+    bool forceReplaceOldest = false,
+  }) async {
+    final result = await DeviceRepository().registerPushToken(
+      token,
+      forceReplaceOldest: forceReplaceOldest,
+    );
+    if (!result.limitReached) return;
+
+    final context = _navigatorKey?.currentContext;
+    if (context == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('Đã đạt giới hạn thiết bị'),
+        content: Text(
+          'Cửa hàng này chỉ được đăng nhập tối đa ${result.maxDevices} thiết bị nhận thông '
+          'báo cùng lúc. Gỡ thiết bị đăng nhập cũ nhất '
+          '("${result.oldestDeviceName?.isNotEmpty == true ? result.oldestDeviceName : 'Thiết bị không tên'}"'
+          '${result.oldestDevicePlatform != null ? ' · ${devicePlatformLabels[result.oldestDevicePlatform] ?? result.oldestDevicePlatform}' : ''}'
+          '${result.oldestDeviceLastActive != null ? ', hoạt động lần cuối ${formatDateTime(result.oldestDeviceLastActive!)}' : ''}'
+          ') để thiết bị này nhận thông báo thay?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Để sau'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Gỡ và tiếp tục'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      await _registerDevice(token, forceReplaceOldest: true);
     }
   }
 

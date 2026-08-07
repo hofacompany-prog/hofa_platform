@@ -3,6 +3,7 @@ import '../models/admin_stats.dart';
 import '../models/user_profile.dart';
 import '../models/user_detail.dart';
 import '../models/merchant.dart';
+import '../models/merchant_device.dart';
 import '../models/merchant_fee_tier.dart';
 import '../models/branch_hours.dart';
 import '../models/driver.dart';
@@ -152,6 +153,24 @@ class AdminRepository {
 
   Future<void> deleteMerchant(String id) async {
     await _api.delete('/merchants/$id');
+  }
+
+  // ---- Thiết bị đăng nhập của cửa hàng (chủ + nhân viên) ----
+
+  Future<List<MerchantDevice>> merchantDevices(String merchantId) async {
+    final list = await _api.get('/merchants/$merchantId/devices') as List;
+    return list
+        .map((e) => MerchantDevice.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// "Tắt" — xoá push_token, ngừng gửi thông báo tới máy đó nhưng vẫn giữ lịch sử đăng nhập.
+  Future<void> disableMerchantDevice(String merchantId, String deviceId) async {
+    await _api.patch('/merchants/$merchantId/devices/$deviceId');
+  }
+
+  Future<void> deleteMerchantDevice(String merchantId, String deviceId) async {
+    await _api.delete('/merchants/$merchantId/devices/$deviceId');
   }
 
   Future<Branch> createBranch(

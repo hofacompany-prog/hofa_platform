@@ -4,13 +4,14 @@ const asyncHandler = require('../asyncHandler');
 const { ApiError } = require('../errors');
 const { pickFields, requireFields, pagination, requireAuth, requireRole, requireMerchantAccess } = require('../utils');
 const supabaseAdmin = require('../supabaseAdmin');
+const push = require('../push');
 
 const MERCHANT_FIELDS = [
   'name', 'slug', 'description', 'merchant_type', 'logo_url', 'cover_url', 'phone', 'email',
   'business_license_no', 'tax_code', 'legal_doc_urls',
   'bank_name', 'bank_account_no', 'bank_account_name',
   'commission_rate', 'min_order_amount', 'avg_prep_minutes',
-  'buy_on_behalf_fee_basis'
+  'buy_on_behalf_fee_basis', 'max_devices'
 ];
 
 const BRANCH_FIELDS = [
@@ -269,6 +270,52 @@ router.post('/merchants/:merchantId/staff', asyncHandler(async (req, res) => {
 router.delete('/merchants/:merchantId/staff/:id', asyncHandler(async (req, res) => {
   await requireMerchantAccess(req.ctx, req.params.merchantId);
   await db.deleteById('merchant_staff', req.params.id);
+  res.json({ ok: true, data: { deleted: true } });
+}));
+
+// ---- Thiết bị đăng nhập (chủ + nhân viên cùng chung 1 danh sách/1 giới hạn max_devices) ----
+// Dùng ở web admin (màn chi tiết cửa hàng) để admin xem/tắt/xoá — quyền cũng cho phép chính
+// chủ cửa hàng quản lý (requireMerchantAccess như mọi route khác của merchant), dù hiện tại
+// store app chưa có màn nào gọi tới các route này.
+
+router.get('/merchants/:merchantId/devices', asyncHandler(async (req, res) => {
+  await requireMerchantAccess(req.ctx, req.params.merchantId);
+  const userIds = await push.resolveMerchantUserIds([req.params.merchantId]);
+  if (!userIds.length) return res.json({ ok: true, data: [] });
+  const rows = await db.query(
+    `SELECT d.*, u.full_name AS user_full_name, u.role AS user_role
+       FROM user_devices d
+       JOIN users u ON u.id = d.user_id
+      WHERE d.user_id = ANY($1::uuid[])
+      ORDER BY d.last_active_at DESC NULLS LAST`,
+    [userIds]
+  );
+  res.json({ ok: true, data: rows });
+}));
+
+/** Chỉ "tắt" (xoá push_token, ngừng gửi thông báo tới máy đó) — giữ lại dòng để vẫn thấy
+ * lịch sử đăng nhập. Không thể tự "bật" lại vì token phải do chính máy đó tạo ra. */
+router.patch('/merchants/:merchantId/devices/:deviceId', asyncHandler(async (req, res) => {
+  await requireMerchantAccess(req.ctx, req.params.merchantId);
+  const userIds = await push.resolveMerchantUserIds([req.params.merchantId]);
+  const device = await db.queryOne(
+    'SELECT id FROM user_devices WHERE id = $1 AND user_id = ANY($2::uuid[])',
+    [req.params.deviceId, userIds]
+  );
+  if (!device) throw new ApiError('NOT_FOUND', 'Không tìm thấy thiết bị', 404);
+  const updated = await db.updateById('user_devices', req.params.deviceId, { push_token: null });
+  res.json({ ok: true, data: updated });
+}));
+
+router.delete('/merchants/:merchantId/devices/:deviceId', asyncHandler(async (req, res) => {
+  await requireMerchantAccess(req.ctx, req.params.merchantId);
+  const userIds = await push.resolveMerchantUserIds([req.params.merchantId]);
+  const device = await db.queryOne(
+    'SELECT id FROM user_devices WHERE id = $1 AND user_id = ANY($2::uuid[])',
+    [req.params.deviceId, userIds]
+  );
+  if (!device) throw new ApiError('NOT_FOUND', 'Không tìm thấy thiết bị', 404);
+  await db.deleteById('user_devices', req.params.deviceId);
   res.json({ ok: true, data: { deleted: true } });
 }));
 

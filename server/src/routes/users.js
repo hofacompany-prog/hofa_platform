@@ -3,6 +3,7 @@ const db = require('../db');
 const asyncHandler = require('../asyncHandler');
 const { ApiError } = require('../errors');
 const { pickFields, requireFields, pagination, requireAuth, requireRole, requireOwnRow } = require('../utils');
+const push = require('../push');
 
 const ADDRESS_FIELDS = [
   'label', 'recipient_name', 'recipient_phone', 'line1', 'ward', 'district',
@@ -180,9 +181,50 @@ router.post('/devices', asyncHandler(async (req, res) => {
     const updated = await db.updateById('user_devices', existing.id, data);
     return res.json({ ok: true, data: updated });
   }
+
+  // Thiết bị THẬT SỰ mới với tài khoản này (chưa từng có dòng nào) — nếu tài khoản thuộc 1
+  // cửa hàng (chủ hoặc nhân viên), kiểm tra giới hạn max_devices của cửa hàng đó (tính chung
+  // toàn bộ chủ + nhân viên) trước khi cho thêm, tránh nhiều thiết bị cùng nhận trùng thông
+  // báo đơn hàng hoặc thiết bị test cũ chiếm chỗ mãi. Khách hàng/tài xế không bị giới hạn này.
+  if (['merchant_owner', 'merchant_staff'].includes(req.ctx.role)) {
+    const merchant = await db.queryOne(
+      `SELECT m.id, m.max_devices FROM merchants m
+        LEFT JOIN merchant_staff ms ON ms.merchant_id = m.id AND ms.user_id = $1
+       WHERE (m.owner_id = $1 OR ms.user_id = $1) AND m.deleted_at IS NULL
+       LIMIT 1`,
+      [req.ctx.userId]
+    );
+    if (merchant) {
+      const merchantUserIds = await push.resolveMerchantUserIds([merchant.id]);
+      const devices = await db.query(
+        `SELECT * FROM user_devices WHERE user_id = ANY($1::uuid[]) ORDER BY last_active_at ASC NULLS FIRST`,
+        [merchantUserIds]
+      );
+      if (devices.length >= merchant.max_devices) {
+        if (req.body.force_replace_oldest === true) {
+          await db.deleteById('user_devices', devices[0].id);
+        } else {
+          return res.json({
+            ok: true,
+            data: {
+              status: 'limit_reached',
+              max_devices: merchant.max_devices,
+              oldest_device: {
+                id: devices[0].id,
+                device_name: devices[0].device_name,
+                platform: devices[0].platform,
+                last_active_at: devices[0].last_active_at
+              }
+            }
+          });
+        }
+      }
+    }
+  }
+
   data.user_id = req.ctx.userId;
   const created = await db.insertRow('user_devices', data);
-  res.status(201).json({ ok: true, data: created });
+  res.status(201).json({ ok: true, data: { status: 'ok', ...created } });
 }));
 
 // Gỡ 1 thiết bị khỏi danh sách — dừng gửi push tới máy đó (xoá push_token khỏi

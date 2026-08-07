@@ -31,17 +31,29 @@ Future<String> _localDeviceId() async {
 class DeviceRepository {
   final _api = ApiClient.instance;
 
-  Future<void> registerPushToken(String pushToken) async {
+  /// Đăng ký thiết bị nhận push. Với tài khoản cửa hàng (chủ/nhân viên), server chặn nếu
+  /// cửa hàng đó đã đủ merchants.max_devices thiết bị — trả về [DeviceRegisterResult] báo
+  /// "limit_reached" kèm thông tin thiết bị cũ nhất thay vì đăng ký thẳng, để gọi lại với
+  /// [forceReplaceOldest] = true sau khi người dùng xác nhận gỡ thiết bị cũ đó.
+  Future<DeviceRegisterResult> registerPushToken(
+    String pushToken, {
+    bool forceReplaceOldest = false,
+  }) async {
     final deviceId = await _localDeviceId();
-    await _api.post(
+    final result = await _api.post(
       '/devices',
       body: {
         'device_id': deviceId,
         'device_name': 'HOFA Store',
         'platform': _currentPlatform(),
         'push_token': pushToken,
+        if (forceReplaceOldest) 'force_replace_oldest': true,
       },
     );
+    if (result is Map && result['status'] == 'limit_reached') {
+      return DeviceRegisterResult.limitReached(result.cast<String, dynamic>());
+    }
+    return const DeviceRegisterResult.ok();
   }
 
   /// Mã máy cục bộ hiện tại — dùng để đánh dấu "Thiết bị này" trong màn danh sách
@@ -57,4 +69,31 @@ class DeviceRepository {
   }
 
   Future<void> remove(String id) => _api.delete('/devices/$id');
+}
+
+/// Kết quả gọi POST /devices — [limitReached] = true nghĩa là server TỪ CHỐI đăng ký (chưa
+/// tạo dòng mới) vì cửa hàng đã đủ số thiết bị tối đa, kèm thông tin thiết bị cũ nhất để hỏi
+/// người dùng có muốn gỡ nó đi rồi đăng ký lại (forceReplaceOldest: true) hay không.
+class DeviceRegisterResult {
+  final bool limitReached;
+  final int? maxDevices;
+  final String? oldestDeviceName;
+  final String? oldestDevicePlatform;
+  final DateTime? oldestDeviceLastActive;
+
+  const DeviceRegisterResult.ok()
+    : limitReached = false,
+      maxDevices = null,
+      oldestDeviceName = null,
+      oldestDevicePlatform = null,
+      oldestDeviceLastActive = null;
+
+  DeviceRegisterResult.limitReached(Map<String, dynamic> json)
+    : limitReached = true,
+      maxDevices = (json['max_devices'] as num?)?.toInt(),
+      oldestDeviceName = (json['oldest_device'] as Map?)?['device_name'] as String?,
+      oldestDevicePlatform = (json['oldest_device'] as Map?)?['platform'] as String?,
+      oldestDeviceLastActive = DateTime.tryParse(
+        '${(json['oldest_device'] as Map?)?['last_active_at']}',
+      );
 }

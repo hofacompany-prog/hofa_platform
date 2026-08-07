@@ -7,6 +7,7 @@ import '../../models/branch_hours.dart';
 import '../../providers/admin_providers.dart';
 import '../../widgets/image_upload_field.dart';
 import '../../widgets/multi_image_upload_field.dart';
+import 'merchant_devices_card.dart';
 import 'merchant_fee_tiers_card.dart';
 import 'merchants_screen.dart' show merchantStatusLabels;
 
@@ -678,6 +679,8 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
                       const SizedBox(height: 16),
                       MerchantFeeTiersCard(merchant: m),
                     ],
+                    const SizedBox(height: 16),
+                    MerchantDevicesCard(merchant: m),
                   ],
                 ),
               ),
