@@ -86,7 +86,7 @@ async function sendBroadcastToRoles(roles, { title, body, badge = false }) {
     `SELECT DISTINCT d.push_token
        FROM user_devices d
        JOIN users u ON u.id = d.user_id
-      WHERE u.role = ANY($1::text[]) AND u.deleted_at IS NULL AND d.push_token IS NOT NULL`,
+      WHERE u.role::text = ANY($1::text[]) AND u.deleted_at IS NULL AND d.push_token IS NOT NULL`,
     [roles]
   );
   const tokens = devices.map((d) => d.push_token).filter(Boolean);

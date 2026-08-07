@@ -43,7 +43,7 @@ router.get('/admin/notifications/audience', asyncHandler(async (req, res) => {
         `SELECT COUNT(DISTINCT d.push_token) AS count
            FROM user_devices d
            JOIN users u ON u.id = d.user_id
-          WHERE u.role = ANY($1::text[]) AND u.deleted_at IS NULL AND d.push_token IS NOT NULL`,
+          WHERE u.role::text = ANY($1::text[]) AND u.deleted_at IS NULL AND d.push_token IS NOT NULL`,
         [AUDIENCE_ROLES[audienceType]]
       );
   res.json({ ok: true, data: { count: Number(row.count) } });
