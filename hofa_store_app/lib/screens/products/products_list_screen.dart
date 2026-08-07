@@ -342,25 +342,7 @@ class ProductsListScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Sản phẩm'),
-        actions: [
-          const NotificationBell(),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-            child: OutlinedButton.icon(
-              onPressed: () => context.push('/topping-groups/new'),
-              icon: const Icon(Icons.add),
-              label: const Text('Thêm topping'),
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            child: FilledButton.icon(
-              onPressed: () => context.push('/products/new'),
-              icon: const Icon(Icons.add),
-              label: const Text('Thêm sản phẩm'),
-            ),
-          ),
-        ],
+        actions: const [NotificationBell()],
       ),
       body: RefreshIndicator(
         onRefresh: () async {
@@ -370,6 +352,52 @@ class ProductsListScreen extends ConsumerWidget {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            // 2 nút hành động chính — 2 icon+chữ đủ dài để tràn ngang nếu để nguyên trong
+            // AppBar (nhất là màn điện thoại hẹp). Giới hạn chung 3/4 bề ngang màn hình, chữ
+            // tự thu nhỏ (FittedBox) nếu vẫn không đủ chỗ thay vì tràn/xuống dòng lệch.
+            Center(
+              child: FractionallySizedBox(
+                widthFactor: 0.75,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => context.push('/topping-groups/new'),
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: const [
+                              Icon(Icons.add, size: 18),
+                              SizedBox(width: 4),
+                              Text('Thêm topping'),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: () => context.push('/products/new'),
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: const [
+                              Icon(Icons.add, size: 18),
+                              SizedBox(width: 4),
+                              Text('Thêm sản phẩm'),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
             productsAsync.when(
               loading: () => const Padding(
                 padding: EdgeInsets.symmetric(vertical: 24),
