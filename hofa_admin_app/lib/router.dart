@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -20,8 +21,11 @@ import 'screens/settings/order_code_screen.dart';
 import 'screens/vouchers/vouchers_screen.dart';
 import 'screens/notifications/notifications_screen.dart';
 
+final adminNavigatorKey = GlobalKey<NavigatorState>();
+
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
+    navigatorKey: adminNavigatorKey,
     initialLocation: '/',
     refreshListenable: GoRouterRefreshStream(
       Supabase.instance.client.auth.onAuthStateChange,

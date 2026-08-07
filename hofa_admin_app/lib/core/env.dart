@@ -4,6 +4,10 @@ class Env {
   static const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
   static const supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
   static const apiBaseUrl = String.fromEnvironment('API_BASE_URL');
+  static const appVersion = String.fromEnvironment(
+    'APP_VERSION',
+    defaultValue: '0.1.0+1',
+  );
 
   static void assertConfigured() {
     if (supabaseUrl.isEmpty || supabaseAnonKey.isEmpty || apiBaseUrl.isEmpty) {
