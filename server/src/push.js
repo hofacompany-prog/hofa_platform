@@ -39,6 +39,10 @@ const FCM_BATCH_SIZE = 500;
 async function saveNotifications(userIds, { title, body, data = {}, category = 'system' }) {
   const ids = [...new Set(userIds)].filter(Boolean);
   if (!ids.length) return [];
+  // TODO: log tạm để soi xem 1 sự kiện có gọi saveNotifications 2 lần không, và nếu có thì
+  // từ cùng 1 process (bug gọi trùng trong code) hay 2 process khác nhau (2 instance server
+  // cùng chạy) — xoá sau khi xác định được nguyên nhân gửi thông báo trùng lặp.
+  console.log(`[notifications] saveNotifications pid=${process.pid} title="${title}" users=${JSON.stringify(ids)}`);
   try {
     return await db.insertRows(
       'notifications',
