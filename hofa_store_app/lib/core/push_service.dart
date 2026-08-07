@@ -68,7 +68,12 @@ class PushService {
     FirebaseMessaging.onMessageOpenedApp.listen((m) => _handleData(m.data));
 
     final initial = await FirebaseMessaging.instance.getInitialMessage();
-    if (initial != null) _handleData(initial.data);
+    // init() được gọi và await TRƯỚC runApp() (xem main.dart) — Navigator chưa tồn tại lúc
+    // này, điều hướng ngay sẽ bị _handleData() âm thầm bỏ qua (context == null). Đợi 1 khung
+    // hình đầu tiên vẽ xong (luôn sau runApp) rồi mới điều hướng.
+    if (initial != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _handleData(initial.data));
+    }
   }
 
   Future<void> _registerTokenIfLoggedIn() async {
@@ -116,6 +121,13 @@ class PushService {
   void _handleData(Map<String, dynamic> data) {
     final context = _navigatorKey?.currentContext;
     if (context == null) return;
+    // Thông báo admin gửi tay (màn "Thông báo" ở web admin) — screen là route admin tự chọn
+    // lúc soạn thông báo, không liên quan gì đơn hàng nên phải xét trước nhánh order_id.
+    if (data['type'] == 'admin_broadcast') {
+      final screen = data['screen'] as String?;
+      if (screen != null && screen.isNotEmpty) context.go(screen);
+      return;
+    }
     final orderId = data['order_id'] as String?;
     if (orderId == null) return;
 

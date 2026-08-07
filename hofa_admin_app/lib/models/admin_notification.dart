@@ -9,6 +9,7 @@ class AdminNotification {
   final int sentCount;
   final int totalCount;
   final bool showBadge;
+  final String? targetScreen;
   final DateTime createdAt;
   final String? createdByName;
   final List<String> recipientNames;
@@ -24,6 +25,7 @@ class AdminNotification {
     required this.totalCount,
     required this.createdAt,
     this.showBadge = false,
+    this.targetScreen,
     this.createdByName,
     this.recipientNames = const [],
     this.targetMerchantNames = const [],
@@ -39,6 +41,7 @@ class AdminNotification {
         sentCount: (json['sent_count'] as num?)?.toInt() ?? 0,
         totalCount: (json['total_count'] as num?)?.toInt() ?? 0,
         showBadge: json['show_badge'] as bool? ?? false,
+        targetScreen: json['target_screen'] as String?,
         createdAt:
             DateTime.tryParse(json['created_at'] as String? ?? '') ??
             DateTime.now(),
@@ -55,4 +58,27 @@ const audienceTypeLabels = {
   'customer': 'Khách hàng',
   'merchant': 'Cửa hàng',
   'driver': 'Tài xế',
+};
+
+/// Màn app sẽ mở khi người dùng bấm vào thông báo — khác nhau theo audienceType vì mỗi
+/// app (customer/store/driver) có route riêng. Giá trị (key) là route thật của app đó, xem
+/// core/push_service.dart của từng app để biết nó xử lý route này thế nào.
+const Map<String, Map<String, String>> notificationTargetScreensByAudience = {
+  'customer': {
+    '/': 'Trang chủ',
+    '/orders': 'Đơn hàng của tôi',
+    '/cart': 'Giỏ hàng',
+    '/profile': 'Hồ sơ',
+  },
+  'merchant': {
+    '/products': 'Sản phẩm (trang chủ)',
+    '/orders': 'Đơn hàng',
+    '/inventory': 'Kho hàng',
+    '/settings': 'Cài đặt',
+  },
+  'driver': {
+    '/': 'Trang chủ',
+    '/earnings': 'Thu nhập',
+    '/profile': 'Hồ sơ',
+  },
 };

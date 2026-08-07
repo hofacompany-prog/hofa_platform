@@ -90,6 +90,8 @@ router.post('/admin/notifications', asyncHandler(async (req, res) => {
   const userIds = audienceType !== 'merchant' && Array.isArray(req.body.user_ids)
     ? req.body.user_ids.filter(Boolean) : [];
   const showBadge = req.body.show_badge === true;
+  const targetScreen = typeof req.body.target_screen === 'string' && req.body.target_screen.trim()
+    ? req.body.target_screen.trim() : null;
 
   const isSpecific = merchantIds.length > 0 || userIds.length > 0;
   const resolvedUserIds = audienceType === 'merchant'
@@ -97,8 +99,8 @@ router.post('/admin/notifications', asyncHandler(async (req, res) => {
     : userIds;
 
   const { sent, total } = isSpecific
-    ? await push.sendToUserIds(resolvedUserIds, { title, body, badge: showBadge })
-    : await push.sendBroadcastToRoles(AUDIENCE_ROLES[audienceType], { title, body, badge: showBadge });
+    ? await push.sendToUserIds(resolvedUserIds, { title, body, badge: showBadge, screen: targetScreen })
+    : await push.sendBroadcastToRoles(AUDIENCE_ROLES[audienceType], { title, body, badge: showBadge, screen: targetScreen });
 
   const saved = await db.insertRow('admin_notifications', {
     title,
@@ -106,6 +108,7 @@ router.post('/admin/notifications', asyncHandler(async (req, res) => {
     audience_type: audienceType,
     target: isSpecific ? 'specific' : 'all',
     show_badge: showBadge,
+    target_screen: targetScreen,
     sent_count: sent,
     total_count: total,
     created_by: req.ctx.userId

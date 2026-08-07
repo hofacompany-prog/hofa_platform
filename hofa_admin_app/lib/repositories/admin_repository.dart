@@ -372,6 +372,7 @@ class AdminRepository {
     List<String>? userIds,
     List<String>? merchantIds,
     bool showBadge = false,
+    String? targetScreen,
   }) async => AdminNotification.fromJson(
     await _api.post(
           '/admin/notifications',
@@ -383,6 +384,7 @@ class AdminRepository {
             if (merchantIds != null && merchantIds.isNotEmpty)
               'merchant_ids': merchantIds,
             'show_badge': showBadge,
+            if (targetScreen != null) 'target_screen': targetScreen,
           },
         )
         as Map<String, dynamic>,

@@ -28,6 +28,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   String _audienceType = 'customer';
   bool _sendToAll = true;
   bool _showBadge = false;
+  String? _targetScreen;
   final List<UserProfile> _selectedUsers = [];
   final List<Merchant> _selectedMerchants = [];
 
@@ -96,6 +97,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       _selectedMerchants.clear();
       _allAudienceCount = null;
       _specificAudienceCount = null;
+      _targetScreen = null;
     });
     if (_sendToAll) {
       _loadAllAudienceCount();
@@ -210,6 +212,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                 ? _selectedMerchants.map((m) => m.id).toList()
                 : null,
             showBadge: _showBadge,
+            targetScreen: _targetScreen,
           );
       _titleCtrl.clear();
       _bodyCtrl.clear();
@@ -218,6 +221,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         _selectedMerchants.clear();
         _specificAudienceCount = null;
         _showBadge = false;
+        _targetScreen = null;
       });
       ref.invalidate(notificationsProvider);
       if (mounted) {
@@ -455,6 +459,35 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                               'người nhận (chỉ áp dụng nếu họ đã "Thêm vào màn hình chính"). '
                               'Thông báo về đơn hàng luôn tự hiện số, không cần bật ở đây.',
                             ),
+                          ),
+                          const SizedBox(height: 8),
+                          DropdownButtonFormField<String?>(
+                            initialValue: _targetScreen,
+                            decoration: const InputDecoration(
+                              labelText: 'Khi bấm vào thông báo, mở màn nào',
+                              helperText:
+                                  'Để trống thì bấm vào chỉ mở app ở màn mặc định, không nhảy tới đâu cụ thể.',
+                              helperMaxLines: 2,
+                              border: OutlineInputBorder(),
+                            ),
+                            items: [
+                              const DropdownMenuItem(
+                                value: null,
+                                child: Text('Không chỉ định'),
+                              ),
+                              ...(notificationTargetScreensByAudience[_audienceType] ??
+                                      const {})
+                                  .entries
+                                  .map(
+                                    (e) => DropdownMenuItem(
+                                      value: e.key,
+                                      child: Text(e.value),
+                                    ),
+                                  ),
+                            ],
+                            onChanged: _sending
+                                ? null
+                                : (v) => setState(() => _targetScreen = v),
                           ),
                           const SizedBox(height: 8),
                           SizedBox(
@@ -793,6 +826,15 @@ class _NotificationCard extends StatelessWidget {
                   const Chip(
                     visualDensity: VisualDensity.compact,
                     label: Text('Có badge'),
+                  ),
+                if (notification.targetScreen != null)
+                  Chip(
+                    visualDensity: VisualDensity.compact,
+                    avatar: const Icon(Icons.open_in_new, size: 14),
+                    label: Text(
+                      notificationTargetScreensByAudience[notification.audienceType]?[notification.targetScreen] ??
+                          notification.targetScreen!,
+                    ),
                   ),
                 if (notification.createdByName != null)
                   Chip(

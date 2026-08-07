@@ -81,7 +81,7 @@ async function sendPushToUser(userId, { title, body, data = {}, badge = true }) 
  * thông báo — dùng cho màn "Thông báo" ở web admin, target=all. [roles] vd ['customer'],
  * ['driver'], ['merchant_owner','merchant_staff']. Trả về { sent, total }.
  */
-async function sendBroadcastToRoles(roles, { title, body, badge = false }) {
+async function sendBroadcastToRoles(roles, { title, body, badge = false, screen = null }) {
   const devices = await db.query(
     `SELECT DISTINCT d.push_token
        FROM user_devices d
@@ -93,7 +93,9 @@ async function sendBroadcastToRoles(roles, { title, body, badge = false }) {
   const { sent } = await sendToTokens(tokens, {
     title,
     body,
-    data: { type: 'admin_broadcast' },
+    // screen: route nội bộ app nhận sẽ mở khi bấm vào thông báo — bỏ hẳn key này nếu không
+    // chỉ định, tránh gửi chuỗi "null" (mọi giá trị data đều bị ép thành string cho FCM).
+    data: { type: 'admin_broadcast', ...(screen ? { screen } : {}) },
     badge
   });
   return { sent, total: tokens.length };
@@ -116,7 +118,7 @@ async function resolveMerchantUserIds(merchantIds) {
  * Gửi push cho 1 danh sách user_id cụ thể (admin tự chọn ở màn Thông báo) — dùng cho
  * target = specific_users. Trả về { sent, total } để ghi vào admin_notifications.
  */
-async function sendToUserIds(userIds, { title, body, badge = false }) {
+async function sendToUserIds(userIds, { title, body, badge = false, screen = null }) {
   if (!userIds.length) return { sent: 0, total: 0 };
   const devices = await db.query(
     'SELECT DISTINCT push_token FROM user_devices WHERE user_id = ANY($1::uuid[]) AND push_token IS NOT NULL',
@@ -126,7 +128,7 @@ async function sendToUserIds(userIds, { title, body, badge = false }) {
   const { sent } = await sendToTokens(tokens, {
     title,
     body,
-    data: { type: 'admin_broadcast' },
+    data: { type: 'admin_broadcast', ...(screen ? { screen } : {}) },
     badge
   });
   return { sent, total: tokens.length };
