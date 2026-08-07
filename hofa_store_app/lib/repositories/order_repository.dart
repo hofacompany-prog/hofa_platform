@@ -28,10 +28,16 @@ class OrderRepository {
 
   Future<Order> get(String id) async => Order.fromJson(await _api.get('/orders/$id') as Map<String, dynamic>);
 
-  Future<Order> updateStatus(String id, String status, {String? note}) async =>
+  Future<Order> updateStatus(
+    String id,
+    String status, {
+    String? note,
+    int? estimatedPrepMinutes,
+  }) async =>
       Order.fromJson(await _api.patch('/orders/$id/status', body: {
         'status': status,
         if (note != null && note.isNotEmpty) 'note': note,
+        if (estimatedPrepMinutes != null) 'estimated_prep_minutes': estimatedPrepMinutes,
       }) as Map<String, dynamic>);
 
   /// Thử lại tìm tài xế online gần nhất — dùng khi đơn đã "Chờ tài xế lấy" nhưng

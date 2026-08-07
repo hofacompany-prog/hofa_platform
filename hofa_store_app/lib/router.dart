@@ -64,8 +64,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/orders/offer/:id',
-        builder: (context, state) =>
-            OrderOfferScreen(orderId: state.pathParameters['id']!),
+        builder: (context, state) => OrderOfferScreen(
+          orderId: state.pathParameters['id']!,
+          notificationId: state.extra as String?,
+        ),
       ),
       ShellRoute(
         builder: (context, state, child) => DashboardShell(child: child),

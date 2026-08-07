@@ -7,6 +7,7 @@ import '../../models/branch.dart';
 import '../../models/finance_summary.dart';
 import '../../models/merchant_today_stats.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/notification_providers.dart';
 import '../../repositories/merchant_repository.dart';
 import '../../widgets/notification_bell.dart';
 
@@ -38,6 +39,7 @@ class HomeScreen extends ConsumerWidget {
     final statsAsync = ref.watch(merchantTodayStatsProvider);
     final todayFinanceAsync = ref.watch(financeSummaryProvider('today'));
     final branches = ref.watch(_homeBranchesProvider).valueOrNull ?? const <Branch>[];
+    final unreadOrders = ref.watch(unreadOrderCountProvider).valueOrNull ?? 0;
     final mainBranch = branches.isEmpty
         ? null
         : branches.firstWhere((b) => b.isMain, orElse: () => branches.first);
@@ -113,7 +115,12 @@ class HomeScreen extends ConsumerWidget {
                 children: [
                   ...kNavDestinations
                       .where((d) => d.path != '/home')
-                      .map((d) => _ShortcutTile(icon: d.selected, label: d.label, path: d.path)),
+                      .map((d) => _ShortcutTile(
+                            icon: d.selected,
+                            label: d.label,
+                            path: d.path,
+                            badgeCount: d.path == '/orders' ? unreadOrders : 0,
+                          )),
                   // Danh mục và Kho hàng không còn nằm trong thanh điều hướng chính (đỡ chật,
                   // nhường chỗ cho Tài chính) nhưng vẫn cần dùng được — giữ lại làm lối tắt ở
                   // đây, giống Thiết bị.
@@ -274,8 +281,14 @@ class _ShortcutTile extends StatelessWidget {
   final IconData icon;
   final String label;
   final String path;
+  final int badgeCount;
 
-  const _ShortcutTile({required this.icon, required this.label, required this.path});
+  const _ShortcutTile({
+    required this.icon,
+    required this.label,
+    required this.path,
+    this.badgeCount = 0,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -286,14 +299,18 @@ class _ShortcutTile extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: 52,
-            height: 52,
-            decoration: BoxDecoration(
-              color: theme.colorScheme.primary.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(14),
+          Badge(
+            label: Text('$badgeCount'),
+            isLabelVisible: badgeCount > 0,
+            child: Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primary.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(icon, color: theme.colorScheme.primary),
             ),
-            child: Icon(icon, color: theme.colorScheme.primary),
           ),
           const SizedBox(height: 6),
           Text(

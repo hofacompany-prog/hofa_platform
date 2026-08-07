@@ -1,3 +1,15 @@
+class OrderItemTopping {
+  final String name;
+  final int price;
+
+  OrderItemTopping({required this.name, required this.price});
+
+  factory OrderItemTopping.fromJson(Map<String, dynamic> json) => OrderItemTopping(
+        name: json['name'] as String? ?? '',
+        price: (json['price'] as num?)?.toInt() ?? 0,
+      );
+}
+
 class OrderItem {
   final String id;
   final String productName;
@@ -6,6 +18,7 @@ class OrderItem {
   final int quantity;
   final int lineTotal;
   final String? note;
+  final List<OrderItemTopping> toppings;
 
   OrderItem({
     required this.id,
@@ -15,6 +28,7 @@ class OrderItem {
     required this.quantity,
     required this.lineTotal,
     this.note,
+    this.toppings = const [],
   });
 
   factory OrderItem.fromJson(Map<String, dynamic> json) => OrderItem(
@@ -25,6 +39,10 @@ class OrderItem {
         quantity: (json['quantity'] as num?)?.toInt() ?? 0,
         lineTotal: (json['line_total'] as num?)?.toInt() ?? 0,
         note: json['note'] as String?,
+        toppings: (json['toppings'] as List?)
+                ?.map((e) => OrderItemTopping.fromJson(e as Map<String, dynamic>))
+                .toList() ??
+            const [],
       );
 }
 
@@ -46,6 +64,8 @@ class Order {
   final String paymentStatus;
   final DateTime createdAt;
   final DateTime? acceptDeadline;
+  final String? customerNote;
+  final int? estimatedPrepMinutes;
   final List<OrderItem> items;
 
   Order({
@@ -66,6 +86,8 @@ class Order {
     required this.paymentStatus,
     required this.createdAt,
     this.acceptDeadline,
+    this.customerNote,
+    this.estimatedPrepMinutes,
     required this.items,
   });
 
@@ -87,6 +109,8 @@ class Order {
         paymentStatus: json['payment_status'] as String? ?? 'pending',
         createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ?? DateTime.now(),
         acceptDeadline: json['accept_deadline'] != null ? DateTime.tryParse(json['accept_deadline'].toString()) : null,
+        customerNote: json['customer_note'] as String?,
+        estimatedPrepMinutes: (json['estimated_prep_minutes'] as num?)?.toInt(),
         items: (json['items'] as List?)?.map((e) => OrderItem.fromJson(e as Map<String, dynamic>)).toList() ?? [],
       );
 }

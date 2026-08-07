@@ -195,7 +195,16 @@ router.patch('/orders/:id/status', asyncHandler(async (req, res) => {
     p_force: req.ctx.role === 'admin'
   });
   if (req.body.status === 'confirmed') {
-    await db.query('UPDATE orders SET accept_deadline = NULL WHERE id = $1', [req.params.id]);
+    // estimated_prep_minutes: cửa hàng tự chỉnh lúc trượt nhận đơn (màn nhận đơn store app) —
+    // không bắt buộc, đơn quá hạn tự xác nhận (autoConfirmExpiredOrder) hay admin ép trạng
+    // thái thì không có giá trị này, cứ để NULL.
+    const prepMinutes = Number.isInteger(req.body.estimated_prep_minutes) && req.body.estimated_prep_minutes > 0
+      ? req.body.estimated_prep_minutes
+      : null;
+    await db.query(
+      'UPDATE orders SET accept_deadline = NULL, estimated_prep_minutes = COALESCE($2, estimated_prep_minutes) WHERE id = $1',
+      [req.params.id, prepMinutes]
+    );
   }
 
   // Không tự báo cho khách khi chính khách là người vừa bấm huỷ — họ đã biết rồi.

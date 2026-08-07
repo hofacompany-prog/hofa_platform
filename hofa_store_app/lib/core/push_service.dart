@@ -185,17 +185,20 @@ class PushService {
     final orderId = data['order_id'] as String?;
     if (orderId == null) return;
 
-    // Bấm thẳng push (ngoài màn hình chính) cũng tính là đã đọc, giống bấm trong danh sách
-    // hộp thư — notification_id do server nhét sẵn vào data (xem push.js sendPushToUser),
-    // không cần thêm bước tra cứu API nào khác.
+    // notification_id do server nhét sẵn vào data (xem push.js sendPushToUser) — bấm thẳng
+    // push (ngoài màn hình chính) tính là đã đọc GIỐNG bấm trong danh sách hộp thư, TRỪ
+    // order_offer: mở màn nhận đơn ra chưa có nghĩa là đã xử lý, nếu bấm X bỏ qua mà chưa
+    // trượt nhận/huỷ thì badge đỏ phải còn nguyên — order_offer_screen.dart tự đánh dấu đã
+    // đọc khi thực sự nhận/huỷ xong (xem OrderOfferScreen.notificationId).
     final notificationId = data['notification_id'] as String?;
-    if (notificationId != null) {
+    final isOrderOffer = data['type'] == 'order_offer';
+    if (notificationId != null && !isOrderOffer) {
       NotificationRepository().markRead(notificationId).catchError((_) {});
     }
 
     switch (data['type']) {
       case 'order_offer':
-        context.push('/orders/offer/$orderId');
+        context.push('/orders/offer/$orderId', extra: notificationId);
         break;
       case 'order_auto_confirmed':
       case 'order_auto_cancelled':
