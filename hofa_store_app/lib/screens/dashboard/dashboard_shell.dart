@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/notification_providers.dart';
 
 class DashboardShell extends ConsumerWidget {
   final Widget child;
@@ -50,6 +51,11 @@ class DashboardShell extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final merchantAsync = ref.watch(myMerchantProvider);
     final location = GoRouterState.of(context).matchedLocation;
+    // Watch ở đây (widget luôn mounted xuyên suốt app) để badge biểu tượng PWA ở màn hình
+    // chính luôn tự đồng bộ đúng số đơn chưa đọc — side effect nằm trong provider, xem
+    // notification_providers.dart. Kết quả count cũng tận dụng luôn để hiện badge ngay
+    // trên tab "Đơn hàng" của NavigationRail cho rõ ràng hơn nữa.
+    final unreadOrders = ref.watch(unreadOrderCountProvider).valueOrNull ?? 0;
 
     return Scaffold(
       body: Row(
@@ -99,11 +105,18 @@ class DashboardShell extends ConsumerWidget {
             ),
             destinations: _destinations
                 .map(
-                  (d) => NavigationRailDestination(
-                    icon: Icon(d.icon),
-                    selectedIcon: Icon(d.selected),
-                    label: Text(d.label),
-                  ),
+                  (d) {
+                    final showBadge = d.path == '/orders' && unreadOrders > 0;
+                    return NavigationRailDestination(
+                      icon: showBadge
+                          ? Badge(label: Text('$unreadOrders'), child: Icon(d.icon))
+                          : Icon(d.icon),
+                      selectedIcon: showBadge
+                          ? Badge(label: Text('$unreadOrders'), child: Icon(d.selected))
+                          : Icon(d.selected),
+                      label: Text(d.label),
+                    );
+                  },
                 )
                 .toList(),
           ),

@@ -10,18 +10,31 @@ const { pagination, requireAuth } = require('../utils');
 router.get('/notifications', asyncHandler(async (req, res) => {
   requireAuth(req.ctx);
   const { limit, offset } = pagination(req.query);
+  const params = [req.ctx.userId];
+  let categoryClause = '';
+  if (req.query.category) {
+    params.push(req.query.category);
+    categoryClause = ` AND category = $${params.length}`;
+  }
+  params.push(limit, offset);
   const rows = await db.query(
-    'SELECT * FROM notifications WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3',
-    [req.ctx.userId, limit, offset]
+    `SELECT * FROM notifications WHERE user_id = $1${categoryClause} ORDER BY created_at DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
+    params
   );
   res.json({ ok: true, data: rows });
 }));
 
 router.get('/notifications/unread-count', asyncHandler(async (req, res) => {
   requireAuth(req.ctx);
+  const params = [req.ctx.userId];
+  let categoryClause = '';
+  if (req.query.category) {
+    params.push(req.query.category);
+    categoryClause = ' AND category = $2';
+  }
   const row = await db.queryOne(
-    'SELECT COUNT(*) AS count FROM notifications WHERE user_id = $1 AND read_at IS NULL',
-    [req.ctx.userId]
+    `SELECT COUNT(*) AS count FROM notifications WHERE user_id = $1 AND read_at IS NULL${categoryClause}`,
+    params
   );
   res.json({ ok: true, data: { count: Number(row.count) } });
 }));

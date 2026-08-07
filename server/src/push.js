@@ -32,14 +32,21 @@ const FCM_BATCH_SIZE = 500;
  * độc lập hoàn toàn với việc gửi push qua FCM có thành công hay không, vì mục đích của hộp
  * thư trong app là user vẫn xem lại được kể cả khi không có push_token/chưa cấp quyền
  * thông báo trình duyệt/thiết bị. Không throw — lỗi ghi không được làm hỏng luồng gửi push.
+ * Trả về mảng rỗng nếu lỗi/không có ai để ghi; trả về đúng các dòng vừa tạo (kèm id) khi
+ * thành công — sendPushToUser dùng id này để nhét vào data payload FCM (notification_id),
+ * cho phép app đánh dấu đã đọc thẳng khi bấm push mà không cần gọi API tra cứu.
  */
-async function saveNotifications(userIds, { title, body, data = {} }) {
+async function saveNotifications(userIds, { title, body, data = {}, category = 'system' }) {
   const ids = [...new Set(userIds)].filter(Boolean);
-  if (!ids.length) return;
+  if (!ids.length) return [];
   try {
-    await db.insertRows('notifications', ids.map((userId) => ({ user_id: userId, title, body, data })));
+    return await db.insertRows(
+      'notifications',
+      ids.map((userId) => ({ user_id: userId, title, body, data, category }))
+    );
   } catch (err) {
     console.error('[notifications] Không ghi được hộp thư:', err.message);
+    return [];
   }
 }
 
@@ -79,18 +86,23 @@ async function sendToTokens(tokens, { title, body, data = {}, badge = false }) {
 
 /**
  * Gửi push notification cho MỌI thiết bị đã đăng ký (bảng user_devices) của 1 user.
- * data phải toàn giá trị string (giới hạn của FCM data payload). badge mặc định true vì mọi
- * nơi gọi hàm này đều là thông báo liên quan đơn hàng (orderOffer.js, dispatch.js,
- * notifyCustomerOrderStatus) — loại thông báo mặc định cộng badge theo yêu cầu nghiệp vụ.
+ * data phải toàn giá trị string (giới hạn của FCM data payload). badge/category mặc định
+ * true/'order' vì mọi nơi gọi hàm này đều là thông báo liên quan đơn hàng/chuyến giao
+ * (orderOffer.js, dispatch.js, notifyCustomerOrderStatus).
+ *
+ * Chỉ gửi cho ĐÚNG 1 user (khác sendBroadcastToRoles/sendToUserIds gửi nhiều user cùng lúc
+ * với 1 payload chung) nên nhét thẳng được id dòng notifications vừa tạo vào data —
+ * notification_id — để app đánh dấu đã đọc ngay khi bấm push, không cần thêm API tra cứu.
  */
-async function sendPushToUser(userId, { title, body, data = {}, badge = true }) {
+async function sendPushToUser(userId, { title, body, data = {}, badge = true, category = 'order' }) {
   const devices = await db.query(
     'SELECT push_token FROM user_devices WHERE user_id = $1 AND push_token IS NOT NULL',
     [userId]
   );
   const tokens = devices.map((d) => d.push_token).filter(Boolean);
-  await saveNotifications([userId], { title, body, data });
-  return sendToTokens(tokens, { title, body, data, badge });
+  const [saved] = await saveNotifications([userId], { title, body, data, category });
+  const fcmData = { ...data, category, ...(saved ? { notification_id: saved.id } : {}) };
+  return sendToTokens(tokens, { title, body, data: fcmData, badge });
 }
 
 /**
@@ -98,8 +110,8 @@ async function sendPushToUser(userId, { title, body, data = {}, badge = true }) 
  * thông báo — dùng cho màn "Thông báo" ở web admin, target=all. [roles] vd ['customer'],
  * ['driver'], ['merchant_owner','merchant_staff']. Trả về { sent, total }.
  */
-async function sendBroadcastToRoles(roles, { title, body, badge = false, screen = null }) {
-  const data = { type: 'admin_broadcast', ...(screen ? { screen } : {}) };
+async function sendBroadcastToRoles(roles, { title, body, badge = false, screen = null, category = 'system' }) {
+  const data = { type: 'admin_broadcast', category, ...(screen ? { screen } : {}) };
 
   // Toàn bộ user thuộc nhóm role — KHÔNG lọc theo có push_token hay không, vì hộp thư trong
   // app phải thấy được thông báo này kể cả khi thiết bị chưa đăng ký/chưa cấp quyền push.
@@ -107,7 +119,7 @@ async function sendBroadcastToRoles(roles, { title, body, badge = false, screen 
     `SELECT id FROM users WHERE role::text = ANY($1::text[]) AND deleted_at IS NULL`,
     [roles]
   );
-  await saveNotifications(users.map((u) => u.id), { title, body, data });
+  await saveNotifications(users.map((u) => u.id), { title, body, data, category });
 
   const devices = await db.query(
     `SELECT DISTINCT d.push_token
@@ -140,10 +152,10 @@ async function resolveMerchantUserIds(merchantIds) {
  * Gửi push cho 1 danh sách user_id cụ thể (admin tự chọn ở màn Thông báo) — dùng cho
  * target = specific_users. Trả về { sent, total } để ghi vào admin_notifications.
  */
-async function sendToUserIds(userIds, { title, body, badge = false, screen = null }) {
+async function sendToUserIds(userIds, { title, body, badge = false, screen = null, category = 'system' }) {
   if (!userIds.length) return { sent: 0, total: 0 };
-  const data = { type: 'admin_broadcast', ...(screen ? { screen } : {}) };
-  await saveNotifications(userIds, { title, body, data });
+  const data = { type: 'admin_broadcast', category, ...(screen ? { screen } : {}) };
+  await saveNotifications(userIds, { title, body, data, category });
 
   const devices = await db.query(
     'SELECT DISTINCT push_token FROM user_devices WHERE user_id = ANY($1::uuid[]) AND push_token IS NOT NULL',

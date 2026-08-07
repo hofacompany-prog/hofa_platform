@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'env.dart';
 import '../repositories/device_repository.dart';
+import '../repositories/notification_repository.dart';
 
 /// Nhận FCM push khi có đơn mới (order_offer/order_auto_confirmed/order_auto_cancelled) và
 /// điều hướng thẳng tới màn tương ứng — kể cả khi app đang mở (foreground), đang nền, hay
@@ -130,6 +131,14 @@ class PushService {
     }
     final orderId = data['order_id'] as String?;
     if (orderId == null) return;
+
+    // Bấm thẳng push (ngoài màn hình chính) cũng tính là đã đọc, giống bấm trong danh sách
+    // hộp thư — notification_id do server nhét sẵn vào data (xem push.js sendPushToUser),
+    // không cần thêm bước tra cứu API nào khác.
+    final notificationId = data['notification_id'] as String?;
+    if (notificationId != null) {
+      NotificationRepository().markRead(notificationId).catchError((_) {});
+    }
 
     switch (data['type']) {
       case 'order_offer':

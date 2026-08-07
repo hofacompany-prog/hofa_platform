@@ -7,6 +7,7 @@ class AppNotification {
   final String title;
   final String body;
   final Map<String, dynamic> data;
+  final String category;
   final DateTime? readAt;
   final DateTime createdAt;
 
@@ -15,6 +16,7 @@ class AppNotification {
     required this.title,
     required this.body,
     this.data = const {},
+    this.category = 'system',
     this.readAt,
     required this.createdAt,
   });
@@ -27,6 +29,7 @@ class AppNotification {
         title: json['title'] as String? ?? '',
         body: json['body'] as String? ?? '',
         data: (json['data'] as Map?)?.cast<String, dynamic>() ?? const {},
+        category: json['category'] as String? ?? 'system',
         readAt: json['read_at'] != null
             ? DateTime.tryParse(json['read_at'] as String)
             : null,
@@ -35,3 +38,10 @@ class AppNotification {
             DateTime.now(),
       );
 }
+
+const notificationCategoryLabels = {
+  'order': 'Đơn hàng',
+  'promotion': 'Khuyến mãi',
+  'ad': 'Quảng cáo',
+  'system': 'Khác',
+};

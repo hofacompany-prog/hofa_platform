@@ -29,6 +29,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   bool _sendToAll = true;
   bool _showBadge = false;
   String? _targetScreen;
+  String _category = 'system';
   final List<UserProfile> _selectedUsers = [];
   final List<Merchant> _selectedMerchants = [];
 
@@ -213,12 +214,14 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                 : null,
             showBadge: _showBadge,
             targetScreen: _targetScreen,
+            category: _category,
           );
       _titleCtrl.clear();
       _bodyCtrl.clear();
       setState(() {
         _selectedUsers.clear();
         _selectedMerchants.clear();
+        _category = 'system';
         _specificAudienceCount = null;
         _showBadge = false;
         _targetScreen = null;
@@ -459,6 +462,28 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                               'người nhận (chỉ áp dụng nếu họ đã "Thêm vào màn hình chính"). '
                               'Thông báo về đơn hàng luôn tự hiện số, không cần bật ở đây.',
                             ),
+                          ),
+                          const SizedBox(height: 8),
+                          DropdownButtonFormField<String>(
+                            initialValue: _category,
+                            decoration: const InputDecoration(
+                              labelText: 'Danh mục thông báo',
+                              helperText:
+                                  'Quyết định thông báo này nằm ở tab nào trong hộp thư của người nhận.',
+                              border: OutlineInputBorder(),
+                            ),
+                            items: notificationCategoryLabels.entries
+                                .where((e) => e.key != 'order')
+                                .map(
+                                  (e) => DropdownMenuItem(
+                                    value: e.key,
+                                    child: Text(e.value),
+                                  ),
+                                )
+                                .toList(),
+                            onChanged: _sending
+                                ? null
+                                : (v) => setState(() => _category = v ?? _category),
                           ),
                           const SizedBox(height: 8),
                           DropdownButtonFormField<String?>(
@@ -821,6 +846,10 @@ class _NotificationCard extends StatelessWidget {
                 Chip(
                   visualDensity: VisualDensity.compact,
                   label: Text(formatDateTime(notification.createdAt)),
+                ),
+                Chip(
+                  visualDensity: VisualDensity.compact,
+                  label: Text(notificationCategoryLabels[notification.category] ?? notification.category),
                 ),
                 if (notification.showBadge)
                   const Chip(

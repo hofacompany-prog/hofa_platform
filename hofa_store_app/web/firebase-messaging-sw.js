@@ -49,14 +49,16 @@ function writeBadgeCount(count) {
 
 /**
  * Firebase JS SDK chỉ định tuyến message vào đây khi KHÔNG có tab nào của app đang mở/focus
- * — đúng lúc icon màn hình chính là thứ người dùng thật sự nhìn thấy, nên badge chỉ cần xử lý
- * ở service worker. data.badge do server/src/push.js quyết định: 'true' cho thông báo đơn
- * hàng (mặc định) hoặc khi admin tick "Hiển thị số trên biểu tượng ứng dụng".
+ * — đúng lúc icon màn hình chính là thứ người dùng thật sự nhìn thấy. Badge của app Cửa hàng
+ * đại diện CHÍNH XÁC cho số thông báo "Đơn hàng" chưa đọc (không phải mọi push nói chung) —
+ * cộng dồn ở đây chỉ là ước lượng tạm thời lúc app đang đóng (không gọi được API vì service
+ * worker không có sẵn access token); ngay khi app mở lên, unreadOrderCountProvider (xem
+ * lib/providers/notification_providers.dart, BadgeService) tự chỉnh lại đúng số thật.
  */
 messaging.onBackgroundMessage(async (payload) => {
   const data = payload.data || {};
 
-  if (data.badge === 'true' && 'setAppBadge' in self.registration) {
+  if (data.category === 'order' && 'setAppBadge' in self.registration) {
     const count = (await readBadgeCount()) + 1;
     await writeBadgeCount(count);
     self.registration.setAppBadge(count).catch(() => {});

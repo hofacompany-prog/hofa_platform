@@ -10,6 +10,7 @@ class AdminNotification {
   final int totalCount;
   final bool showBadge;
   final String? targetScreen;
+  final String category;
   final DateTime createdAt;
   final String? createdByName;
   final List<String> recipientNames;
@@ -26,6 +27,7 @@ class AdminNotification {
     required this.createdAt,
     this.showBadge = false,
     this.targetScreen,
+    this.category = 'system',
     this.createdByName,
     this.recipientNames = const [],
     this.targetMerchantNames = const [],
@@ -42,6 +44,7 @@ class AdminNotification {
         totalCount: (json['total_count'] as num?)?.toInt() ?? 0,
         showBadge: json['show_badge'] as bool? ?? false,
         targetScreen: json['target_screen'] as String?,
+        category: json['category'] as String? ?? 'system',
         createdAt:
             DateTime.tryParse(json['created_at'] as String? ?? '') ??
             DateTime.now(),
@@ -58,6 +61,16 @@ const audienceTypeLabels = {
   'customer': 'Khách hàng',
   'merchant': 'Cửa hàng',
   'driver': 'Tài xế',
+};
+
+/// Danh mục hiển thị theo tab trong hộp thư của app nhận (Tất cả/Đơn hàng/Khuyến mãi/Quảng
+/// cáo...) — 'order' do hệ thống tự gắn cho thông báo đơn hàng/chuyến giao, không chọn được
+/// ở đây (chỉ liệt kê để hiện nhãn đúng trong lịch sử nếu có), 3 cái còn lại admin tự chọn.
+const notificationCategoryLabels = {
+  'order': 'Đơn hàng',
+  'promotion': 'Khuyến mãi',
+  'ad': 'Quảng cáo',
+  'system': 'Khác',
 };
 
 /// Màn app sẽ mở khi người dùng bấm vào thông báo — khác nhau theo audienceType vì mỗi
