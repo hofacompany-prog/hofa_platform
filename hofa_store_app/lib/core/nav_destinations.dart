@@ -24,12 +24,6 @@ const kNavDestinations = <NavDestination>[
     path: '/orders',
   ),
   (
-    icon: Icons.inventory_2_outlined,
-    selected: Icons.inventory_2,
-    label: 'Kho hàng',
-    path: '/inventory',
-  ),
-  (
     icon: Icons.account_balance_wallet_outlined,
     selected: Icons.account_balance_wallet,
     label: 'Tài chính',

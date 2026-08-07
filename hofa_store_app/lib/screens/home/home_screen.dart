@@ -114,12 +114,18 @@ class HomeScreen extends ConsumerWidget {
                   ...kNavDestinations
                       .where((d) => d.path != '/home')
                       .map((d) => _ShortcutTile(icon: d.selected, label: d.label, path: d.path)),
-                  // Danh mục không còn nằm trong thanh điều hướng chính (nhường chỗ cho Tài
-                  // chính) nhưng vẫn cần dùng được — giữ lại làm lối tắt ở đây, giống Thiết bị.
+                  // Danh mục và Kho hàng không còn nằm trong thanh điều hướng chính (đỡ chật,
+                  // nhường chỗ cho Tài chính) nhưng vẫn cần dùng được — giữ lại làm lối tắt ở
+                  // đây, giống Thiết bị.
                   const _ShortcutTile(
                     icon: Icons.category_outlined,
                     label: 'Danh mục',
                     path: '/categories',
+                  ),
+                  const _ShortcutTile(
+                    icon: Icons.inventory_2_outlined,
+                    label: 'Kho hàng',
+                    path: '/inventory',
                   ),
                   const _ShortcutTile(
                     icon: Icons.devices_other_outlined,
