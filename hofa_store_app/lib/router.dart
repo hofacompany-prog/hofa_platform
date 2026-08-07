@@ -7,6 +7,7 @@ import 'screens/auth/login_screen.dart';
 import 'screens/onboarding/create_store_screen.dart';
 import 'screens/dashboard/dashboard_shell.dart';
 import 'screens/home/home_screen.dart';
+import 'screens/finance/finance_screen.dart';
 import 'screens/products/products_list_screen.dart';
 import 'screens/products/product_form_screen.dart';
 import 'screens/toppings/topping_group_form_screen.dart';
@@ -111,6 +112,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/categories',
             builder: (context, state) => const CategoriesScreen(),
+          ),
+          GoRoute(
+            path: '/finance',
+            builder: (context, state) => const FinanceScreen(),
           ),
           GoRoute(
             path: '/settings',

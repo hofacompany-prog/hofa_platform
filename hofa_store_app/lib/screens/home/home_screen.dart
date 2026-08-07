@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/format.dart';
 import '../../core/nav_destinations.dart';
 import '../../models/branch.dart';
+import '../../models/finance_summary.dart';
 import '../../models/merchant_today_stats.dart';
 import '../../providers/auth_provider.dart';
 import '../../repositories/merchant_repository.dart';
@@ -35,6 +36,7 @@ class HomeScreen extends ConsumerWidget {
     final theme = Theme.of(context);
     final merchantAsync = ref.watch(myMerchantProvider);
     final statsAsync = ref.watch(merchantTodayStatsProvider);
+    final todayFinanceAsync = ref.watch(financeSummaryProvider('today'));
     final branches = ref.watch(_homeBranchesProvider).valueOrNull ?? const <Branch>[];
     final mainBranch = branches.isEmpty
         ? null
@@ -46,6 +48,7 @@ class HomeScreen extends ConsumerWidget {
           onRefresh: () async {
             ref.invalidate(myMerchantProvider);
             ref.invalidate(merchantTodayStatsProvider);
+            ref.invalidate(financeSummaryProvider('today'));
             ref.invalidate(_homeBranchesProvider);
           },
           child: ListView(
@@ -90,7 +93,7 @@ class HomeScreen extends ConsumerWidget {
                       ),
                     ),
                     const SizedBox(width: 12),
-                    Expanded(child: _RevenueCard(stats: statsAsync.valueOrNull)),
+                    Expanded(child: _RevenueCard(summary: todayFinanceAsync.valueOrNull)),
                   ],
                 ),
               ),
@@ -111,6 +114,13 @@ class HomeScreen extends ConsumerWidget {
                   ...kNavDestinations
                       .where((d) => d.path != '/home')
                       .map((d) => _ShortcutTile(icon: d.selected, label: d.label, path: d.path)),
+                  // Danh mục không còn nằm trong thanh điều hướng chính (nhường chỗ cho Tài
+                  // chính) nhưng vẫn cần dùng được — giữ lại làm lối tắt ở đây, giống Thiết bị.
+                  const _ShortcutTile(
+                    icon: Icons.category_outlined,
+                    label: 'Danh mục',
+                    path: '/categories',
+                  ),
                   const _ShortcutTile(
                     icon: Icons.devices_other_outlined,
                     label: 'Thiết bị',
@@ -193,8 +203,8 @@ class _PreparingCard extends StatelessWidget {
 }
 
 class _RevenueCard extends StatelessWidget {
-  final MerchantTodayStats? stats;
-  const _RevenueCard({required this.stats});
+  final FinanceSummary? summary;
+  const _RevenueCard({required this.summary});
 
   @override
   Widget build(BuildContext context) {
@@ -206,42 +216,48 @@ class _RevenueCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         side: BorderSide(color: theme.colorScheme.outlineVariant),
       ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              children: [
-                CircleAvatar(
-                  radius: 16,
-                  backgroundColor: theme.colorScheme.secondary.withValues(alpha: 0.12),
-                  child: Icon(Icons.trending_up, size: 18, color: theme.colorScheme.secondary),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    'Thu nhập hôm nay',
-                    style: theme.textTheme.bodySmall,
-                    maxLines: 2,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        // Thu nhập ròng (đã trừ hoa hồng + thuế) — bấm vào xem chi tiết ở màn Tài chính.
+        onTap: () => context.push('/finance'),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  CircleAvatar(
+                    radius: 16,
+                    backgroundColor: theme.colorScheme.secondary.withValues(alpha: 0.12),
+                    child: Icon(Icons.trending_up, size: 18, color: theme.colorScheme.secondary),
                   ),
-                ),
-              ],
-            ),
-            const Spacer(),
-            Text(
-              formatVnd(stats?.todayRevenue ?? 0),
-              style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              '${stats?.todayOrderCount ?? 0} đơn hàng',
-              style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline),
-            ),
-          ],
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Thu nhập hôm nay',
+                      style: theme.textTheme.bodySmall,
+                      maxLines: 2,
+                    ),
+                  ),
+                  Icon(Icons.chevron_right, size: 18, color: theme.colorScheme.outline),
+                ],
+              ),
+              const Spacer(),
+              Text(
+                formatVnd(summary?.netIncome ?? 0),
+                style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '${summary?.orderCount ?? 0} đơn hàng',
+                style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline),
+              ),
+            ],
+          ),
         ),
       ),
     );

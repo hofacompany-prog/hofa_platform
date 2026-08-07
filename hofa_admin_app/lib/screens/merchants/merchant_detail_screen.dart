@@ -50,6 +50,8 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
     final phoneCtrl = TextEditingController(text: m.phone ?? '');
     final emailCtrl = TextEditingController(text: m.email ?? '');
     final commissionCtrl = TextEditingController(text: m.commissionRate.toString());
+    final vatRateCtrl = TextEditingController(text: m.vatRate.toString());
+    final pitRateCtrl = TextEditingController(text: m.pitRate.toString());
     final minOrderCtrl = TextEditingController(text: m.minOrderAmount.toString());
     final prepCtrl = TextEditingController(text: m.avgPrepMinutes.toString());
     final bankNameCtrl = TextEditingController(text: m.bankName ?? '');
@@ -134,6 +136,33 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
                     decoration: const InputDecoration(labelText: 'Đơn tối thiểu (VNĐ)'),
                     keyboardType: TextInputType.number,
                   ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: vatRateCtrl,
+                          decoration: const InputDecoration(labelText: 'Thuế GTGT (%)'),
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextField(
+                          controller: pitRateCtrl,
+                          decoration: const InputDecoration(labelText: 'Thuế TNCN (%)'),
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        ),
+                      ),
+                    ],
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      'Dùng cho màn Tài chính ở app cửa hàng — mặc định theo hộ kinh doanh dịch vụ ăn uống (TT40/2021/TT-BTC).',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.black54),
+                    ),
+                  ),
                   const Divider(height: 28),
                   Align(
                       alignment: Alignment.centerLeft,
@@ -178,6 +207,8 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
           'phone': phoneCtrl.text.trim(),
           'email': emailCtrl.text.trim().isEmpty ? null : emailCtrl.text.trim(),
           'commission_rate': num.tryParse(commissionCtrl.text.trim()) ?? m.commissionRate,
+          'vat_rate': num.tryParse(vatRateCtrl.text.trim()) ?? m.vatRate,
+          'pit_rate': num.tryParse(pitRateCtrl.text.trim()) ?? m.pitRate,
           'min_order_amount': int.tryParse(minOrderCtrl.text.trim()) ?? m.minOrderAmount,
           'avg_prep_minutes': int.tryParse(prepCtrl.text.trim()) ?? m.avgPrepMinutes,
           'bank_name': bankNameCtrl.text.trim().isEmpty ? null : bankNameCtrl.text.trim(),

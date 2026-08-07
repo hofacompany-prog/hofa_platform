@@ -86,6 +86,8 @@ class Merchant {
   final int minOrderAmount;
   final int avgPrepMinutes;
   final int maxDevices;
+  final num vatRate;
+  final num pitRate;
   final num ratingAvg;
   final int ratingCount;
   final DateTime? standardCertifiedAt;
@@ -119,6 +121,8 @@ class Merchant {
     required this.minOrderAmount,
     required this.avgPrepMinutes,
     this.maxDevices = 1,
+    this.vatRate = 3.0,
+    this.pitRate = 1.5,
     required this.ratingAvg,
     required this.ratingCount,
     this.standardCertifiedAt,
@@ -154,6 +158,8 @@ class Merchant {
         minOrderAmount: (json['min_order_amount'] as num?)?.toInt() ?? 0,
         avgPrepMinutes: (json['avg_prep_minutes'] as num?)?.toInt() ?? 15,
         maxDevices: (json['max_devices'] as num?)?.toInt() ?? 1,
+        vatRate: num.tryParse('${json['vat_rate']}') ?? 3.0,
+        pitRate: num.tryParse('${json['pit_rate']}') ?? 1.5,
         ratingAvg: num.tryParse('${json['rating_avg']}') ?? 0,
         ratingCount: (json['rating_count'] as num?)?.toInt() ?? 0,
         standardCertifiedAt:

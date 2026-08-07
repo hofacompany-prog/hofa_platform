@@ -30,10 +30,10 @@ const kNavDestinations = <NavDestination>[
     path: '/inventory',
   ),
   (
-    icon: Icons.category_outlined,
-    selected: Icons.category,
-    label: 'Danh mục',
-    path: '/categories',
+    icon: Icons.account_balance_wallet_outlined,
+    selected: Icons.account_balance_wallet,
+    label: 'Tài chính',
+    path: '/finance',
   ),
   (
     icon: Icons.settings_outlined,

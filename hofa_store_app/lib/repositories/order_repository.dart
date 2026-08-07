@@ -11,10 +11,17 @@ class OrderRepository {
     return json == null ? null : Delivery.fromJson(json);
   }
 
-  Future<List<Order>> listForMerchant(String merchantId, {String? status}) async {
+  Future<List<Order>> listForMerchant(
+    String merchantId, {
+    String? status,
+    String? from,
+    String? to,
+  }) async {
     final list = await _api.get('/merchants/$merchantId/orders', query: {
       'limit': 100,
       if (status != null) 'status': status,
+      if (from != null) 'from': from,
+      if (to != null) 'to': to,
     }) as List;
     return list.map((e) => Order.fromJson(e as Map<String, dynamic>)).toList();
   }

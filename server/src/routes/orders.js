@@ -122,6 +122,16 @@ router.get('/merchants/:merchantId/orders', asyncHandler(async (req, res) => {
   const params = [req.params.merchantId];
   if (req.query.status) { params.push(req.query.status); clauses.push(`status = $${params.length}`); }
   if (req.query.branch_id) { params.push(req.query.branch_id); clauses.push(`branch_id = $${params.length}`); }
+  // from/to: ngày dương lịch theo giờ Việt Nam (YYYY-MM-DD), dùng cho tab "Giao dịch" ở màn
+  // Tài chính store app — cùng cách tính mốc ngày với /merchants/:id/finance/summary.
+  if (req.query.from) {
+    params.push(req.query.from);
+    clauses.push(`(created_at AT TIME ZONE 'Asia/Ho_Chi_Minh')::date >= $${params.length}::date`);
+  }
+  if (req.query.to) {
+    params.push(req.query.to);
+    clauses.push(`(created_at AT TIME ZONE 'Asia/Ho_Chi_Minh')::date <= $${params.length}::date`);
+  }
   params.push(limit, offset);
   const rows = await db.query(
     `SELECT * FROM orders WHERE ${clauses.join(' AND ')} ORDER BY created_at DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,

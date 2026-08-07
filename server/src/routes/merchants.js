@@ -11,7 +11,7 @@ const MERCHANT_FIELDS = [
   'business_license_no', 'tax_code', 'legal_doc_urls',
   'bank_name', 'bank_account_no', 'bank_account_name',
   'commission_rate', 'min_order_amount', 'avg_prep_minutes',
-  'buy_on_behalf_fee_basis', 'max_devices'
+  'buy_on_behalf_fee_basis', 'max_devices', 'vat_rate', 'pit_rate'
 ];
 
 const BRANCH_FIELDS = [
@@ -227,6 +227,73 @@ router.get('/merchants/:merchantId/stats/today', asyncHandler(async (req, res) =
       preparing_count: preparing.count,
       today_order_count: today.order_count,
       today_revenue: Number(today.revenue)
+    }
+  });
+}));
+
+/**
+ * "Tài chính" (store app, tab Tóm tắt) — doanh thu ròng, hoa hồng, thuế GTGT/TNCN (áp thẳng
+ * lên doanh thu ròng, không lồng thuế trong thuế — đúng cách Thông tư 40/2021 tính thuế
+ * khoán) và thu nhập ròng cho 1 khoảng thời gian. period=today|yesterday|week|custom, custom
+ * cần kèm from/to (YYYY-MM-DD). Mọi mốc ngày tính theo giờ Việt Nam, không dùng giờ server.
+ */
+router.get('/merchants/:merchantId/finance/summary', asyncHandler(async (req, res) => {
+  await requireMerchantAccess(req.ctx, req.params.merchantId);
+  const merchant = await db.queryOne(
+    'SELECT commission_rate, vat_rate, pit_rate FROM merchants WHERE id = $1',
+    [req.params.merchantId]
+  );
+  if (!merchant) throw new ApiError('NOT_FOUND', 'Không tìm thấy cửa hàng', 404);
+
+  const period = req.query.period || 'today';
+  if (period === 'custom') requireFields(req.query, ['from', 'to']);
+
+  const row = await db.queryOne(
+    `WITH bounds AS (
+       SELECT
+         CASE $2
+           WHEN 'yesterday' THEN (now() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date - 1
+           WHEN 'week' THEN date_trunc('week', (now() AT TIME ZONE 'Asia/Ho_Chi_Minh'))::date
+           WHEN 'custom' THEN $3::date
+           ELSE (now() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date
+         END AS from_date,
+         CASE $2
+           WHEN 'yesterday' THEN (now() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date - 1
+           WHEN 'custom' THEN $4::date
+           ELSE (now() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date
+         END AS to_date
+     )
+     SELECT b.from_date, b.to_date,
+            COALESCE(SUM(o.total_amount) FILTER (WHERE o.status NOT IN ('cancelled', 'refunded')), 0)::bigint AS revenue,
+            COUNT(*) FILTER (WHERE o.status NOT IN ('cancelled', 'refunded'))::int AS order_count
+       FROM bounds b
+       LEFT JOIN orders o ON o.merchant_id = $1
+         AND (o.created_at AT TIME ZONE 'Asia/Ho_Chi_Minh')::date BETWEEN b.from_date AND b.to_date
+      GROUP BY b.from_date, b.to_date`,
+    [req.params.merchantId, period, req.query.from || null, req.query.to || null]
+  );
+
+  const revenue = Number(row.revenue);
+  const commissionAmount = Math.round((revenue * Number(merchant.commission_rate)) / 100);
+  const vatAmount = Math.round((revenue * Number(merchant.vat_rate)) / 100);
+  const pitAmount = Math.round((revenue * Number(merchant.pit_rate)) / 100);
+  const netIncome = revenue - commissionAmount - vatAmount - pitAmount;
+
+  res.json({
+    ok: true,
+    data: {
+      period,
+      from: row.from_date,
+      to: row.to_date,
+      order_count: row.order_count,
+      revenue,
+      commission_rate: Number(merchant.commission_rate),
+      commission_amount: commissionAmount,
+      vat_rate: Number(merchant.vat_rate),
+      vat_amount: vatAmount,
+      pit_rate: Number(merchant.pit_rate),
+      pit_amount: pitAmount,
+      net_income: netIncome
     }
   });
 }));

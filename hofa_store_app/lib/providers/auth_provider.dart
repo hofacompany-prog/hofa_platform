@@ -4,6 +4,7 @@ import '../core/api_exception.dart';
 import '../models/user_profile.dart';
 import '../models/merchant.dart';
 import '../models/merchant_today_stats.dart';
+import '../models/finance_summary.dart';
 import '../models/product.dart';
 import '../repositories/user_repository.dart';
 import '../repositories/merchant_repository.dart';
@@ -64,3 +65,12 @@ final merchantTodayStatsProvider = FutureProvider.autoDispose<MerchantTodayStats
   if (merchant == null) return null;
   return _merchantRepo.todayStats(merchant.id);
 });
+
+/// Tóm tắt tài chính theo period ('today'/'yesterday'/'week') — dùng cho card "Thu nhập hôm
+/// nay" ở Trang chủ (luôn gọi với 'today') và tab Tóm tắt ở màn Tài chính.
+final financeSummaryProvider = FutureProvider.autoDispose
+    .family<FinanceSummary?, String>((ref, period) async {
+      final merchant = await ref.watch(myMerchantProvider.future);
+      if (merchant == null) return null;
+      return _merchantRepo.financeSummary(merchant.id, period: period);
+    });
