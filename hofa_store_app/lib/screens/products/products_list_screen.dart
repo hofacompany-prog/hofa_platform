@@ -341,6 +341,13 @@ class ProductsListScreen extends ConsumerWidget {
 
     return Scaffold(
       appBar: AppBar(
+        // Products là 1 tab điều hướng chính (không phải màn được push vào) nên
+        // không tự có nút back mặc định — canPop() phòng trường hợp có vào từ 1 chỗ
+        // khác bằng push thật, còn lại quay thẳng về Trang chủ cho dễ đoán.
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => context.canPop() ? context.pop() : context.go('/home'),
+        ),
         title: const Text('Sản phẩm'),
         actions: const [NotificationBell()],
       ),
@@ -352,12 +359,11 @@ class ProductsListScreen extends ConsumerWidget {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            // 2 nút hành động chính — 2 icon+chữ đủ dài để tràn ngang nếu để nguyên trong
-            // AppBar (nhất là màn điện thoại hẹp). Giới hạn chung 3/4 bề ngang màn hình, chữ
-            // tự thu nhỏ (FittedBox) nếu vẫn không đủ chỗ thay vì tràn/xuống dòng lệch.
+            // 2 nút hành động chính — 4/5 bề ngang màn hình, chữ tự thu nhỏ (FittedBox) nếu
+            // vẫn không đủ chỗ thay vì tràn/xuống dòng lệch.
             Center(
               child: FractionallySizedBox(
-                widthFactor: 0.75,
+                widthFactor: 0.8,
                 child: Row(
                   children: [
                     Expanded(
