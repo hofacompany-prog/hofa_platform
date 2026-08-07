@@ -18,6 +18,7 @@ import 'screens/settings/branch_settings_screen.dart';
 import 'screens/settings/store_profile_edit_screen.dart';
 import 'screens/settings/branch_edit_screen.dart';
 import 'screens/settings/branch_hours_screen.dart';
+import 'screens/settings/devices_screen.dart';
 import 'screens/notifications/notifications_screen.dart';
 import 'models/merchant.dart';
 import 'models/branch.dart';
@@ -113,6 +114,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/notifications',
             builder: (context, state) => const NotificationsScreen(),
+          ),
+          GoRoute(
+            path: '/settings/devices',
+            builder: (context, state) => const DevicesScreen(),
           ),
           GoRoute(
             path: '/settings/profile',

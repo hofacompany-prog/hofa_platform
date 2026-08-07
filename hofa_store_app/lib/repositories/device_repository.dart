@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart'
     show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import '../core/api_client.dart';
+import '../models/user_device.dart';
 
 /// kIsWeb PHẢI kiểm tra trước — defaultTargetPlatform trên web vẫn trả về iOS/Android
 /// theo User-Agent trình duyệt, không phải giá trị 'web' riêng, dễ ghi nhầm platform.
@@ -42,4 +43,18 @@ class DeviceRepository {
       },
     );
   }
+
+  /// Mã máy cục bộ hiện tại — dùng để đánh dấu "Thiết bị này" trong màn danh sách
+  /// thiết bị (so với device_id server trả về), không expose ra ngoài bằng cách nào khác.
+  Future<String> currentDeviceId() => _localDeviceId();
+
+  Future<List<UserDevice>> list() async {
+    final data = await _api.get('/devices') as List;
+    return data
+        .map((e) => UserDevice.fromJson(e as Map<String, dynamic>))
+        .toList()
+      ..sort((a, b) => b.lastActiveAt.compareTo(a.lastActiveAt));
+  }
+
+  Future<void> remove(String id) => _api.delete('/devices/$id');
 }

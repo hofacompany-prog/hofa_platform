@@ -162,6 +162,23 @@ class BranchSettingsScreen extends ConsumerWidget {
                   'Tắt công tắc khi hết hàng hoặc nghỉ đột xuất — cửa hàng sẽ tạm ngừng nhận đơn mới.',
                   style: TextStyle(color: Colors.grey),
                 ),
+                const SizedBox(height: 24),
+                Text('Bảo mật', style: theme.textTheme.titleMedium),
+                const SizedBox(height: 8),
+                Card(
+                  elevation: 0,
+                  color: theme.colorScheme.surfaceContainerLow,
+                  child: ListTile(
+                    onTap: () => context.push('/settings/devices'),
+                    leading: Icon(
+                      Icons.devices_other_outlined,
+                      color: theme.colorScheme.primary,
+                    ),
+                    title: const Text('Thiết bị đã đăng nhập'),
+                    subtitle: const Text('Xem và gỡ các thiết bị đang nhận thông báo'),
+                    trailing: const Icon(Icons.chevron_right),
+                  ),
+                ),
               ],
             ),
           ),
