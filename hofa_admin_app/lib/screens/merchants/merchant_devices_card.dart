@@ -106,8 +106,9 @@ class _MerchantDevicesCardState extends ConsumerState<MerchantDevicesCard> {
         title: const Text('Xoá thiết bị này?'),
         content: Text(
           'Xoá hẳn "${d.deviceName?.isNotEmpty == true ? d.deviceName : 'Thiết bị không tên'}" '
-          'của ${d.userFullName} khỏi danh sách — không đăng xuất được tài khoản đó từ xa, chỉ '
-          'ngừng nhận thông báo và giải phóng 1 chỗ trong giới hạn thiết bị.',
+          'của ${d.userFullName} — thiết bị đó sẽ bị đăng xuất và xoá session đăng nhập ngay '
+          'khi thực hiện thao tác kế tiếp (không cần đang mở app ngay lúc này), và giải '
+          'phóng 1 chỗ trong giới hạn thiết bị.',
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Huỷ')),
@@ -163,8 +164,8 @@ class _MerchantDevicesCardState extends ConsumerState<MerchantDevicesCard> {
             ),
             const SizedBox(height: 4),
             Text(
-              'Thiết bị của chủ và nhân viên cửa hàng đang nhận thông báo đơn hàng. '
-              'Xoá không đăng xuất được từ xa — chỉ ngừng gửi thông báo tới máy đó.',
+              'Thiết bị của chủ và nhân viên cửa hàng đang đăng nhập/nhận thông báo đơn hàng. '
+              'Xoá 1 thiết bị sẽ đăng xuất máy đó từ xa.',
               style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline),
             ),
             const SizedBox(height: 16),

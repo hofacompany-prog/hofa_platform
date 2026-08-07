@@ -48,6 +48,26 @@ const attachContext = asyncHandler(async (req, res, next) => {
     profile,
     role: profile ? profile.role : null
   };
+
+  // Gỡ từ xa 1 thiết bị (màn "Thiết bị đăng nhập" ở admin, "Thiết bị đã đăng nhập" ở store
+  // app) — server không tự quản lý session Supabase nên không thu hồi được access_token đang
+  // có ngay lập tức; thay vào đó CHẶN NGAY từ request kế tiếp của đúng thiết bị đó, buộc app
+  // tự đăng xuất + xoá session cục bộ khi thấy DEVICE_REVOKED (xem ApiClient._handle — hiện
+  // chỉ hofa_store_app gửi header này, các app khác không có màn quản lý thiết bị nên bỏ
+  // qua). Client CHỈ gửi header SAU KHI đã đăng ký thiết bị thành công ít nhất 1 lần trong
+  // phiên hiện tại (DeviceSession.markRegistered) — tránh chặn nhầm ngay sau khi vừa đăng
+  // nhập, lúc POST /devices đầu tiên còn chưa kịp chạy xong.
+  const deviceId = req.headers['x-device-id'];
+  if (deviceId) {
+    const device = await db.queryOne(
+      'SELECT id FROM user_devices WHERE user_id = $1 AND device_id = $2',
+      [claims.sub, deviceId]
+    );
+    if (!device) {
+      throw new ApiError('DEVICE_REVOKED', 'Thiết bị này đã bị gỡ khỏi tài khoản — vui lòng đăng nhập lại', 401);
+    }
+  }
+
   next();
 });
 

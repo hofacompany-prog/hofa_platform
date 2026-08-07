@@ -4,11 +4,11 @@ import '../../core/format.dart';
 import '../../models/user_device.dart';
 import '../../providers/device_providers.dart';
 
-/// Danh sách thiết bị đã đăng nhập tài khoản (bảng user_devices) — KHÔNG phải danh sách
-/// session Supabase thật (server không tự quản lý session, xác thực hoàn toàn qua Supabase
-/// Auth, xem comment ở server/src/routes/users.js DELETE /devices/:id). Vì vậy "Gỡ thiết bị"
-/// chỉ dừng gửi push tới máy đó và xoá khỏi danh sách này, không ép đăng xuất từ xa được —
-/// phải nói rõ trong UI để không gây hiểu nhầm là tính năng bảo mật mạnh hơn thực tế.
+/// Danh sách thiết bị đã đăng nhập tài khoản (bảng user_devices). "Gỡ thiết bị" xoá dòng này
+/// VÀ ép đăng xuất từ xa thật — server chặn ngay request kế tiếp của đúng thiết bị đó
+/// (DEVICE_REVOKED, xem middleware/auth.js), buộc app trên máy đó tự đăng xuất + xoá session
+/// Supabase cục bộ. Không tức thời tuyệt đối (chờ tới request kế tiếp của máy đó, thường chỉ
+/// vài giây tới vài phút nếu app đang mở), nhưng không cần máy đó đang online ngay lúc gỡ.
 class DevicesScreen extends ConsumerWidget {
   const DevicesScreen({super.key});
 
@@ -35,12 +35,11 @@ class DevicesScreen extends ConsumerWidget {
         title: const Text('Gỡ thiết bị này?'),
         content: Text(
           isCurrent
-              ? 'Đây chính là thiết bị bạn đang dùng để xem màn này — gỡ xong sẽ ngừng nhận '
-                    'thông báo đẩy ngay trên máy này. Bạn vẫn đang đăng nhập bình thường, '
-                    'không bị đăng xuất.'
-              : '"${device.deviceName ?? 'Thiết bị không tên'}" sẽ ngừng nhận thông báo đẩy '
-                    'và biến mất khỏi danh sách này. Máy đó vẫn đang đăng nhập tài khoản của '
-                    'bạn — thao tác này không đăng xuất được từ xa.',
+              ? 'Đây chính là thiết bị bạn đang dùng để xem màn này — gỡ xong bạn sẽ bị đăng '
+                    'xuất khỏi máy này ngay.'
+              : '"${device.deviceName ?? 'Thiết bị không tên'}" sẽ bị đăng xuất và xoá session '
+                    'đăng nhập trên máy đó ngay khi máy đó thực hiện thao tác kế tiếp (không '
+                    'cần đang mở app ngay lúc này).',
         ),
         actions: [
           TextButton(
@@ -120,9 +119,9 @@ class DevicesScreen extends ConsumerWidget {
                         const SizedBox(width: 12),
                         Expanded(
                           child: Text(
-                            'Danh sách thiết bị đang nhận thông báo đẩy cho tài khoản này. '
-                            'Gỡ 1 thiết bị chỉ dừng gửi thông báo tới máy đó, không đăng '
-                            'xuất từ xa được.',
+                            'Danh sách thiết bị đã đăng nhập tài khoản này. Gỡ 1 thiết bị sẽ '
+                            'đăng xuất máy đó và xoá session đăng nhập trên máy đó ngay khi '
+                            'máy đó thực hiện thao tác kế tiếp.',
                             style: theme.textTheme.bodySmall?.copyWith(
                               height: 1.4,
                             ),

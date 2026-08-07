@@ -2,7 +2,9 @@ import 'dart:math';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart'
     show kIsWeb, defaultTargetPlatform, TargetPlatform;
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/api_client.dart';
+import '../core/device_session.dart';
 import '../models/user_device.dart';
 
 /// kIsWeb PHẢI kiểm tra trước — defaultTargetPlatform trên web vẫn trả về iOS/Android
@@ -53,6 +55,8 @@ class DeviceRepository {
     if (result is Map && result['status'] == 'limit_reached') {
       return DeviceRegisterResult.limitReached(result.cast<String, dynamic>());
     }
+    final userId = Supabase.instance.client.auth.currentSession?.user.id;
+    if (userId != null) DeviceSession.markRegistered(deviceId, userId);
     return const DeviceRegisterResult.ok();
   }
 

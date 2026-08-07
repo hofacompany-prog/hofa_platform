@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'device_session.dart';
 import 'env.dart';
 import 'api_exception.dart';
 
@@ -20,10 +21,12 @@ class ApiClient {
   }
 
   Map<String, String> _headers() {
-    final token = Supabase.instance.client.auth.currentSession?.accessToken;
+    final session = Supabase.instance.client.auth.currentSession;
+    final deviceId = DeviceSession.headerFor(session?.user.id);
     return {
       'Content-Type': 'application/json',
-      if (token != null) 'Authorization': 'Bearer $token',
+      if (session != null) 'Authorization': 'Bearer ${session.accessToken}',
+      if (deviceId != null) 'X-Device-Id': deviceId,
     };
   }
 
@@ -36,8 +39,16 @@ class ApiClient {
     }
     if (body['ok'] == true) return body['data'];
     final err = body['error'] as Map<String, dynamic>? ?? {};
+    final code = err['code']?.toString() ?? 'UNKNOWN';
+    // Thiết bị này vừa bị chủ/nhân viên khác hoặc admin gỡ khỏi tài khoản (màn "Thiết bị
+    // đăng nhập") — server chặn ngay từ request này, phía app phải tự đăng xuất + xoá session
+    // Supabase cục bộ ngay lập tức, không chờ người dùng tự nhận ra rồi thao tác gì thêm.
+    if (code == 'DEVICE_REVOKED') {
+      DeviceSession.clear();
+      Supabase.instance.client.auth.signOut();
+    }
     throw ApiException(
-      code: err['code']?.toString() ?? 'UNKNOWN',
+      code: code,
       message: err['message']?.toString() ?? 'Lỗi không xác định',
       statusCode: resp.statusCode,
     );

@@ -227,11 +227,11 @@ router.post('/devices', asyncHandler(async (req, res) => {
   res.status(201).json({ ok: true, data: { status: 'ok', ...created } });
 }));
 
-// Gỡ 1 thiết bị khỏi danh sách — dừng gửi push tới máy đó (xoá push_token khỏi
-// user_devices) và không còn hiện trong màn "Thiết bị đã đăng nhập". KHÔNG thu hồi được
-// session Supabase thật của máy đó (server không tự quản lý session, xác thực hoàn toàn
-// qua Supabase Auth) nên đây là "gỡ khỏi danh sách/ngừng nhận thông báo", không phải đăng
-// xuất từ xa — client phải ghi rõ điều này, đừng để người dùng hiểu nhầm là ép đăng xuất.
+// Gỡ 1 thiết bị khỏi danh sách — không thu hồi được access_token hiện có của máy đó ngay lập
+// tức (server không tự quản lý session, xác thực qua JWT/JWKS của Supabase), nhưng middleware
+// attachContext chặn NGAY request kế tiếp của đúng thiết bị đó (DEVICE_REVOKED, dựa vào header
+// X-Device-Id — chỉ có SAU KHI thiết bị đã đăng ký qua POST /devices ít nhất 1 lần), buộc app
+// trên máy đó tự đăng xuất + xoá session Supabase cục bộ (xem ApiClient của app).
 router.delete('/devices/:id', asyncHandler(async (req, res) => {
   requireAuth(req.ctx);
   await requireOwnRow('user_devices', req.params.id, req.ctx.userId, 'user_id');
