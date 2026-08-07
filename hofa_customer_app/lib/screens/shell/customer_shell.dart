@@ -61,25 +61,39 @@ class CustomerShell extends ConsumerWidget {
 
     return Scaffold(
       body: child,
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: selectedIndex,
-        onDestinationSelected: (i) => context.go(_items[i].path),
-        destinations: _items.map((d) {
-          final count = d.label == 'Giỏ hàng'
-              ? instantCount
-              : d.label == 'Đặt trước'
-              ? preorderCount
-              : 0;
-          return NavigationDestination(
-            icon: count > 0
-                ? Badge(label: Text('$count'), child: Icon(d.icon))
-                : Icon(d.icon),
-            selectedIcon: count > 0
-                ? Badge(label: Text('$count'), child: Icon(d.selected))
-                : Icon(d.selected),
-            label: d.label,
-          );
-        }).toList(),
+      // onlyShowSelected: chỉ hiện chữ cho mục đang chọn (giống store app) — 5 mục hiện đủ
+      // chữ cùng lúc trên màn hẹp dễ bị dính/chật, ẩn bớt chữ mục chưa chọn cho gọn gàng.
+      bottomNavigationBar: NavigationBarTheme(
+        data: NavigationBarThemeData(
+          height: 64,
+          labelTextStyle: WidgetStateProperty.resolveWith(
+            (states) => TextStyle(
+              fontSize: 11,
+              fontWeight: states.contains(WidgetState.selected) ? FontWeight.w600 : FontWeight.w400,
+            ),
+          ),
+        ),
+        child: NavigationBar(
+          selectedIndex: selectedIndex,
+          onDestinationSelected: (i) => context.go(_items[i].path),
+          labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
+          destinations: _items.map((d) {
+            final count = d.label == 'Giỏ hàng'
+                ? instantCount
+                : d.label == 'Đặt trước'
+                ? preorderCount
+                : 0;
+            return NavigationDestination(
+              icon: count > 0
+                  ? Badge(label: Text('$count'), child: Icon(d.icon, size: 22))
+                  : Icon(d.icon, size: 22),
+              selectedIcon: count > 0
+                  ? Badge(label: Text('$count'), child: Icon(d.selected, size: 22))
+                  : Icon(d.selected, size: 22),
+              label: d.label,
+            );
+          }).toList(),
+        ),
       ),
     );
   }
