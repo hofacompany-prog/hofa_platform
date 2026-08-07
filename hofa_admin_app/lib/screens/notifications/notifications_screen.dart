@@ -27,6 +27,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
 
   String _audienceType = 'customer';
   bool _sendToAll = true;
+  bool _showBadge = false;
   final List<UserProfile> _selectedUsers = [];
   final List<Merchant> _selectedMerchants = [];
 
@@ -208,6 +209,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
             merchantIds: (!_sendToAll && _audienceType == 'merchant')
                 ? _selectedMerchants.map((m) => m.id).toList()
                 : null,
+            showBadge: _showBadge,
           );
       _titleCtrl.clear();
       _bodyCtrl.clear();
@@ -215,6 +217,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         _selectedUsers.clear();
         _selectedMerchants.clear();
         _specificAudienceCount = null;
+        _showBadge = false;
       });
       ref.invalidate(notificationsProvider);
       if (mounted) {
@@ -435,6 +438,22 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
                               helperText: 'Nội dung đầy đủ của thông báo',
                               border: OutlineInputBorder(),
                               alignLabelWithHint: true,
+                            ),
+                          ),
+                          CheckboxListTile(
+                            contentPadding: EdgeInsets.zero,
+                            controlAffinity: ListTileControlAffinity.leading,
+                            value: _showBadge,
+                            onChanged: _sending
+                                ? null
+                                : (v) => setState(() => _showBadge = v ?? false),
+                            title: const Text(
+                              'Hiển thị số trên biểu tượng ứng dụng',
+                            ),
+                            subtitle: const Text(
+                              'Cộng thêm 1 vào ô số nhỏ trên icon PWA ở màn hình chính của '
+                              'người nhận (chỉ áp dụng nếu họ đã "Thêm vào màn hình chính"). '
+                              'Thông báo về đơn hàng luôn tự hiện số, không cần bật ở đây.',
                             ),
                           ),
                           const SizedBox(height: 8),
@@ -770,6 +789,11 @@ class _NotificationCard extends StatelessWidget {
                   visualDensity: VisualDensity.compact,
                   label: Text(formatDateTime(notification.createdAt)),
                 ),
+                if (notification.showBadge)
+                  const Chip(
+                    visualDensity: VisualDensity.compact,
+                    label: Text('Có badge'),
+                  ),
                 if (notification.createdByName != null)
                   Chip(
                     visualDensity: VisualDensity.compact,

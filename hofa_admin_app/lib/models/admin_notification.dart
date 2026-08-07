@@ -8,6 +8,7 @@ class AdminNotification {
   final String target;
   final int sentCount;
   final int totalCount;
+  final bool showBadge;
   final DateTime createdAt;
   final String? createdByName;
   final List<String> recipientNames;
@@ -22,6 +23,7 @@ class AdminNotification {
     required this.sentCount,
     required this.totalCount,
     required this.createdAt,
+    this.showBadge = false,
     this.createdByName,
     this.recipientNames = const [],
     this.targetMerchantNames = const [],
@@ -36,6 +38,7 @@ class AdminNotification {
         target: json['target'] as String? ?? 'all',
         sentCount: (json['sent_count'] as num?)?.toInt() ?? 0,
         totalCount: (json['total_count'] as num?)?.toInt() ?? 0,
+        showBadge: json['show_badge'] as bool? ?? false,
         createdAt:
             DateTime.tryParse(json['created_at'] as String? ?? '') ??
             DateTime.now(),

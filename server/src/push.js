@@ -32,12 +32,16 @@ const FCM_BATCH_SIZE = 500;
  * theo từng user (sendPushToUser) lẫn gửi hàng loạt (sendBroadcastToCustomers).
  * Không throw — lỗi gửi push không bao giờ được làm hỏng luồng gọi nó.
  */
-async function sendToTokens(tokens, { title, body, data = {} }) {
+async function sendToTokens(tokens, { title, body, data = {}, badge = false }) {
   const firebaseApp = getApp();
   if (!firebaseApp || !tokens.length) return { sent: 0 };
 
   const admin = require('firebase-admin');
-  const stringData = Object.fromEntries(Object.entries(data).map(([k, v]) => [k, String(v)]));
+  // badge: cộng thêm số vào biểu tượng PWA đã "Thêm vào màn hình chính" (Badging API) — service
+  // worker phía client đọc cờ này, xem web/firebase-messaging-sw.js của customer/driver/store.
+  const stringData = Object.fromEntries(
+    Object.entries({ ...data, badge: String(!!badge) }).map(([k, v]) => [k, String(v)])
+  );
   let sent = 0;
   for (let i = 0; i < tokens.length; i += FCM_BATCH_SIZE) {
     const batch = tokens.slice(i, i + FCM_BATCH_SIZE);
@@ -59,15 +63,17 @@ async function sendToTokens(tokens, { title, body, data = {} }) {
 
 /**
  * Gửi push notification cho MỌI thiết bị đã đăng ký (bảng user_devices) của 1 user.
- * data phải toàn giá trị string (giới hạn của FCM data payload).
+ * data phải toàn giá trị string (giới hạn của FCM data payload). badge mặc định true vì mọi
+ * nơi gọi hàm này đều là thông báo liên quan đơn hàng (orderOffer.js, dispatch.js,
+ * notifyCustomerOrderStatus) — loại thông báo mặc định cộng badge theo yêu cầu nghiệp vụ.
  */
-async function sendPushToUser(userId, { title, body, data = {} }) {
+async function sendPushToUser(userId, { title, body, data = {}, badge = true }) {
   const devices = await db.query(
     'SELECT push_token FROM user_devices WHERE user_id = $1 AND push_token IS NOT NULL',
     [userId]
   );
   const tokens = devices.map((d) => d.push_token).filter(Boolean);
-  return sendToTokens(tokens, { title, body, data });
+  return sendToTokens(tokens, { title, body, data, badge });
 }
 
 /**
@@ -75,7 +81,7 @@ async function sendPushToUser(userId, { title, body, data = {} }) {
  * thông báo — dùng cho màn "Thông báo" ở web admin, target=all. [roles] vd ['customer'],
  * ['driver'], ['merchant_owner','merchant_staff']. Trả về { sent, total }.
  */
-async function sendBroadcastToRoles(roles, { title, body }) {
+async function sendBroadcastToRoles(roles, { title, body, badge = false }) {
   const devices = await db.query(
     `SELECT DISTINCT d.push_token
        FROM user_devices d
@@ -87,7 +93,8 @@ async function sendBroadcastToRoles(roles, { title, body }) {
   const { sent } = await sendToTokens(tokens, {
     title,
     body,
-    data: { type: 'admin_broadcast' }
+    data: { type: 'admin_broadcast' },
+    badge
   });
   return { sent, total: tokens.length };
 }
@@ -109,7 +116,7 @@ async function resolveMerchantUserIds(merchantIds) {
  * Gửi push cho 1 danh sách user_id cụ thể (admin tự chọn ở màn Thông báo) — dùng cho
  * target = specific_users. Trả về { sent, total } để ghi vào admin_notifications.
  */
-async function sendToUserIds(userIds, { title, body }) {
+async function sendToUserIds(userIds, { title, body, badge = false }) {
   if (!userIds.length) return { sent: 0, total: 0 };
   const devices = await db.query(
     'SELECT DISTINCT push_token FROM user_devices WHERE user_id = ANY($1::uuid[]) AND push_token IS NOT NULL',
@@ -119,7 +126,8 @@ async function sendToUserIds(userIds, { title, body }) {
   const { sent } = await sendToTokens(tokens, {
     title,
     body,
-    data: { type: 'admin_broadcast' }
+    data: { type: 'admin_broadcast' },
+    badge
   });
   return { sent, total: tokens.length };
 }

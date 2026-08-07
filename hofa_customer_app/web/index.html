@@ -46,6 +46,31 @@
     For more details:
     * https://docs.flutter.dev/platform-integration/web/initialization
   -->
+
+  <!-- Xoá badge trên icon PWA (Badging API) mỗi khi mở/quay lại app — badge được cộng ở
+       firebase-messaging-sw.js lúc app không mở, dùng chung 1 IndexedDB store để đếm. -->
+  <script>
+    (function () {
+      if (!('clearAppBadge' in navigator)) return;
+      function clearBadge() {
+        navigator.clearAppBadge().catch(function () {});
+        if (!('indexedDB' in window)) return;
+        var req = indexedDB.open('hofa-badge', 1);
+        req.onupgradeneeded = function () {
+          req.result.createObjectStore('counter');
+        };
+        req.onsuccess = function () {
+          var tx = req.result.transaction('counter', 'readwrite');
+          tx.objectStore('counter').put(0, 'count');
+        };
+      }
+      clearBadge();
+      document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'visible') clearBadge();
+      });
+    })();
+  </script>
+
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>
