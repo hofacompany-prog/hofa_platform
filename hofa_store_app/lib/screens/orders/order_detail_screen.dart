@@ -500,9 +500,10 @@ class _StepperButton extends StatelessWidget {
 }
 
 /// Thanh trượt xác nhận thời gian chuẩn bị — dải màu cảnh báo chạy dần từ trái sang phải phía
-/// sau thanh trượt trong đúng 10 giây (điều khiển bởi [sweep], KHÔNG liên quan
-/// order.acceptDeadline). Trượt hết thanh bất kỳ lúc nào = xác nhận ngay; không trượt thì hết
-/// 10 giây [sweep] tự hoàn tất và gọi [onConfirm] (xem addStatusListener ở nơi tạo controller).
+/// sau thanh trượt trong confirm_sweep_seconds giây (điều khiển bởi [sweep]). Trượt hết thanh
+/// bất kỳ lúc nào = xác nhận ngay; không trượt thì hết giờ [sweep] tự hoàn tất và gọi
+/// [onConfirm] (xem addStatusListener ở nơi tạo controller) — server không còn tự quét/tự huỷ
+/// đơn quá hạn nữa, cơ chế này thay thế hoàn toàn.
 class _SweepSlideToConfirm extends StatelessWidget {
   final Animation<double> sweep;
   final bool busy;
