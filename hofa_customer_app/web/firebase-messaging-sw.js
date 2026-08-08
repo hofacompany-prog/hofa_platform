@@ -69,7 +69,34 @@ messaging.onBackgroundMessage(async (payload) => {
   }
 });
 
+/**
+ * Đường dẫn trong app tương ứng với data của push — khớp switch trong
+ * lib/core/push_service.dart#handleData, NHƯNG chạy ở đây (service worker, ngoài Dart) vì lúc
+ * app đang đóng/nền, Dart code không chạy nên handleData không có cơ hội được gọi — trước đây
+ * bấm vào thông báo chỉ mở trang chủ (self.registration.scope), bỏ qua hẳn order_id, nên
+ * không bao giờ nhảy tới đúng màn Chi tiết đơn được.
+ */
+function targetPathFor(data) {
+  if (data.type === 'admin_broadcast' && data.screen) return data.screen;
+  if (data.order_id && data.type === 'order_status_changed') return '/orders/' + data.order_id;
+  return '/';
+}
+
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  event.waitUntil(clients.openWindow(self.registration.scope));
+  // firebase-messaging-compat.js tự hiện thông báo (xem onBackgroundMessage ở trên) và gói data
+  // gốc vào notification.data.FCM_MSG.data — không phải tự đặt ra, đây là cấu trúc SDK dùng.
+  const fcmData = (event.notification.data && event.notification.data.FCM_MSG && event.notification.data.FCM_MSG.data) || {};
+  const targetUrl = new URL(targetPathFor(fcmData), self.registration.scope).href;
+
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+      for (const client of windowClients) {
+        if (client.url.startsWith(self.registration.scope) && 'focus' in client) {
+          return client.navigate(targetUrl).then((c) => (c || client).focus()).catch(() => client.focus());
+        }
+      }
+      if (clients.openWindow) return clients.openWindow(targetUrl);
+    })
+  );
 });
