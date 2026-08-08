@@ -29,11 +29,18 @@ const _defaultCenter = LatLng(
   106.7009,
 ); // trung tâm TP.HCM — điểm khởi đầu hợp lý khi chưa có vị trí
 
-/// Chọn vị trí chi nhánh bằng bản đồ (giống màn chọn vị trí bên app khách/cửa hàng):
-/// ghim cố định giữa màn hình, kéo bản đồ hoặc tìm kiếm để di chuyển ghim, xác nhận là
-/// xong. Dùng OpenStreetMap (flutter_map + Nominatim) — miễn phí, không cần API key.
+/// Chọn vị trí bằng bản đồ (giống màn chọn vị trí bên app khách/cửa hàng): ghim cố định giữa
+/// màn hình, kéo bản đồ hoặc tìm kiếm để di chuyển ghim, xác nhận là xong. Dùng OpenStreetMap
+/// (flutter_map + Nominatim) — miễn phí, không cần API key. Dùng chung cho cả chọn vị trí chi
+/// nhánh (merchant_form_screen.dart) lẫn sửa điểm lấy/giao hàng của 1 chuyến
+/// (deliveries/delivery_detail_screen.dart, truyền sẵn initialLatitude/Longitude).
 class LocationPickerScreen extends StatefulWidget {
-  const LocationPickerScreen({super.key});
+  /// Toạ độ có sẵn (đang sửa 1 vị trí đã có, thay vì chọn mới) — mở bản đồ ngay tại đó thay vì
+  /// thử định vị máy của admin (không liên quan gì tới vị trí thật cần sửa).
+  final double? initialLatitude;
+  final double? initialLongitude;
+
+  const LocationPickerScreen({super.key, this.initialLatitude, this.initialLongitude});
 
   @override
   State<LocationPickerScreen> createState() => _LocationPickerScreenState();
@@ -55,7 +62,12 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
   @override
   void initState() {
     super.initState();
-    _tryLocateMe(animate: false);
+    if (widget.initialLatitude != null && widget.initialLongitude != null) {
+      _center = LatLng(widget.initialLatitude!, widget.initialLongitude!);
+      _resolveAddressAt(_center); // bản đồ chưa dựng xong lúc initState — xác định địa chỉ ngay
+    } else {
+      _tryLocateMe(animate: false);
+    }
   }
 
   @override

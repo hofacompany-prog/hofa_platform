@@ -4,11 +4,13 @@ import 'package:go_router/go_router.dart';
 import '../../core/format.dart';
 import '../../models/admin_delivery.dart';
 import '../../providers/admin_providers.dart';
+import '../merchants/location_picker_screen.dart';
 
 /// Chi tiết 1 chuyến giao hàng — cho admin xem đầy đủ + SỬA điểm lấy hàng (dữ liệu của chi
 /// nhánh, qua updateBranch) và điểm giao hàng (dữ liệu riêng của đơn, qua
-/// updateOrderShipping) khi toạ độ/địa chỉ sai hoặc thiếu, cùng đổi trạng thái/xoá như ở màn
-/// danh sách "Chuyến giao hàng" (deliveries_screen.dart) cho tiện thao tác tại chỗ.
+/// updateOrderShipping) TRỰC TIẾP TRÊN BẢN ĐỒ (dùng chung LocationPickerScreen với màn chọn vị
+/// trí chi nhánh lúc tạo cửa hàng) khi toạ độ/địa chỉ sai hoặc thiếu, cùng đổi trạng thái/xoá
+/// như ở màn danh sách "Chuyến giao hàng" (deliveries_screen.dart) cho tiện thao tác tại chỗ.
 class DeliveryDetailScreen extends ConsumerStatefulWidget {
   final String deliveryId;
   const DeliveryDetailScreen({super.key, required this.deliveryId});
@@ -22,23 +24,23 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
 
   Future<void> _editPickup(AdminDelivery d) async {
     if (d.branchId == null) return;
-    final result = await showDialog<Map<String, dynamic>>(
-      context: context,
-      builder: (context) => _EditPointDialog(
-        title: 'Sửa điểm lấy hàng',
-        line1: d.branchLine1 ?? '',
-        ward: d.branchWard ?? '',
-        district: d.branchDistrict ?? '',
-        province: d.branchProvince ?? '',
-        latitude: d.branchLatitude,
-        longitude: d.branchLongitude,
+    final picked = await Navigator.of(context).push<PickedLocation>(
+      MaterialPageRoute(
+        builder: (_) => LocationPickerScreen(initialLatitude: d.branchLatitude, initialLongitude: d.branchLongitude),
       ),
     );
-    if (result == null) return;
+    if (picked == null) return;
 
     setState(() => _busy = true);
     try {
-      await ref.read(adminRepoProvider).updateBranch(d.branchId!, result);
+      await ref.read(adminRepoProvider).updateBranch(d.branchId!, {
+        'line1': picked.line1,
+        'ward': picked.ward,
+        'district': picked.district,
+        'province': picked.province,
+        'latitude': picked.latitude,
+        'longitude': picked.longitude,
+      });
       ref.invalidate(deliveryDetailProvider(widget.deliveryId));
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Đã lưu điểm lấy hàng')));
     } catch (e) {
@@ -49,24 +51,23 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
   }
 
   Future<void> _editDropoff(AdminDelivery d) async {
-    final result = await showDialog<Map<String, dynamic>>(
-      context: context,
-      builder: (context) => _EditPointDialog(
-        title: 'Sửa điểm giao hàng',
-        line1: d.shipLine1 ?? '',
-        ward: d.shipWard ?? '',
-        district: d.shipDistrict ?? '',
-        province: d.shipProvince ?? '',
-        latitude: d.shipLatitude,
-        longitude: d.shipLongitude,
-        fieldPrefix: 'ship_',
+    final picked = await Navigator.of(context).push<PickedLocation>(
+      MaterialPageRoute(
+        builder: (_) => LocationPickerScreen(initialLatitude: d.shipLatitude, initialLongitude: d.shipLongitude),
       ),
     );
-    if (result == null) return;
+    if (picked == null) return;
 
     setState(() => _busy = true);
     try {
-      await ref.read(adminRepoProvider).updateOrderShipping(d.orderId, result);
+      await ref.read(adminRepoProvider).updateOrderShipping(d.orderId, {
+        'ship_line1': picked.line1,
+        'ship_ward': picked.ward,
+        'ship_district': picked.district,
+        'ship_province': picked.province,
+        'ship_latitude': picked.latitude,
+        'ship_longitude': picked.longitude,
+      });
       ref.invalidate(deliveryDetailProvider(widget.deliveryId));
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Đã lưu điểm giao hàng')));
     } catch (e) {
@@ -323,120 +324,6 @@ class _PointCard extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-/// Hộp thoại sửa 1 điểm (địa chỉ + toạ độ) — dùng chung cho cả điểm lấy hàng lẫn giao hàng, trả
-/// về Map đúng tên cột đích (branches.* hay orders.ship_*, xem [fieldPrefix]) để gọi thẳng
-/// updateBranch()/updateOrderShipping() mà không cần đổi tên field ở nơi gọi.
-class _EditPointDialog extends StatefulWidget {
-  final String title;
-  final String line1;
-  final String ward;
-  final String district;
-  final String province;
-  final double? latitude;
-  final double? longitude;
-  final String fieldPrefix;
-
-  const _EditPointDialog({
-    required this.title,
-    required this.line1,
-    required this.ward,
-    required this.district,
-    required this.province,
-    required this.latitude,
-    required this.longitude,
-    this.fieldPrefix = '',
-  });
-
-  @override
-  State<_EditPointDialog> createState() => _EditPointDialogState();
-}
-
-class _EditPointDialogState extends State<_EditPointDialog> {
-  late final _line1Ctrl = TextEditingController(text: widget.line1);
-  late final _wardCtrl = TextEditingController(text: widget.ward);
-  late final _districtCtrl = TextEditingController(text: widget.district);
-  late final _provinceCtrl = TextEditingController(text: widget.province);
-  late final _latCtrl = TextEditingController(text: widget.latitude?.toString() ?? '');
-  late final _lngCtrl = TextEditingController(text: widget.longitude?.toString() ?? '');
-
-  @override
-  void dispose() {
-    _line1Ctrl.dispose();
-    _wardCtrl.dispose();
-    _districtCtrl.dispose();
-    _provinceCtrl.dispose();
-    _latCtrl.dispose();
-    _lngCtrl.dispose();
-    super.dispose();
-  }
-
-  void _submit() {
-    final lat = double.tryParse(_latCtrl.text.trim());
-    final lng = double.tryParse(_lngCtrl.text.trim());
-    Navigator.pop(context, {
-      '${widget.fieldPrefix}line1': _line1Ctrl.text.trim(),
-      '${widget.fieldPrefix}ward': _wardCtrl.text.trim(),
-      '${widget.fieldPrefix}district': _districtCtrl.text.trim(),
-      '${widget.fieldPrefix}province': _provinceCtrl.text.trim(),
-      '${widget.fieldPrefix}latitude': lat,
-      '${widget.fieldPrefix}longitude': lng,
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text(widget.title),
-      content: SizedBox(
-        width: 360,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(controller: _line1Ctrl, decoration: const InputDecoration(labelText: 'Địa chỉ (số nhà, đường)')),
-              const SizedBox(height: 8),
-              TextField(controller: _wardCtrl, decoration: const InputDecoration(labelText: 'Phường/Xã')),
-              const SizedBox(height: 8),
-              TextField(controller: _districtCtrl, decoration: const InputDecoration(labelText: 'Quận/Huyện')),
-              const SizedBox(height: 8),
-              TextField(controller: _provinceCtrl, decoration: const InputDecoration(labelText: 'Tỉnh/Thành phố')),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _latCtrl,
-                      decoration: const InputDecoration(labelText: 'Vĩ độ (latitude)'),
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: TextField(
-                      controller: _lngCtrl,
-                      decoration: const InputDecoration(labelText: 'Kinh độ (longitude)'),
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Mẹo: mở Google Maps, giữ tay trên vị trí đúng rồi bấm vào toạ độ hiện ra để sao chép.',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ],
-          ),
-        ),
-      ),
-      actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Huỷ')),
-        FilledButton(onPressed: _submit, child: const Text('Lưu')),
-      ],
     );
   }
 }
