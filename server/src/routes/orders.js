@@ -33,6 +33,18 @@ router.post('/orders', asyncHandler(async (req, res) => {
     throw new ApiError('BRANCH_CLOSED', 'Cửa hàng đang tạm đóng, chưa thể đặt hàng lúc này', 409);
   }
 
+  // Cửa hàng mua hộ bắt buộc thanh toán trước (chuyển khoản) — cửa hàng phải ứng tiền mua hộ
+  // khách trước khi có hàng, không thể để khách trả sau (COD) như đơn thường. Chặn thật ở
+  // server, không chỉ ẩn nút COD trên UI vì khách vẫn gọi thẳng API được.
+  const merchant = await db.queryOne('SELECT merchant_type FROM merchants WHERE id = $1', [body.merchant_id]);
+  if (merchant?.merchant_type === 'buy_on_behalf' && (body.payment_method || 'cod') === 'cod') {
+    throw new ApiError(
+      'PREPAYMENT_REQUIRED',
+      'Cửa hàng mua hộ yêu cầu thanh toán trước — chọn Chuyển khoản ngân hàng thay vì COD',
+      400
+    );
+  }
+
   const order = await db.callRpc('create_order', {
     p_customer_id: req.ctx.userId,
     p_merchant_id: body.merchant_id,

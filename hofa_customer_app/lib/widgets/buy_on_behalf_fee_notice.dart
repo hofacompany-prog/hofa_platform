@@ -46,12 +46,16 @@ class BuyOnBehalfFeeNotice extends ConsumerWidget {
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  'Cửa hàng mua hộ — có phụ phí tính vào tổng thanh toán',
+                  'Cửa hàng mua hộ — lưu ý trước khi đặt',
                   style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600),
                 ),
               ),
             ],
           ),
+          const SizedBox(height: 6),
+          _NoticeLine(icon: Icons.payments_outlined, text: 'Có phụ phí mua hộ tính vào tổng thanh toán, xem bảng bên dưới'),
+          _NoticeLine(icon: Icons.schedule, text: 'Đơn có thể lâu hơn bình thường do cửa hàng phải đi mua hộ'),
+          _NoticeLine(icon: Icons.lock_clock, text: 'Bắt buộc thanh toán trước (chuyển khoản), không hỗ trợ trả khi nhận hàng (COD)'),
           const SizedBox(height: 8),
           tiersAsync.when(
             loading: () => const SizedBox(
@@ -96,6 +100,28 @@ class BuyOnBehalfFeeNotice extends ConsumerWidget {
               );
             },
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _NoticeLine extends StatelessWidget {
+  final IconData icon;
+  final String text;
+  const _NoticeLine({required this.icon, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 14, color: theme.colorScheme.secondary),
+          const SizedBox(width: 6),
+          Expanded(child: Text(text, style: theme.textTheme.bodySmall)),
         ],
       ),
     );

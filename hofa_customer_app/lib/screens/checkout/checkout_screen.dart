@@ -308,6 +308,14 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     });
   }
 
+  /// Cửa hàng mua hộ bắt buộc chuyển khoản trước, không cho chọn COD — xem BuyOnBehalfFeeNotice
+  /// (cảnh báo hiện sẵn ở màn cửa hàng/sản phẩm) và chặn lại lần nữa ở server (routes/orders.js).
+  String _effectivePaymentMethod(CartState cart) {
+    final merchant = cart.merchantId == null ? null : ref.read(merchantDetailProvider(cart.merchantId!)).valueOrNull;
+    if (merchant?.isBuyOnBehalf == true) return 'bank_transfer';
+    return _paymentMethod;
+  }
+
   Map<String, dynamic> _orderBody(
     CartState cart,
     List<CartItem> items,
@@ -344,7 +352,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     'ship_district': address.district,
     'ship_latitude': address.latitude,
     'ship_longitude': address.longitude,
-    'payment_method': _paymentMethod,
+    'payment_method': _effectivePaymentMethod(cart),
     'delivery_fee': deliveryFee,
     if (_appliedVouchers.isNotEmpty)
       'voucher_codes': _appliedVouchers.map((v) => v.code).toList(),
@@ -765,19 +773,22 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               ),
             ),
           const Divider(height: 32),
+          if (merchant != null && merchant.isBuyOnBehalf) BuyOnBehalfFeeNotice(merchant: merchant),
           Text('Phương thức thanh toán', style: theme.textTheme.titleSmall),
           RadioGroup<String>(
-            groupValue: _paymentMethod,
-            onChanged: (v) =>
-                setState(() => _paymentMethod = v ?? _paymentMethod),
+            groupValue: _effectivePaymentMethod(cart),
+            onChanged: (merchant?.isBuyOnBehalf ?? false)
+                ? (_) {}
+                : (v) => setState(() => _paymentMethod = v ?? _paymentMethod),
             child: Column(
-              children: const [
-                RadioListTile<String>(
-                  contentPadding: EdgeInsets.zero,
-                  value: 'cod',
-                  title: Text('Thanh toán khi nhận hàng (COD)'),
-                ),
-                RadioListTile<String>(
+              children: [
+                if (!(merchant?.isBuyOnBehalf ?? false))
+                  const RadioListTile<String>(
+                    contentPadding: EdgeInsets.zero,
+                    value: 'cod',
+                    title: Text('Thanh toán khi nhận hàng (COD)'),
+                  ),
+                const RadioListTile<String>(
                   contentPadding: EdgeInsets.zero,
                   value: 'bank_transfer',
                   title: Text('Chuyển khoản ngân hàng'),
