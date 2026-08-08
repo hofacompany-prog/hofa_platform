@@ -244,6 +244,12 @@ class AdminRepository {
     await _api.post('/admin/drivers/$id/verify') as Map<String, dynamic>,
   );
 
+  /// Gỡ tài xế bị kẹt trạng thái (thường là 'busy' không tự về 'online' được) — không đụng gì
+  /// tới deliveries, chỉ đổi đúng cột status của drivers.
+  Future<Driver> forceDriverStatus(String id, String status) async => Driver.fromJson(
+        await _api.patch('/admin/drivers/$id/status', body: {'status': status}) as Map<String, dynamic>,
+      );
+
   // ---- Đơn hàng ----
 
   Future<List<Order>> orders({

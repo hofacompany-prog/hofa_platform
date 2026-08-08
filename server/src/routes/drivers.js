@@ -107,4 +107,16 @@ router.post('/admin/drivers/:id/verify', asyncHandler(async (req, res) => {
   res.json({ ok: true, data: updated });
 }));
 
+/** Admin chỉnh tay trạng thái tài xế (offline/online/busy/on_break) — gỡ trường hợp tài xế bị
+ * kẹt ở 'busy' (vd app tắt/mất mạng giữa chừng một chuyến, chuyến đã bị xoá/đổi trạng thái ở
+ * màn "Chuyến giao hàng" nhưng vì lý do gì đó không tự trả tài xế về online) khiến không nhận
+ * được chuyến mới — không đụng gì tới deliveries, chỉ đổi đúng cột status của drivers. */
+router.patch('/admin/drivers/:id/status', asyncHandler(async (req, res) => {
+  requireRole(req.ctx, ['admin']);
+  requireFields(req.body, ['status']);
+  const updated = await db.updateById('drivers', req.params.id, { status: req.body.status });
+  if (!updated) throw new ApiError('NOT_FOUND', 'Không tìm thấy tài xế', 404);
+  res.json({ ok: true, data: updated });
+}));
+
 module.exports = router;

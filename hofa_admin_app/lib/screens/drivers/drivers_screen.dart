@@ -45,6 +45,55 @@ class _DriversScreenState extends ConsumerState<DriversScreen> {
     }
   }
 
+  /// Gỡ tài xế kẹt ở 1 trạng thái (thường 'busy') không tự nhận được chuyến mới — vd chuyến cũ
+  /// bị xoá/đổi trạng thái ở màn "Chuyến giao hàng" nhưng vì lý do gì đó tài xế không tự về lại
+  /// 'online'. Chỉ đổi đúng cột status của drivers, không đụng gì tới deliveries.
+  Future<void> _changeStatus(Driver d) async {
+    var selected = d.status;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setInner) => AlertDialog(
+          title: const Text('Đổi trạng thái tài xế'),
+          content: SizedBox(
+            width: 320,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Dùng khi tài xế bị kẹt trạng thái (vd "Đang giao" mãi) và không nhận được chuyến mới.'),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<String>(
+                  initialValue: selected,
+                  decoration: const InputDecoration(border: OutlineInputBorder(), isDense: true),
+                  items: driverStatusLabels.entries
+                      .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))
+                      .toList(),
+                  onChanged: (v) => setInner(() => selected = v ?? selected),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Huỷ')),
+            FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Xác nhận')),
+          ],
+        ),
+      ),
+    );
+    if (ok != true) return;
+
+    setState(() => _busy = true);
+    try {
+      await ref.read(adminRepoProvider).forceDriverStatus(d.id, selected);
+      ref.invalidate(driversProvider);
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final driversAsync = ref.watch(driversProvider);
@@ -116,9 +165,10 @@ class _DriversScreenState extends ConsumerState<DriversScreen> {
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Chip(
+                            ActionChip(
                               label: Text(driverStatusLabels[d.status] ?? d.status),
                               visualDensity: VisualDensity.compact,
+                              onPressed: _busy ? null : () => _changeStatus(d),
                             ),
                             const SizedBox(width: 8),
                             if (!d.isVerified)
