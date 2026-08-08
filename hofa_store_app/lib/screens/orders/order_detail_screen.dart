@@ -11,6 +11,7 @@ import '../../models/order.dart';
 import '../../models/prep_tier_settings.dart';
 import '../../repositories/merchant_repository.dart';
 import '../../repositories/order_repository.dart';
+import '../../widgets/rolling_countdown.dart';
 
 final _orderProvider = FutureProvider.autoDispose.family<Order, String>((ref, id) => OrderRepository().get(id));
 final _deliveryProvider =
@@ -54,7 +55,6 @@ class OrderDetailScreen extends ConsumerStatefulWidget {
 
 class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> with SingleTickerProviderStateMixin {
   bool _updating = false;
-  Timer? _tickTimer;
   AnimationController? _sweepController;
   bool _sweepStarted = false;
   bool _sweepIsAutoAccept = true;
@@ -62,16 +62,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> with Sing
   int? _prepMinutes;
 
   @override
-  void initState() {
-    super.initState();
-    _tickTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) setState(() {});
-    });
-  }
-
-  @override
   void dispose() {
-    _tickTimer?.cancel();
     _sweepController?.dispose();
     super.dispose();
   }
@@ -468,7 +459,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> with Sing
               ),
               SizedBox(
                 width: 160,
-                child: _RollingCountdown(
+                child: RollingCountdown(
                   deadline: o.createdAt.add(Duration(minutes: _prepMinutes!)),
                   alignment: CrossAxisAlignment.center,
                 ),
@@ -514,7 +505,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> with Sing
         children: [
           Expanded(
             child: o.confirmedAt != null && o.estimatedPrepMinutes != null
-                ? _RollingCountdown(deadline: o.confirmedAt!.add(Duration(minutes: o.estimatedPrepMinutes!)))
+                ? RollingCountdown(deadline: o.confirmedAt!.add(Duration(minutes: o.estimatedPrepMinutes!)))
                 : const SizedBox(),
           ),
           const SizedBox(width: 12),
@@ -621,76 +612,6 @@ class _SweepSlideToConfirm extends StatelessWidget {
           },
         ),
         slide,
-      ],
-    );
-  }
-}
-
-/// Đồng hồ đếm ngược thời gian chuẩn bị tới [deadline], chữ số có hiệu ứng "chạy lên/xuống" khi
-/// đổi (xem [_RollingTimeText]). Hết giờ thì đóng băng ở 00:00 màu đỏ + dòng chữ báo trễ, KHÔNG
-/// đếm tiếp sang số âm — đúng yêu cầu chỉ báo trạng thái, số phút trễ thật lưu ở
-/// order.lateMinutes khi thực sự bấm "Đã làm xong" (xem routes/orders.js). Dùng cả TRƯỚC lúc
-/// xác nhận (deadline = createdAt + số phút đang chọn trên bộ đếm +/-, tự tính lại ngay khi
-/// bấm +/-) lẫn SAU khi xác nhận (deadline = confirmedAt + estimatedPrepMinutes, cố định).
-class _RollingCountdown extends StatelessWidget {
-  final DateTime deadline;
-  final CrossAxisAlignment alignment;
-  const _RollingCountdown({required this.deadline, this.alignment = CrossAxisAlignment.start});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final remaining = deadline.difference(DateTime.now());
-    final isLate = remaining.isNegative;
-    final shown = isLate ? Duration.zero : remaining;
-    final mm = shown.inMinutes.remainder(60).toString().padLeft(2, '0');
-    final ss = shown.inSeconds.remainder(60).toString().padLeft(2, '0');
-    final color = isLate ? theme.colorScheme.error : theme.colorScheme.onSurface;
-
-    return Column(
-      crossAxisAlignment: alignment,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _RollingTimeText(
-          text: '$mm:$ss',
-          style: theme.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold, color: color),
-        ),
-        const SizedBox(height: 2),
-        Text(
-          isLate ? 'Đơn hàng đang bị trễ' : 'Thời gian chuẩn bị còn lại',
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: isLate ? theme.colorScheme.error : theme.colorScheme.outline,
-            fontWeight: isLate ? FontWeight.bold : null,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-/// Hiệu ứng đồng hồ cơ học: từng ký tự tự trượt lên và mờ dần vào/ra riêng, dùng
-/// AnimatedSwitcher keyed theo (vị trí, ký tự) — chỉ ký tự vừa đổi mới chạy hiệu ứng.
-class _RollingTimeText extends StatelessWidget {
-  final String text;
-  final TextStyle? style;
-  const _RollingTimeText({required this.text, this.style});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        for (var i = 0; i < text.length; i++)
-          ClipRect(
-            child: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 300),
-              transitionBuilder: (child, animation) => SlideTransition(
-                position: Tween<Offset>(begin: const Offset(0, 0.6), end: Offset.zero).animate(animation),
-                child: FadeTransition(opacity: animation, child: child),
-              ),
-              child: Text(text[i], key: ValueKey('$i-${text[i]}'), style: style),
-            ),
-          ),
       ],
     );
   }
