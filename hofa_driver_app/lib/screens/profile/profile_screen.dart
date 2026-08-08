@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../providers/auth_provider.dart';
+import '../../widgets/app_version_text.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -87,6 +88,8 @@ class ProfileScreen extends ConsumerWidget {
                 icon: const Icon(Icons.logout),
                 label: const Text('Đăng xuất'),
               ),
+              const SizedBox(height: 12),
+              const AppVersionText(),
             ],
           );
         },

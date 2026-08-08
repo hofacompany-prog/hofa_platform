@@ -6,6 +6,7 @@ import '../../core/format.dart';
 import '../../models/branch.dart';
 import '../../providers/auth_provider.dart';
 import '../../repositories/merchant_repository.dart';
+import '../../widgets/app_version_text.dart';
 import '../../widgets/nav_back_button.dart';
 
 final _branchesProvider = FutureProvider.autoDispose<List<Branch>>((ref) async {
@@ -197,6 +198,8 @@ class BranchSettingsScreen extends ConsumerWidget {
                   icon: const Icon(Icons.logout),
                   label: const Text('Đăng xuất'),
                 ),
+                const SizedBox(height: 12),
+                const AppVersionText(),
               ],
             ),
           ),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../providers/admin_providers.dart';
+import '../../widgets/app_version_text.dart';
 
 class AdminLoginScreen extends ConsumerStatefulWidget {
   const AdminLoginScreen({super.key});
@@ -53,63 +54,73 @@ class _AdminLoginScreenState extends ConsumerState<AdminLoginScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 400),
-            child: Card(
-              elevation: 0,
-              color: theme.colorScheme.surfaceContainerLow,
-              child: Padding(
-                padding: const EdgeInsets.all(32),
-                child: Form(
-                  key: _formKey,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Image.asset('assets/images/logo.png', height: 64),
-                      const SizedBox(height: 16),
-                      Text('HOFA Admin',
-                          textAlign: TextAlign.center,
-                          style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
-                      const SizedBox(height: 4),
-                      Text('Trang quản trị hệ thống',
-                          textAlign: TextAlign.center, style: theme.textTheme.bodyMedium),
-                      const SizedBox(height: 32),
-                      TextFormField(
-                        controller: _emailCtrl,
-                        decoration: const InputDecoration(labelText: 'Email', border: OutlineInputBorder()),
-                        keyboardType: TextInputType.emailAddress,
-                        validator: (v) => (v == null || !v.contains('@')) ? 'Email không hợp lệ' : null,
+      body: Stack(
+        children: [
+          Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 400),
+                child: Card(
+                  elevation: 0,
+                  color: theme.colorScheme.surfaceContainerLow,
+                  child: Padding(
+                    padding: const EdgeInsets.all(32),
+                    child: Form(
+                      key: _formKey,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Image.asset('assets/images/logo.png', height: 64),
+                          const SizedBox(height: 16),
+                          Text('HOFA Admin',
+                              textAlign: TextAlign.center,
+                              style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 4),
+                          Text('Trang quản trị hệ thống',
+                              textAlign: TextAlign.center, style: theme.textTheme.bodyMedium),
+                          const SizedBox(height: 32),
+                          TextFormField(
+                            controller: _emailCtrl,
+                            decoration: const InputDecoration(labelText: 'Email', border: OutlineInputBorder()),
+                            keyboardType: TextInputType.emailAddress,
+                            validator: (v) => (v == null || !v.contains('@')) ? 'Email không hợp lệ' : null,
+                          ),
+                          const SizedBox(height: 16),
+                          TextFormField(
+                            controller: _passwordCtrl,
+                            decoration: const InputDecoration(labelText: 'Mật khẩu', border: OutlineInputBorder()),
+                            obscureText: true,
+                            onFieldSubmitted: (_) => _submit(),
+                            validator: (v) => (v == null || v.isEmpty) ? 'Nhập mật khẩu' : null,
+                          ),
+                          if (_error != null) ...[
+                            const SizedBox(height: 16),
+                            Text(_error!, style: TextStyle(color: theme.colorScheme.error)),
+                          ],
+                          const SizedBox(height: 24),
+                          FilledButton(
+                            onPressed: _loading ? null : _submit,
+                            child: _loading
+                                ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                                : const Text('Đăng nhập'),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        controller: _passwordCtrl,
-                        decoration: const InputDecoration(labelText: 'Mật khẩu', border: OutlineInputBorder()),
-                        obscureText: true,
-                        onFieldSubmitted: (_) => _submit(),
-                        validator: (v) => (v == null || v.isEmpty) ? 'Nhập mật khẩu' : null,
-                      ),
-                      if (_error != null) ...[
-                        const SizedBox(height: 16),
-                        Text(_error!, style: TextStyle(color: theme.colorScheme.error)),
-                      ],
-                      const SizedBox(height: 24),
-                      FilledButton(
-                        onPressed: _loading ? null : _submit,
-                        child: _loading
-                            ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                            : const Text('Đăng nhập'),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
               ),
             ),
           ),
-        ),
+          const Positioned(
+            left: 0,
+            right: 0,
+            bottom: 24,
+            child: AppVersionText(),
+          ),
+        ],
       ),
     );
   }

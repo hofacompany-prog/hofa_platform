@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/phone_auth.dart';
 import '../../repositories/user_repository.dart';
+import '../../widgets/app_version_text.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -105,104 +106,114 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 400),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const SizedBox(height: 24),
-                  Center(child: Image.asset('assets/images/logo.png', height: 64)),
-                  const SizedBox(height: 12),
-                  Text(
-                    'HOFA cho tài xế',
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    _awaitingOtp
-                        ? 'Xác thực số điện thoại'
-                        : (_isSignUp ? 'Tạo tài khoản tài xế' : 'Đăng nhập để bắt đầu nhận đơn'),
-                    textAlign: TextAlign.center,
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                  const SizedBox(height: 32),
-                  if (_awaitingOtp) ...[
-                    Text('Nhập mã OTP đã gửi tới ${_phoneCtrl.text.trim()}',
-                        style: Theme.of(context).textTheme.bodySmall),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _otpCtrl,
-                      decoration: const InputDecoration(labelText: 'Mã OTP'),
-                      keyboardType: TextInputType.number,
-                      onSubmitted: (_) => _submit(),
-                    ),
-                  ] else ...[
-                    if (_isSignUp) ...[
-                      TextFormField(
-                        controller: _fullNameCtrl,
-                        decoration: const InputDecoration(labelText: 'Họ tên'),
-                        validator: (v) => (v == null || v.trim().isEmpty) ? 'Nhập họ tên' : null,
+      body: Stack(
+        children: [
+          Center(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(24),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 400),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const SizedBox(height: 24),
+                      Center(child: Image.asset('assets/images/logo.png', height: 64)),
+                      const SizedBox(height: 12),
+                      Text(
+                        'HOFA cho tài xế',
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
                       ),
-                      const SizedBox(height: 16),
+                      const SizedBox(height: 8),
+                      Text(
+                        _awaitingOtp
+                            ? 'Xác thực số điện thoại'
+                            : (_isSignUp ? 'Tạo tài khoản tài xế' : 'Đăng nhập để bắt đầu nhận đơn'),
+                        textAlign: TextAlign.center,
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                      const SizedBox(height: 32),
+                      if (_awaitingOtp) ...[
+                        Text('Nhập mã OTP đã gửi tới ${_phoneCtrl.text.trim()}',
+                            style: Theme.of(context).textTheme.bodySmall),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: _otpCtrl,
+                          decoration: const InputDecoration(labelText: 'Mã OTP'),
+                          keyboardType: TextInputType.number,
+                          onSubmitted: (_) => _submit(),
+                        ),
+                      ] else ...[
+                        if (_isSignUp) ...[
+                          TextFormField(
+                            controller: _fullNameCtrl,
+                            decoration: const InputDecoration(labelText: 'Họ tên'),
+                            validator: (v) => (v == null || v.trim().isEmpty) ? 'Nhập họ tên' : null,
+                          ),
+                          const SizedBox(height: 16),
+                        ],
+                        TextFormField(
+                          controller: _phoneCtrl,
+                          decoration: const InputDecoration(labelText: 'Số điện thoại'),
+                          keyboardType: TextInputType.phone,
+                          validator: (v) => (v == null || !isValidPhone(v.trim())) ? 'Số điện thoại không hợp lệ' : null,
+                        ),
+                        const SizedBox(height: 16),
+                        TextFormField(
+                          controller: _passwordCtrl,
+                          decoration: const InputDecoration(labelText: 'Mật khẩu'),
+                          obscureText: true,
+                          onFieldSubmitted: (_) => _submit(),
+                          validator: (v) => (v == null || v.length < 6) ? 'Mật khẩu tối thiểu 6 ký tự' : null,
+                        ),
+                      ],
+                      if (_error != null) ...[
+                        const SizedBox(height: 16),
+                        Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                      ],
+                      if (_info != null) ...[
+                        const SizedBox(height: 16),
+                        Text(_info!, style: TextStyle(color: Theme.of(context).colorScheme.primary)),
+                      ],
+                      const SizedBox(height: 24),
+                      FilledButton(
+                        onPressed: _loading ? null : _submit,
+                        child: _loading
+                            ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                            : Text(_awaitingOtp ? 'Xác nhận' : (_isSignUp ? 'Đăng ký' : 'Đăng nhập')),
+                      ),
+                      const SizedBox(height: 12),
+                      if (_awaitingOtp)
+                        TextButton(
+                          onPressed: _loading ? null : () => setState(() => _awaitingOtp = false),
+                          child: const Text('Quay lại'),
+                        )
+                      else
+                        TextButton(
+                          onPressed: _loading
+                              ? null
+                              : () => setState(() {
+                                    _isSignUp = !_isSignUp;
+                                    _error = null;
+                                    _info = null;
+                                  }),
+                          child: Text(_isSignUp ? 'Đã có tài khoản? Đăng nhập' : 'Chưa có tài khoản? Đăng ký'),
+                        ),
                     ],
-                    TextFormField(
-                      controller: _phoneCtrl,
-                      decoration: const InputDecoration(labelText: 'Số điện thoại'),
-                      keyboardType: TextInputType.phone,
-                      validator: (v) => (v == null || !isValidPhone(v.trim())) ? 'Số điện thoại không hợp lệ' : null,
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: _passwordCtrl,
-                      decoration: const InputDecoration(labelText: 'Mật khẩu'),
-                      obscureText: true,
-                      onFieldSubmitted: (_) => _submit(),
-                      validator: (v) => (v == null || v.length < 6) ? 'Mật khẩu tối thiểu 6 ký tự' : null,
-                    ),
-                  ],
-                  if (_error != null) ...[
-                    const SizedBox(height: 16),
-                    Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
-                  ],
-                  if (_info != null) ...[
-                    const SizedBox(height: 16),
-                    Text(_info!, style: TextStyle(color: Theme.of(context).colorScheme.primary)),
-                  ],
-                  const SizedBox(height: 24),
-                  FilledButton(
-                    onPressed: _loading ? null : _submit,
-                    child: _loading
-                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                        : Text(_awaitingOtp ? 'Xác nhận' : (_isSignUp ? 'Đăng ký' : 'Đăng nhập')),
                   ),
-                  const SizedBox(height: 12),
-                  if (_awaitingOtp)
-                    TextButton(
-                      onPressed: _loading ? null : () => setState(() => _awaitingOtp = false),
-                      child: const Text('Quay lại'),
-                    )
-                  else
-                    TextButton(
-                      onPressed: _loading
-                          ? null
-                          : () => setState(() {
-                                _isSignUp = !_isSignUp;
-                                _error = null;
-                                _info = null;
-                              }),
-                      child: Text(_isSignUp ? 'Đã có tài khoản? Đăng nhập' : 'Chưa có tài khoản? Đăng ký'),
-                    ),
-                ],
+                ),
               ),
             ),
           ),
-        ),
+          const Positioned(
+            left: 0,
+            right: 0,
+            bottom: 24,
+            child: AppVersionText(),
+          ),
+        ],
       ),
     );
   }

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../providers/admin_providers.dart';
+import '../../widgets/app_version_text.dart';
 
 class AdminShell extends ConsumerWidget {
   final Widget child;
@@ -148,6 +149,10 @@ class AdminShell extends ConsumerWidget {
                         onPressed: () =>
                             Supabase.instance.client.auth.signOut(),
                       ),
+                      if (wide) ...[
+                        const SizedBox(height: 4),
+                        const AppVersionText(),
+                      ],
                     ],
                   ),
                 ),
