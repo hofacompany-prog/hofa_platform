@@ -7,7 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/format.dart';
 import '../../models/delivery.dart';
 import '../../models/order.dart';
-import '../../providers/auth_provider.dart';
+import '../../models/prep_tier_settings.dart';
 import '../../repositories/merchant_repository.dart';
 import '../../repositories/order_repository.dart';
 
@@ -16,8 +16,11 @@ final _deliveryProvider =
     FutureProvider.autoDispose.family<Delivery?, String>((ref, id) => OrderRepository().delivery(id));
 final _confirmSweepSecondsProvider =
     FutureProvider.autoDispose<int>((ref) => MerchantRepository().confirmSweepSeconds());
+final _prepTierSettingsProvider =
+    FutureProvider.autoDispose<PrepTierSettings>((ref) => MerchantRepository().prepTierSettings());
 
-const _defaultPrepMinutes = 15; // dùng khi chưa tải được merchant.avgPrepMinutes kịp
+const _fallbackPrepMinutes = 15; // dùng khi order.defaultPrepMinutes null (đơn tạo trước migration)
+const _fallbackCeilingMinutes = 120; // dùng khi chưa tải được prep_ceiling_* (Thông số admin) kịp
 const _defaultSweepSeconds = 10; // dùng khi chưa tải được confirm_sweep_seconds (Thông số admin) kịp
 
 /// Chi tiết đơn — đích đến duy nhất của push "đơn mới" (xem push_service.dart) lẫn danh sách
@@ -167,8 +170,10 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> with Sing
     final canCancel = isPlaced || isPrepPhase;
 
     if (isPlaced) {
-      final merchant = ref.watch(myMerchantProvider).valueOrNull;
-      _prepMinutes ??= merchant?.avgPrepMinutes ?? _defaultPrepMinutes;
+      // Thời gian chuẩn bị mặc định đã được server chốt theo bậc (auto_accept_settings.
+      // prep_default_*) ngay lúc tạo đơn, xem hofa-db/39_prep_time_tiers.sql — ổn định dù admin
+      // có sửa Thông số sau đó, không tính lại ở client.
+      _prepMinutes ??= o.defaultPrepMinutes ?? _fallbackPrepMinutes;
       final sweepSecondsAsync = ref.watch(_confirmSweepSecondsProvider);
       // Đợi tải xong confirm_sweep_seconds (Thông số admin) rồi mới tạo controller — tạo ngay ở
       // lần build đầu tiên (lúc FutureProvider chắc chắn còn đang loading) sẽ luôn khoá cứng ở
@@ -390,6 +395,12 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> with Sing
 
   Widget _buildPlacedBottom(BuildContext context, Order o) {
     final theme = Theme.of(context);
+    final tierSettings = ref.watch(_prepTierSettingsProvider).valueOrNull;
+    final itemQuantityTotal = o.items.fold<int>(0, (sum, item) => sum + item.quantity);
+    final ceilingMinutes = tierSettings?.ceilingFor(itemQuantityTotal: itemQuantityTotal, subtotal: o.subtotal) ??
+        _fallbackCeilingMinutes;
+    if (_prepMinutes! > ceilingMinutes) _prepMinutes = ceilingMinutes;
+
     return Container(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
       decoration: BoxDecoration(
@@ -398,8 +409,6 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> with Sing
       ),
       child: Column(
         children: [
-          Text('Thời gian làm đơn dự kiến', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -408,28 +417,17 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> with Sing
                 onPressed: _prepMinutes! > 1 ? () => setState(() => _prepMinutes = _prepMinutes! - 1) : null,
               ),
               SizedBox(
-                width: 100,
-                child: Center(
-                  child: Text.rich(
-                    TextSpan(
-                      children: [
-                        TextSpan(
-                          text: '${_prepMinutes!}',
-                          style: theme.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
-                        ),
-                        TextSpan(text: ' phút', style: theme.textTheme.bodyMedium),
-                      ],
-                    ),
-                  ),
+                width: 160,
+                child: _RollingCountdown(
+                  deadline: o.createdAt.add(Duration(minutes: _prepMinutes!)),
+                  alignment: CrossAxisAlignment.center,
                 ),
               ),
-              _StepperButton(icon: Icons.add, onPressed: () => setState(() => _prepMinutes = _prepMinutes! + 1)),
+              _StepperButton(
+                icon: Icons.add,
+                onPressed: _prepMinutes! < ceilingMinutes ? () => setState(() => _prepMinutes = _prepMinutes! + 1) : null,
+              ),
             ],
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Chuẩn bị sẵn sàng đơn hàng trong thời gian này',
-            style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline),
           ),
           const SizedBox(height: 16),
           _sweepController == null
@@ -452,7 +450,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> with Sing
         children: [
           Expanded(
             child: o.confirmedAt != null && o.estimatedPrepMinutes != null
-                ? _RollingCountdown(confirmedAt: o.confirmedAt!, estimatedPrepMinutes: o.estimatedPrepMinutes!)
+                ? _RollingCountdown(deadline: o.confirmedAt!.add(Duration(minutes: o.estimatedPrepMinutes!)))
                 : const SizedBox(),
           ),
           const SizedBox(width: 12),
@@ -556,19 +554,20 @@ class _SweepSlideToConfirm extends StatelessWidget {
   }
 }
 
-/// Đồng hồ đếm ngược thời gian chuẩn bị, chữ số có hiệu ứng "chạy lên/xuống" khi đổi (xem
-/// [_RollingTimeText]). Hết giờ thì đóng băng ở 00:00 màu đỏ + dòng chữ báo trễ, KHÔNG đếm tiếp
-/// sang số âm hay số phút trễ — đúng yêu cầu chỉ báo trạng thái, số phút trễ thật lưu ở
-/// order.lateMinutes khi thực sự bấm "Đã làm xong" (xem routes/orders.js).
+/// Đồng hồ đếm ngược thời gian chuẩn bị tới [deadline], chữ số có hiệu ứng "chạy lên/xuống" khi
+/// đổi (xem [_RollingTimeText]). Hết giờ thì đóng băng ở 00:00 màu đỏ + dòng chữ báo trễ, KHÔNG
+/// đếm tiếp sang số âm — đúng yêu cầu chỉ báo trạng thái, số phút trễ thật lưu ở
+/// order.lateMinutes khi thực sự bấm "Đã làm xong" (xem routes/orders.js). Dùng cả TRƯỚC lúc
+/// xác nhận (deadline = createdAt + số phút đang chọn trên bộ đếm +/-, tự tính lại ngay khi
+/// bấm +/-) lẫn SAU khi xác nhận (deadline = confirmedAt + estimatedPrepMinutes, cố định).
 class _RollingCountdown extends StatelessWidget {
-  final DateTime confirmedAt;
-  final int estimatedPrepMinutes;
-  const _RollingCountdown({required this.confirmedAt, required this.estimatedPrepMinutes});
+  final DateTime deadline;
+  final CrossAxisAlignment alignment;
+  const _RollingCountdown({required this.deadline, this.alignment = CrossAxisAlignment.start});
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final deadline = confirmedAt.add(Duration(minutes: estimatedPrepMinutes));
     final remaining = deadline.difference(DateTime.now());
     final isLate = remaining.isNegative;
     final shown = isLate ? Duration.zero : remaining;
@@ -577,7 +576,7 @@ class _RollingCountdown extends StatelessWidget {
     final color = isLate ? theme.colorScheme.error : theme.colorScheme.onSurface;
 
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: alignment,
       mainAxisSize: MainAxisSize.min,
       children: [
         _RollingTimeText(

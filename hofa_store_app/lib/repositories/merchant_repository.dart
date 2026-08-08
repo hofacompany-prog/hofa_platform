@@ -4,6 +4,7 @@ import '../models/merchant_today_stats.dart';
 import '../models/finance_summary.dart';
 import '../models/branch.dart';
 import '../models/branch_hours.dart';
+import '../models/prep_tier_settings.dart';
 
 class MerchantRepository {
   final _api = ApiClient.instance;
@@ -97,5 +98,11 @@ class MerchantRepository {
   Future<int> confirmSweepSeconds() async {
     final data = await _api.get('/auto-accept-settings') as Map<String, dynamic>?;
     return (data?['confirm_sweep_seconds'] as num?)?.toInt() ?? 10;
+  }
+
+  /// Bậc thời gian chuẩn bị (trần +/-) — admin cấu hình ở "Thông số", công khai.
+  Future<PrepTierSettings> prepTierSettings() async {
+    final data = await _api.get('/auto-accept-settings') as Map<String, dynamic>?;
+    return data == null ? PrepTierSettings.fromJson(const {}) : PrepTierSettings.fromJson(data);
   }
 }

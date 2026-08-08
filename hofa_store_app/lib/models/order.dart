@@ -68,6 +68,7 @@ class Order {
   final String? customerNote;
   final int? estimatedPrepMinutes;
   final int? lateMinutes;
+  final int? defaultPrepMinutes;
   final List<OrderItem> items;
 
   Order({
@@ -92,6 +93,7 @@ class Order {
     this.customerNote,
     this.estimatedPrepMinutes,
     this.lateMinutes,
+    this.defaultPrepMinutes,
     required this.items,
   });
 
@@ -117,6 +119,7 @@ class Order {
         customerNote: json['customer_note'] as String?,
         estimatedPrepMinutes: (json['estimated_prep_minutes'] as num?)?.toInt(),
         lateMinutes: (json['late_minutes'] as num?)?.toInt(),
+        defaultPrepMinutes: (json['default_prep_minutes'] as num?)?.toInt(),
         items: (json['items'] as List?)?.map((e) => OrderItem.fromJson(e as Map<String, dynamic>)).toList() ?? [],
       );
 }

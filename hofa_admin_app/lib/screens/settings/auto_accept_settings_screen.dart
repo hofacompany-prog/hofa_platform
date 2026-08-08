@@ -21,6 +21,14 @@ class _AutoAcceptSettingsScreenState extends ConsumerState<AutoAcceptSettingsScr
   final _maxCtrl = TextEditingController();
   final _manualWindowCtrl = TextEditingController();
   final _confirmSweepCtrl = TextEditingController();
+  final _tierItemsCtrl = TextEditingController();
+  final _tierValueCtrl = TextEditingController();
+  final _prepDefaultBaseCtrl = TextEditingController();
+  final _prepDefaultIncrementCtrl = TextEditingController();
+  final _prepDefaultMaxCtrl = TextEditingController();
+  final _prepCeilingBaseCtrl = TextEditingController();
+  final _prepCeilingIncrementCtrl = TextEditingController();
+  final _prepCeilingMaxCtrl = TextEditingController();
   bool _initialized = false;
   bool _saving = false;
 
@@ -32,6 +40,14 @@ class _AutoAcceptSettingsScreenState extends ConsumerState<AutoAcceptSettingsScr
     _maxCtrl.dispose();
     _manualWindowCtrl.dispose();
     _confirmSweepCtrl.dispose();
+    _tierItemsCtrl.dispose();
+    _tierValueCtrl.dispose();
+    _prepDefaultBaseCtrl.dispose();
+    _prepDefaultIncrementCtrl.dispose();
+    _prepDefaultMaxCtrl.dispose();
+    _prepCeilingBaseCtrl.dispose();
+    _prepCeilingIncrementCtrl.dispose();
+    _prepCeilingMaxCtrl.dispose();
     super.dispose();
   }
 
@@ -42,6 +58,14 @@ class _AutoAcceptSettingsScreenState extends ConsumerState<AutoAcceptSettingsScr
     _maxCtrl.text = s.autoAcceptPrepMaxMinutes.toString();
     _manualWindowCtrl.text = s.manualConfirmWindowMinutes.toString();
     _confirmSweepCtrl.text = s.confirmSweepSeconds.toString();
+    _tierItemsCtrl.text = s.prepTierItems.toString();
+    _tierValueCtrl.text = s.prepTierValueVnd.toString();
+    _prepDefaultBaseCtrl.text = s.prepDefaultBaseMinutes.toString();
+    _prepDefaultIncrementCtrl.text = s.prepDefaultIncrementMinutes.toString();
+    _prepDefaultMaxCtrl.text = s.prepDefaultMaxMinutes.toString();
+    _prepCeilingBaseCtrl.text = s.prepCeilingBaseMinutes.toString();
+    _prepCeilingIncrementCtrl.text = s.prepCeilingIncrementMinutes.toString();
+    _prepCeilingMaxCtrl.text = s.prepCeilingMaxMinutes.toString();
   }
 
   Future<void> _save(String? id) async {
@@ -75,6 +99,46 @@ class _AutoAcceptSettingsScreenState extends ConsumerState<AutoAcceptSettingsScr
       _showError('Thời gian thanh chạy màu không hợp lệ');
       return;
     }
+    final tierItems = int.tryParse(_tierItemsCtrl.text.trim());
+    final tierValue = int.tryParse(_tierValueCtrl.text.trim());
+    final prepDefaultBase = int.tryParse(_prepDefaultBaseCtrl.text.trim());
+    final prepDefaultIncrement = int.tryParse(_prepDefaultIncrementCtrl.text.trim());
+    final prepDefaultMax = int.tryParse(_prepDefaultMaxCtrl.text.trim());
+    final prepCeilingBase = int.tryParse(_prepCeilingBaseCtrl.text.trim());
+    final prepCeilingIncrement = int.tryParse(_prepCeilingIncrementCtrl.text.trim());
+    final prepCeilingMax = int.tryParse(_prepCeilingMaxCtrl.text.trim());
+    if (tierItems == null || tierItems <= 0) {
+      _showError('Mốc bậc theo số phần không hợp lệ');
+      return;
+    }
+    if (tierValue == null || tierValue <= 0) {
+      _showError('Mốc bậc theo giá trị đơn không hợp lệ');
+      return;
+    }
+    if (prepDefaultBase == null || prepDefaultBase <= 0) {
+      _showError('Thời gian chuẩn bị mặc định ở bậc 0 không hợp lệ');
+      return;
+    }
+    if (prepDefaultIncrement == null || prepDefaultIncrement < 0) {
+      _showError('Số phút cộng thêm mỗi bậc (mặc định) không hợp lệ');
+      return;
+    }
+    if (prepDefaultMax == null || prepDefaultMax < prepDefaultBase) {
+      _showError('Trần thời gian chuẩn bị mặc định phải lớn hơn hoặc bằng số phút ở bậc 0');
+      return;
+    }
+    if (prepCeilingBase == null || prepCeilingBase < prepDefaultBase) {
+      _showError('Số phút tối đa cửa hàng chỉnh được ở bậc 0 phải lớn hơn hoặc bằng thời gian mặc định ở bậc 0');
+      return;
+    }
+    if (prepCeilingIncrement == null || prepCeilingIncrement < 0) {
+      _showError('Số phút cộng thêm mỗi bậc (trần) không hợp lệ');
+      return;
+    }
+    if (prepCeilingMax == null || prepCeilingMax < prepCeilingBase || prepCeilingMax < prepDefaultMax) {
+      _showError('Trần tuyệt đối phải lớn hơn hoặc bằng cả trần ở bậc 0 lẫn trần thời gian chuẩn bị mặc định');
+      return;
+    }
 
     setState(() => _saving = true);
     try {
@@ -87,6 +151,14 @@ class _AutoAcceptSettingsScreenState extends ConsumerState<AutoAcceptSettingsScr
               autoAcceptPrepMaxMinutes: max,
               manualConfirmWindowMinutes: manualWindow,
               confirmSweepSeconds: confirmSweep,
+              prepTierItems: tierItems,
+              prepTierValueVnd: tierValue,
+              prepDefaultBaseMinutes: prepDefaultBase,
+              prepDefaultIncrementMinutes: prepDefaultIncrement,
+              prepDefaultMaxMinutes: prepDefaultMax,
+              prepCeilingBaseMinutes: prepCeilingBase,
+              prepCeilingIncrementMinutes: prepCeilingIncrement,
+              prepCeilingMaxMinutes: prepCeilingMax,
             ),
           );
       ref.invalidate(autoAcceptSettingsProvider);
@@ -189,6 +261,94 @@ class _AutoAcceptSettingsScreenState extends ConsumerState<AutoAcceptSettingsScr
                             'trong bấy nhiêu giây. Hết giờ mà chưa trượt, hệ thống tự chốt số phút đang '
                             'hiện trên bộ đếm +/- làm thời gian chuẩn bị và tự xác nhận đơn. Áp dụng cho '
                             'mọi đơn mới, không phụ thuộc công tắc "Tự động nhận đơn" ở trên.',
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    _SectionCard(
+                      title: 'Mốc bậc thời gian chuẩn bị (dùng chung)',
+                      child: Column(
+                        children: [
+                          Text(
+                            'Đơn nào chạm mốc SỐ PHẦN hay GIÁ TRỊ trước thì tính theo bậc đó (lấy bậc lớn '
+                            'hơn trong 2 cách tính). Dùng chung cho cả thời gian chuẩn bị mặc định lẫn trần '
+                            '+/- bên dưới.',
+                            style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline),
+                          ),
+                          const SizedBox(height: 12),
+                          _NumberField(
+                            controller: _tierItemsCtrl,
+                            label: 'Cứ mỗi bao nhiêu phần thì +1 bậc (số phần)',
+                            helper: 'Số phần = tổng số lượng món trong đơn (không phân biệt loại món).',
+                          ),
+                          const SizedBox(height: 12),
+                          _NumberField(
+                            controller: _tierValueCtrl,
+                            label: 'Cứ mỗi bao nhiêu đồng thì +1 bậc (giá trị đơn)',
+                            helper: 'Tính theo tổng tiền món (subtotal), chưa gồm phí ship.',
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    _SectionCard(
+                      title: 'Thời gian chuẩn bị mặc định (theo bậc)',
+                      child: Column(
+                        children: [
+                          Text(
+                            'Số phút hiện sẵn ở màn chi tiết đơn (store app) khi đơn vừa vào — chốt luôn lúc '
+                            'tạo đơn, không đổi dù sau đó bạn có sửa lại Thông số.',
+                            style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline),
+                          ),
+                          const SizedBox(height: 12),
+                          _NumberField(
+                            controller: _prepDefaultBaseCtrl,
+                            label: 'Thời gian chuẩn bị mặc định ở bậc 0 (phút)',
+                            helper: 'Áp dụng cho đơn chưa chạm mốc bậc nào ở trên.',
+                          ),
+                          const SizedBox(height: 12),
+                          _NumberField(
+                            controller: _prepDefaultIncrementCtrl,
+                            label: 'Cộng thêm mỗi bậc (phút)',
+                            helper: 'Mỗi bậc vượt qua, cộng thêm bấy nhiêu phút vào thời gian chuẩn bị mặc định.',
+                          ),
+                          const SizedBox(height: 12),
+                          _NumberField(
+                            controller: _prepDefaultMaxCtrl,
+                            label: 'Trần thời gian chuẩn bị mặc định (phút)',
+                            helper: 'Trần tuyệt đối, bất kể bậc cao đến đâu.',
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    _SectionCard(
+                      title: 'Thời gian tối đa cửa hàng được chỉnh (theo bậc)',
+                      child: Column(
+                        children: [
+                          Text(
+                            'Giới hạn trên của nút +/- ở màn chi tiết đơn — cửa hàng không bấm + vượt quá '
+                            'số này, dù đang ở trạng thái mặc định hay đã tự chỉnh.',
+                            style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline),
+                          ),
+                          const SizedBox(height: 12),
+                          _NumberField(
+                            controller: _prepCeilingBaseCtrl,
+                            label: 'Trần +/- ở bậc 0 (phút)',
+                            helper: 'Phải lớn hơn hoặc bằng thời gian chuẩn bị mặc định ở bậc 0.',
+                          ),
+                          const SizedBox(height: 12),
+                          _NumberField(
+                            controller: _prepCeilingIncrementCtrl,
+                            label: 'Cộng thêm mỗi bậc (phút)',
+                            helper: 'Mỗi bậc vượt qua, cộng thêm bấy nhiêu phút vào trần +/-.',
+                          ),
+                          const SizedBox(height: 12),
+                          _NumberField(
+                            controller: _prepCeilingMaxCtrl,
+                            label: 'Trần +/- tuyệt đối (phút)',
+                            helper: 'Trần tuyệt đối, bất kể bậc cao đến đâu.',
+                          ),
+                        ],
                       ),
                     ),
                     const SizedBox(height: 24),
