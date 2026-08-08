@@ -48,6 +48,44 @@ function writeBadgeCount(count) {
 }
 
 /**
+ * Lưu lại data của push gần nhất — để notificationclick bên dưới đọc lại. KHÔNG đọc từ
+ * event.notification.data (đã thử — cấu trúc đó do firebase-messaging-compat.js tự quyết định
+ * lúc tự hiện thông báo và không ổn định/không tài liệu hoá rõ ràng giữa các bản SDK, thực tế
+ * đã xác nhận không lấy được data đúng, khiến bấm push mở app nhưng không nhảy đúng màn). Ghi
+ * lại data thẳng từ onBackgroundMessage (đáng tin cậy — dùng chung cho đếm badge) là cách chắc
+ * chắn duy nhất. Cùng 1 object store 'counter' với hàm đếm badge ở trên, khác key.
+ */
+function writeLastPushData(data) {
+  return new Promise((resolve) => {
+    const req = indexedDB.open('hofa-badge', 1);
+    req.onupgradeneeded = () => req.result.createObjectStore('counter');
+    req.onsuccess = () => {
+      const tx = req.result.transaction('counter', 'readwrite');
+      tx.objectStore('counter').put(data, 'lastPush');
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+    };
+    req.onerror = () => resolve();
+  });
+}
+
+function readLastPushData() {
+  return new Promise((resolve) => {
+    const req = indexedDB.open('hofa-badge', 1);
+    req.onupgradeneeded = () => req.result.createObjectStore('counter');
+    req.onsuccess = () => {
+      const getReq = req.result
+        .transaction('counter', 'readonly')
+        .objectStore('counter')
+        .get('lastPush');
+      getReq.onsuccess = () => resolve(getReq.result || {});
+      getReq.onerror = () => resolve({});
+    };
+    req.onerror = () => resolve({});
+  });
+}
+
+/**
  * Firebase JS SDK chỉ định tuyến message vào đây khi KHÔNG có tab nào của app đang mở/focus
  * — đúng lúc icon màn hình chính là thứ người dùng thật sự nhìn thấy, nên badge chỉ cần xử lý
  * ở service worker. data.badge do server/src/push.js quyết định: 'true' cho thông báo đơn
@@ -61,6 +99,7 @@ function writeBadgeCount(count) {
 // gì tới việc hiển thị.
 messaging.onBackgroundMessage(async (payload) => {
   const data = payload.data || {};
+  await writeLastPushData(data);
 
   if (data.badge === 'true' && 'setAppBadge' in self.registration) {
     const count = (await readBadgeCount()) + 1;
@@ -84,19 +123,17 @@ function targetPathFor(data) {
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
-  // firebase-messaging-compat.js tự hiện thông báo (xem onBackgroundMessage ở trên) và gói data
-  // gốc vào notification.data.FCM_MSG.data — không phải tự đặt ra, đây là cấu trúc SDK dùng.
-  const fcmData = (event.notification.data && event.notification.data.FCM_MSG && event.notification.data.FCM_MSG.data) || {};
-  const targetUrl = new URL(targetPathFor(fcmData), self.registration.scope).href;
-
   event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
-      for (const client of windowClients) {
-        if (client.url.startsWith(self.registration.scope) && 'focus' in client) {
-          return client.navigate(targetUrl).then((c) => (c || client).focus()).catch(() => client.focus());
+    readLastPushData().then((data) => {
+      const targetUrl = new URL(targetPathFor(data), self.registration.scope).href;
+      return clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+        for (const client of windowClients) {
+          if (client.url.startsWith(self.registration.scope) && 'focus' in client) {
+            return client.navigate(targetUrl).then((c) => (c || client).focus()).catch(() => client.focus());
+          }
         }
-      }
-      if (clients.openWindow) return clients.openWindow(targetUrl);
+        if (clients.openWindow) return clients.openWindow(targetUrl);
+      });
     })
   );
 });
