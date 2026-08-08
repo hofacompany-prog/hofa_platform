@@ -46,8 +46,25 @@ class _OfferScreenState extends ConsumerState<OfferScreen> with SingleTickerProv
   bool _resolved = false;
   bool _busy = false;
 
+  /// Chặn thoát màn này bằng nút back của TRÌNH DUYỆT (web) — PopScope(canPop: false) chỉ chặn
+  /// được pop kiểu Flutter Navigator, không chặn được back của trình duyệt (đã xác nhận qua
+  /// thực tế). router.dart tự đẩy trở lại /offer/:id ở redirect nếu biến này còn set — PHẢI
+  /// xoá trước khi tự điều hướng đi (accept/decline) để không tự đá chính mình quay lại.
+  void _setPendingOffer() {
+    if (ref.read(pendingOfferIdProvider) != widget.deliveryId) {
+      ref.read(pendingOfferIdProvider.notifier).state = widget.deliveryId;
+    }
+  }
+
+  void _clearPendingOffer() {
+    if (ref.read(pendingOfferIdProvider) == widget.deliveryId) {
+      ref.read(pendingOfferIdProvider.notifier).state = null;
+    }
+  }
+
   @override
   void dispose() {
+    _clearPendingOffer();
     _sweepController?.dispose();
     super.dispose();
   }
@@ -58,6 +75,7 @@ class _OfferScreenState extends ConsumerState<OfferScreen> with SingleTickerProv
     setState(() => _busy = true);
     try {
       await _deliveryRepo.updateStatus(widget.deliveryId, 'accepted');
+      _clearPendingOffer();
       ref.invalidate(activeDeliveryProvider);
       if (mounted) context.pushReplacement('/deliveries/${widget.deliveryId}');
     } catch (e) {
@@ -78,6 +96,7 @@ class _OfferScreenState extends ConsumerState<OfferScreen> with SingleTickerProv
     } catch (_) {
       // im lặng — server tự chặn accept trễ + vòng quét vẫn dọn được dù gọi lỗi ở đây
     }
+    _clearPendingOffer();
     if (mounted) context.pop();
   }
 
@@ -87,6 +106,7 @@ class _OfferScreenState extends ConsumerState<OfferScreen> with SingleTickerProv
     setState(() => _busy = true);
     try {
       await _deliveryRepo.decline(widget.deliveryId);
+      _clearPendingOffer();
       if (mounted) context.pop();
     } catch (e) {
       _resolved = false;
@@ -126,7 +146,13 @@ class _OfferScreenState extends ConsumerState<OfferScreen> with SingleTickerProv
                   children: [
                     Text('Không tải được đơn: $e', textAlign: TextAlign.center),
                     const SizedBox(height: 16),
-                    FilledButton(onPressed: () => context.pop(), child: const Text('Đóng')),
+                    FilledButton(
+                      onPressed: () {
+                        _clearPendingOffer();
+                        context.pop();
+                      },
+                      child: const Text('Đóng'),
+                    ),
                   ],
                 ),
               ),
@@ -135,6 +161,7 @@ class _OfferScreenState extends ConsumerState<OfferScreen> with SingleTickerProv
               if (delivery.status != 'assigned') {
                 // Đã được xử lý (chấp nhận/hết hạn) từ nơi khác — đóng luôn.
                 WidgetsBinding.instance.addPostFrameCallback((_) {
+                  _clearPendingOffer();
                   if (mounted && !_resolved) {
                     _resolved = true;
                     context.pop();
@@ -142,6 +169,11 @@ class _OfferScreenState extends ConsumerState<OfferScreen> with SingleTickerProv
                 });
                 return const Center(child: CircularProgressIndicator());
               }
+              // ref.read(...).state = ... không được gọi thẳng trong build() (Riverpod chặn sửa
+              // provider lúc cây widget đang dựng) — hoãn sang sau khung hình này.
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted) _setPendingOffer();
+              });
               return _buildBody(context, delivery);
             },
           ),

@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/go_router_refresh_stream.dart';
 import 'main.dart' show navigatorKey;
 import 'providers/auth_provider.dart';
+import 'providers/delivery_providers.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/auth/register_driver_screen.dart';
 import 'screens/shell/driver_shell.dart';
@@ -40,6 +41,13 @@ final routerProvider = Provider<GoRouter>((ref) {
         if (onRegister) return '/';
       } catch (_) {
         // lỗi mạng tạm thời — đừng khoá cứng người dùng
+      }
+
+      // Đang có màn nhận đơn chờ quyết định — ép ở lại đúng màn đó bất kể thoát ra bằng cách
+      // nào (nút back trình duyệt, sửa tay URL...), xem pendingOfferIdProvider.
+      final pendingOfferId = ref.read(pendingOfferIdProvider);
+      if (pendingOfferId != null && state.matchedLocation != '/offer/$pendingOfferId') {
+        return '/offer/$pendingOfferId';
       }
       return null;
     },

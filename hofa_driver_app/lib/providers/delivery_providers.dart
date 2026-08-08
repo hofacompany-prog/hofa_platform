@@ -19,3 +19,12 @@ final activeDeliveryProvider = FutureProvider.autoDispose<Delivery?>((ref) async
 });
 
 final deliveryProvider = FutureProvider.autoDispose.family<Delivery, String>((ref, id) => _deliveryRepo.get(id));
+
+/// deliveryId của màn nhận đơn đang chờ tài xế quyết định (còn "assigned", chưa nhận/từ chối/
+/// hết hạn) — null khi không có màn nào đang mở kiểu này. PopScope(canPop: false) ở
+/// OfferScreen chỉ chặn được pop kiểu Flutter Navigator (nút back trong app, Android predictive
+/// back đôi khi), KHÔNG chặn được nút back của trình duyệt trên web (đã xác nhận qua thực tế:
+/// bấm back vẫn thoát ra ngoài được) — router.dart đọc biến này ở redirect để tự đẩy trở lại
+/// /offer/:id bất kể người dùng thoát ra bằng cách nào, cho tới khi màn đó tự xoá biến (xem
+/// OfferScreen._setPendingOffer/_clearPendingOffer).
+final pendingOfferIdProvider = StateProvider<String?>((ref) => null);
