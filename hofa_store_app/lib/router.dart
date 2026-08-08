@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -29,7 +30,13 @@ import 'main.dart' show navigatorKey;
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     navigatorKey: navigatorKey,
-    initialLocation: '/home',
+    // initialLocation cố định ('/home') từng khiến app LUÔN boot ở trang chủ bất kể trình
+    // duyệt/PWA thực sự mở ở URL nào — kể cả khi service worker đã điều hướng
+    // clients.openWindow()/client.navigate() đúng tới /orders/:id lúc bấm push (xem
+    // web/firebase-messaging-sw.js), route đó vẫn bị initialLocation ghi đè ngay khi
+    // GoRouter khởi tạo. Trên web, ưu tiên URL thật của trình duyệt lúc mở app; '/home' chỉ
+    // còn là dự phòng khi URL rỗng/gốc hoặc trên mobile (không có khái niệm URL).
+    initialLocation: kIsWeb && Uri.base.path.length > 1 ? Uri.base.path : '/home',
     refreshListenable: GoRouterRefreshStream(
       Supabase.instance.client.auth.onAuthStateChange,
     ),
