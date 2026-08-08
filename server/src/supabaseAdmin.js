@@ -51,4 +51,22 @@ async function createAuthUser(phone, password) {
   return data.user.id;
 }
 
-module.exports = { createAuthUser, phoneToAuthEmail };
+/**
+ * Xoá thẳng 1 tài khoản Supabase Auth — dùng khi admin xoá triệt để 1 người dùng (không chỉ
+ * xoá dòng public.users), vì nếu chỉ xoá public.users mà vẫn còn tài khoản Auth thì người đó
+ * đăng nhập lại là /me/sync tự tạo lại hồ sơ ngay, coi như chưa xoá được gì. Idempotent —
+ * tài khoản Auth không còn tồn tại (đã xoá trước đó / lệch dữ liệu) thì coi như thành công,
+ * không throw, để không chặn việc dọn dòng public.users còn sót lại.
+ */
+async function deleteAuthUser(authUserId) {
+  const supabase = getClient();
+  if (!supabase) {
+    throw new Error('Server chưa cấu hình SUPABASE_SERVICE_ROLE_KEY — không xoá triệt để được tài khoản đăng nhập.');
+  }
+  const { error } = await supabase.auth.admin.deleteUser(authUserId);
+  if (error && error.status !== 404 && !/not.*found/i.test(error.message || '')) {
+    throw error;
+  }
+}
+
+module.exports = { createAuthUser, deleteAuthUser, phoneToAuthEmail };

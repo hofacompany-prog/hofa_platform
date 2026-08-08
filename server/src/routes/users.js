@@ -4,6 +4,7 @@ const asyncHandler = require('../asyncHandler');
 const { ApiError } = require('../errors');
 const { pickFields, requireFields, pagination, requireAuth, requireRole, requireOwnRow } = require('../utils');
 const push = require('../push');
+const supabaseAdmin = require('../supabaseAdmin');
 
 const ADDRESS_FIELDS = [
   'label', 'recipient_name', 'recipient_phone', 'line1', 'ward', 'district',
@@ -112,17 +113,43 @@ router.patch('/admin/users/:id/role', asyncHandler(async (req, res) => {
   res.json({ ok: true, data: safe });
 }));
 
-/** Xoá mềm — giữ deleted_at để đơn hàng/dữ liệu cũ còn trỏ tới người này còn đọc được. */
+/**
+ * Xoá triệt để — xoá cả tài khoản đăng nhập Supabase Auth lẫn dòng public.users, không chỉ
+ * ẩn (deleted_at) như trước. Các bảng tham chiếu users.id qua ON DELETE CASCADE (địa chỉ,
+ * thiết bị, đánh giá, nhân viên cửa hàng, lượt dùng voucher, thông báo...) tự dọn theo khi
+ * xoá; nhưng merchants.owner_id/drivers.user_id/orders.customer_id là ON DELETE RESTRICT nên
+ * Postgres sẽ chặn hẳn nếu còn — chủ động kiểm tra và báo rõ lý do trước, KHÔNG ép cascade
+ * xoá luôn cửa hàng/đơn hàng, vì làm vậy sẽ phá dữ liệu của NHỮNG NGƯỜI KHÁC (khách khác đã
+ * mua ở cửa hàng đó, tài xế đã giao đơn...), không chỉ của riêng người bị xoá.
+ */
 router.delete('/admin/users/:id', asyncHandler(async (req, res) => {
   requireRole(req.ctx, ['admin']);
+  if (req.params.id === req.ctx.userId) {
+    throw new ApiError('BAD_REQUEST', 'Không thể tự xoá tài khoản admin đang đăng nhập', 400);
+  }
   const existing = await db.findById('users', req.params.id);
   if (!existing) throw new ApiError('NOT_FOUND', 'Không tìm thấy người dùng', 404);
-  const updated = await db.updateById('users', req.params.id, {
-    deleted_at: new Date().toISOString(),
-    status: 'banned'
-  });
-  const { password_hash, ...safe } = updated;
-  res.json({ ok: true, data: safe });
+
+  const [merchant, driver, orderCount] = await Promise.all([
+    db.queryOne('SELECT id, name FROM merchants WHERE owner_id = $1', [req.params.id]),
+    db.queryOne('SELECT id FROM drivers WHERE user_id = $1', [req.params.id]),
+    db.queryOne('SELECT COUNT(*) AS count FROM orders WHERE customer_id = $1', [req.params.id])
+  ]);
+  const blocks = [];
+  if (merchant) blocks.push(`đang đứng tên chủ cửa hàng "${merchant.name}" — xử lý cửa hàng đó trước (xoá hoặc đổi chủ)`);
+  if (driver) blocks.push('có hồ sơ tài xế — xoá hồ sơ tài xế ở màn Tài xế trước');
+  if (Number(orderCount.count) > 0) {
+    blocks.push(
+      `đã đặt ${orderCount.count} đơn hàng — xoá sẽ mất luôn dữ liệu đơn/doanh thu liên quan của cửa hàng, dùng "Tạm khoá" nếu chỉ muốn chặn đăng nhập`
+    );
+  }
+  if (blocks.length) {
+    throw new ApiError('USER_HAS_DEPENDENTS', `Không thể xoá triệt để: tài khoản ${blocks.join('; ')}.`, 409);
+  }
+
+  await supabaseAdmin.deleteAuthUser(req.params.id);
+  await db.deleteById('users', req.params.id);
+  res.json({ ok: true, data: { deleted: true } });
 }));
 
 // ---- Địa chỉ giao hàng ----

@@ -156,15 +156,17 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Xoá người dùng?'),
+        title: const Text('Xoá vĩnh viễn tài khoản?'),
         content: Text(
-            '${u.fullName} sẽ bị xoá mềm (ẩn khỏi danh sách, không đăng nhập được) nhưng đơn hàng cũ vẫn được giữ nguyên.'),
+            'Xoá triệt để "${u.fullName}" — mất luôn tài khoản đăng nhập, không thể khôi phục. '
+            'Nếu tài khoản đang là chủ cửa hàng, có hồ sơ tài xế, hoặc đã từng đặt đơn hàng thì sẽ bị chặn '
+            'kèm lý do cụ thể (vì xoá sẽ ảnh hưởng dữ liệu của người khác) — dùng "Tạm khoá" thay vào đó nếu chỉ muốn chặn đăng nhập.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Huỷ')),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Xoá'),
+            child: const Text('Xoá vĩnh viễn'),
           ),
         ],
       ),
