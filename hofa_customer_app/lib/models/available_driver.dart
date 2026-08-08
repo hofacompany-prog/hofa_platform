@@ -27,8 +27,11 @@ class AvailableDriver {
         avatarUrl: json['avatar_url'] as String?,
         vehicleType: json['vehicle_type'] as String?,
         vehiclePlate: json['vehicle_plate'] as String?,
-        ratingAvg: (json['rating_avg'] as num?)?.toDouble() ?? 0,
+        // rating_avg là cột NUMERIC ở Postgres — node-postgres trả về dạng chuỗi (vd "0.00")
+        // để tránh mất độ chính xác, không phải số JSON — ép thẳng "as num" sẽ ném lỗi
+        // TypeError. Parse qua chuỗi giống hệt models/merchant.dart, models/product.dart.
+        ratingAvg: (num.tryParse('${json['rating_avg']}') ?? 0).toDouble(),
         ratingCount: (json['rating_count'] as num?)?.toInt() ?? 0,
-        distanceKm: json['distance_km'] != null ? (json['distance_km'] as num).toDouble() : null,
+        distanceKm: json['distance_km'] != null ? num.tryParse('${json['distance_km']}')?.toDouble() : null,
       );
 }
