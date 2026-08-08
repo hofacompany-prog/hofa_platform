@@ -8,6 +8,7 @@ import '../models/merchant.dart';
 import '../models/merchant_device.dart';
 import '../models/merchant_fee_tier.dart';
 import '../models/driver.dart';
+import '../models/admin_delivery.dart';
 import '../models/order.dart';
 import '../models/category.dart';
 import '../models/shipping_fee_settings.dart';
@@ -104,6 +105,14 @@ final ordersProvider = FutureProvider.autoDispose<List<Order>>((ref) {
 final orderDetailProvider = FutureProvider.autoDispose.family<Order, String>(
   (ref, id) => ref.watch(adminRepoProvider).order(id),
 );
+
+/// null = đang hoạt động (mặc định phía server), 'all' = mọi trạng thái, hoặc 1 giá trị cụ thể.
+final deliveryStatusFilterProvider = StateProvider.autoDispose<String?>((ref) => null);
+
+final deliveriesProvider = FutureProvider.autoDispose<List<AdminDelivery>>((ref) {
+  final status = ref.watch(deliveryStatusFilterProvider);
+  return ref.watch(adminRepoProvider).deliveries(status: status);
+});
 
 final categoriesProvider = FutureProvider.autoDispose<List<Category>>(
   (ref) => ref.watch(adminRepoProvider).categories(),

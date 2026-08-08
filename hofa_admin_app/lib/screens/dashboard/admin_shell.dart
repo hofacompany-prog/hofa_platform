@@ -41,6 +41,12 @@ class AdminShell extends ConsumerWidget {
       path: '/drivers',
     ),
     (
+      icon: Icons.moped_outlined,
+      selected: Icons.moped,
+      label: 'Chuyến giao hàng',
+      path: '/deliveries',
+    ),
+    (
       icon: Icons.category_outlined,
       selected: Icons.category,
       label: 'Danh mục',

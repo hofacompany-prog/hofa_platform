@@ -169,4 +169,104 @@ router.get('/deliveries/:id/tracks', asyncHandler(async (req, res) => {
   res.json({ ok: true, data: rows });
 }));
 
+const ACTIVE_DELIVERY_STATUSES = ['pending', 'assigned', 'accepted', 'arrived_store', 'picked_up', 'delivering'];
+
+/** Trả tài xế về 'online' nếu đang 'busy' vì đúng chuyến này — admin sửa/xoá tay bỏ qua RPC
+ * update_delivery_status (không có side effect nào khác của RPC đó chạy ở đây, xem comment 2
+ * route bên dưới), nên phải tự lo phần này để không kẹt tài xế "busy" mãi mãi. */
+async function releaseDriverIfBusy(driverId) {
+  if (!driverId) return;
+  await db.query(`UPDATE drivers SET status = 'online' WHERE id = $1 AND status = 'busy'`, [driverId]);
+}
+
+/** Toàn bộ chuyến giao hàng đang "sống" (chưa delivered/failed/returned) kèm tên tài xế + mã
+ * đơn/cửa hàng/khách — admin dùng để giám sát tổng thể, không theo từng tài xế riêng lẻ.
+ * status=all bỏ lọc trạng thái (xem lịch sử luôn); status=<1 giá trị cụ thể> lọc đúng giá trị đó. */
+router.get('/admin/deliveries', asyncHandler(async (req, res) => {
+  requireRole(req.ctx, ['admin']);
+  const clauses = [];
+  const params = [];
+  if (req.query.status === 'all') {
+    // không lọc gì thêm
+  } else if (req.query.status) {
+    params.push(req.query.status);
+    clauses.push(`d.status = $${params.length}`);
+  } else {
+    params.push(ACTIVE_DELIVERY_STATUSES);
+    clauses.push(`d.status = ANY($${params.length}::delivery_status[])`);
+  }
+  const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
+  const { limit, offset } = pagination(req.query);
+  params.push(limit, offset);
+  const rows = await db.query(
+    `SELECT d.*, o.order_code, o.merchant_id, m.name AS merchant_name, o.ship_recipient_name AS customer_name,
+            u.full_name AS driver_name, u.phone AS driver_phone
+       FROM deliveries d
+       JOIN orders o ON o.id = d.order_id
+       LEFT JOIN merchants m ON m.id = o.merchant_id
+       LEFT JOIN drivers dr ON dr.id = d.driver_id
+       LEFT JOIN users u ON u.id = dr.user_id
+       ${where}
+      ORDER BY d.assigned_at DESC NULLS LAST, d.created_at DESC
+      LIMIT $${params.length - 1} OFFSET $${params.length}`,
+    params
+  );
+  res.json({ ok: true, data: rows });
+}));
+
+/** Admin chỉnh tay trạng thái chuyến giao hàng — KHÔNG đi qua RPC update_delivery_status vì RPC
+ * đó có side effect thật (trừ tồn kho lúc picked_up, cộng ví COD + đồng bộ orders.status lúc
+ * delivered) không phù hợp cho 1 thao tác sửa dữ liệu hành chính; ở đây chỉ đổi đúng cột status,
+ * không đụng tiền/tồn kho, tự trả tài xế về online nếu đang bận vì chuyến này. */
+router.patch('/admin/deliveries/:id/status', asyncHandler(async (req, res) => {
+  requireRole(req.ctx, ['admin']);
+  requireFields(req.body, ['status']);
+  const delivery = await db.findById('deliveries', req.params.id);
+  if (!delivery) throw new ApiError('NOT_FOUND', 'Không tìm thấy chuyến giao hàng', 404);
+
+  const updated = await db.updateById('deliveries', req.params.id, { status: req.body.status });
+  if (!ACTIVE_DELIVERY_STATUSES.includes(req.body.status)) {
+    await releaseDriverIfBusy(delivery.driver_id);
+  }
+  res.json({ ok: true, data: updated });
+}));
+
+/** Xoá thẳng 1 chuyến — cùng lý do không qua RPC như route đổi trạng thái ở trên. Giai đoạn
+ * MVP: xoá thẳng, không chặn theo trạng thái (khớp quy ước DELETE /admin/orders/:id). */
+router.delete('/admin/deliveries/:id', asyncHandler(async (req, res) => {
+  requireRole(req.ctx, ['admin']);
+  const delivery = await db.findById('deliveries', req.params.id);
+  if (!delivery) throw new ApiError('NOT_FOUND', 'Không tìm thấy chuyến giao hàng', 404);
+  await db.deleteById('deliveries', req.params.id);
+  await releaseDriverIfBusy(delivery.driver_id);
+  res.json({ ok: true, data: { deleted: true } });
+}));
+
+/** Xoá hàng loạt — {ids: [...]} xoá đúng danh sách, {status_in: [...]} xoá mọi chuyến đang ở 1
+ * trong các trạng thái đó (dùng cho nút "Xoá tất cả" ở đúng bộ lọc đang xem), {all: true} xoá
+ * toàn bộ bảng deliveries không lọc gì — khớp kiểu 3 hình dạng body của
+ * POST /admin/notifications/inbox/delete. */
+router.post('/admin/deliveries/delete', asyncHandler(async (req, res) => {
+  requireRole(req.ctx, ['admin']);
+  const { ids, status_in: statusIn, all } = req.body;
+
+  let deleted;
+  if (Array.isArray(ids) && ids.length) {
+    deleted = await db.query('DELETE FROM deliveries WHERE id = ANY($1::uuid[]) RETURNING id, driver_id', [ids]);
+  } else if (Array.isArray(statusIn) && statusIn.length) {
+    deleted = await db.query(
+      'DELETE FROM deliveries WHERE status = ANY($1::delivery_status[]) RETURNING id, driver_id',
+      [statusIn]
+    );
+  } else if (all) {
+    deleted = await db.query('DELETE FROM deliveries RETURNING id, driver_id');
+  } else {
+    throw new ApiError('BAD_REQUEST', 'Cần truyền ids, status_in hoặc all', 400);
+  }
+
+  const driverIds = [...new Set(deleted.map((r) => r.driver_id).filter(Boolean))];
+  await Promise.all(driverIds.map((id) => releaseDriverIfBusy(id)));
+  res.json({ ok: true, data: { deleted: deleted.length } });
+}));
+
 module.exports = router;

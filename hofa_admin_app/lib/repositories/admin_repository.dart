@@ -7,6 +7,7 @@ import '../models/merchant_device.dart';
 import '../models/merchant_fee_tier.dart';
 import '../models/branch_hours.dart';
 import '../models/driver.dart';
+import '../models/admin_delivery.dart';
 import '../models/order.dart';
 import '../models/category.dart';
 import '../models/shipping_fee_settings.dart';
@@ -285,6 +286,39 @@ class AdminRepository {
   /// buộc khoá ngoại (vd đã có giao dịch thanh toán) thì server trả lỗi cụ thể từ Postgres.
   Future<void> deleteOrder(String id) async {
     await _api.delete('/admin/orders/$id');
+  }
+
+  // ---- Giám sát chuyến giao hàng ----
+
+  /// status=null lấy các chuyến đang hoạt động (mặc định phía server), 'all' bỏ lọc, hoặc 1
+  /// giá trị delivery_status cụ thể.
+  Future<List<AdminDelivery>> deliveries({String? status}) async {
+    final list = await _api.get('/admin/deliveries', query: {
+      'limit': 200,
+      if (status != null) 'status': status,
+    }) as List;
+    return list.map((e) => AdminDelivery.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  /// Đổi tay trạng thái 1 chuyến — không đi qua RPC nghiệp vụ (không đụng tồn kho/ví tài xế),
+  /// xem comment PATCH /admin/deliveries/:id/status phía server.
+  Future<void> forceDeliveryStatus(String id, String status) async {
+    await _api.patch('/admin/deliveries/$id/status', body: {'status': status});
+  }
+
+  Future<void> deleteDelivery(String id) async {
+    await _api.delete('/admin/deliveries/$id');
+  }
+
+  /// Xoá hàng loạt — truyền đúng 1 trong 3: [ids], [statusIn] (khớp đúng bộ lọc đang xem, dùng
+  /// cho nút "Xoá tất cả"), hoặc [all] (xoá toàn bộ bảng, không lọc gì).
+  Future<int> deleteDeliveries({List<String>? ids, List<String>? statusIn, bool all = false}) async {
+    final data = await _api.post('/admin/deliveries/delete', body: {
+      if (ids != null && ids.isNotEmpty) 'ids': ids,
+      if (statusIn != null && statusIn.isNotEmpty) 'status_in': statusIn,
+      if (all) 'all': true,
+    }) as Map<String, dynamic>;
+    return (data['deleted'] as num?)?.toInt() ?? 0;
   }
 
   // ---- Danh mục ngành hàng ----

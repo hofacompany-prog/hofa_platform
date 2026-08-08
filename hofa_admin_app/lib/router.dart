@@ -15,6 +15,7 @@ import 'screens/orders/order_detail_screen.dart';
 import 'screens/users/users_screen.dart';
 import 'screens/users/user_detail_screen.dart';
 import 'screens/drivers/drivers_screen.dart';
+import 'screens/deliveries/deliveries_screen.dart';
 import 'screens/catalog/categories_screen.dart';
 import 'screens/settings/finance_settings_screen.dart';
 import 'screens/settings/shipping_fee_screen.dart';
@@ -100,6 +101,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/drivers',
             builder: (context, state) => const DriversScreen(),
+          ),
+          GoRoute(
+            path: '/deliveries',
+            builder: (context, state) => const DeliveriesScreen(),
           ),
           GoRoute(
             path: '/categories',
