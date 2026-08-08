@@ -124,21 +124,39 @@ function writePendingDeepLink(path) {
  * worker không có sẵn access token); ngay khi app mở lên, unreadOrderCountProvider (xem
  * lib/providers/notification_providers.dart, BadgeService) tự chỉnh lại đúng số thật.
  */
-// KHÔNG tự gọi self.registration.showNotification() ở đây — payload luôn có sẵn field
-// "notification" (xem server/src/push.js sendToTokens), nên firebase-messaging-compat.js đã
-// TỰ hiện thông báo trước khi callback này chạy. Gọi thêm 1 lần nữa sẽ hiện lặp 2 thông báo
-// giống hệt nhau cho MỌI push (bug thật đã xảy ra, xác nhận qua log server chỉ gửi 1 lần).
-// onBackgroundMessage ở đây chỉ còn dùng để cộng dồn badge — side effect độc lập, không đụng
-// gì tới việc hiển thị.
+// Trên Android/Chrome: KHÔNG tự gọi self.registration.showNotification() — payload luôn có sẵn
+// field "notification" (xem server/src/push.js sendToTokens), nên firebase-messaging-compat.js
+// đã TỰ hiện thông báo trước khi callback này chạy; gọi thêm sẽ hiện lặp 2 thông báo (bug thật
+// đã xảy ra, xác nhận qua log server chỉ gửi 1 lần).
+// Trên iOS Safari: HÀNH VI KHÁC HẲN — xác nhận qua Web Inspector thật, console báo "Push event
+// handling completed without showing any notification via ServiceWorkerRegistration.showNotification()."
+// nghĩa là trên nền tảng này, việc firebase-messaging-compat.js tự hiện thông báo KHÔNG được
+// tính là đã gọi showNotification() theo đúng hợp đồng của Push API — rất có thể vì thế mà
+// notification đó cũng không phải là 1 Notification object thật để notificationclick gắn vào,
+// khiến bấm vào không bao giờ chạy code của mình. Phải tự gọi showNotification() ở đây, CHỈ
+// trên iOS, để không hiện lặp thông báo trên Android.
+const isIOS = /iPad|iPhone|iPod/.test(self.navigator.userAgent);
+
 messaging.onBackgroundMessage(async (payload) => {
   const data = payload.data || {};
-  console.log('[hofa-sw] onBackgroundMessage nhận data =', data);
+  console.log('[hofa-sw] onBackgroundMessage nhận data =', data, ', isIOS =', isIOS);
   await writeLastPushData(data);
 
   if (data.category === 'order' && 'setAppBadge' in self.registration) {
     const count = (await readBadgeCount()) + 1;
     await writeBadgeCount(count);
     self.registration.setAppBadge(count).catch(() => {});
+  }
+
+  if (isIOS) {
+    const title = (payload.notification && payload.notification.title) || data.title || 'HOFA';
+    const body = (payload.notification && payload.notification.body) || data.body || '';
+    console.log('[hofa-sw] iOS: tự gọi showNotification()', title, body);
+    await self.registration.showNotification(title, {
+      body,
+      icon: '/icons/Icon-192.png',
+      data,
+    });
   }
 });
 
