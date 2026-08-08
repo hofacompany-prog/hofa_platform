@@ -22,14 +22,16 @@ async function requireOwnDelivery(ctx, deliveryId) {
   return delivery;
 }
 
-/** Đơn mua hộ: tài xế từ chối/hết hạn thì báo lại cho khách tự chọn người khác thay vì tự
- * động chuyển tài xế gần nhất kế tiếp như đơn thường — xem dispatch.repickNeeded. */
-async function isBuyOnBehalfOrder(orderId) {
+/** Đơn mua hộ mà khách CHỌN TAY tài xế (orders.selected_driver_id còn set) — tài xế từ chối/hết
+ * hạn thì báo lại cho khách tự chọn người khác thay vì tự động chuyển tài xế gần nhất kế tiếp,
+ * xem dispatch.repickNeeded. Đơn mua hộ mà khách chọn "để hệ thống tự tìm" thì selected_driver_id
+ * luôn NULL (không set lúc đặt) — vẫn tự động chuyển tài xế khác như đơn thường. */
+async function needsCustomerRepick(orderId) {
   const row = await db.queryOne(
-    `SELECT m.merchant_type FROM orders o JOIN merchants m ON m.id = o.merchant_id WHERE o.id = $1`,
+    `SELECT m.merchant_type, o.selected_driver_id FROM orders o JOIN merchants m ON m.id = o.merchant_id WHERE o.id = $1`,
     [orderId]
   );
-  return row?.merchant_type === 'buy_on_behalf';
+  return row?.merchant_type === 'buy_on_behalf' && row?.selected_driver_id != null;
 }
 
 router.get('/orders/:orderId/delivery', asyncHandler(async (req, res) => {
@@ -125,7 +127,7 @@ router.patch('/deliveries/:id/status', asyncHandler(async (req, res) => {
     // lúc thanh màu chạy hết, có thể tới sau accept_deadline vài trăm ms vì độ trễ mạng) vẫn
     // đúng Ý ĐỊNH tự nhận — cho qua, không chặn/chuyển tài xế khác.
     if (!driver?.auto_accept) {
-      if (await isBuyOnBehalfOrder(delivery.order_id)) {
+      if (await needsCustomerRepick(delivery.order_id)) {
         await dispatch.repickNeeded(req.params.id, 'Tài xế bạn chọn không xác nhận kịp thời gian');
         throw new ApiError('OFFER_EXPIRED', 'Đã quá hạn xác nhận — khách cần chọn lại tài xế khác', 409);
       }
@@ -163,7 +165,7 @@ router.post('/deliveries/:id/decline', asyncHandler(async (req, res) => {
   if (delivery.status !== 'assigned') {
     throw new ApiError('BAD_REQUEST', 'Chỉ có thể từ chối đơn chưa xác nhận', 400);
   }
-  const result = (await isBuyOnBehalfOrder(delivery.order_id))
+  const result = (await needsCustomerRepick(delivery.order_id))
     ? await dispatch.repickNeeded(req.params.id, 'Tài xế bạn chọn đã từ chối đơn')
     : await dispatch.reassignAfterDecline(req.params.id);
   res.json({ ok: true, data: { reassigned: !!result } });

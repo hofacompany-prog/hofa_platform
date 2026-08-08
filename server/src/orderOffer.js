@@ -74,8 +74,8 @@ async function dispatchBuyOnBehalfOrder(orderId) {
   });
   push.notifyCustomerOrderStatus(orderId, 'ready_for_pickup').catch(() => {});
 
-  // selected_driver_id lẽ ra luôn có (bắt buộc chọn ở checkout) — fallback tự tìm gần nhất chỉ
-  // để không kẹt đơn nếu vì lý do gì đó (đơn cũ trước khi có tính năng này...) chưa có lựa chọn.
+  // Khách chọn 1 trong 2 ở checkout: tự chọn tài xế (selected_driver_id có giá trị) hoặc để hệ
+  // thống tự tìm gần nhất (bỏ trống) — xem checkout_screen.dart app khách.
   const result = order.selected_driver_id
     ? await dispatchToSelectedDriver(orderId)
     : await dispatch.offerToNearestDriver(orderId);

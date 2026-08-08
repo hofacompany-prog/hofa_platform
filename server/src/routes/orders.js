@@ -45,10 +45,10 @@ router.post('/orders', asyncHandler(async (req, res) => {
     );
   }
 
-  // Cửa hàng mua hộ: khách bắt buộc tự chọn 1 tài xế ngay ở checkout (thay vì hệ thống tự tìm
-  // gần nhất) — xem GET /drivers/available. Chặn thật ở server, không chỉ bắt buộc trên UI.
-  if (merchant?.merchant_type === 'buy_on_behalf') {
-    requireFields(body, ['selected_driver_id']);
+  // Cửa hàng mua hộ: khách chọn 1 trong 2 — tự chọn tài xế (selected_driver_id) hoặc để hệ
+  // thống tự tìm gần nhất (bỏ trống, xem GET /drivers/available cho màn chọn tay). Không bắt
+  // buộc nữa — chỉ validate KHI khách có chọn, để tài xế đã chọn còn thật sự online.
+  if (merchant?.merchant_type === 'buy_on_behalf' && body.selected_driver_id) {
     const selectedDriver = await db.queryOne(`SELECT id FROM drivers WHERE id = $1 AND status = 'online'`, [body.selected_driver_id]);
     if (!selectedDriver) {
       throw new ApiError('DRIVER_UNAVAILABLE', 'Tài xế đã chọn hiện không còn online, vui lòng chọn lại', 409);
@@ -78,7 +78,7 @@ router.post('/orders', asyncHandler(async (req, res) => {
     p_customer_note: body.customer_note || null
   });
 
-  if (merchant?.merchant_type === 'buy_on_behalf') {
+  if (merchant?.merchant_type === 'buy_on_behalf' && body.selected_driver_id) {
     await db.query('UPDATE orders SET selected_driver_id = $2 WHERE id = $1', [order.id, body.selected_driver_id]);
     order.selected_driver_id = body.selected_driver_id;
   }

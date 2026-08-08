@@ -178,12 +178,14 @@ async function autoAcceptExpiredOffer(deliveryId) {
 /** Quét các delivery đang chờ xác nhận nhưng đã quá accept_deadline — gọi định kỳ từ setInterval
  * (index.js) và cũng lộ ra POST /internal/sweep-expired-offers cho 1 cron ngoài dự phòng.
  * Rẽ nhánh theo drivers.auto_accept của tài xế đang được gán: bật thì tự nhận hộ, tắt thì chuyển
- * tài xế khác — TRỪ đơn mua hộ (merchant_type=buy_on_behalf), tắt thì báo khách tự chọn lại
- * (repickNeeded) chứ không tự tìm tài xế khác, vì khách đã chủ động chọn người này rồi. Không có
- * cron thì hạn vẫn được chặn ở bước accept (lười kiểm tra, xem routes/deliveries.js). */
+ * tài xế khác — TRỪ đơn mua hộ mà khách CHỌN TAY tài xế (merchant_type=buy_on_behalf VÀ
+ * o.selected_driver_id còn set), tắt thì báo khách tự chọn lại (repickNeeded) chứ không tự tìm
+ * tài xế khác, vì khách đã chủ động chọn người này rồi. Đơn mua hộ mà khách chọn "để hệ thống
+ * tự tìm" (selected_driver_id NULL ngay từ đầu) vẫn tự chuyển tài xế khác như đơn thường. Không
+ * có cron thì hạn vẫn được chặn ở bước accept (lười kiểm tra, xem routes/deliveries.js). */
 async function sweepExpiredOffers() {
   const expired = await db.query(
-    `SELECT d.id, dr.auto_accept, m.merchant_type
+    `SELECT d.id, dr.auto_accept, m.merchant_type, o.selected_driver_id
        FROM deliveries d
        JOIN drivers dr ON dr.id = d.driver_id
        JOIN orders o ON o.id = d.order_id
@@ -194,7 +196,7 @@ async function sweepExpiredOffers() {
   for (const row of expired) {
     if (row.auto_accept) {
       results.push(await autoAcceptExpiredOffer(row.id));
-    } else if (row.merchant_type === 'buy_on_behalf') {
+    } else if (row.merchant_type === 'buy_on_behalf' && row.selected_driver_id != null) {
       results.push(await repickNeeded(row.id, 'Tài xế bạn chọn không xác nhận kịp thời gian'));
     } else {
       results.push(await reassignAfterDecline(row.id));

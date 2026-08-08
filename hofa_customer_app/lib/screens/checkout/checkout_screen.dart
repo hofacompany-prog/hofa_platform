@@ -36,6 +36,7 @@ class CheckoutScreen extends ConsumerStatefulWidget {
 
 class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   String? _selectedAddressId;
+  bool _autoFindDriver = true;
   AvailableDriver? _selectedDriver;
   String _paymentMethod = 'cod';
   DateTime? _scheduledFor;
@@ -357,7 +358,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     'ship_latitude': address.latitude,
     'ship_longitude': address.longitude,
     'payment_method': _effectivePaymentMethod(cart),
-    if (_selectedDriver != null) 'selected_driver_id': _selectedDriver!.id,
+    if (!_autoFindDriver && _selectedDriver != null) 'selected_driver_id': _selectedDriver!.id,
     'delivery_fee': deliveryFee,
     if (_appliedVouchers.isNotEmpty)
       'voucher_codes': _appliedVouchers.map((v) => v.code).toList(),
@@ -479,8 +480,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     if (items.isEmpty) return;
 
     final merchant = ref.read(merchantDetailProvider(cart.merchantId!)).valueOrNull;
-    if (merchant?.isBuyOnBehalf == true && _selectedDriver == null) {
-      setState(() => _driverPickError = 'Chọn 1 tài xế trước khi đặt hàng');
+    if (merchant?.isBuyOnBehalf == true && !_autoFindDriver && _selectedDriver == null) {
+      setState(() => _driverPickError = 'Chọn 1 tài xế trước khi đặt hàng, hoặc chọn "Để hệ thống tự tìm"');
       return;
     }
     setState(() => _driverPickError = null);
@@ -791,37 +792,60 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           if (merchant != null && merchant.isBuyOnBehalf) ...[
             BuyOnBehalfFeeNotice(merchant: merchant),
             const SizedBox(height: 12),
-            Text('Chọn tài xế', style: theme.textTheme.titleSmall),
-            const SizedBox(height: 8),
-            Card(
-              elevation: 0,
-              color: theme.colorScheme.surfaceContainerLow,
-              child: ListTile(
-                leading: CircleAvatar(
-                  backgroundImage: _selectedDriver?.avatarUrl != null ? NetworkImage(_selectedDriver!.avatarUrl!) : null,
-                  child: _selectedDriver?.avatarUrl == null ? const Icon(Icons.person) : null,
-                ),
-                title: Text(_selectedDriver?.fullName ?? 'Chưa chọn tài xế'),
-                subtitle: _selectedDriver != null
-                    ? Text(
-                        '★ ${_selectedDriver!.ratingAvg.toStringAsFixed(1)}'
-                        '${_selectedDriver!.vehicleType != null ? ' · ${_selectedDriver!.vehicleType}' : ''}',
-                      )
-                    : const Text('Bấm để xem tài xế đang online gần cửa hàng'),
-                trailing: const Icon(Icons.chevron_right),
-                onTap: (branch?.latitude == null || branch?.longitude == null)
-                    ? null
-                    : () async {
-                        final picked = await showDriverPickerDialog(context, lat: branch!.latitude!, lng: branch.longitude!);
-                        if (picked != null) setState(() => _selectedDriver = picked);
-                      },
+            Text('Cách tìm tài xế', style: theme.textTheme.titleSmall),
+            RadioGroup<bool>(
+              groupValue: _autoFindDriver,
+              onChanged: (v) => setState(() {
+                _autoFindDriver = v ?? true;
+                if (_autoFindDriver) _driverPickError = null;
+              }),
+              child: const Column(
+                children: [
+                  RadioListTile<bool>(
+                    contentPadding: EdgeInsets.zero,
+                    value: true,
+                    title: Text('Để hệ thống tự tìm tài xế gần nhất'),
+                  ),
+                  RadioListTile<bool>(
+                    contentPadding: EdgeInsets.zero,
+                    value: false,
+                    title: Text('Tự chọn tài xế ưng ý'),
+                  ),
+                ],
               ),
             ),
-            if (_driverPickError != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 6),
-                child: Text(_driverPickError!, style: TextStyle(color: theme.colorScheme.error)),
+            if (!_autoFindDriver) ...[
+              const SizedBox(height: 8),
+              Card(
+                elevation: 0,
+                color: theme.colorScheme.surfaceContainerLow,
+                child: ListTile(
+                  leading: CircleAvatar(
+                    backgroundImage: _selectedDriver?.avatarUrl != null ? NetworkImage(_selectedDriver!.avatarUrl!) : null,
+                    child: _selectedDriver?.avatarUrl == null ? const Icon(Icons.person) : null,
+                  ),
+                  title: Text(_selectedDriver?.fullName ?? 'Chưa chọn tài xế'),
+                  subtitle: _selectedDriver != null
+                      ? Text(
+                          '★ ${_selectedDriver!.ratingAvg.toStringAsFixed(1)}'
+                          '${_selectedDriver!.vehicleType != null ? ' · ${_selectedDriver!.vehicleType}' : ''}',
+                        )
+                      : const Text('Bấm để xem tài xế đang online gần cửa hàng'),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: (branch?.latitude == null || branch?.longitude == null)
+                      ? null
+                      : () async {
+                          final picked = await showDriverPickerDialog(context, lat: branch!.latitude!, lng: branch.longitude!);
+                          if (picked != null) setState(() => _selectedDriver = picked);
+                        },
+                ),
               ),
+              if (_driverPickError != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text(_driverPickError!, style: TextStyle(color: theme.colorScheme.error)),
+                ),
+            ],
             const Divider(height: 32),
           ],
           Text('Phương thức thanh toán', style: theme.textTheme.titleSmall),
