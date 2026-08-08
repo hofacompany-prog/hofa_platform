@@ -6,7 +6,7 @@ const { pickFields, requireRole } = require('../utils');
 const FIELDS = [
   'auto_accept_default_minutes', 'auto_accept_prep_base_minutes',
   'auto_accept_prep_increment_minutes', 'auto_accept_prep_max_minutes',
-  'manual_confirm_window_minutes'
+  'manual_confirm_window_minutes', 'confirm_sweep_seconds'
 ];
 
 /** Chỉ giữ 1 dòng đang áp dụng — dòng mới nhất theo updated_at. */

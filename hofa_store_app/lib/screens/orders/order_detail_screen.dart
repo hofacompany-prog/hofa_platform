@@ -8,19 +8,25 @@ import '../../core/format.dart';
 import '../../models/delivery.dart';
 import '../../models/order.dart';
 import '../../providers/auth_provider.dart';
+import '../../repositories/merchant_repository.dart';
 import '../../repositories/order_repository.dart';
 
 final _orderProvider = FutureProvider.autoDispose.family<Order, String>((ref, id) => OrderRepository().get(id));
 final _deliveryProvider =
     FutureProvider.autoDispose.family<Delivery?, String>((ref, id) => OrderRepository().delivery(id));
+final _confirmSweepSecondsProvider =
+    FutureProvider.autoDispose<int>((ref) => MerchantRepository().confirmSweepSeconds());
 
 const _defaultPrepMinutes = 15; // dùng khi chưa tải được merchant.avgPrepMinutes kịp
+const _defaultSweepSeconds = 10; // dùng khi chưa tải được confirm_sweep_seconds (Thông số admin) kịp
 
 /// Chi tiết đơn — đích đến duy nhất của push "đơn mới" (xem push_service.dart) lẫn danh sách
-/// đơn. Đơn "placed" hiện thanh trượt xác nhận với 1 dải màu chạy trong 10 giây thuần phía
-/// client (AnimationController riêng của màn này) — hết 10s mà cửa hàng chưa trượt thì tự
-/// chốt số phút đang hiện trên bộ đếm +/- làm estimated_prep_minutes và chuyển đơn sang
-/// "confirmed"; trượt tay lúc nào cũng làm y hệt vậy, chỉ là sớm hơn.
+/// đơn. Đơn "placed" hiện thanh trượt xác nhận với 1 dải màu chạy trong
+/// confirm_sweep_seconds giây (admin cấu hình ở "Thông số", xem MerchantRepository.
+/// confirmSweepSeconds — AnimationController riêng của màn này, thuần phía client) — hết giờ
+/// mà cửa hàng chưa trượt thì tự chốt số phút đang hiện trên bộ đếm +/- làm
+/// estimated_prep_minutes và chuyển đơn sang "confirmed"; trượt tay lúc nào cũng làm y hệt
+/// vậy, chỉ là sớm hơn.
 class OrderDetailScreen extends ConsumerStatefulWidget {
   final String orderId;
   const OrderDetailScreen({super.key, required this.orderId});
@@ -164,8 +170,9 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> with Sing
       final merchant = ref.watch(myMerchantProvider).valueOrNull;
       _prepMinutes ??= merchant?.avgPrepMinutes ?? _defaultPrepMinutes;
       if (!_sweepStarted) {
+        final sweepSeconds = ref.watch(_confirmSweepSecondsProvider).valueOrNull ?? _defaultSweepSeconds;
         _sweepStarted = true;
-        _sweepController = AnimationController(vsync: this, duration: const Duration(seconds: 10))..forward();
+        _sweepController = AnimationController(vsync: this, duration: Duration(seconds: sweepSeconds))..forward();
         _sweepController!.addStatusListener((status) {
           if (status == AnimationStatus.completed) _confirmPrepTime();
         });

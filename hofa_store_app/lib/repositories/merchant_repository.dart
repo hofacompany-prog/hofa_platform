@@ -90,4 +90,12 @@ class MerchantRepository {
     }) as List;
     return list.map((e) => BranchHour.fromJson(e as Map<String, dynamic>)).toList();
   }
+
+  /// Số giây dải màu chạy trên thanh xác nhận thời gian chuẩn bị ở màn chi tiết đơn — admin cấu
+  /// hình ở "Thông số" (auto_accept_settings.confirm_sweep_seconds), công khai (không cần đăng
+  /// nhập). Trả về mặc định 10 nếu chưa tải được kịp, không chặn màn hình vì lỗi mạng tạm thời.
+  Future<int> confirmSweepSeconds() async {
+    final data = await _api.get('/auto-accept-settings') as Map<String, dynamic>?;
+    return (data?['confirm_sweep_seconds'] as num?)?.toInt() ?? 10;
+  }
 }

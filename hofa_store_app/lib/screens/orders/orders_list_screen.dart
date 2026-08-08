@@ -53,10 +53,10 @@ class OrdersListScreen extends ConsumerWidget {
       body: Column(
         children: [
           SizedBox(
-            height: 56,
+            height: 44,
             child: ListView(
               scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
               children: _statusGroups.keys
                   .map((name) => Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -83,7 +83,7 @@ class OrdersListScreen extends ConsumerWidget {
                 return RefreshIndicator(
                   onRefresh: () async => ref.invalidate(_ordersProvider),
                   child: ListView.separated(
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                     itemCount: orders.length,
                     separatorBuilder: (_, __) => const SizedBox(height: 8),
                     itemBuilder: (context, i) {
@@ -108,7 +108,7 @@ class OrdersListScreen extends ConsumerWidget {
                               ? const CircleAvatar(radius: 5, backgroundColor: Colors.red)
                               : const SizedBox(width: 10),
                           title: Text(
-                            '${o.orderCode} — ${o.shipRecipientName}',
+                            o.orderCode,
                             style: TextStyle(fontWeight: isUnread ? FontWeight.bold : FontWeight.normal),
                           ),
                           subtitle: Text('${formatVnd(o.totalAmount)} · ${formatDateTime(o.createdAt)}'),

@@ -20,6 +20,7 @@ class _AutoAcceptSettingsScreenState extends ConsumerState<AutoAcceptSettingsScr
   final _incrementCtrl = TextEditingController();
   final _maxCtrl = TextEditingController();
   final _manualWindowCtrl = TextEditingController();
+  final _confirmSweepCtrl = TextEditingController();
   bool _initialized = false;
   bool _saving = false;
 
@@ -30,6 +31,7 @@ class _AutoAcceptSettingsScreenState extends ConsumerState<AutoAcceptSettingsScr
     _incrementCtrl.dispose();
     _maxCtrl.dispose();
     _manualWindowCtrl.dispose();
+    _confirmSweepCtrl.dispose();
     super.dispose();
   }
 
@@ -39,6 +41,7 @@ class _AutoAcceptSettingsScreenState extends ConsumerState<AutoAcceptSettingsScr
     _incrementCtrl.text = s.autoAcceptPrepIncrementMinutes.toString();
     _maxCtrl.text = s.autoAcceptPrepMaxMinutes.toString();
     _manualWindowCtrl.text = s.manualConfirmWindowMinutes.toString();
+    _confirmSweepCtrl.text = s.confirmSweepSeconds.toString();
   }
 
   Future<void> _save(String? id) async {
@@ -47,6 +50,7 @@ class _AutoAcceptSettingsScreenState extends ConsumerState<AutoAcceptSettingsScr
     final increment = int.tryParse(_incrementCtrl.text.trim());
     final max = int.tryParse(_maxCtrl.text.trim());
     final manualWindow = int.tryParse(_manualWindowCtrl.text.trim());
+    final confirmSweep = int.tryParse(_confirmSweepCtrl.text.trim());
     if (defaultMin == null || defaultMin <= 0) {
       _showError('Thời gian mặc định không hợp lệ');
       return;
@@ -67,6 +71,10 @@ class _AutoAcceptSettingsScreenState extends ConsumerState<AutoAcceptSettingsScr
       _showError('Thời gian chờ xác nhận thủ công không hợp lệ');
       return;
     }
+    if (confirmSweep == null || confirmSweep <= 0) {
+      _showError('Thời gian thanh chạy màu không hợp lệ');
+      return;
+    }
 
     setState(() => _saving = true);
     try {
@@ -78,6 +86,7 @@ class _AutoAcceptSettingsScreenState extends ConsumerState<AutoAcceptSettingsScr
               autoAcceptPrepIncrementMinutes: increment,
               autoAcceptPrepMaxMinutes: max,
               manualConfirmWindowMinutes: manualWindow,
+              confirmSweepSeconds: confirmSweep,
             ),
           );
       ref.invalidate(autoAcceptSettingsProvider);
@@ -168,6 +177,18 @@ class _AutoAcceptSettingsScreenState extends ConsumerState<AutoAcceptSettingsScr
                         label: 'Thời gian chờ xác nhận thủ công (phút)',
                         helper: 'Cửa hàng có bấy nhiêu phút để tự bấm xác nhận. Hết giờ, đơn tự huỷ và '
                             'chi nhánh tự chuyển sang "Tạm đóng cửa".',
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    _SectionCard(
+                      title: 'Màn chi tiết đơn (mọi đơn mới)',
+                      child: _NumberField(
+                        controller: _confirmSweepCtrl,
+                        label: 'Thời gian thanh chạy màu để xác nhận thời gian chuẩn bị (giây)',
+                        helper: 'Ở màn chi tiết đơn của cửa hàng, dải màu chạy trên thanh trượt xác nhận '
+                            'trong bấy nhiêu giây. Hết giờ mà chưa trượt, hệ thống tự chốt số phút đang '
+                            'hiện trên bộ đếm +/- làm thời gian chuẩn bị và tự xác nhận đơn. Áp dụng cho '
+                            'mọi đơn mới, không phụ thuộc công tắc "Tự động nhận đơn" ở trên.',
                       ),
                     ),
                     const SizedBox(height: 24),
