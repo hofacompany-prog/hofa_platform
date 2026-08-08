@@ -169,8 +169,14 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> with Sing
     if (isPlaced) {
       final merchant = ref.watch(myMerchantProvider).valueOrNull;
       _prepMinutes ??= merchant?.avgPrepMinutes ?? _defaultPrepMinutes;
-      if (!_sweepStarted) {
-        final sweepSeconds = ref.watch(_confirmSweepSecondsProvider).valueOrNull ?? _defaultSweepSeconds;
+      final sweepSecondsAsync = ref.watch(_confirmSweepSecondsProvider);
+      // Đợi tải xong confirm_sweep_seconds (Thông số admin) rồi mới tạo controller — tạo ngay ở
+      // lần build đầu tiên (lúc FutureProvider chắc chắn còn đang loading) sẽ luôn khoá cứng ở
+      // giá trị mặc định 10s vì _sweepStarted bật lên true ngay, không bao giờ tạo lại controller
+      // dù giá trị thật đã tải xong sau đó (đã xác nhận qua thực tế: thanh màu không theo đúng
+      // số giây cài trong Thông số).
+      if (!_sweepStarted && !sweepSecondsAsync.isLoading) {
+        final sweepSeconds = sweepSecondsAsync.valueOrNull ?? _defaultSweepSeconds;
         _sweepStarted = true;
         _sweepController = AnimationController(vsync: this, duration: Duration(seconds: sweepSeconds))..forward();
         _sweepController!.addStatusListener((status) {
@@ -426,7 +432,9 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> with Sing
             style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline),
           ),
           const SizedBox(height: 16),
-          _SweepSlideToConfirm(sweep: _sweepController!, busy: _updating, onConfirm: _confirmPrepTime),
+          _sweepController == null
+              ? const SizedBox(height: 60, child: Center(child: CircularProgressIndicator(strokeWidth: 2)))
+              : _SweepSlideToConfirm(sweep: _sweepController!, busy: _updating, onConfirm: _confirmPrepTime),
         ],
       ),
     );
