@@ -177,7 +177,16 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
     final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Chuyến giao hàng')),
+      appBar: AppBar(
+        title: const Text('Chuyến giao hàng'),
+        actions: [
+          IconButton(
+            tooltip: 'Bản đồ',
+            icon: const Icon(Icons.map_outlined),
+            onPressed: () => context.push('/deliveries/${widget.deliveryId}/map'),
+          ),
+        ],
+      ),
       body: deliveryAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Lỗi: $e')),

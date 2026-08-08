@@ -13,6 +13,7 @@ import 'screens/home/home_screen.dart';
 import 'screens/earnings/earnings_screen.dart';
 import 'screens/profile/profile_screen.dart';
 import 'screens/delivery/delivery_detail_screen.dart';
+import 'screens/delivery/delivery_map_screen.dart';
 import 'screens/offer/offer_screen.dart';
 import 'screens/notifications/notifications_screen.dart';
 
@@ -61,6 +62,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/deliveries/:id',
         builder: (context, state) => DeliveryDetailScreen(deliveryId: state.pathParameters['id']!),
+      ),
+      GoRoute(
+        path: '/deliveries/:id/map',
+        builder: (context, state) => DeliveryMapScreen(deliveryId: state.pathParameters['id']!),
       ),
       ShellRoute(
         builder: (context, state, child) => DriverShell(child: child),
