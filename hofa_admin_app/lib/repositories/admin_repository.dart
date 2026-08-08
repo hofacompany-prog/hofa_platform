@@ -306,10 +306,21 @@ class AdminRepository {
     return list.map((e) => AdminDelivery.fromJson(e as Map<String, dynamic>)).toList();
   }
 
+  /// Chi tiết 1 chuyến — kèm đầy đủ điểm lấy hàng (branch*) + điểm giao hàng (ship*) mà bản
+  /// danh sách (deliveries()) không có, dùng cho màn chi tiết chuyến giao.
+  Future<AdminDelivery> delivery(String id) async =>
+      AdminDelivery.fromJson(await _api.get('/admin/deliveries/$id') as Map<String, dynamic>);
+
   /// Đổi tay trạng thái 1 chuyến — không đi qua RPC nghiệp vụ (không đụng tồn kho/ví tài xế),
   /// xem comment PATCH /admin/deliveries/:id/status phía server.
   Future<void> forceDeliveryStatus(String id, String status) async {
     await _api.patch('/admin/deliveries/$id/status', body: {'status': status});
+  }
+
+  /// Sửa điểm GIAO hàng của đơn (ship_*) — điểm LẤY hàng sửa qua updateBranch() ở trên vì đó là
+  /// dữ liệu của chi nhánh, không phải của riêng đơn/chuyến này.
+  Future<void> updateOrderShipping(String orderId, Map<String, dynamic> data) async {
+    await _api.patch('/admin/orders/$orderId/shipping', body: data);
   }
 
   Future<void> deleteDelivery(String id) async {

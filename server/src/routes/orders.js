@@ -2,7 +2,7 @@ const router = require('express').Router();
 const db = require('../db');
 const asyncHandler = require('../asyncHandler');
 const { ApiError } = require('../errors');
-const { requireFields, pagination, requireAuth, requireRole, requireMerchantAccess, requireOrderAccess } = require('../utils');
+const { requireFields, pickFields, pagination, requireAuth, requireRole, requireMerchantAccess, requireOrderAccess } = require('../utils');
 const dispatch = require('../dispatch');
 const orderOffer = require('../orderOffer');
 const push = require('../push');
@@ -113,6 +113,24 @@ router.delete('/admin/orders/:id', asyncHandler(async (req, res) => {
   const deleted = await db.deleteById('orders', req.params.id);
   if (!deleted) throw new ApiError('NOT_FOUND', 'Không tìm thấy đơn hàng', 404);
   res.json({ ok: true, data: { deleted: true } });
+}));
+
+const SHIP_FIELDS = [
+  'ship_recipient_name', 'ship_recipient_phone', 'ship_line1', 'ship_ward',
+  'ship_district', 'ship_province', 'ship_latitude', 'ship_longitude'
+];
+
+/** Admin sửa tay điểm giao hàng của 1 đơn — dùng khi toạ độ sai/thiếu (ship_latitude/longitude
+ * cho phép NULL, xem 01_schema.sql) khiến màn "Chuyến giao hàng" (admin) hoặc bản đồ tài xế
+ * không hiện đúng vị trí. Không đụng gì tới deliveries hiện có (distance_km/eta_minutes/
+ * driver_fee đã tính từ trước giữ nguyên) — chỉ áp dụng cho lần gán tài xế MỚI sau khi sửa. */
+router.patch('/admin/orders/:id/shipping', asyncHandler(async (req, res) => {
+  requireRole(req.ctx, ['admin']);
+  const order = await db.findById('orders', req.params.id);
+  if (!order) throw new ApiError('NOT_FOUND', 'Không tìm thấy đơn hàng', 404);
+  const data = pickFields(req.body, SHIP_FIELDS);
+  const updated = await db.updateById('orders', req.params.id, data);
+  res.json({ ok: true, data: updated });
 }));
 
 router.get('/merchants/:merchantId/orders', asyncHandler(async (req, res) => {

@@ -214,6 +214,33 @@ router.get('/admin/deliveries', asyncHandler(async (req, res) => {
   res.json({ ok: true, data: rows });
 }));
 
+/** 1 chuyến cụ thể, kèm đầy đủ điểm lấy hàng (branches) + điểm giao hàng (orders.ship_*) để
+ * màn chi tiết chuyến giao (admin) hiện và cho sửa — khác GET /admin/deliveries (danh sách,
+ * ít cột hơn cho gọn). */
+router.get('/admin/deliveries/:id', asyncHandler(async (req, res) => {
+  requireRole(req.ctx, ['admin']);
+  const row = await db.queryOne(
+    `SELECT d.*, o.order_code, o.merchant_id, m.name AS merchant_name,
+            o.ship_recipient_name AS customer_name, o.ship_recipient_phone AS customer_phone,
+            o.ship_line1, o.ship_ward, o.ship_district, o.ship_province,
+            o.ship_latitude, o.ship_longitude, o.branch_id,
+            b.name AS branch_name, b.phone AS branch_phone,
+            b.line1 AS branch_line1, b.ward AS branch_ward, b.district AS branch_district, b.province AS branch_province,
+            b.latitude AS branch_latitude, b.longitude AS branch_longitude,
+            u.full_name AS driver_name, u.phone AS driver_phone
+       FROM deliveries d
+       JOIN orders o ON o.id = d.order_id
+       LEFT JOIN merchants m ON m.id = o.merchant_id
+       LEFT JOIN branches b ON b.id = o.branch_id
+       LEFT JOIN drivers dr ON dr.id = d.driver_id
+       LEFT JOIN users u ON u.id = dr.user_id
+      WHERE d.id = $1`,
+    [req.params.id]
+  );
+  if (!row) throw new ApiError('NOT_FOUND', 'Không tìm thấy chuyến giao hàng', 404);
+  res.json({ ok: true, data: row });
+}));
+
 /** Admin chỉnh tay trạng thái chuyến giao hàng — KHÔNG đi qua RPC update_delivery_status vì RPC
  * đó có side effect thật (trừ tồn kho lúc picked_up, cộng ví COD + đồng bộ orders.status lúc
  * delivered) không phù hợp cho 1 thao tác sửa dữ liệu hành chính; ở đây chỉ đổi đúng cột status,

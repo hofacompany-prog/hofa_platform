@@ -16,6 +16,7 @@ import 'screens/users/users_screen.dart';
 import 'screens/users/user_detail_screen.dart';
 import 'screens/drivers/drivers_screen.dart';
 import 'screens/deliveries/deliveries_screen.dart';
+import 'screens/deliveries/delivery_detail_screen.dart';
 import 'screens/catalog/categories_screen.dart';
 import 'screens/settings/finance_settings_screen.dart';
 import 'screens/settings/shipping_fee_screen.dart';
@@ -105,6 +106,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/deliveries',
             builder: (context, state) => const DeliveriesScreen(),
+          ),
+          GoRoute(
+            path: '/deliveries/:id',
+            builder: (context, state) => DeliveryDetailScreen(deliveryId: state.pathParameters['id']!),
           ),
           GoRoute(
             path: '/categories',

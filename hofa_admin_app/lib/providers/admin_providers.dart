@@ -114,6 +114,10 @@ final deliveriesProvider = FutureProvider.autoDispose<List<AdminDelivery>>((ref)
   return ref.watch(adminRepoProvider).deliveries(status: status);
 });
 
+final deliveryDetailProvider = FutureProvider.autoDispose.family<AdminDelivery, String>(
+  (ref, id) => ref.watch(adminRepoProvider).delivery(id),
+);
+
 final categoriesProvider = FutureProvider.autoDispose<List<Category>>(
   (ref) => ref.watch(adminRepoProvider).categories(),
 );

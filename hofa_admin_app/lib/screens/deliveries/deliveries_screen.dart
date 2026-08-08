@@ -223,7 +223,7 @@ class _DeliveriesScreenState extends ConsumerState<DeliveriesScreen> {
                       color: theme.colorScheme.surfaceContainerLow,
                       child: ListTile(
                         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        onTap: () => context.go('/orders/${d.orderId}'),
+                        onTap: () => context.go('/deliveries/${d.id}'),
                         title: Text('${d.orderCode} · ${d.merchantName ?? ""}',
                             style: const TextStyle(fontWeight: FontWeight.w500)),
                         subtitle: Text(
@@ -244,6 +244,10 @@ class _DeliveriesScreenState extends ConsumerState<DeliveriesScreen> {
                             PopupMenuButton<void>(
                               icon: const Icon(Icons.more_vert),
                               itemBuilder: (context) => [
+                                PopupMenuItem(
+                                  onTap: () => context.go('/orders/${d.orderId}'),
+                                  child: const Text('Xem đơn hàng'),
+                                ),
                                 PopupMenuItem(
                                   onTap: () => _forceStatus(d),
                                   child: const Text('Đổi trạng thái'),
