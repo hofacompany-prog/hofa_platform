@@ -15,6 +15,7 @@ class Delivery {
   final String orderId;
   final String? driverId;
   final String status;
+  final String? branchName;
   final num? distanceKm;
   final int? etaMinutes;
   final int driverFee;
@@ -33,6 +34,7 @@ class Delivery {
     required this.orderId,
     this.driverId,
     required this.status,
+    this.branchName,
     this.distanceKm,
     this.etaMinutes,
     required this.driverFee,
@@ -52,6 +54,7 @@ class Delivery {
         orderId: json['order_id'] as String,
         driverId: json['driver_id'] as String?,
         status: json['status'] as String? ?? 'pending',
+        branchName: json['branch_name'] as String?,
         distanceKm: json['distance_km'] != null ? num.tryParse('${json['distance_km']}') : null,
         etaMinutes: (json['eta_minutes'] as num?)?.toInt(),
         driverFee: (json['driver_fee'] as num?)?.toInt() ?? 0,

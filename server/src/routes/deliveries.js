@@ -29,23 +29,37 @@ router.get('/orders/:orderId/delivery', asyncHandler(async (req, res) => {
 }));
 
 /** Phải đặt TRƯỚC /deliveries/:id để Express không hiểu nhầm "mine" là 1 giá trị :id
- * (giống lưu ý ở GET /merchants/mine trong merchants.js). */
+ * (giống lưu ý ở GET /merchants/mine trong merchants.js). Kèm b.name AS branch_name — app tài
+ * xế cần tên quán ngay ở danh sách/thẻ trang chủ, không chờ gọi thêm GET /branches/:id. */
 router.get('/deliveries/mine', asyncHandler(async (req, res) => {
   const driver = await requireOwnDriverRow(req.ctx);
   const { limit, offset } = pagination(req.query);
-  const clauses = ['driver_id = $1'];
+  const clauses = ['d.driver_id = $1'];
   const params = [driver.id];
-  if (req.query.status) { params.push(req.query.status); clauses.push(`status = $${params.length}`); }
+  if (req.query.status) { params.push(req.query.status); clauses.push(`d.status = $${params.length}`); }
   params.push(limit, offset);
   const rows = await db.query(
-    `SELECT * FROM deliveries WHERE ${clauses.join(' AND ')} ORDER BY assigned_at DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
+    `SELECT d.*, b.name AS branch_name
+       FROM deliveries d
+       JOIN orders o ON o.id = d.order_id
+       JOIN branches b ON b.id = o.branch_id
+      WHERE ${clauses.join(' AND ')}
+      ORDER BY d.assigned_at DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
     params
   );
   res.json({ ok: true, data: rows });
 }));
 
 router.get('/deliveries/:id', asyncHandler(async (req, res) => {
-  const delivery = await requireOwnDelivery(req.ctx, req.params.id);
+  await requireOwnDelivery(req.ctx, req.params.id);
+  const delivery = await db.queryOne(
+    `SELECT d.*, b.name AS branch_name
+       FROM deliveries d
+       JOIN orders o ON o.id = d.order_id
+       JOIN branches b ON b.id = o.branch_id
+      WHERE d.id = $1`,
+    [req.params.id]
+  );
   res.json({ ok: true, data: delivery });
 }));
 

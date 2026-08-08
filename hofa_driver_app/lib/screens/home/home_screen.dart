@@ -272,6 +272,13 @@ class _PendingOfferCard extends StatelessWidget {
                 ),
               ],
             ),
+            if (delivery.branchName != null) ...[
+              const SizedBox(height: 6),
+              Text(
+                delivery.branchName!,
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+              ),
+            ],
             const SizedBox(height: 6),
             Text(
               [
@@ -312,10 +319,16 @@ class _ActiveDeliveryCard extends StatelessWidget {
             style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
         subtitle: Padding(
           padding: const EdgeInsets.only(top: 6),
-          child: Text([
-            if (delivery.distanceKm != null) '${delivery.distanceKm!.toStringAsFixed(1)} km',
-            formatVnd(delivery.driverFee),
-          ].join(' · ')),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (delivery.branchName != null) Text(delivery.branchName!, style: theme.textTheme.bodyMedium),
+              Text([
+                if (delivery.distanceKm != null) '${delivery.distanceKm!.toStringAsFixed(1)} km',
+                formatVnd(delivery.driverFee),
+              ].join(' · ')),
+            ],
+          ),
         ),
         trailing: const Icon(Icons.chevron_right),
         onTap: () => context.push('/deliveries/${delivery.id}'),

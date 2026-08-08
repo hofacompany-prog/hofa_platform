@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/format.dart';
 import '../../models/branch.dart';
-import '../../models/delivery.dart';
 import '../../models/order.dart' as model;
 import '../../providers/delivery_providers.dart';
 import '../../repositories/delivery_repository.dart';
@@ -13,6 +12,16 @@ import '../../repositories/pickup_repository.dart';
 import '../../widgets/image_upload_field.dart';
 
 const _stageOrder = ['accepted', 'arrived_store', 'picked_up', 'delivering', 'delivered'];
+
+/// Nhãn ngắn riêng cho stepper — không dùng chung deliveryStatusLabels vì hầu hết bắt đầu bằng
+/// "Đã" (Đã nhận đơn, Đã đến quán, Đã lấy hàng...), lấy từ đầu sẽ ra toàn chữ "Đã".
+const _stageShortLabels = {
+  'accepted': 'Đã nhận',
+  'arrived_store': 'Đến quán',
+  'picked_up': 'Lấy hàng',
+  'delivering': 'Đang giao',
+  'delivered': 'Giao xong',
+};
 
 class DeliveryDetailScreen extends ConsumerStatefulWidget {
   final String deliveryId;
@@ -324,7 +333,7 @@ class _StageStepper extends StatelessWidget {
                       : null,
                 ),
                 const SizedBox(height: 4),
-                Text(deliveryStatusLabels[_stageOrder[i]]!.split(' ').first, style: theme.textTheme.labelSmall, textAlign: TextAlign.center),
+                Text(_stageShortLabels[_stageOrder[i]]!, style: theme.textTheme.labelSmall, textAlign: TextAlign.center),
               ],
             ),
           ),

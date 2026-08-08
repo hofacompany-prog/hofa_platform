@@ -71,8 +71,14 @@ async function offerToNearestDriver(orderId, { excludeDriverIds = [] } = {}) {
 
   const settings = await currentDriverAcceptSettings();
   const windowSeconds = driver.auto_accept ? settings.auto_accept_sweep_seconds : settings.manual_accept_sweep_seconds;
-  const deadline = new Date(Date.now() + windowSeconds * 1000).toISOString();
-  await db.query('UPDATE deliveries SET accept_deadline = $1 WHERE id = $2', [deadline, delivery.id]);
+  // Tính accept_deadline bằng now() của Postgres (không phải Date.now() của Node) để khớp đúng
+  // đồng hồ với assigned_at (cũng do Postgres set trong RPC assign_driver) — tránh lệch giờ giữa
+  // 2 server (Render/Node và Supabase/Postgres) làm thanh màu phía tài xế tính sai % đã trôi qua.
+  const deadlineRow = await db.queryOne(
+    `UPDATE deliveries SET accept_deadline = now() + ($1 || ' seconds')::interval WHERE id = $2 RETURNING accept_deadline`,
+    [windowSeconds, delivery.id]
+  );
+  const deadline = deadlineRow.accept_deadline.toISOString();
   await push.sendPushToUser(driver.user_id, {
     title: 'Đơn mới gần bạn!',
     body: `${order.order_code} · ${distanceKm != null ? distanceKm.toFixed(1) + ' km' : ''} · ${driverFee.toLocaleString('vi-VN')}đ — xác nhận trong ${windowSeconds}s`,

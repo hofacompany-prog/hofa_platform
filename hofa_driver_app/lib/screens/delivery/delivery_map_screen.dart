@@ -10,10 +10,10 @@ import '../../repositories/pickup_repository.dart';
 
 /// Bản đồ 2 điểm (lấy hàng + giao hàng) cho 1 chuyến — mở từ màn chi tiết chuyến giao, giúp
 /// tài xế hình dung quãng đường trước khi bấm "Chỉ đường" (mở app bản đồ ngoài cho chỉ đường
-/// thật, xem _navigate trong delivery_detail_screen.dart — màn này chỉ hiện vị trí, không tự
-/// vẽ đường/điều hướng để khỏi phụ thuộc thêm dịch vụ định tuyến). Dùng OpenStreetMap
-/// (flutter_map) như màn chọn địa chỉ ở app khách — miễn phí, không cần API key, tránh vướng
-/// chi phí Google Maps ở Việt Nam.
+/// thật theo từng điểm, xem _navigate). Có vẽ 1 đường thẳng nối 2 điểm + khoảng cách chim bay
+/// để tài xế ước lượng nhanh, không phải đường đi thực tế theo road network vì chưa có dịch vụ
+/// định tuyến riêng. Dùng OpenStreetMap (flutter_map) như màn chọn địa chỉ ở app khách — miễn
+/// phí, không cần API key, tránh vướng chi phí Google Maps ở Việt Nam.
 class DeliveryMapScreen extends StatefulWidget {
   final String deliveryId;
   const DeliveryMapScreen({super.key, required this.deliveryId});
@@ -55,6 +55,9 @@ class _DeliveryMapScreenState extends State<DeliveryMapScreen> {
     if (await canLaunchUrl(uri)) await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
+  double _distance(double lat1, double lng1, double lat2, double lng2) =>
+      const Distance().as(LengthUnit.Kilometer, LatLng(lat1, lng1), LatLng(lat2, lng2));
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -92,6 +95,17 @@ class _DeliveryMapScreenState extends State<DeliveryMapScreen> {
                             urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                             userAgentPackageName: 'com.hofa.hofa_driver',
                           ),
+                          if (hasDropoff)
+                            PolylineLayer(
+                              polylines: [
+                                Polyline(
+                                  points: [LatLng(branch.latitude, branch.longitude), LatLng(order.shipLatitude!, order.shipLongitude!)],
+                                  color: theme.colorScheme.primary,
+                                  strokeWidth: 4,
+                                  pattern: const StrokePattern.dotted(),
+                                ),
+                              ],
+                            ),
                           MarkerLayer(
                             markers: [
                               Marker(
@@ -112,6 +126,23 @@ class _DeliveryMapScreenState extends State<DeliveryMapScreen> {
                         ],
                       ),
                     ),
+                    if (hasDropoff)
+                      Container(
+                        width: double.infinity,
+                        color: theme.colorScheme.primaryContainer,
+                        padding: const EdgeInsets.symmetric(vertical: 8),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.route, size: 18, color: theme.colorScheme.onPrimaryContainer),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Khoảng cách đường chim bay: ${_distance(branch.latitude, branch.longitude, order.shipLatitude!, order.shipLongitude!).toStringAsFixed(1)} km',
+                              style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.onPrimaryContainer, fontWeight: FontWeight.w600),
+                            ),
+                          ],
+                        ),
+                      ),
                     SafeArea(
                       top: false,
                       child: Padding(
