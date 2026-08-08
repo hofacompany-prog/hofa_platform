@@ -167,8 +167,8 @@ class PushService {
         );
       }
     }
-    // Đơn mới cần xác nhận: mở thẳng màn nhận đơn, không chờ người dùng bấm vào thông báo —
-    // đúng kiểu Grab/Shopee (app tự bật lên khi đang mở sẵn). Áp dụng cả trên web.
+    // Đơn mới: mở thẳng màn chi tiết đơn, không chờ người dùng bấm vào thông báo — đúng kiểu
+    // Grab/Shopee (app tự bật lên khi đang mở sẵn). Áp dụng cả trên web.
     if (message.data['type'] == 'order_offer') handleData(message.data);
   }
 
@@ -186,20 +186,14 @@ class PushService {
     if (orderId == null) return;
 
     // notification_id do server nhét sẵn vào data (xem push.js sendPushToUser) — bấm thẳng
-    // push (ngoài màn hình chính) tính là đã đọc GIỐNG bấm trong danh sách hộp thư, TRỪ
-    // order_offer: mở màn nhận đơn ra chưa có nghĩa là đã xử lý, nếu bấm X bỏ qua mà chưa
-    // trượt nhận/huỷ thì badge đỏ phải còn nguyên — order_offer_screen.dart tự đánh dấu đã
-    // đọc khi thực sự nhận/huỷ xong (xem OrderOfferScreen.notificationId).
+    // push (ngoài màn hình chính) tính là đã đọc, giống bấm trong danh sách hộp thư.
     final notificationId = data['notification_id'] as String?;
-    final isOrderOffer = data['type'] == 'order_offer';
-    if (notificationId != null && !isOrderOffer) {
+    if (notificationId != null) {
       NotificationRepository().markRead(notificationId).catchError((_) {});
     }
 
     switch (data['type']) {
       case 'order_offer':
-        context.push('/orders/offer/$orderId', extra: notificationId);
-        break;
       case 'order_auto_confirmed':
       case 'order_auto_cancelled':
         context.go('/orders/$orderId');
