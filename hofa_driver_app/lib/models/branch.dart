@@ -1,7 +1,10 @@
+import '../core/format.dart';
+
 class Branch {
   final String id;
   final String merchantId;
   final String name;
+  final String? merchantName;
   final String? phone;
   final String line1;
   final String? ward;
@@ -14,6 +17,7 @@ class Branch {
     required this.id,
     required this.merchantId,
     required this.name,
+    this.merchantName,
     this.phone,
     required this.line1,
     this.ward,
@@ -25,10 +29,14 @@ class Branch {
 
   String get fullLine => [line1, ward, district, province].where((e) => e != null && e.isNotEmpty).join(', ');
 
+  /// Tên quán trước, tên chi nhánh sau — xem pickupTitle trong core/format.dart.
+  String get displayName => pickupTitle(merchantName, name);
+
   factory Branch.fromJson(Map<String, dynamic> json) => Branch(
         id: json['id'] as String,
         merchantId: json['merchant_id'] as String,
         name: json['name'] as String? ?? '',
+        merchantName: json['merchant_name'] as String?,
         phone: json['phone'] as String?,
         line1: json['line1'] as String? ?? '',
         ward: json['ward'] as String?,

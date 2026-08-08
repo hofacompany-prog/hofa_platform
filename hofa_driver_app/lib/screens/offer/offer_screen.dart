@@ -374,7 +374,7 @@ class _OfferDetails extends ConsumerWidget {
           data: (branch) => _AddressTile(
             icon: Icons.storefront,
             label: 'Lấy hàng',
-            title: branch.name,
+            title: branch.displayName,
             subtitle: branch.fullLine,
           ),
           loading: () => const _AddressTile(icon: Icons.storefront, label: 'Lấy hàng', title: 'Đang tải...', subtitle: ''),

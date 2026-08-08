@@ -236,7 +236,7 @@ class _DeliveryMapScreenState extends State<DeliveryMapScreen> {
                             _PointRow(
                               icon: Icons.storefront,
                               iconColor: theme.colorScheme.primary,
-                              title: branch.name,
+                              title: branch.displayName,
                               subtitle: branch.fullLine,
                               onNavigate: () => _navigate(branch.latitude, branch.longitude),
                             ),

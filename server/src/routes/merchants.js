@@ -311,8 +311,16 @@ router.get('/merchants/:merchantId/branches', asyncHandler(async (req, res) => {
   res.json({ ok: true, data: rows });
 }));
 
+/** Kèm m.name AS merchant_name — app tài xế cần tên quán (khác tên chi nhánh) để hiện ở màn
+ * nhận đơn/chi tiết/bản đồ chuyến giao. */
 router.get('/branches/:id', asyncHandler(async (req, res) => {
-  const row = await db.queryOne('SELECT * FROM branches WHERE id = $1 AND deleted_at IS NULL', [req.params.id]);
+  const row = await db.queryOne(
+    `SELECT b.*, m.name AS merchant_name
+       FROM branches b
+       JOIN merchants m ON m.id = b.merchant_id
+      WHERE b.id = $1 AND b.deleted_at IS NULL`,
+    [req.params.id]
+  );
   if (!row) throw new ApiError('NOT_FOUND', 'Không tìm thấy chi nhánh', 404);
   res.json({ ok: true, data: row });
 }));

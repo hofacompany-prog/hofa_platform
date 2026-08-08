@@ -223,7 +223,7 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
                         children: [
                           Icon(Icons.storefront, color: theme.colorScheme.primary),
                           const SizedBox(width: 8),
-                          Expanded(child: Text(branch?.name ?? 'Đang tải...', style: theme.textTheme.titleSmall)),
+                          Expanded(child: Text(branch?.displayName ?? 'Đang tải...', style: theme.textTheme.titleSmall)),
                           if (branch != null)
                             IconButton(icon: const Icon(Icons.directions), onPressed: () => _navigate(branch.latitude, branch.longitude)),
                           if (branch?.phone != null)

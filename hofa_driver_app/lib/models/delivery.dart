@@ -1,3 +1,5 @@
+import '../core/format.dart';
+
 const deliveryStatusLabels = {
   'pending': 'Đang tìm tài xế',
   'assigned': 'Đã gán — chờ xác nhận',
@@ -16,6 +18,7 @@ class Delivery {
   final String? driverId;
   final String status;
   final String? branchName;
+  final String? merchantName;
   final num? distanceKm;
   final int? etaMinutes;
   final int driverFee;
@@ -35,6 +38,7 @@ class Delivery {
     this.driverId,
     required this.status,
     this.branchName,
+    this.merchantName,
     this.distanceKm,
     this.etaMinutes,
     required this.driverFee,
@@ -49,12 +53,16 @@ class Delivery {
     this.failureReason,
   });
 
+  /// Tên quán trước, tên chi nhánh sau (null nếu chưa có branch_name — hiếm, chỉ khi lỗi join).
+  String? get pickupDisplayName => branchName == null ? null : pickupTitle(merchantName, branchName!);
+
   factory Delivery.fromJson(Map<String, dynamic> json) => Delivery(
         id: json['id'] as String,
         orderId: json['order_id'] as String,
         driverId: json['driver_id'] as String?,
         status: json['status'] as String? ?? 'pending',
         branchName: json['branch_name'] as String?,
+        merchantName: json['merchant_name'] as String?,
         distanceKm: json['distance_km'] != null ? num.tryParse('${json['distance_km']}') : null,
         etaMinutes: (json['eta_minutes'] as num?)?.toInt(),
         driverFee: (json['driver_fee'] as num?)?.toInt() ?? 0,

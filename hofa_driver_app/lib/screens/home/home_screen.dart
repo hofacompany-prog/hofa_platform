@@ -272,10 +272,10 @@ class _PendingOfferCard extends StatelessWidget {
                 ),
               ],
             ),
-            if (delivery.branchName != null) ...[
+            if (delivery.pickupDisplayName != null) ...[
               const SizedBox(height: 6),
               Text(
-                delivery.branchName!,
+                delivery.pickupDisplayName!,
                 style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
               ),
             ],
@@ -322,7 +322,7 @@ class _ActiveDeliveryCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              if (delivery.branchName != null) Text(delivery.branchName!, style: theme.textTheme.bodyMedium),
+              if (delivery.pickupDisplayName != null) Text(delivery.pickupDisplayName!, style: theme.textTheme.bodyMedium),
               Text([
                 if (delivery.distanceKm != null) '${delivery.distanceKm!.toStringAsFixed(1)} km',
                 formatVnd(delivery.driverFee),
