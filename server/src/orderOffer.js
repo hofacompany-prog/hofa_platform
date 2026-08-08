@@ -1,5 +1,6 @@
 const db = require('./db');
 const push = require('./push');
+const dispatch = require('./dispatch');
 
 /** Tất cả user quản lý 1 cửa hàng (chủ + nhân viên) — để gửi push đơn mới cho tất cả, ai xem trước thì bấm trước. */
 async function getMerchantUserIds(merchantId) {
@@ -29,4 +30,37 @@ async function offerOrderToMerchant(orderId) {
   })));
 }
 
-module.exports = { offerOrderToMerchant };
+/**
+ * Đơn ở cửa hàng mua hộ (merchant_type='buy_on_behalf') — cửa hàng không chuẩn bị/xác nhận gì
+ * cả, tài xế mới là người trực tiếp đi mua, nên bỏ hẳn 2 bước 'confirmed'/'preparing' (không có
+ * ý nghĩa gì với đơn này) và chuyển thẳng sang 'ready_for_pickup' rồi gọi dispatch ngay khi
+ * thanh toán được ghi nhận (record_payment RPC chuyển pending_payment -> placed, xem
+ * routes/payments.js gọi hàm này ngay sau đó). Không throw — lỗi ở đây không được làm hỏng
+ * luồng ghi nhận thanh toán đã thành công.
+ */
+async function dispatchBuyOnBehalfOrder(orderId) {
+  const order = await db.queryOne(
+    `SELECT o.status, m.merchant_type
+       FROM orders o JOIN merchants m ON m.id = o.merchant_id
+      WHERE o.id = $1`,
+    [orderId]
+  );
+  if (!order || order.merchant_type !== 'buy_on_behalf' || order.status !== 'placed') return;
+
+  await db.callRpc('update_order_status', {
+    p_order_id: orderId,
+    p_new_status: 'ready_for_pickup',
+    p_changed_by: null,
+    p_actor_role: 'admin',
+    p_note: 'Tự động — cửa hàng mua hộ',
+    p_force: true
+  });
+  push.notifyCustomerOrderStatus(orderId, 'ready_for_pickup').catch(() => {});
+
+  const result = await dispatch.offerToNearestDriver(orderId);
+  if (!result) {
+    console.warn('[orderOffer] Đơn mua hộ', orderId, 'không tìm được tài xế online — cần admin gán tay.');
+  }
+}
+
+module.exports = { offerOrderToMerchant, dispatchBuyOnBehalfOrder };

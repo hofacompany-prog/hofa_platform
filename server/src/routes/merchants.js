@@ -312,10 +312,11 @@ router.get('/merchants/:merchantId/branches', asyncHandler(async (req, res) => {
 }));
 
 /** Kèm m.name AS merchant_name — app tài xế cần tên quán (khác tên chi nhánh) để hiện ở màn
- * nhận đơn/chi tiết/bản đồ chuyến giao. */
+ * nhận đơn/chi tiết/bản đồ chuyến giao. Kèm m.merchant_type để app tài xế biết đơn mua hộ
+ * (buy_on_behalf) — không có OTP ở bước lấy hàng, hiện danh sách cần mua thay vào đó. */
 router.get('/branches/:id', asyncHandler(async (req, res) => {
   const row = await db.queryOne(
-    `SELECT b.*, m.name AS merchant_name
+    `SELECT b.*, m.name AS merchant_name, m.merchant_type
        FROM branches b
        JOIN merchants m ON m.id = b.merchant_id
       WHERE b.id = $1 AND b.deleted_at IS NULL`,

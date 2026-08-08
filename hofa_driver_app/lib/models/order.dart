@@ -46,6 +46,7 @@ class Order {
   final double? shipLatitude;
   final double? shipLongitude;
   final String? shipNote;
+  final int subtotal;
   final int totalAmount;
   final String paymentMethod;
   final String paymentStatus;
@@ -66,6 +67,7 @@ class Order {
     this.shipLatitude,
     this.shipLongitude,
     this.shipNote,
+    required this.subtotal,
     required this.totalAmount,
     required this.paymentMethod,
     required this.paymentStatus,
@@ -90,6 +92,7 @@ class Order {
         shipLatitude: json['ship_latitude'] != null ? double.tryParse('${json['ship_latitude']}') : null,
         shipLongitude: json['ship_longitude'] != null ? double.tryParse('${json['ship_longitude']}') : null,
         shipNote: json['ship_note'] as String?,
+        subtotal: (json['subtotal'] as num?)?.toInt() ?? 0,
         totalAmount: (json['total_amount'] as num?)?.toInt() ?? 0,
         paymentMethod: json['payment_method'] as String? ?? 'cod',
         paymentStatus: json['payment_status'] as String? ?? 'pending',

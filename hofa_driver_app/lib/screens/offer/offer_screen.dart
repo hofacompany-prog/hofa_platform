@@ -380,6 +380,30 @@ class _OfferDetails extends ConsumerWidget {
           loading: () => const _AddressTile(icon: Icons.storefront, label: 'Lấy hàng', title: 'Đang tải...', subtitle: ''),
           error: (_, _) => const _AddressTile(icon: Icons.storefront, label: 'Lấy hàng', title: '—', subtitle: ''),
         ),
+        if (branchAsync.valueOrNull?.isBuyOnBehalf == true) ...[
+          const SizedBox(height: 8),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.primaryContainer.withValues(alpha: 0.5),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.shopping_bag_outlined, size: 18, color: theme.colorScheme.primary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Đơn mua hộ — bạn cần ứng tiền mua hàng tại quán, được hoàn ngay vào ví khi xác nhận đã mua xong (không cần OTP, chỉ cần ảnh hoá đơn).',
+                    style: TextStyle(color: theme.colorScheme.primary),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
         const Padding(
           padding: EdgeInsets.only(left: 19),
           child: SizedBox(height: 20, child: VerticalDivider(thickness: 2)),

@@ -4,6 +4,7 @@ const config = require('../config');
 const asyncHandler = require('../asyncHandler');
 const { ApiError } = require('../errors');
 const { requireFields, requireAuth, requireRole, requireMerchantAccess, requireOrderAccess } = require('../utils');
+const orderOffer = require('../orderOffer');
 
 router.get('/orders/:orderId/payments', asyncHandler(async (req, res) => {
   await requireOrderAccess(req.ctx, req.params.orderId);
@@ -43,6 +44,9 @@ router.post('/payments', asyncHandler(async (req, res) => {
     p_transaction_code: req.body.transaction_code || null,
     p_collected_by: req.ctx.userId,
     p_gateway_response: req.body.gateway_response || null
+  });
+  orderOffer.dispatchBuyOnBehalfOrder(req.body.order_id).catch((err) => {
+    console.error('[orderOffer] Không tự chuyển được đơn mua hộ sau khi ghi nhận thanh toán', req.body.order_id, err.message);
   });
   res.status(201).json({ ok: true, data: payment });
 }));
@@ -85,6 +89,9 @@ router.post('/payments/webhook', asyncHandler(async (req, res) => {
     p_transaction_code: req.body.transaction_code,
     p_collected_by: null,
     p_gateway_response: req.body.raw || null
+  });
+  orderOffer.dispatchBuyOnBehalfOrder(req.body.order_id).catch((err) => {
+    console.error('[orderOffer] Không tự chuyển được đơn mua hộ sau khi ghi nhận thanh toán', req.body.order_id, err.message);
   });
   res.json({ ok: true, data: payment });
 }));

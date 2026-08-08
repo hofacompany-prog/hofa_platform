@@ -30,8 +30,9 @@ router.get('/orders/:orderId/delivery', asyncHandler(async (req, res) => {
 
 /** Phải đặt TRƯỚC /deliveries/:id để Express không hiểu nhầm "mine" là 1 giá trị :id
  * (giống lưu ý ở GET /merchants/mine trong merchants.js). Kèm b.name AS branch_name + m.name AS
- * merchant_name (tên quán, khác tên chi nhánh) — app tài xế cần cả 2 ngay ở thẻ trang chủ,
- * không chờ gọi thêm GET /branches/:id. */
+ * merchant_name (tên quán, khác tên chi nhánh) + m.merchant_type (đơn mua hộ không có OTP lấy
+ * hàng) — app tài xế cần cả 3 ngay ở thẻ trang chủ/chi tiết, không chờ gọi thêm GET
+ * /branches/:id. */
 router.get('/deliveries/mine', asyncHandler(async (req, res) => {
   const driver = await requireOwnDriverRow(req.ctx);
   const { limit, offset } = pagination(req.query);
@@ -40,7 +41,7 @@ router.get('/deliveries/mine', asyncHandler(async (req, res) => {
   if (req.query.status) { params.push(req.query.status); clauses.push(`d.status = $${params.length}`); }
   params.push(limit, offset);
   const rows = await db.query(
-    `SELECT d.*, b.name AS branch_name, m.name AS merchant_name
+    `SELECT d.*, b.name AS branch_name, m.name AS merchant_name, m.merchant_type
        FROM deliveries d
        JOIN orders o ON o.id = d.order_id
        JOIN branches b ON b.id = o.branch_id
@@ -55,7 +56,7 @@ router.get('/deliveries/mine', asyncHandler(async (req, res) => {
 router.get('/deliveries/:id', asyncHandler(async (req, res) => {
   await requireOwnDelivery(req.ctx, req.params.id);
   const delivery = await db.queryOne(
-    `SELECT d.*, b.name AS branch_name, m.name AS merchant_name
+    `SELECT d.*, b.name AS branch_name, m.name AS merchant_name, m.merchant_type
        FROM deliveries d
        JOIN orders o ON o.id = d.order_id
        JOIN branches b ON b.id = o.branch_id

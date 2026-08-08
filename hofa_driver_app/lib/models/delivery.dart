@@ -19,6 +19,7 @@ class Delivery {
   final String status;
   final String? branchName;
   final String? merchantName;
+  final String? merchantType;
   final num? distanceKm;
   final int? etaMinutes;
   final int driverFee;
@@ -39,6 +40,7 @@ class Delivery {
     required this.status,
     this.branchName,
     this.merchantName,
+    this.merchantType,
     this.distanceKm,
     this.etaMinutes,
     required this.driverFee,
@@ -56,6 +58,9 @@ class Delivery {
   /// Tên quán trước, tên chi nhánh sau (null nếu chưa có branch_name — hiếm, chỉ khi lỗi join).
   String? get pickupDisplayName => branchName == null ? null : pickupTitle(merchantName, branchName!);
 
+  /// Đơn mua hộ — tài xế tự đi mua tại quán, không có OTP lấy hàng (xem delivery_detail_screen).
+  bool get isBuyOnBehalf => merchantType == 'buy_on_behalf';
+
   factory Delivery.fromJson(Map<String, dynamic> json) => Delivery(
         id: json['id'] as String,
         orderId: json['order_id'] as String,
@@ -63,6 +68,7 @@ class Delivery {
         status: json['status'] as String? ?? 'pending',
         branchName: json['branch_name'] as String?,
         merchantName: json['merchant_name'] as String?,
+        merchantType: json['merchant_type'] as String?,
         distanceKm: json['distance_km'] != null ? num.tryParse('${json['distance_km']}') : null,
         etaMinutes: (json['eta_minutes'] as num?)?.toInt(),
         driverFee: (json['driver_fee'] as num?)?.toInt() ?? 0,

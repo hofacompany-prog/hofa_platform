@@ -145,6 +145,60 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
     );
   }
 
+  /// Đơn mua hộ — tài xế tự đi mua, không có nhân viên cửa hàng nào đọc OTP cho tài xế, nên
+  /// bước "picked_up" ở đây không hỏi OTP mà bắt buộc 1 ảnh hoá đơn/hàng đã mua làm bằng chứng
+  /// (xem update_delivery_status trong hofa-db/43_buy_on_behalf_driver_dispatch.sql — server
+  /// chặn hẳn nếu thiếu ảnh). Ví tài xế được hoàn tiền hàng ngay khi xác nhận thành công.
+  Future<void> _promptBuyOnBehalfPickup() async {
+    String? photoUrl;
+    String? error;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setInner) => AlertDialog(
+          title: const Text('Xác nhận đã mua xong'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Đơn mua hộ — không cần OTP, chỉ cần chụp ảnh hoá đơn hoặc hàng đã mua làm bằng chứng.'),
+                const SizedBox(height: 12),
+                ImageUploadField(
+                  label: 'Ảnh hoá đơn/hàng đã mua (bắt buộc)',
+                  folder: 'deliveries',
+                  onChanged: (url) => setInner(() {
+                    photoUrl = url;
+                    error = null;
+                  }),
+                ),
+                if (error != null) ...[
+                  const SizedBox(height: 8),
+                  Text(error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Huỷ')),
+            FilledButton(
+              onPressed: () {
+                if (photoUrl == null) {
+                  setInner(() => error = 'Cần chụp ảnh trước khi xác nhận');
+                  return;
+                }
+                Navigator.pop(context, true);
+              },
+              child: const Text('Xác nhận'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (ok != true || photoUrl == null) return;
+    await _advance('picked_up', proofPhotoUrls: [photoUrl!]);
+  }
+
   Future<void> _promptFailed() async {
     final ctrl = TextEditingController();
     final ok = await showDialog<bool>(
@@ -211,6 +265,8 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
               const SizedBox(height: 8),
               _StageStepper(status: delivery.status),
               const SizedBox(height: 16),
+              if (delivery.isBuyOnBehalf && order != null) _BuyOnBehalfShoppingCard(order: order),
+              if (delivery.isBuyOnBehalf && order != null) const SizedBox(height: 12),
               Card(
                 elevation: 0,
                 color: theme.colorScheme.surfaceContainerLow,
@@ -292,8 +348,10 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
                 status: delivery.status,
                 failureReason: delivery.failureReason,
                 busy: _busy,
+                isBuyOnBehalf: delivery.isBuyOnBehalf,
                 onArrivedStore: () => _advance('arrived_store'),
                 onPickedUp: () => _promptOtp('Nhập mã OTP lấy hàng (cửa hàng đọc cho bạn)', 'picked_up'),
+                onBuyOnBehalfPickup: _promptBuyOnBehalfPickup,
                 onStartDelivering: () => _advance('delivering'),
                 onDelivered: _promptDelivered,
                 onFailed: _promptFailed,
@@ -351,8 +409,10 @@ class _ActionArea extends StatelessWidget {
   final String status;
   final String? failureReason;
   final bool busy;
+  final bool isBuyOnBehalf;
   final VoidCallback onArrivedStore;
   final VoidCallback onPickedUp;
+  final VoidCallback onBuyOnBehalfPickup;
   final VoidCallback onStartDelivering;
   final VoidCallback onDelivered;
   final VoidCallback onFailed;
@@ -362,8 +422,10 @@ class _ActionArea extends StatelessWidget {
     required this.status,
     required this.failureReason,
     required this.busy,
+    required this.isBuyOnBehalf,
     required this.onArrivedStore,
     required this.onPickedUp,
+    required this.onBuyOnBehalfPickup,
     required this.onStartDelivering,
     required this.onDelivered,
     required this.onFailed,
@@ -378,13 +440,13 @@ class _ActionArea extends StatelessWidget {
         return FilledButton.icon(
           onPressed: busy ? null : onArrivedStore,
           icon: const Icon(Icons.storefront),
-          label: const Text('Đã đến quán lấy hàng'),
+          label: Text(isBuyOnBehalf ? 'Đã đến quán' : 'Đã đến quán lấy hàng'),
         );
       case 'arrived_store':
         return FilledButton.icon(
-          onPressed: busy ? null : onPickedUp,
+          onPressed: busy ? null : (isBuyOnBehalf ? onBuyOnBehalfPickup : onPickedUp),
           icon: const Icon(Icons.inventory_2_outlined),
-          label: const Text('Đã lấy hàng'),
+          label: Text(isBuyOnBehalf ? 'Đã mua xong hàng' : 'Đã lấy hàng'),
         );
       case 'picked_up':
         return FilledButton.icon(
@@ -432,5 +494,66 @@ class _ActionArea extends StatelessWidget {
       default:
         return const SizedBox();
     }
+  }
+}
+
+/// Danh sách cần mua giúp khách — chỉ hiện cho đơn mua hộ, để tài xế biết chính xác cần mua gì
+/// và mang đủ tiền trước khi đến quán (tiền hàng được hoàn ngay vào ví lúc xác nhận đã mua).
+class _BuyOnBehalfShoppingCard extends StatelessWidget {
+  final model.Order order;
+  const _BuyOnBehalfShoppingCard({required this.order});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      elevation: 0,
+      color: theme.colorScheme.secondaryContainer.withValues(alpha: 0.4),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.shopping_bag_outlined, color: theme.colorScheme.secondary),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text('Cần mua giúp khách', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            for (final item in order.items)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '${item.quantity}x ${item.productName}${item.variantName != null ? ' (${item.variantName})' : ''}'
+                        '${item.note != null && item.note!.isNotEmpty ? ' — ${item.note}' : ''}',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            const Divider(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('Tổng tiền hàng cần ứng', style: theme.textTheme.bodyMedium),
+                Text(formatVnd(order.subtotal), style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Bạn ứng tiền mua tại quán, hoàn ngay vào ví khi bấm "Đã mua xong hàng" (kèm ảnh hoá đơn).',
+              style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

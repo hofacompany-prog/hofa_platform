@@ -9,6 +9,7 @@ import '../../models/branch.dart';
 import '../../models/delivery.dart';
 import '../../models/order.dart';
 import '../../models/prep_tier_settings.dart';
+import '../../providers/auth_provider.dart';
 import '../../repositories/merchant_repository.dart';
 import '../../repositories/order_repository.dart';
 import '../../widgets/rolling_countdown.dart';
@@ -297,6 +298,30 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> with Sing
                       style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline),
                     ),
                     const SizedBox(height: 12),
+                    if (ref.watch(myMerchantProvider).valueOrNull?.merchantType == 'buy_on_behalf') ...[
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.tertiaryContainer.withValues(alpha: 0.5),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(Icons.info_outline, size: 18, color: theme.colorScheme.tertiary),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                'Đơn mua hộ — hệ thống tự chuyển thẳng cho tài xế xử lý ngay khi khách thanh toán, cửa hàng không cần xác nhận/chuẩn bị.',
+                                style: TextStyle(color: theme.colorScheme.tertiary),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
                     if (o.customerNote != null && o.customerNote!.trim().isNotEmpty) ...[
                       Container(
                         width: double.infinity,

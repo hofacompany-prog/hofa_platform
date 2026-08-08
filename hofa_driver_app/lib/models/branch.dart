@@ -5,6 +5,7 @@ class Branch {
   final String merchantId;
   final String name;
   final String? merchantName;
+  final String? merchantType;
   final String? phone;
   final String line1;
   final String? ward;
@@ -18,6 +19,7 @@ class Branch {
     required this.merchantId,
     required this.name,
     this.merchantName,
+    this.merchantType,
     this.phone,
     required this.line1,
     this.ward,
@@ -32,11 +34,15 @@ class Branch {
   /// Tên quán trước, tên chi nhánh sau — xem pickupTitle trong core/format.dart.
   String get displayName => pickupTitle(merchantName, name);
 
+  /// Đơn mua hộ — tài xế tự đi mua, không có OTP/nhân viên xác nhận lấy hàng.
+  bool get isBuyOnBehalf => merchantType == 'buy_on_behalf';
+
   factory Branch.fromJson(Map<String, dynamic> json) => Branch(
         id: json['id'] as String,
         merchantId: json['merchant_id'] as String,
         name: json['name'] as String? ?? '',
         merchantName: json['merchant_name'] as String?,
+        merchantType: json['merchant_type'] as String?,
         phone: json['phone'] as String?,
         line1: json['line1'] as String? ?? '',
         ward: json['ward'] as String?,
