@@ -263,29 +263,16 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> with Sing
                         width: double.infinity,
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: theme.colorScheme.secondary,
+                          color: theme.colorScheme.secondaryContainer.withValues(alpha: 0.5),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Icon(Icons.info_outline, size: 18, color: Colors.white),
+                            Icon(Icons.info_outline, size: 18, color: theme.colorScheme.secondary),
                             const SizedBox(width: 8),
                             Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Ghi chú của khách',
-                                    style: theme.textTheme.labelMedium?.copyWith(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(o.customerNote!, style: const TextStyle(color: Colors.white)),
-                                ],
-                              ),
+                              child: Text(o.customerNote!, style: TextStyle(color: theme.colorScheme.secondary)),
                             ),
                           ],
                         ),
@@ -334,26 +321,12 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> with Sing
                               ),
                             if (item.note != null && item.note!.trim().isNotEmpty)
                               Padding(
-                                padding: const EdgeInsets.only(top: 6, left: 20),
-                                child: Container(
-                                  width: double.infinity,
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                  decoration: BoxDecoration(
+                                padding: const EdgeInsets.only(top: 4, left: 20),
+                                child: Text(
+                                  'Ghi chú: ${item.note}',
+                                  style: theme.textTheme.bodySmall?.copyWith(
                                     color: theme.colorScheme.secondary,
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Row(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      const Icon(Icons.info_outline, size: 14, color: Colors.white),
-                                      const SizedBox(width: 6),
-                                      Expanded(
-                                        child: Text(
-                                          item.note!,
-                                          style: theme.textTheme.bodySmall?.copyWith(color: Colors.white),
-                                        ),
-                                      ),
-                                    ],
+                                    fontWeight: FontWeight.bold,
                                   ),
                                 ),
                               ),
