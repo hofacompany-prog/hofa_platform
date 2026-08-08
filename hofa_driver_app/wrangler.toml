@@ -1,0 +1,10 @@
+# Deploy: ./build_web.sh rồi "wrangler deploy" (cần đăng nhập trước: wrangler login).
+# not_found_handling = "single-page-application" là cách ĐÚNG để Cloudflare Workers static
+# assets trả về index.html cho mọi đường dẫn không khớp file tĩnh nào (route con của
+# go_router như /offer/:id, /deliveries/:id) — khác hẳn Cloudflare Pages (dùng file _redirects).
+name = "hofa-driver"
+compatibility_date = "2026-08-08"
+
+[assets]
+directory = "./build/web"
+not_found_handling = "single-page-application"

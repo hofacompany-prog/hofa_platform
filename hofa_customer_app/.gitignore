@@ -50,3 +50,6 @@ env.json
 google-services.json
 GoogleService-Info.plist
 lib/firebase_options.dart
+
+# Cache/state cục bộ của wrangler (deploy Cloudflare Workers) — không phải mã nguồn
+.wrangler/

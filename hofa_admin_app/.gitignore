@@ -44,3 +44,6 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 env.json
+
+# Cache/state cục bộ của wrangler (deploy Cloudflare Workers) — không phải mã nguồn
+.wrangler/

@@ -147,3 +147,6 @@ vite.config.ts.timestamp-*
 
 # Claude Code local settings
 .claude/
+
+# Cache/state cục bộ của wrangler (deploy Cloudflare Workers)
+.wrangler/
