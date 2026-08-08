@@ -12,6 +12,14 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
+// Trình duyệt mặc định giữ service worker CŨ chạy cho tới khi mọi tab/instance của app đóng
+// hẳn, kể cả khi đã tải xong bản service worker mới — mọi sửa đổi ở file này (kể cả các bản
+// vá điều hướng push trước đó) có thể ÂM THẦM không có hiệu lực trên máy thật vì lý do này,
+// không phải vì logic sai. skipWaiting() bỏ qua bước "waiting", clients.claim() chiếm quyền
+// kiểm soát các tab đang mở ngay lập tức — bản mới có hiệu lực ngay lần mở app kế tiếp.
+self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('activate', (event) => event.waitUntil(clients.claim()));
+
 /**
  * Đếm dồn số badge trên icon PWA ở màn hình chính (Badging API). localStorage không dùng
  * được trong service worker nên lưu ở IndexedDB — cùng 1 store với script xoá badge trong
