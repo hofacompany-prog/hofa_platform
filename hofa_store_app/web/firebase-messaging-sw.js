@@ -171,10 +171,17 @@ self.addEventListener('notificationclick', (event) => {
         return clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
           for (const client of windowClients) {
             if (client.url.startsWith(origin) && 'focus' in client) {
-              return client
-                .navigate(targetUrl)
-                .then((c) => (c || client).focus())
-                .catch(() => client.focus());
+              // App đang mở nền (chưa tắt hẳn): focus TRƯỚC rồi mới navigate — gọi navigate()
+              // trên 1 client chưa được focus có thể bị từ chối âm thầm trên 1 số nền tảng (đã
+              // xác nhận qua thực tế: bấm push lúc app thu gọn chỉ mở app lên lại đúng màn cũ,
+              // không tới chi tiết đơn). postMessage cho trang đó để Dart tự điều hướng bằng
+              // router hiện có (đọc lại IndexedDB, xem pending_deep_link_web.dart) — không phụ
+              // thuộc navigate() có thật sự tải lại trang hay không; navigate() vẫn thử thêm cho
+              // các trường hợp postMessage không được lắng nghe kịp.
+              return client.focus().then((focused) => {
+                (focused || client).postMessage({ type: 'hofa-deep-link', path });
+                return client.navigate(targetUrl).catch(() => {});
+              });
             }
           }
           if (clients.openWindow) return clients.openWindow(targetUrl);

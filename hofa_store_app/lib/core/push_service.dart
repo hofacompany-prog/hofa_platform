@@ -85,6 +85,9 @@ class PushService {
     }
     if (kIsWeb) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _checkPendingDeepLink());
+      // App đang mở nền rồi bấm push: xem setPendingDeepLinkMessageHandler trong
+      // pending_deep_link_web.dart để hiểu vì sao cần thêm kênh này ngoài lần đọc lúc khởi động.
+      PendingDeepLink.onMessage(_checkPendingDeepLink);
     }
   }
 
