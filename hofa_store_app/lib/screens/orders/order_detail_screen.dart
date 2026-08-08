@@ -263,15 +263,30 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> with Sing
                         width: double.infinity,
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: theme.colorScheme.secondaryContainer.withValues(alpha: 0.5),
+                          color: theme.colorScheme.secondary,
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Icon(Icons.info_outline, size: 18, color: theme.colorScheme.secondary),
+                            const Icon(Icons.info_outline, size: 18, color: Colors.white),
                             const SizedBox(width: 8),
-                            Expanded(child: Text(o.customerNote!)),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Ghi chú của khách',
+                                    style: theme.textTheme.labelMedium?.copyWith(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(o.customerNote!, style: const TextStyle(color: Colors.white)),
+                                ],
+                              ),
+                            ),
                           ],
                         ),
                       ),
