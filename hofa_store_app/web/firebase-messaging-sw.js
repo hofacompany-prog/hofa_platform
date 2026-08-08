@@ -142,16 +142,16 @@ messaging.onBackgroundMessage(async (payload) => {
 });
 
 /**
- * Đường dẫn trong app tương ứng với data của push — khớp switch trong
- * lib/core/push_service.dart#handleData, NHƯNG chạy ở đây (service worker, ngoài Dart) vì lúc
- * app đang đóng/nền, Dart code không chạy nên handleData không có cơ hội được gọi — trước đây
- * bấm vào thông báo chỉ mở trang chủ (self.registration.scope), bỏ qua hẳn order_id, nên
- * không bao giờ nhảy tới đúng màn Chi tiết đơn được.
+ * Đường dẫn trong app tương ứng với data của push — chạy ở đây (service worker, ngoài Dart)
+ * vì lúc app đang đóng/nền, Dart code không chạy nên handleData (push_service.dart) không có
+ * cơ hội được gọi. Đích tạm thời chỉ để tab "Đơn hàng" (không tới thẳng chi tiết 1 đơn cụ
+ * thể) — đơn giản hoá tối đa lúc chưa xác định được vì sao điều hướng khi app tắt hẳn không
+ * có tác dụng trên iOS, để tách xem lỗi nằm ở việc điều hướng nói chung hay ở phần order_id.
  */
 function targetPathFor(data) {
   if (data.type === 'admin_broadcast' && data.screen) return data.screen;
-  if (data.order_id && ['order_offer', 'order_auto_confirmed', 'order_auto_cancelled'].includes(data.type)) {
-    return '/orders/' + data.order_id;
+  if (['order_offer', 'order_auto_confirmed', 'order_auto_cancelled'].includes(data.type)) {
+    return '/orders';
   }
   return '/';
 }
