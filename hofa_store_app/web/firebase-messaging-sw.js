@@ -159,7 +159,16 @@ function targetPathFor(data) {
 
 self.addEventListener('notificationclick', (event) => {
   console.log('[hofa-sw] notificationclick nhận được, notification =', event.notification);
-  event.notification.close();
+  // Safari/iOS từ chối đóng thông báo NGAY lúc vừa hiện ("Persistent notifications cannot be
+  // closed shortly after they are shown") — lỗi này ném ra đồng bộ, nếu không bọc try/catch
+  // sẽ làm dừng cả hàm ngay tại đây, không bao giờ chạy tới phần đọc IndexedDB/điều hướng bên
+  // dưới. Xác nhận qua log thực tế: onBackgroundMessage chạy bình thường nhưng không có log
+  // nào sau dòng notification.close() cả trên iOS.
+  try {
+    event.notification.close();
+  } catch (e) {
+    console.log('[hofa-sw] notification.close() lỗi, bỏ qua và tiếp tục điều hướng', e);
+  }
   event.waitUntil(
     readLastPushData()
       .then((data) => {
