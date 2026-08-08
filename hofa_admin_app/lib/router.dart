@@ -23,6 +23,7 @@ import 'screens/settings/shipping_fee_screen.dart';
 import 'screens/settings/order_code_screen.dart';
 import 'screens/settings/auto_accept_settings_screen.dart';
 import 'screens/settings/driver_accept_settings_screen.dart';
+import 'screens/settings/payment_settings_screen.dart';
 import 'screens/vouchers/vouchers_screen.dart';
 import 'screens/notifications/notifications_screen.dart';
 
@@ -142,6 +143,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/driver-accept-settings',
             builder: (context, state) => const DriverAcceptSettingsScreen(),
+          ),
+          GoRoute(
+            path: '/payments',
+            builder: (context, state) => const PaymentSettingsScreen(),
           ),
         ],
       ),

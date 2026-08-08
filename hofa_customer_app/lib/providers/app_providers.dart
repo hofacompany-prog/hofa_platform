@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/address.dart';
+import '../models/bank_account_settings.dart';
 import '../models/branch.dart';
 import '../models/category.dart';
 import '../models/delivery.dart';
@@ -13,6 +14,7 @@ import '../models/shipping_fee_settings.dart';
 import '../models/topping.dart';
 import '../models/voucher.dart';
 import '../models/wholesale_tier.dart';
+import '../repositories/bank_settings_repository.dart';
 import '../repositories/merchant_repository.dart';
 import '../repositories/notification_repository.dart';
 import '../repositories/order_repository.dart';
@@ -29,6 +31,7 @@ final voucherRepoProvider = Provider((ref) => VoucherRepository());
 final reviewRepoProvider = Provider((ref) => ReviewRepository());
 final shippingRepoProvider = Provider((ref) => ShippingRepository());
 final notificationRepoProvider = Provider((ref) => NotificationRepository());
+final bankSettingsRepoProvider = Provider((ref) => BankSettingsRepository());
 
 /// Hộp thư thông báo — autoDispose để mỗi lần vào lại màn Thông báo đều lấy dữ liệu mới.
 final notificationsProvider = FutureProvider.autoDispose<List<AppNotification>>(
@@ -85,6 +88,12 @@ final shippingFeeSettingsProvider =
     FutureProvider.autoDispose<ShippingFeeSettings?>(
       (ref) => ref.watch(shippingRepoProvider).feeSettings(),
     );
+
+/// Thông tin tài khoản ngân hàng toàn sàn (chỉnh ở app admin) — dùng dựng QR VietQR ở màn chi
+/// tiết đơn cho đơn thanh toán chuyển khoản.
+final bankAccountSettingsProvider = FutureProvider.autoDispose<BankAccountSettings>(
+  (ref) => ref.watch(bankSettingsRepoProvider).get(),
+);
 
 // ---- Sản phẩm ----
 

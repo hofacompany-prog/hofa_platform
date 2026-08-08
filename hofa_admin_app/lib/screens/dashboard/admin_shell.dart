@@ -94,6 +94,12 @@ class AdminShell extends ConsumerWidget {
       label: 'Thông số tài xế',
       path: '/driver-accept-settings',
     ),
+    (
+      icon: Icons.qr_code_outlined,
+      selected: Icons.qr_code,
+      label: 'Thanh toán',
+      path: '/payments',
+    ),
   ];
 
   int _indexFor(String location) {

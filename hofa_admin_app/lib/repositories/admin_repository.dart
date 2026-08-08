@@ -15,6 +15,7 @@ import '../models/voucher.dart';
 import '../models/order_settings.dart';
 import '../models/auto_accept_settings.dart';
 import '../models/driver_accept_settings.dart';
+import '../models/bank_account_settings.dart';
 import '../models/admin_notification.dart';
 import '../models/notification_inbox_item.dart';
 import '../models/notification_settings.dart';
@@ -438,6 +439,33 @@ class AdminRepository {
         await _api.patch('/driver-accept-settings', body: settings.toJson())
             as Map<String, dynamic>,
       );
+
+  // ---- Thông tin tài khoản ngân hàng (VietQR) ----
+
+  Future<BankAccountSettings> bankAccountSettings() async {
+    final data = await _api.get('/bank-account-settings');
+    return data == null
+        ? BankAccountSettings.fallback()
+        : BankAccountSettings.fromJson(data as Map<String, dynamic>);
+  }
+
+  Future<BankAccountSettings> updateBankAccountSettings(BankAccountSettings settings) async =>
+      BankAccountSettings.fromJson(
+        await _api.patch('/bank-account-settings', body: settings.toJson())
+            as Map<String, dynamic>,
+      );
+
+  /// Xác nhận đã nhận chuyển khoản cho 1 đơn pending_payment — gọi ĐÚNG POST /payments (không
+  /// phải PATCH /orders/:id/status) vì đây là hàm duy nhất vừa ghi lại giao dịch (bảng payments)
+  /// vừa tự chuyển đơn sang 'placed' (record_payment RPC) và kích hoạt dispatch tự động cho đơn
+  /// mua hộ (orderOffer.dispatchBuyOnBehalfOrder, gọi từ routes/payments.js).
+  Future<void> confirmPayment(String orderId, int amount) async {
+    await _api.post('/payments', body: {
+      'order_id': orderId,
+      'method': 'bank_transfer',
+      'amount': amount,
+    });
+  }
 
   // ---- Thông báo đẩy ----
 

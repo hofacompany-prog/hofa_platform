@@ -16,6 +16,7 @@ import '../models/voucher.dart';
 import '../models/order_settings.dart';
 import '../models/auto_accept_settings.dart';
 import '../models/driver_accept_settings.dart';
+import '../models/bank_account_settings.dart';
 import '../models/admin_notification.dart';
 import '../models/notification_settings.dart';
 import '../repositories/admin_repository.dart';
@@ -145,6 +146,14 @@ final autoAcceptSettingsProvider = FutureProvider.autoDispose<AutoAcceptSettings
 
 final driverAcceptSettingsProvider = FutureProvider.autoDispose<DriverAcceptSettings>(
   (ref) => ref.watch(adminRepoProvider).driverAcceptSettings(),
+);
+
+final bankAccountSettingsProvider = FutureProvider.autoDispose<BankAccountSettings>(
+  (ref) => ref.watch(adminRepoProvider).bankAccountSettings(),
+);
+
+final pendingPaymentOrdersProvider = FutureProvider.autoDispose<List<Order>>(
+  (ref) => ref.watch(adminRepoProvider).orders(status: 'pending_payment'),
 );
 
 final notificationsProvider =

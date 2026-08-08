@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:http/http.dart' as http;
+import '../../core/file_download.dart';
 import '../../core/format.dart';
+import '../../core/vietqr.dart';
 import '../../models/order.dart';
 import '../../providers/app_providers.dart';
 import '../../widgets/driver_picker_dialog.dart';
@@ -308,6 +311,10 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                     ),
                   ),
                 ),
+                if (o.paymentMethod == 'bank_transfer' && o.status == 'pending_payment') ...[
+                  const SizedBox(height: 12),
+                  _BankTransferQrCard(order: o),
+                ],
                 deliveryAsync.when(
                   loading: () => const SizedBox(),
                   error: (_, _) => const SizedBox(),
@@ -444,4 +451,103 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
       ],
     ),
   );
+}
+
+/// Mã VietQR để khách quét chuyển khoản — chỉ hiện cho đơn bank_transfer đang pending_payment.
+/// Dựng URL ảnh từ thông tin tài khoản ngân hàng admin cấu hình (bankAccountSettingsProvider),
+/// không cần server tạo ảnh riêng — xem core/vietqr.dart.
+class _BankTransferQrCard extends ConsumerStatefulWidget {
+  final Order order;
+  const _BankTransferQrCard({required this.order});
+
+  @override
+  ConsumerState<_BankTransferQrCard> createState() => _BankTransferQrCardState();
+}
+
+class _BankTransferQrCardState extends ConsumerState<_BankTransferQrCard> {
+  bool _downloading = false;
+
+  Future<void> _download(String url, String filename) async {
+    setState(() => _downloading = true);
+    try {
+      final res = await http.get(Uri.parse(url));
+      if (res.statusCode != 200) throw Exception('Không tải được ảnh QR');
+      await FileDownloadService.downloadBytes(res.bodyBytes, filename);
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+    } finally {
+      if (mounted) setState(() => _downloading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final settingsAsync = ref.watch(bankAccountSettingsProvider);
+
+    return Card(
+      elevation: 0,
+      color: theme.colorScheme.surfaceContainerLow,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: settingsAsync.when(
+          loading: () => const Center(child: Padding(padding: EdgeInsets.all(12), child: CircularProgressIndicator())),
+          error: (e, _) => Text('Lỗi: $e'),
+          data: (settings) {
+            if (!settings.isConfigured) {
+              return Text(
+                'Cửa hàng chưa cấu hình mã QR chuyển khoản — liên hệ hỗ trợ để được hướng dẫn chuyển khoản.',
+                style: theme.textTheme.bodyMedium,
+              );
+            }
+            final qrUrl = buildVietQrUrl(
+              bankBin: settings.bankBin!,
+              accountNumber: settings.accountNumber!,
+              amount: widget.order.totalAmount,
+              addInfo: widget.order.orderCode,
+              accountName: settings.accountHolderName,
+            );
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Text('Quét mã để chuyển khoản', style: theme.textTheme.titleSmall),
+                const SizedBox(height: 12),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.network(
+                    qrUrl,
+                    width: 240,
+                    height: 240,
+                    fit: BoxFit.contain,
+                    errorBuilder: (context, error, stackTrace) => const SizedBox(
+                      width: 240,
+                      height: 240,
+                      child: Center(child: Text('Không tải được ảnh QR')),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text('${settings.bankName ?? ''} · ${settings.accountNumber}', style: theme.textTheme.bodyMedium),
+                if (settings.accountHolderName != null) Text(settings.accountHolderName!, style: theme.textTheme.bodySmall),
+                const SizedBox(height: 4),
+                Text(
+                  'Số tiền: ${formatVnd(widget.order.totalAmount)} · Nội dung: ${widget.order.orderCode}',
+                  style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: _downloading ? null : () => _download(qrUrl, 'vietqr_${widget.order.orderCode}.png'),
+                  icon: _downloading
+                      ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                      : const Icon(Icons.download_outlined),
+                  label: const Text('Tải QR về máy'),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
 }
