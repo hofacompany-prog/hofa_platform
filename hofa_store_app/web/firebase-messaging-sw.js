@@ -94,6 +94,29 @@ function readLastPushData() {
 }
 
 /**
+ * Ghi lại đường dẫn cần tới NGAY LÚC BẤM (không phải lúc nhận push) — Dart phía app
+ * (push_service.dart) tự đọc + xoá cái này lúc khởi động để tự điều hướng bằng go_router.
+ * Lý do cần thêm bước này thay vì chỉ dựa vào clients.openWindow(url)/client.navigate(url):
+ * app cài như PWA (WebAPK trên Android) lúc bị tắt hẳn rồi mở lại từ thông báo có thể bỏ qua
+ * URL truyền vào, luôn khởi động lại ở start_url khai trong manifest.json — xác nhận qua thực
+ * tế bấm push lúc app đã tắt hẳn luôn rơi về trang chủ dù URL truyền cho openWindow đã đúng.
+ * IndexedDB là kênh duy nhất chắc chắn "sống sót" qua việc khởi động lại đó để Dart đọc lại.
+ */
+function writePendingDeepLink(path) {
+  return new Promise((resolve) => {
+    const req = indexedDB.open('hofa-badge', 1);
+    req.onupgradeneeded = () => req.result.createObjectStore('counter');
+    req.onsuccess = () => {
+      const tx = req.result.transaction('counter', 'readwrite');
+      tx.objectStore('counter').put(path, 'pendingDeepLink');
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+    };
+    req.onerror = () => resolve();
+  });
+}
+
+/**
  * Firebase JS SDK chỉ định tuyến message vào đây khi KHÔNG có tab nào của app đang mở/focus
  * — đúng lúc icon màn hình chính là thứ người dùng thật sự nhìn thấy. Badge của app Cửa hàng
  * đại diện CHÍNH XÁC cho số thông báo "Đơn hàng" chưa đọc (không phải mọi push nói chung) —
@@ -137,14 +160,17 @@ self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   event.waitUntil(
     readLastPushData().then((data) => {
-      const targetUrl = new URL(targetPathFor(data), self.registration.scope).href;
-      return clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
-        for (const client of windowClients) {
-          if (client.url.startsWith(self.registration.scope) && 'focus' in client) {
-            return client.navigate(targetUrl).then((c) => (c || client).focus()).catch(() => client.focus());
+      const path = targetPathFor(data);
+      return writePendingDeepLink(path).then(() => {
+        const targetUrl = new URL(path, self.registration.scope).href;
+        return clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+          for (const client of windowClients) {
+            if (client.url.startsWith(self.registration.scope) && 'focus' in client) {
+              return client.navigate(targetUrl).then((c) => (c || client).focus()).catch(() => client.focus());
+            }
           }
-        }
-        if (clients.openWindow) return clients.openWindow(targetUrl);
+          if (clients.openWindow) return clients.openWindow(targetUrl);
+        });
       });
     })
   );

@@ -71,6 +71,33 @@
     })();
   </script>
 
+  <!-- Đọc + xoá đường dẫn service worker ghi lúc bấm push (xem
+       web/firebase-messaging-sw.js#writePendingDeepLink) — gọi từ Dart qua
+       lib/core/pending_deep_link_web.dart. Bù cho việc app cài kiểu PWA/WebAPK trên Android
+       có thể bỏ qua URL truyền vào clients.openWindow()/client.navigate() lúc mở lại từ
+       thông báo khi đã tắt hẳn, luôn khởi động lại ở start_url của manifest.json. -->
+  <script>
+    window.hofaReadPendingDeepLink = function () {
+      return new Promise(function (resolve) {
+        if (!('indexedDB' in window)) return resolve(null);
+        var req = indexedDB.open('hofa-badge', 1);
+        req.onupgradeneeded = function () { req.result.createObjectStore('counter'); };
+        req.onsuccess = function () {
+          var tx = req.result.transaction('counter', 'readwrite');
+          var store = tx.objectStore('counter');
+          var getReq = store.get('pendingDeepLink');
+          getReq.onsuccess = function () {
+            var path = getReq.result || null;
+            if (path) store.delete('pendingDeepLink');
+            resolve(path);
+          };
+          getReq.onerror = function () { resolve(null); };
+        };
+        req.onerror = function () { resolve(null); };
+      });
+    };
+  </script>
+
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

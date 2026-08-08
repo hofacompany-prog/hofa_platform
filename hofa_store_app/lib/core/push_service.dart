@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'env.dart';
 import 'format.dart';
+import 'pending_deep_link.dart';
 import '../models/user_device.dart';
 import '../repositories/device_repository.dart';
 import '../repositories/notification_repository.dart';
@@ -82,6 +83,22 @@ class PushService {
     if (initial != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) => handleData(initial.data));
     }
+    if (kIsWeb) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _checkPendingDeepLink());
+    }
+  }
+
+  /// Bù cho getInitialMessage() ở trên — trên web, lúc app cài kiểu PWA/WebAPK bị tắt hẳn rồi
+  /// mở lại từ việc bấm 1 thông báo, getInitialMessage() không đáng tin cậy (đã xác nhận: app
+  /// mở lên nhưng luôn rơi về trang chủ). firebase-messaging-sw.js tự ghi lại đường dẫn cần
+  /// tới vào IndexedDB ngay lúc bấm (xem writePendingDeepLink) — đọc lại ở đây để tự điều
+  /// hướng, độc lập hoàn toàn với getInitialMessage().
+  Future<void> _checkPendingDeepLink() async {
+    final path = await PendingDeepLink.readAndClear();
+    if (path == null || path.isEmpty || path == '/') return;
+    final context = _navigatorKey?.currentContext;
+    if (context == null) return;
+    context.go(path);
   }
 
   Future<void> _registerTokenIfLoggedIn() async {
