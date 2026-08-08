@@ -45,6 +45,9 @@ const _defaultManualSweepSeconds = 300; // dùng khi chưa tải được manual
 ///   - TẮT: chạy manual_confirm_sweep_seconds giây (màu khác, mặc định dài hơn nhiều) — hết giờ
 ///     tự HUỶ đơn và tự đóng cửa chi nhánh (is_open = false), coi như cửa hàng không theo dõi
 ///     đơn. Trượt tay lúc nào cũng XÁC NHẬN ngay bất kể đang ở chế độ nào, chỉ là sớm hơn.
+/// Mốc hết giờ của thanh chạy màu (o.confirmSweepDeadline) đã được SERVER chốt sẵn ngay lúc
+/// tạo đơn (hofa-db/42_confirm_sweep_deadline.sql) — thoát app rồi mở lại đúng đơn này chỉ tính
+/// lại thời gian còn LẠI tới đúng mốc đó, không reset về đầu.
 class OrderDetailScreen extends ConsumerStatefulWidget {
   final String orderId;
   const OrderDetailScreen({super.key, required this.orderId});
@@ -202,23 +205,39 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> with Sing
       // có sửa Thông số sau đó, không tính lại ở client.
       _prepMinutes ??= o.defaultPrepMinutes ?? _fallbackPrepMinutes;
       final branchAsync = ref.watch(_orderBranchProvider((merchantId: o.merchantId, branchId: o.branchId)));
+      // o.confirmSweepDeadline đã được server chốt SẴN lúc tạo đơn (hofa-db/
+      // 42_confirm_sweep_deadline.sql) — dùng mốc giờ cố định này thay vì tự tính lại số giây
+      // mỗi lần mở màn, để thoát app rồi vào lại KHÔNG làm thanh chạy lại từ đầu (đã xác nhận
+      // qua thực tế: trước đây thanh luôn reset về 100% mỗi lần mở lại màn hình). Đơn tạo trước
+      // migration (confirmSweepDeadline null) mới cần đợi tải confirm_sweep_seconds/
+      // manual_confirm_sweep_seconds để tự tính tạm 1 mốc mới, xem nhánh else bên dưới.
       final confirmSweepAsync = ref.watch(_confirmSweepSecondsProvider);
       final manualSweepAsync = ref.watch(_manualConfirmSweepSecondsProvider);
-      // Đợi tải xong CẢ 3 (chi nhánh + 2 mốc giây) rồi mới tạo controller — tạo ngay ở lần build
-      // đầu tiên (lúc còn đang loading) sẽ luôn khoá cứng ở giá trị/nhánh sai vì _sweepStarted
-      // bật lên true ngay, không bao giờ tạo lại controller dù dữ liệu thật đã tải xong sau đó
-      // (đã xác nhận qua thực tế với riêng confirm_sweep_seconds trước đây).
-      if (!_sweepStarted && !branchAsync.isLoading && !confirmSweepAsync.isLoading && !manualSweepAsync.isLoading) {
+      final needsFallbackSettings = o.confirmSweepDeadline == null;
+      final settingsReady = !needsFallbackSettings || (!confirmSweepAsync.isLoading && !manualSweepAsync.isLoading);
+      // Đợi tải xong thông tin chi nhánh (+ 2 mốc giây NẾU đơn cũ chưa có deadline) rồi mới tạo
+      // controller — tạo ngay ở lần build đầu tiên (lúc còn đang loading) sẽ luôn khoá cứng ở
+      // giá trị/nhánh sai vì _sweepStarted bật lên true ngay, không bao giờ tạo lại controller
+      // dù dữ liệu thật đã tải xong sau đó (đã xác nhận qua thực tế với riêng
+      // confirm_sweep_seconds trước đây).
+      if (!_sweepStarted && !branchAsync.isLoading && settingsReady) {
         // Mặc định coi như BẬT (an toàn hơn) nếu không tải được thông tin chi nhánh — tránh lỡ
         // tự huỷ đơn + đóng cửa hàng chỉ vì lỗi mạng tạm thời.
         final autoAccept = branchAsync.valueOrNull?.autoAcceptOrders ?? true;
-        final seconds = autoAccept
-            ? (confirmSweepAsync.valueOrNull ?? _defaultSweepSeconds)
-            : (manualSweepAsync.valueOrNull ?? _defaultManualSweepSeconds);
+        final deadline = o.confirmSweepDeadline ??
+            DateTime.now().add(Duration(
+              seconds: autoAccept
+                  ? (confirmSweepAsync.valueOrNull ?? _defaultSweepSeconds)
+                  : (manualSweepAsync.valueOrNull ?? _defaultManualSweepSeconds),
+            ));
+        final duration = deadline.difference(DateTime.now());
         final branch = branchAsync.valueOrNull;
         _sweepStarted = true;
         _sweepIsAutoAccept = autoAccept;
-        _sweepController = AnimationController(vsync: this, duration: Duration(seconds: seconds))..forward();
+        _sweepController = AnimationController(
+          vsync: this,
+          duration: duration.isNegative ? Duration.zero : duration,
+        )..forward();
         _sweepController!.addStatusListener((status) {
           if (status != AnimationStatus.completed) return;
           if (autoAccept) {
