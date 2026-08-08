@@ -9,4 +9,6 @@ class PwaVersionService {
   static Future<String?> fetchDeployedVersion() => impl.fetchDeployedVersion();
 
   static Future<void> clearCacheAndReload() => impl.clearCacheAndReload();
+
+  static Future<void> unregisterStaleServiceWorkers() => impl.unregisterStaleServiceWorkers();
 }

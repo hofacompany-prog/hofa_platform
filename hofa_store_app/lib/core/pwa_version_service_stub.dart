@@ -2,3 +2,5 @@
 Future<String?> fetchDeployedVersion() async => null;
 
 Future<void> clearCacheAndReload() async {}
+
+Future<void> unregisterStaleServiceWorkers() async {}

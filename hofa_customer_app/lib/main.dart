@@ -59,6 +59,9 @@ class _HofaCustomerAppState extends ConsumerState<HofaCustomerApp> {
   }
 
   Future<void> _checkPwaVersion() async {
+    // Chạy mỗi lần mở app, không chờ phát hiện lệch version — xem lý do ở
+    // pwa_version_service_web.dart#unregisterStaleServiceWorkers.
+    PwaVersionService.unregisterStaleServiceWorkers().catchError((_) {});
     final deployedVersion = await PwaVersionService.fetchDeployedVersion();
     if (!mounted || deployedVersion == null) return;
     if (deployedVersion == Env.appVersion) return;
