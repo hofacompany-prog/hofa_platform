@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/phone_auth.dart';
 import '../../providers/auth_providers.dart';
@@ -85,6 +86,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       _error = null;
       _info = null;
     });
+    // Chặn router.dart tự đá qua /complete-profile ngay khi signUp() vừa tạo session (auth
+    // state đổi trước khi /me/sync bên dưới kịp chạy xong) — không thì bắt nhập lại họ
+    // tên/SĐT lần 2 ở màn đó. Tắt lại ở finally dù thành công hay lỗi.
+    ref.read(authFlowInProgressProvider.notifier).state = true;
     try {
       final res = await Supabase.instance.client.auth.signUp(
         email: phoneToAuthEmail(_phoneCtrl.text.trim()),
@@ -100,11 +105,25 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             phone: _phoneCtrl.text.trim(),
           );
       ref.invalidate(userProfileProvider);
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          title: const Text('Đăng ký thành công!'),
+          content: const Text('Chào mừng bạn đến với HOFA — bắt đầu đặt hàng ngay thôi.'),
+          actions: [
+            FilledButton(onPressed: () => Navigator.pop(context), child: const Text('Bắt đầu')),
+          ],
+        ),
+      );
+      if (mounted) context.go('/');
     } on AuthException catch (e) {
       setState(() => _error = e.message);
     } catch (e) {
       setState(() => _error = 'Có lỗi xảy ra: $e');
     } finally {
+      ref.read(authFlowInProgressProvider.notifier).state = false;
       if (mounted) setState(() => _loading = false);
     }
   }

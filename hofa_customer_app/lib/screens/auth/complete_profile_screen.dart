@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../providers/auth_providers.dart';
 
@@ -39,6 +40,7 @@ class _CompleteProfileScreenState extends ConsumerState<CompleteProfileScreen> {
             phone: _phoneCtrl.text.trim(),
           );
       ref.invalidate(userProfileProvider);
+      if (mounted) context.go('/');
     } catch (e) {
       setState(() => _error = 'Có lỗi xảy ra: $e');
     } finally {

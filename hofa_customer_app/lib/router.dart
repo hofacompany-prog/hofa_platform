@@ -44,8 +44,10 @@ final routerProvider = Provider<GoRouter>((ref) {
 
       try {
         final profile = await ref.read(userProfileProvider.future);
-        if (profile == null)
+        if (profile == null) {
+          if (ref.read(authFlowInProgressProvider)) return null;
           return completingProfile ? null : '/complete-profile';
+        }
         if (loggingIn || completingProfile) return '/';
       } catch (_) {
         // lỗi mạng tạm thời — đừng khoá cứng người dùng
