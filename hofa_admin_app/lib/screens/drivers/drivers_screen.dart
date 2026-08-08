@@ -1,8 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/format.dart';
+import '../../models/bank.dart';
 import '../../models/driver.dart';
 import '../../providers/admin_providers.dart';
+
+const _vehicleTypeOptions = [
+  ('xe máy', 'Xe máy'),
+  ('xe tải 500kg', 'Xe tải nhỏ (≤500kg)'),
+  ('xe tải 1000kg', 'Xe tải (≤1 tấn)'),
+];
 
 const _rejectionReasonPresets = [
   'Giấy tờ mờ/không rõ',
@@ -45,6 +52,121 @@ class _DriversScreenState extends ConsumerState<DriversScreen> {
     setState(() => _busy = true);
     try {
       await ref.read(adminRepoProvider).verifyDriver(d.id);
+      ref.invalidate(driversProvider);
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// Admin sửa trực tiếp hồ sơ (CCCD, GPLX, xe, ngân hàng) — dùng khi tài xế nhờ chỉnh hộ, không
+  /// đụng verified_at/rejected_at.
+  Future<void> _editProfile(Driver d) async {
+    List<Bank> banks;
+    try {
+      banks = await ref.read(banksProvider.future);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Không tải được danh sách ngân hàng: $e')));
+      }
+      return;
+    }
+    if (!mounted) return;
+
+    final nationalIdCtrl = TextEditingController(text: d.nationalId ?? '');
+    final licenseNoCtrl = TextEditingController(text: d.licenseNo ?? '');
+    final plateCtrl = TextEditingController(text: d.vehiclePlate ?? '');
+    final accountNumberCtrl = TextEditingController(text: d.bankAccountNumber ?? '');
+    final accountHolderCtrl = TextEditingController(text: d.bankAccountHolder ?? '');
+    var vehicleType = d.vehicleType ?? _vehicleTypeOptions.first.$1;
+    Bank? selectedBank;
+    if (d.bankBin != null) {
+      final match = banks.where((b) => b.bin == d.bankBin);
+      if (match.isNotEmpty) selectedBank = match.first;
+    }
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setInner) => AlertDialog(
+          title: const Text('Sửa hồ sơ tài xế'),
+          content: SizedBox(
+            width: 420,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  TextField(
+                    controller: nationalIdCtrl,
+                    decoration: const InputDecoration(labelText: 'Số CCCD/CMND', border: OutlineInputBorder(), isDense: true),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: licenseNoCtrl,
+                    decoration: const InputDecoration(labelText: 'Số GPLX', border: OutlineInputBorder(), isDense: true),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    initialValue: vehicleType,
+                    decoration: const InputDecoration(labelText: 'Loại xe', border: OutlineInputBorder(), isDense: true),
+                    items: _vehicleTypeOptions
+                        .map((v) => DropdownMenuItem(value: v.$1, child: Text(v.$2)))
+                        .toList(),
+                    onChanged: (v) => setInner(() => vehicleType = v ?? vehicleType),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: plateCtrl,
+                    decoration: const InputDecoration(labelText: 'Biển số xe', border: OutlineInputBorder(), isDense: true),
+                  ),
+                  const Divider(height: 28),
+                  Text('Tài khoản nhận tiền', style: Theme.of(context).textTheme.titleSmall),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<Bank>(
+                    initialValue: selectedBank,
+                    decoration: const InputDecoration(labelText: 'Ngân hàng', border: OutlineInputBorder(), isDense: true),
+                    items: banks.map((b) => DropdownMenuItem(value: b, child: Text(b.name))).toList(),
+                    onChanged: (v) => setInner(() => selectedBank = v),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: accountNumberCtrl,
+                    decoration: const InputDecoration(labelText: 'Số tài khoản', border: OutlineInputBorder(), isDense: true),
+                    keyboardType: TextInputType.number,
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: accountHolderCtrl,
+                    decoration: const InputDecoration(labelText: 'Tên chủ tài khoản', border: OutlineInputBorder(), isDense: true),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Huỷ')),
+            FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Lưu')),
+          ],
+        ),
+      ),
+    );
+    if (ok != true) return;
+
+    setState(() => _busy = true);
+    try {
+      await ref.read(adminRepoProvider).updateDriver(d.id, {
+        'national_id': nationalIdCtrl.text.trim(),
+        'license_no': licenseNoCtrl.text.trim(),
+        'vehicle_type': vehicleType,
+        'vehicle_plate': plateCtrl.text.trim(),
+        if (selectedBank != null) 'bank_name': selectedBank!.name,
+        if (selectedBank != null) 'bank_bin': selectedBank!.bin,
+        'bank_account_number': accountNumberCtrl.text.trim(),
+        'bank_account_holder': accountHolderCtrl.text.trim(),
+      });
       ref.invalidate(driversProvider);
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
@@ -242,6 +364,11 @@ class _DriversScreenState extends ConsumerState<DriversScreen> {
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
+                            IconButton(
+                              tooltip: 'Sửa hồ sơ',
+                              icon: const Icon(Icons.edit_outlined),
+                              onPressed: _busy ? null : () => _editProfile(d),
+                            ),
                             ActionChip(
                               label: Text(driverStatusLabels[d.status] ?? d.status),
                               visualDensity: VisualDensity.compact,

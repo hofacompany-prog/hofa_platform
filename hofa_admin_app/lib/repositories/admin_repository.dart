@@ -251,6 +251,11 @@ class AdminRepository {
     await _api.post('/admin/drivers/$id/reject', body: {'reason': reason}) as Map<String, dynamic>,
   );
 
+  /// Admin sửa trực tiếp hồ sơ tài xế (CCCD, GPLX, xe, ngân hàng) — không đổi trạng thái duyệt.
+  Future<Driver> updateDriver(String id, Map<String, dynamic> data) async => Driver.fromJson(
+        await _api.patch('/admin/drivers/$id', body: data) as Map<String, dynamic>,
+      );
+
   /// Gỡ tài xế bị kẹt trạng thái (thường là 'busy' không tự về 'online' được) — không đụng gì
   /// tới deliveries, chỉ đổi đúng cột status của drivers.
   Future<Driver> forceDriverStatus(String id, String status) async => Driver.fromJson(

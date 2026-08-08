@@ -192,6 +192,16 @@ router.get('/admin/drivers', asyncHandler(async (req, res) => {
   res.json({ ok: true, data: rows });
 }));
 
+/** Admin sửa trực tiếp hồ sơ tài xế (CCCD, GPLX, xe, ngân hàng) — không đụng verified_at/
+ * rejected_at, dùng khi tài xế nhờ admin chỉnh hộ thay vì tự sửa/nộp lại qua PATCH /drivers/me. */
+router.patch('/admin/drivers/:id', asyncHandler(async (req, res) => {
+  requireRole(req.ctx, ['admin']);
+  const data = pickFields(req.body, DRIVER_PROFILE_FIELDS);
+  const updated = await db.updateById('drivers', req.params.id, data);
+  if (!updated) throw new ApiError('NOT_FOUND', 'Không tìm thấy tài xế', 404);
+  res.json({ ok: true, data: updated });
+}));
+
 router.post('/admin/drivers/:id/verify', asyncHandler(async (req, res) => {
   requireRole(req.ctx, ['admin']);
   const updated = await db.updateById('drivers', req.params.id, {

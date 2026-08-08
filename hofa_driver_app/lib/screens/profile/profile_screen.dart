@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../providers/auth_provider.dart';
 import '../../widgets/app_version_text.dart';
@@ -72,7 +73,15 @@ class ProfileScreen extends ConsumerWidget {
                                   _row(context, 'Loại xe', driver.vehicleType ?? '—'),
                                   _row(context, 'Biển số', driver.vehiclePlate ?? '—'),
                                   _row(context, 'Số GPLX', driver.licenseNo ?? '—'),
-                                  _row(context, 'Trạng thái hồ sơ', driver.isVerified ? 'Đã duyệt' : 'Chờ duyệt'),
+                                  _row(
+                                    context,
+                                    'Trạng thái hồ sơ',
+                                    driver.isVerified
+                                        ? 'Đã duyệt'
+                                        : (driver.isRejected ? 'Bị từ chối' : 'Chờ duyệt'),
+                                  ),
+                                  _row(context, 'Ngân hàng', driver.bankName ?? '—'),
+                                  _row(context, 'Số tài khoản', driver.bankAccountNumber ?? '—'),
                                   _row(context, 'Đánh giá', '${driver.ratingAvg}★ (${driver.ratingCount} lượt)'),
                                   _row(context, 'Tổng chuyến', '${driver.totalDeliveries}'),
                                 ],
@@ -82,7 +91,13 @@ class ProfileScreen extends ConsumerWidget {
                   ),
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 16),
+              OutlinedButton.icon(
+                onPressed: () => context.push('/edit-driver-profile'),
+                icon: const Icon(Icons.edit_outlined),
+                label: const Text('Sửa hồ sơ'),
+              ),
+              const SizedBox(height: 12),
               OutlinedButton.icon(
                 onPressed: () => Supabase.instance.client.auth.signOut(),
                 icon: const Icon(Icons.logout),
