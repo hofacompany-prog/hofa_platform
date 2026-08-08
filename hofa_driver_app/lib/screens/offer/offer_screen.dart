@@ -13,6 +13,7 @@ import '../../providers/delivery_providers.dart';
 import '../../repositories/delivery_repository.dart';
 import '../../repositories/order_repository.dart';
 import '../../repositories/pickup_repository.dart';
+import '../delivery/delivery_detail_screen.dart';
 
 final _offerOrderProvider = FutureProvider.autoDispose.family<model.Order, String>((ref, id) => OrderRepository().get(id));
 final _offerBranchProvider = FutureProvider.autoDispose.family<Branch, String>((ref, id) => PickupRepository().branch(id));
@@ -30,6 +31,11 @@ final _offerBranchProvider = FutureProvider.autoDispose.family<Branch, String>((
 /// (accept_deadline + sweepExpiredOffers quét mỗi 10s, xem dispatch.js) vì tài xế di chuyển
 /// ngoài đường, mạng không ổn định bằng cửa hàng — thanh màu ở đây chỉ là hiển thị trực quan +
 /// tự gọi API sớm hơn (không đợi vòng quét), không tự thay thế server.
+///
+/// Sau khi nhận đơn (hoặc phát hiện đơn đã được xử lý từ nơi khác), KHÔNG điều hướng sang
+/// route khác — build() tự chuyển sang hiện DeliveryDetailScreen ngay tại đây (cùng route
+/// /offer/:id), liền mạch từ lúc xác nhận sang lúc theo dõi chuyến, không có hiệu ứng chuyển
+/// màn hình.
 class OfferScreen extends ConsumerStatefulWidget {
   final String deliveryId;
   const OfferScreen({super.key, required this.deliveryId});
@@ -77,7 +83,10 @@ class _OfferScreenState extends ConsumerState<OfferScreen> with SingleTickerProv
       await _deliveryRepo.updateStatus(widget.deliveryId, 'accepted');
       _clearPendingOffer();
       ref.invalidate(activeDeliveryProvider);
-      if (mounted) context.pushReplacement('/deliveries/${widget.deliveryId}');
+      // KHÔNG điều hướng sang route khác — build() bên dưới tự chuyển sang hiện
+      // DeliveryDetailScreen ngay tại màn này khi deliveryProvider refetch thấy status đổi,
+      // liền mạch từ lúc xác nhận sang lúc theo dõi chuyến, không có hiệu ứng chuyển màn.
+      ref.invalidate(deliveryProvider(widget.deliveryId));
     } catch (e) {
       _resolved = false; // cho thử lại (tự động hoặc trượt tay) nếu lỗi
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
@@ -131,54 +140,52 @@ class _OfferScreenState extends ConsumerState<OfferScreen> with SingleTickerProv
     final deliveryAsync = ref.watch(deliveryProvider(widget.deliveryId));
     final theme = Theme.of(context);
 
-    return PopScope(
-      canPop: false,
-      child: Scaffold(
-        backgroundColor: theme.colorScheme.surface,
-        body: SafeArea(
-          child: deliveryAsync.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, _) => Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text('Không tải được đơn: $e', textAlign: TextAlign.center),
-                    const SizedBox(height: 16),
-                    FilledButton(
-                      onPressed: () {
-                        _clearPendingOffer();
-                        context.pop();
-                      },
-                      child: const Text('Đóng'),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            data: (delivery) {
-              if (delivery.status != 'assigned') {
-                // Đã được xử lý (chấp nhận/hết hạn) từ nơi khác — đóng luôn.
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  _clearPendingOffer();
-                  if (mounted && !_resolved) {
-                    _resolved = true;
+    return deliveryAsync.when(
+      loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
+      error: (e, _) => Scaffold(
+        body: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('Không tải được đơn: $e', textAlign: TextAlign.center),
+                const SizedBox(height: 16),
+                FilledButton(
+                  onPressed: () {
+                    _clearPendingOffer();
                     context.pop();
-                  }
-                });
-                return const Center(child: CircularProgressIndicator());
-              }
-              // ref.read(...).state = ... không được gọi thẳng trong build() (Riverpod chặn sửa
-              // provider lúc cây widget đang dựng) — hoãn sang sau khung hình này.
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (mounted) _setPendingOffer();
-              });
-              return _buildBody(context, delivery);
-            },
+                  },
+                  child: const Text('Đóng'),
+                ),
+              ],
+            ),
           ),
         ),
       ),
+      data: (delivery) {
+        if (delivery.status != 'assigned') {
+          // Đã được xác nhận (từ chính màn này hay nơi khác, vd auto-accept lúc hết giờ) hoặc
+          // đã bị từ chối/hết hạn ở nơi khác — hiện LUÔN màn chi tiết chuyến giao ngay tại đây
+          // (cùng route /offer/:id, không điều hướng đi đâu cả) thay vì đóng màn. Không còn
+          // PopScope(canPop:false) ở nhánh này — DeliveryDetailScreen tự có Scaffold/AppBar
+          // riêng, đóng/back bình thường được vì đơn đã có chủ, không cần ép quyết định nữa.
+          WidgetsBinding.instance.addPostFrameCallback((_) => _clearPendingOffer());
+          return DeliveryDetailScreen(deliveryId: widget.deliveryId);
+        }
+        // ref.read(...).state = ... không được gọi thẳng trong build() (Riverpod chặn sửa
+        // provider lúc cây widget đang dựng) — hoãn sang sau khung hình này.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _setPendingOffer();
+        });
+        return PopScope(
+          canPop: false,
+          child: Scaffold(
+            backgroundColor: theme.colorScheme.surface,
+            body: SafeArea(child: _buildBody(context, delivery)),
+          ),
+        );
+      },
     );
   }
 
