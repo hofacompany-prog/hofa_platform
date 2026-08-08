@@ -14,7 +14,6 @@ import 'screens/products/product_form_screen.dart';
 import 'screens/toppings/topping_group_form_screen.dart';
 import 'screens/orders/orders_list_screen.dart';
 import 'screens/orders/order_detail_screen.dart';
-import 'screens/orders/order_offer_screen.dart';
 import 'screens/inventory/inventory_screen.dart';
 import 'screens/categories/categories_screen.dart';
 import 'screens/settings/branch_settings_screen.dart';
@@ -68,13 +67,6 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/onboarding',
         builder: (context, state) => const CreateStoreScreen(),
-      ),
-      GoRoute(
-        path: '/orders/offer/:id',
-        builder: (context, state) => OrderOfferScreen(
-          orderId: state.pathParameters['id']!,
-          notificationId: state.extra as String?,
-        ),
       ),
       ShellRoute(
         builder: (context, state, child) => DashboardShell(child: child),

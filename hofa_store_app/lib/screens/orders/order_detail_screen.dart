@@ -20,9 +20,7 @@ const _defaultPrepMinutes = 15; // dùng khi chưa tải được merchant.avgPr
 /// đơn. Đơn "placed" hiện thanh trượt xác nhận với 1 dải màu chạy trong 10 giây thuần phía
 /// client (AnimationController riêng của màn này) — hết 10s mà cửa hàng chưa trượt thì tự
 /// chốt số phút đang hiện trên bộ đếm +/- làm estimated_prep_minutes và chuyển đơn sang
-/// "confirmed"; trượt tay lúc nào cũng làm y hệt vậy, chỉ là sớm hơn. Cơ chế này ĐỘC LẬP hoàn
-/// toàn với hạn nhận đơn ở order_offer_screen.dart (order.acceptDeadline, do server quét) —
-/// màn đó chỉ còn dùng khi cửa hàng bật "Tự động nhận đơn" và chưa xem qua màn này.
+/// "confirmed"; trượt tay lúc nào cũng làm y hệt vậy, chỉ là sớm hơn.
 class OrderDetailScreen extends ConsumerStatefulWidget {
   final String orderId;
   const OrderDetailScreen({super.key, required this.orderId});

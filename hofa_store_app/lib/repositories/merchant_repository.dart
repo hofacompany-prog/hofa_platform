@@ -4,7 +4,6 @@ import '../models/merchant_today_stats.dart';
 import '../models/finance_summary.dart';
 import '../models/branch.dart';
 import '../models/branch_hours.dart';
-import '../models/auto_accept_settings.dart';
 
 class MerchantRepository {
   final _api = ApiClient.instance;
@@ -90,11 +89,5 @@ class MerchantRepository {
       'hours': hours.map((h) => h.toJson()).toList(),
     }) as List;
     return list.map((e) => BranchHour.fromJson(e as Map<String, dynamic>)).toList();
-  }
-
-  /// Tham số toàn sàn cho "Tự động nhận đơn" — admin cấu hình, công khai (không cần đăng nhập).
-  Future<AutoAcceptSettings> autoAcceptSettings() async {
-    final data = await _api.get('/auto-accept-settings');
-    return AutoAcceptSettings.fromJson(data as Map<String, dynamic>?);
   }
 }
