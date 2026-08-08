@@ -334,12 +334,26 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> with Sing
                               ),
                             if (item.note != null && item.note!.trim().isNotEmpty)
                               Padding(
-                                padding: const EdgeInsets.only(top: 4, left: 20),
-                                child: Text(
-                                  'Ghi chú: ${item.note}',
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    color: theme.colorScheme.outline,
-                                    fontStyle: FontStyle.italic,
+                                padding: const EdgeInsets.only(top: 6, left: 20),
+                                child: Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    color: theme.colorScheme.secondary,
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Row(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      const Icon(Icons.info_outline, size: 14, color: Colors.white),
+                                      const SizedBox(width: 6),
+                                      Expanded(
+                                        child: Text(
+                                          item.note!,
+                                          style: theme.textTheme.bodySmall?.copyWith(color: Colors.white),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ),
