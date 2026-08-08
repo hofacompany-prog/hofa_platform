@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:slide_to_act/slide_to_act.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/format.dart';
+import '../../models/branch.dart';
 import '../../models/delivery.dart';
 import '../../models/order.dart';
 import '../../models/prep_tier_settings.dart';
@@ -16,20 +17,33 @@ final _deliveryProvider =
     FutureProvider.autoDispose.family<Delivery?, String>((ref, id) => OrderRepository().delivery(id));
 final _confirmSweepSecondsProvider =
     FutureProvider.autoDispose<int>((ref) => MerchantRepository().confirmSweepSeconds());
+final _manualConfirmSweepSecondsProvider =
+    FutureProvider.autoDispose<int>((ref) => MerchantRepository().manualConfirmSweepSeconds());
 final _prepTierSettingsProvider =
     FutureProvider.autoDispose<PrepTierSettings>((ref) => MerchantRepository().prepTierSettings());
+final _orderBranchProvider = FutureProvider.autoDispose
+    .family<Branch?, ({String merchantId, String branchId})>((ref, params) async {
+  final branches = await MerchantRepository().branches(params.merchantId);
+  for (final b in branches) {
+    if (b.id == params.branchId) return b;
+  }
+  return null;
+});
 
 const _fallbackPrepMinutes = 15; // dùng khi order.defaultPrepMinutes null (đơn tạo trước migration)
 const _fallbackCeilingMinutes = 120; // dùng khi chưa tải được prep_ceiling_* (Thông số admin) kịp
 const _defaultSweepSeconds = 10; // dùng khi chưa tải được confirm_sweep_seconds (Thông số admin) kịp
+const _defaultManualSweepSeconds = 300; // dùng khi chưa tải được manual_confirm_sweep_seconds kịp
 
 /// Chi tiết đơn — đích đến duy nhất của push "đơn mới" (xem push_service.dart) lẫn danh sách
-/// đơn. Đơn "placed" hiện thanh trượt xác nhận với 1 dải màu chạy trong
-/// confirm_sweep_seconds giây (admin cấu hình ở "Thông số", xem MerchantRepository.
-/// confirmSweepSeconds — AnimationController riêng của màn này, thuần phía client) — hết giờ
-/// mà cửa hàng chưa trượt thì tự chốt số phút đang hiện trên bộ đếm +/- làm
-/// estimated_prep_minutes và chuyển đơn sang "confirmed"; trượt tay lúc nào cũng làm y hệt
-/// vậy, chỉ là sớm hơn.
+/// đơn. Đơn "placed" luôn hiện thanh trượt xác nhận với 1 dải màu chạy, thuần phía client
+/// (AnimationController riêng của màn này) — nhưng thời lượng + hậu quả hết giờ tuỳ vào công tắc
+/// "Tự động nhận đơn" của chi nhánh (branches.auto_accept_orders):
+///   - BẬT: chạy confirm_sweep_seconds giây (admin cấu hình ở "Thông số") — hết giờ tự chốt số
+///     phút đang hiện trên bộ đếm +/- làm estimated_prep_minutes và chuyển đơn sang "confirmed".
+///   - TẮT: chạy manual_confirm_sweep_seconds giây (màu khác, mặc định dài hơn nhiều) — hết giờ
+///     tự HUỶ đơn và tự đóng cửa chi nhánh (is_open = false), coi như cửa hàng không theo dõi
+///     đơn. Trượt tay lúc nào cũng XÁC NHẬN ngay bất kể đang ở chế độ nào, chỉ là sớm hơn.
 class OrderDetailScreen extends ConsumerStatefulWidget {
   final String orderId;
   const OrderDetailScreen({super.key, required this.orderId});
@@ -43,6 +57,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> with Sing
   Timer? _tickTimer;
   AnimationController? _sweepController;
   bool _sweepStarted = false;
+  bool _sweepIsAutoAccept = true;
   bool _confirmResolved = false;
   int? _prepMinutes;
 
@@ -70,6 +85,27 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> with Sing
       ref.invalidate(_orderProvider(widget.orderId));
     } catch (e) {
       _confirmResolved = false; // cho thử lại (tự động hoặc trượt tay) nếu lỗi
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+    } finally {
+      if (mounted) setState(() => _updating = false);
+    }
+  }
+
+  /// Hết giờ thanh chạy màu lúc chi nhánh TẮT "Tự động nhận đơn" — huỷ đơn + đóng cửa chi
+  /// nhánh, coi như cửa hàng không theo dõi đơn. Dùng chung cờ _confirmResolved với
+  /// _confirmPrepTime() để 2 nhánh (BẬT/TẮT) không bao giờ cùng chạy cho 1 đơn.
+  Future<void> _cancelDueToTimeout(Branch? branch) async {
+    if (_confirmResolved) return;
+    _confirmResolved = true;
+    setState(() => _updating = true);
+    try {
+      await OrderRepository().updateStatus(widget.orderId, 'cancelled');
+      if (branch != null) {
+        await MerchantRepository().toggleBranchOpen(branch.id, false);
+      }
+      ref.invalidate(_orderProvider(widget.orderId));
+    } catch (e) {
+      _confirmResolved = false; // cho thử lại nếu lỗi
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
     } finally {
       if (mounted) setState(() => _updating = false);
@@ -174,18 +210,31 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> with Sing
       // prep_default_*) ngay lúc tạo đơn, xem hofa-db/39_prep_time_tiers.sql — ổn định dù admin
       // có sửa Thông số sau đó, không tính lại ở client.
       _prepMinutes ??= o.defaultPrepMinutes ?? _fallbackPrepMinutes;
-      final sweepSecondsAsync = ref.watch(_confirmSweepSecondsProvider);
-      // Đợi tải xong confirm_sweep_seconds (Thông số admin) rồi mới tạo controller — tạo ngay ở
-      // lần build đầu tiên (lúc FutureProvider chắc chắn còn đang loading) sẽ luôn khoá cứng ở
-      // giá trị mặc định 10s vì _sweepStarted bật lên true ngay, không bao giờ tạo lại controller
-      // dù giá trị thật đã tải xong sau đó (đã xác nhận qua thực tế: thanh màu không theo đúng
-      // số giây cài trong Thông số).
-      if (!_sweepStarted && !sweepSecondsAsync.isLoading) {
-        final sweepSeconds = sweepSecondsAsync.valueOrNull ?? _defaultSweepSeconds;
+      final branchAsync = ref.watch(_orderBranchProvider((merchantId: o.merchantId, branchId: o.branchId)));
+      final confirmSweepAsync = ref.watch(_confirmSweepSecondsProvider);
+      final manualSweepAsync = ref.watch(_manualConfirmSweepSecondsProvider);
+      // Đợi tải xong CẢ 3 (chi nhánh + 2 mốc giây) rồi mới tạo controller — tạo ngay ở lần build
+      // đầu tiên (lúc còn đang loading) sẽ luôn khoá cứng ở giá trị/nhánh sai vì _sweepStarted
+      // bật lên true ngay, không bao giờ tạo lại controller dù dữ liệu thật đã tải xong sau đó
+      // (đã xác nhận qua thực tế với riêng confirm_sweep_seconds trước đây).
+      if (!_sweepStarted && !branchAsync.isLoading && !confirmSweepAsync.isLoading && !manualSweepAsync.isLoading) {
+        // Mặc định coi như BẬT (an toàn hơn) nếu không tải được thông tin chi nhánh — tránh lỡ
+        // tự huỷ đơn + đóng cửa hàng chỉ vì lỗi mạng tạm thời.
+        final autoAccept = branchAsync.valueOrNull?.autoAcceptOrders ?? true;
+        final seconds = autoAccept
+            ? (confirmSweepAsync.valueOrNull ?? _defaultSweepSeconds)
+            : (manualSweepAsync.valueOrNull ?? _defaultManualSweepSeconds);
+        final branch = branchAsync.valueOrNull;
         _sweepStarted = true;
-        _sweepController = AnimationController(vsync: this, duration: Duration(seconds: sweepSeconds))..forward();
+        _sweepIsAutoAccept = autoAccept;
+        _sweepController = AnimationController(vsync: this, duration: Duration(seconds: seconds))..forward();
         _sweepController!.addStatusListener((status) {
-          if (status == AnimationStatus.completed) _confirmPrepTime();
+          if (status != AnimationStatus.completed) return;
+          if (autoAccept) {
+            _confirmPrepTime();
+          } else {
+            _cancelDueToTimeout(branch);
+          }
         });
       }
     }
@@ -429,10 +478,24 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> with Sing
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          if (_sweepStarted && !_sweepIsAutoAccept) ...[
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                'Chi nhánh đang tắt "Tự động nhận đơn" — hết giờ mà chưa trượt, đơn sẽ TỰ HUỶ và cửa hàng tự đóng cửa.',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ],
           _sweepController == null
               ? const SizedBox(height: 60, child: Center(child: CircularProgressIndicator(strokeWidth: 2)))
-              : _SweepSlideToConfirm(sweep: _sweepController!, busy: _updating, onConfirm: _confirmPrepTime),
+              : _SweepSlideToConfirm(
+                  sweep: _sweepController!,
+                  busy: _updating,
+                  onConfirm: _confirmPrepTime,
+                  baseColor: _sweepIsAutoAccept ? theme.colorScheme.primary : theme.colorScheme.secondary,
+                ),
         ],
       ),
     );
@@ -500,16 +563,24 @@ class _StepperButton extends StatelessWidget {
 }
 
 /// Thanh trượt xác nhận thời gian chuẩn bị — dải màu cảnh báo chạy dần từ trái sang phải phía
-/// sau thanh trượt trong confirm_sweep_seconds giây (điều khiển bởi [sweep]). Trượt hết thanh
-/// bất kỳ lúc nào = xác nhận ngay; không trượt thì hết giờ [sweep] tự hoàn tất và gọi
-/// [onConfirm] (xem addStatusListener ở nơi tạo controller) — server không còn tự quét/tự huỷ
-/// đơn quá hạn nữa, cơ chế này thay thế hoàn toàn.
+/// sau thanh trượt trong đúng thời lượng của [sweep]. Trượt hết thanh bất kỳ lúc nào = xác nhận
+/// ngay; không trượt thì hết giờ [sweep] tự hoàn tất và gọi [onConfirm] hoặc tự huỷ đơn, tuỳ nơi
+/// tạo controller (xem addStatusListener trong _buildBody) — server không còn tự quét/tự huỷ
+/// đơn quá hạn nữa, cơ chế này thay thế hoàn toàn. [baseColor] là màu nền CHƯA chạy tới — khác
+/// nhau giữa 2 chế độ (xanh lá khi BẬT "Tự động nhận đơn" = hết giờ tự xác nhận, cam khi TẮT =
+/// hết giờ tự huỷ đơn) để cửa hàng phân biệt ngay hậu quả nếu không trượt kịp.
 class _SweepSlideToConfirm extends StatelessWidget {
   final Animation<double> sweep;
   final bool busy;
   final Future<void> Function() onConfirm;
+  final Color baseColor;
 
-  const _SweepSlideToConfirm({required this.sweep, required this.busy, required this.onConfirm});
+  const _SweepSlideToConfirm({
+    required this.sweep,
+    required this.busy,
+    required this.onConfirm,
+    required this.baseColor,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -521,7 +592,7 @@ class _SweepSlideToConfirm extends StatelessWidget {
       textStyle: theme.textTheme.titleMedium?.copyWith(color: Colors.white, fontWeight: FontWeight.w600),
       outerColor: Colors.transparent,
       innerColor: Colors.white,
-      sliderButtonIcon: Icon(Icons.arrow_forward, color: theme.colorScheme.primary),
+      sliderButtonIcon: Icon(Icons.arrow_forward, color: baseColor),
       height: 60,
       borderRadius: 30,
       onSubmit: onConfirm,
@@ -541,8 +612,7 @@ class _SweepSlideToConfirm extends StatelessWidget {
                   children: [
                     if (usedFlex > 0)
                       Expanded(flex: usedFlex, child: Container(color: theme.colorScheme.error.withValues(alpha: 0.55))),
-                    if (usedFlex < 1000)
-                      Expanded(flex: 1000 - usedFlex, child: Container(color: theme.colorScheme.primary)),
+                    if (usedFlex < 1000) Expanded(flex: 1000 - usedFlex, child: Container(color: baseColor)),
                   ],
                 ),
               ),

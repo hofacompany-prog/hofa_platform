@@ -100,6 +100,15 @@ class MerchantRepository {
     return (data?['confirm_sweep_seconds'] as num?)?.toInt() ?? 10;
   }
 
+  /// Số giây dải màu chạy (màu khác, xem order_detail_screen.dart) khi chi nhánh TẮT "Tự động
+  /// nhận đơn" — hết giờ mà chưa trượt thì tự huỷ đơn + tự đóng chi nhánh thay vì tự xác nhận.
+  /// Admin cấu hình ở "Thông số" (confirm_sweep_seconds), công khai. Mặc định 300 nếu chưa tải
+  /// được kịp — dài hơn hẳn confirmSweepSeconds vì hậu quả nặng hơn (huỷ đơn, không phải xác nhận).
+  Future<int> manualConfirmSweepSeconds() async {
+    final data = await _api.get('/auto-accept-settings') as Map<String, dynamic>?;
+    return (data?['manual_confirm_sweep_seconds'] as num?)?.toInt() ?? 300;
+  }
+
   /// Bậc thời gian chuẩn bị (trần +/-) — admin cấu hình ở "Thông số", công khai.
   Future<PrepTierSettings> prepTierSettings() async {
     final data = await _api.get('/auto-accept-settings') as Map<String, dynamic>?;

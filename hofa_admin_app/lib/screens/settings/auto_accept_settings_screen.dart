@@ -5,9 +5,11 @@ import '../../models/auto_accept_settings.dart';
 import '../../providers/admin_providers.dart';
 
 /// Tham số toàn sàn cho công tắc "Tự động nhận đơn" (branches.auto_accept_orders, store app) —
-/// không cài riêng theo từng cửa hàng. Bật: cửa hàng có auto_accept_default_minutes (giới hạn
-/// theo trần tính từ số món) để trượt xác nhận trước khi hệ thống tự nhận hộ. Tắt: cửa hàng có
-/// manual_confirm_window_minutes để tự xác nhận, hết giờ đơn tự huỷ + chi nhánh tự đóng cửa.
+/// không cài riêng theo từng cửa hàng. Ở màn chi tiết đơn (store app), đơn "placed" luôn hiện
+/// thanh trượt xác nhận với dải màu chạy — BẬT: chạy confirm_sweep_seconds giây, hết giờ tự
+/// XÁC NHẬN hộ. TẮT: chạy manual_confirm_sweep_seconds giây (màu khác), hết giờ tự HUỶ đơn và
+/// tự đóng cửa chi nhánh — coi như cửa hàng không theo dõi đơn. Cả 2 xử lý hoàn toàn phía
+/// client (store app), không có vòng quét nền phía server.
 class AutoAcceptSettingsScreen extends ConsumerStatefulWidget {
   const AutoAcceptSettingsScreen({super.key});
 
@@ -16,12 +18,8 @@ class AutoAcceptSettingsScreen extends ConsumerStatefulWidget {
 }
 
 class _AutoAcceptSettingsScreenState extends ConsumerState<AutoAcceptSettingsScreen> {
-  final _defaultCtrl = TextEditingController();
-  final _baseCtrl = TextEditingController();
-  final _incrementCtrl = TextEditingController();
-  final _maxCtrl = TextEditingController();
-  final _manualWindowCtrl = TextEditingController();
   final _confirmSweepCtrl = TextEditingController();
+  final _manualConfirmSweepCtrl = TextEditingController();
   final _tierItemsCtrl = TextEditingController();
   final _tierValueCtrl = TextEditingController();
   final _prepDefaultBaseCtrl = TextEditingController();
@@ -35,12 +33,8 @@ class _AutoAcceptSettingsScreenState extends ConsumerState<AutoAcceptSettingsScr
 
   @override
   void dispose() {
-    _defaultCtrl.dispose();
-    _baseCtrl.dispose();
-    _incrementCtrl.dispose();
-    _maxCtrl.dispose();
-    _manualWindowCtrl.dispose();
     _confirmSweepCtrl.dispose();
+    _manualConfirmSweepCtrl.dispose();
     _tierItemsCtrl.dispose();
     _tierValueCtrl.dispose();
     _prepDefaultBaseCtrl.dispose();
@@ -53,12 +47,8 @@ class _AutoAcceptSettingsScreenState extends ConsumerState<AutoAcceptSettingsScr
   }
 
   void _fillFrom(AutoAcceptSettings s) {
-    _defaultCtrl.text = s.autoAcceptDefaultMinutes.toString();
-    _baseCtrl.text = s.autoAcceptPrepBaseMinutes.toString();
-    _incrementCtrl.text = s.autoAcceptPrepIncrementMinutes.toString();
-    _maxCtrl.text = s.autoAcceptPrepMaxMinutes.toString();
-    _manualWindowCtrl.text = s.manualConfirmWindowMinutes.toString();
     _confirmSweepCtrl.text = s.confirmSweepSeconds.toString();
+    _manualConfirmSweepCtrl.text = s.manualConfirmSweepSeconds.toString();
     _tierItemsCtrl.text = s.prepTierItems.toString();
     _tierValueCtrl.text = s.prepTierValueVnd.toString();
     _prepDefaultBaseCtrl.text = s.prepDefaultBaseMinutes.toString();
@@ -70,34 +60,14 @@ class _AutoAcceptSettingsScreenState extends ConsumerState<AutoAcceptSettingsScr
   }
 
   Future<void> _save(String? id) async {
-    final defaultMin = int.tryParse(_defaultCtrl.text.trim());
-    final base = int.tryParse(_baseCtrl.text.trim());
-    final increment = int.tryParse(_incrementCtrl.text.trim());
-    final max = int.tryParse(_maxCtrl.text.trim());
-    final manualWindow = int.tryParse(_manualWindowCtrl.text.trim());
     final confirmSweep = int.tryParse(_confirmSweepCtrl.text.trim());
-    if (defaultMin == null || defaultMin <= 0) {
-      _showError('Thời gian mặc định không hợp lệ');
-      return;
-    }
-    if (base == null || base <= 0) {
-      _showError('Trần cho 1 món không hợp lệ');
-      return;
-    }
-    if (increment == null || increment < 0) {
-      _showError('Số phút cộng thêm mỗi món không hợp lệ');
-      return;
-    }
-    if (max == null || max < base) {
-      _showError('Trần tối đa toàn đơn phải lớn hơn hoặc bằng trần cho 1 món');
-      return;
-    }
-    if (manualWindow == null || manualWindow <= 0) {
-      _showError('Thời gian chờ xác nhận thủ công không hợp lệ');
-      return;
-    }
+    final manualConfirmSweep = int.tryParse(_manualConfirmSweepCtrl.text.trim());
     if (confirmSweep == null || confirmSweep <= 0) {
-      _showError('Thời gian thanh chạy màu không hợp lệ');
+      _showError('Thời gian thanh chạy màu (khi bật) không hợp lệ');
+      return;
+    }
+    if (manualConfirmSweep == null || manualConfirmSweep <= 0) {
+      _showError('Thời gian thanh chạy màu (khi tắt) không hợp lệ');
       return;
     }
     final tierItems = int.tryParse(_tierItemsCtrl.text.trim());
@@ -146,12 +116,8 @@ class _AutoAcceptSettingsScreenState extends ConsumerState<AutoAcceptSettingsScr
       final saved = await ref.read(adminRepoProvider).updateAutoAcceptSettings(
             AutoAcceptSettings(
               id: id,
-              autoAcceptDefaultMinutes: defaultMin,
-              autoAcceptPrepBaseMinutes: base,
-              autoAcceptPrepIncrementMinutes: increment,
-              autoAcceptPrepMaxMinutes: max,
-              manualConfirmWindowMinutes: manualWindow,
               confirmSweepSeconds: confirmSweep,
+              manualConfirmSweepSeconds: manualConfirmSweep,
               prepTierItems: tierItems,
               prepTierValueVnd: tierValue,
               prepDefaultBaseMinutes: prepDefaultBase,
@@ -247,56 +213,23 @@ class _AutoAcceptSettingsScreenState extends ConsumerState<AutoAcceptSettingsScr
                     const SizedBox(height: 20),
                     _SectionCard(
                       title: 'Khi bật "Tự động nhận đơn"',
-                      child: Column(
-                        children: [
-                          _NumberField(
-                            controller: _defaultCtrl,
-                            label: 'Thời gian mặc định để tự nhận đơn (phút)',
-                            helper: 'Số phút cửa hàng có để trượt xác nhận trước khi hệ thống tự nhận đơn hộ '
-                                '(không vượt quá trần bên dưới).',
-                          ),
-                          const SizedBox(height: 12),
-                          _NumberField(
-                            controller: _baseCtrl,
-                            label: 'Thời gian chuẩn bị tối đa cho 1 món (phút)',
-                            helper: 'Trần thời gian chuẩn bị khi đơn chỉ có 1 món — cũng là giới hạn trên '
-                                'của nút +/- ở màn nhận đơn.',
-                          ),
-                          const SizedBox(height: 12),
-                          _NumberField(
-                            controller: _incrementCtrl,
-                            label: 'Thời gian cộng thêm mỗi món tiếp theo (phút)',
-                            helper: 'Từ món thứ 2 trở đi trong 1 đơn, mỗi món cộng thêm bấy nhiêu phút vào trần.',
-                          ),
-                          const SizedBox(height: 12),
-                          _NumberField(
-                            controller: _maxCtrl,
-                            label: 'Thời gian chuẩn bị tối đa toàn đơn (phút)',
-                            helper: 'Trần tuyệt đối, bất kể đơn có bao nhiêu món.',
-                          ),
-                        ],
+                      child: _NumberField(
+                        controller: _confirmSweepCtrl,
+                        label: 'Thời gian thanh chạy màu để xác nhận (giây)',
+                        helper: 'Ở màn chi tiết đơn, dải màu chạy trên thanh trượt xác nhận trong bấy nhiêu '
+                            'giây. Hết giờ mà cửa hàng chưa trượt, hệ thống tự chốt số phút đang hiện trên bộ '
+                            'đếm +/- làm thời gian chuẩn bị và tự XÁC NHẬN đơn.',
                       ),
                     ),
                     const SizedBox(height: 16),
                     _SectionCard(
                       title: 'Khi tắt "Tự động nhận đơn"',
                       child: _NumberField(
-                        controller: _manualWindowCtrl,
-                        label: 'Thời gian chờ xác nhận thủ công (phút)',
-                        helper: 'Cửa hàng có bấy nhiêu phút để tự bấm xác nhận. Hết giờ, đơn tự huỷ và '
-                            'chi nhánh tự chuyển sang "Tạm đóng cửa".',
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    _SectionCard(
-                      title: 'Màn chi tiết đơn (mọi đơn mới)',
-                      child: _NumberField(
-                        controller: _confirmSweepCtrl,
-                        label: 'Thời gian thanh chạy màu để xác nhận thời gian chuẩn bị (giây)',
-                        helper: 'Ở màn chi tiết đơn của cửa hàng, dải màu chạy trên thanh trượt xác nhận '
-                            'trong bấy nhiêu giây. Hết giờ mà chưa trượt, hệ thống tự chốt số phút đang '
-                            'hiện trên bộ đếm +/- làm thời gian chuẩn bị và tự xác nhận đơn. Áp dụng cho '
-                            'mọi đơn mới, không phụ thuộc công tắc "Tự động nhận đơn" ở trên.',
+                        controller: _manualConfirmSweepCtrl,
+                        label: 'Thời gian thanh chạy màu để xác nhận (giây)',
+                        helper: 'Cùng vị trí thanh trượt như trên nhưng đổi màu khác. Hết giờ mà cửa hàng chưa '
+                            'trượt, hệ thống tự HUỶ đơn và tự đóng cửa chi nhánh — coi như cửa hàng không '
+                            'theo dõi đơn. Nên đặt dài hơn hẳn thời gian ở trên (mặc định 300 giây = 5 phút).',
                       ),
                     ),
                     const SizedBox(height: 16),

@@ -2,12 +2,8 @@
 /// và cho bậc thời gian chuẩn bị mặc định/trần ở màn chi tiết đơn (áp dụng mọi đơn "placed").
 class AutoAcceptSettings {
   final String? id;
-  final int autoAcceptDefaultMinutes;
-  final int autoAcceptPrepBaseMinutes;
-  final int autoAcceptPrepIncrementMinutes;
-  final int autoAcceptPrepMaxMinutes;
-  final int manualConfirmWindowMinutes;
   final int confirmSweepSeconds;
+  final int manualConfirmSweepSeconds;
   final int prepTierItems;
   final int prepTierValueVnd;
   final int prepDefaultBaseMinutes;
@@ -19,12 +15,8 @@ class AutoAcceptSettings {
 
   AutoAcceptSettings({
     this.id,
-    required this.autoAcceptDefaultMinutes,
-    required this.autoAcceptPrepBaseMinutes,
-    required this.autoAcceptPrepIncrementMinutes,
-    required this.autoAcceptPrepMaxMinutes,
-    required this.manualConfirmWindowMinutes,
     required this.confirmSweepSeconds,
+    required this.manualConfirmSweepSeconds,
     required this.prepTierItems,
     required this.prepTierValueVnd,
     required this.prepDefaultBaseMinutes,
@@ -37,12 +29,8 @@ class AutoAcceptSettings {
 
   factory AutoAcceptSettings.fromJson(Map<String, dynamic> json) => AutoAcceptSettings(
         id: json['id'] as String?,
-        autoAcceptDefaultMinutes: (json['auto_accept_default_minutes'] as num?)?.toInt() ?? 8,
-        autoAcceptPrepBaseMinutes: (json['auto_accept_prep_base_minutes'] as num?)?.toInt() ?? 10,
-        autoAcceptPrepIncrementMinutes: (json['auto_accept_prep_increment_minutes'] as num?)?.toInt() ?? 2,
-        autoAcceptPrepMaxMinutes: (json['auto_accept_prep_max_minutes'] as num?)?.toInt() ?? 30,
-        manualConfirmWindowMinutes: (json['manual_confirm_window_minutes'] as num?)?.toInt() ?? 5,
         confirmSweepSeconds: (json['confirm_sweep_seconds'] as num?)?.toInt() ?? 10,
+        manualConfirmSweepSeconds: (json['manual_confirm_sweep_seconds'] as num?)?.toInt() ?? 300,
         prepTierItems: (json['prep_tier_items'] as num?)?.toInt() ?? 3,
         prepTierValueVnd: (json['prep_tier_value_vnd'] as num?)?.toInt() ?? 200000,
         prepDefaultBaseMinutes: (json['prep_default_base_minutes'] as num?)?.toInt() ?? 15,
@@ -55,12 +43,8 @@ class AutoAcceptSettings {
 
   /// Mặc định dùng khi server chưa có dòng cấu hình nào (chưa từng chạy migration).
   factory AutoAcceptSettings.fallback() => AutoAcceptSettings(
-        autoAcceptDefaultMinutes: 8,
-        autoAcceptPrepBaseMinutes: 10,
-        autoAcceptPrepIncrementMinutes: 2,
-        autoAcceptPrepMaxMinutes: 30,
-        manualConfirmWindowMinutes: 5,
         confirmSweepSeconds: 10,
+        manualConfirmSweepSeconds: 300,
         prepTierItems: 3,
         prepTierValueVnd: 200000,
         prepDefaultBaseMinutes: 15,
@@ -72,12 +56,8 @@ class AutoAcceptSettings {
       );
 
   Map<String, dynamic> toJson() => {
-        'auto_accept_default_minutes': autoAcceptDefaultMinutes,
-        'auto_accept_prep_base_minutes': autoAcceptPrepBaseMinutes,
-        'auto_accept_prep_increment_minutes': autoAcceptPrepIncrementMinutes,
-        'auto_accept_prep_max_minutes': autoAcceptPrepMaxMinutes,
-        'manual_confirm_window_minutes': manualConfirmWindowMinutes,
         'confirm_sweep_seconds': confirmSweepSeconds,
+        'manual_confirm_sweep_seconds': manualConfirmSweepSeconds,
         'prep_tier_items': prepTierItems,
         'prep_tier_value_vnd': prepTierValueVnd,
         'prep_default_base_minutes': prepDefaultBaseMinutes,
