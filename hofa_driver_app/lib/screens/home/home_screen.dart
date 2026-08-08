@@ -98,6 +98,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final driverAsync = ref.watch(myDriverProvider);
     final activeDeliveryAsync = ref.watch(activeDeliveryProvider);
     final theme = Theme.of(context);
+    final pendingOffer = activeDeliveryAsync.valueOrNull;
+    final hasPendingOffer = pendingOffer != null && pendingOffer.status == 'assigned';
 
     return Scaffold(
       appBar: AppBar(
@@ -109,7 +111,26 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             const Text('HOFA Tài xế', style: TextStyle(fontWeight: FontWeight.bold)),
           ],
         ),
-        actions: const [NotificationBell()],
+        actions: [
+          // Luôn hiện (khác _PendingOfferCard bên dưới chỉ hiện khi CÓ đơn đang chờ) — bấm vào
+          // lúc không có đơn thì báo rõ ràng thay vì im lặng không làm gì, tránh cảm giác "nút
+          // không hoạt động".
+          IconButton(
+            tooltip: 'Đơn đang chờ xác nhận',
+            icon: hasPendingOffer
+                ? Badge(backgroundColor: theme.colorScheme.error, child: const Icon(Icons.pending_actions))
+                : const Icon(Icons.pending_actions),
+            onPressed: () {
+              if (hasPendingOffer) {
+                context.push('/offer/${pendingOffer.id}');
+              } else {
+                ScaffoldMessenger.of(context)
+                    .showSnackBar(const SnackBar(content: Text('Hiện không có đơn nào đang chờ xác nhận.')));
+              }
+            },
+          ),
+          const NotificationBell(),
+        ],
       ),
       body: RefreshIndicator(
         onRefresh: () async {
