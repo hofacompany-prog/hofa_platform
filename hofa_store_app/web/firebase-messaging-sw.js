@@ -101,14 +101,12 @@ function writePendingDeepLink(path) {
 }
 
 /**
- * Xử lý push event THẲNG (không qua firebase-messaging-compat.js/onBackgroundMessage nữa) —
- * xác nhận qua Web Inspector thật trên iOS: dùng messaging.onBackgroundMessage() khiến
- * showNotification() bị gọi "outside of any push event lifetime" (cảnh báo thật từ trình
- * duyệt), gây thông báo hiện lặp 2 lần (rất có thể do trình duyệt coi push chưa được xử lý
- * xong và gửi lại) và khiến notification tạo ra không phải 1 Notification object thật để
- * notificationclick gắn vào. Tự đọc event.data + tự gọi showNotification() bên trong
- * event.waitUntil() của CHÍNH push event là cách chuẩn, đúng vòng đời Push API, không cần
- * phụ thuộc SDK Firebase trong service worker nữa (SDK chỉ còn cần ở phía Dart để lấy token).
+ * Xử lý push event THẲNG (không qua firebase-messaging-compat.js/onBackgroundMessage) — SDK
+ * Firebase trong service worker từng khiến showNotification() bị gọi ngoài vòng đời push event
+ * thật (xác nhận qua Web Inspector trên iOS), gây thông báo hiện lặp và notification tạo ra
+ * không phải 1 Notification object thật để notificationclick gắn vào. Tự đọc event.data + tự
+ * gọi showNotification() bên trong event.waitUntil() của CHÍNH push event là cách chuẩn, đúng
+ * vòng đời Push API — SDK Firebase chỉ còn cần ở phía Dart để lấy token.
  */
 self.addEventListener('push', (event) => {
   event.waitUntil(handlePush(event));
@@ -119,10 +117,9 @@ async function handlePush(event) {
   try {
     payload = event.data ? event.data.json() : {};
   } catch (e) {
-    console.log('[hofa-sw] không đọc được push data dạng JSON', e);
+    // Payload không phải JSON hợp lệ — bỏ qua, coi như rỗng.
   }
   const data = payload.data || {};
-  console.log('[hofa-sw] push event nhận data =', data);
   await writeLastPushData(data);
 
   if (data.category === 'order' && 'setAppBadge' in self.registration) {
@@ -133,7 +130,6 @@ async function handlePush(event) {
 
   const title = (payload.notification && payload.notification.title) || data.title || 'HOFA';
   const body = (payload.notification && payload.notification.body) || data.body || '';
-  console.log('[hofa-sw] gọi showNotification()', title, body);
   await self.registration.showNotification(title, {
     body,
     icon: '/icons/Icon-192.png',
@@ -144,67 +140,46 @@ async function handlePush(event) {
 /**
  * Đường dẫn trong app tương ứng với data của push — chạy ở đây (service worker, ngoài Dart)
  * vì lúc app đang đóng/nền, Dart code không chạy nên handleData (push_service.dart) không có
- * cơ hội được gọi. Đích tạm thời chỉ để tab "Đơn hàng" (không tới thẳng chi tiết 1 đơn cụ
- * thể) — đơn giản hoá tối đa lúc đang chẩn đoán, để tách xem lỗi nằm ở việc điều hướng nói
- * chung hay ở phần order_id/màn chi tiết.
+ * cơ hội được gọi.
  */
 function targetPathFor(data) {
   if (data.type === 'admin_broadcast' && data.screen) return data.screen;
-  if (['order_offer', 'order_auto_confirmed', 'order_auto_cancelled'].includes(data.type)) {
-    return '/orders';
+  if (data.order_id && ['order_offer', 'order_auto_confirmed', 'order_auto_cancelled'].includes(data.type)) {
+    return '/orders/' + data.order_id;
   }
   return '/';
 }
 
 self.addEventListener('notificationclick', (event) => {
-  console.log('[hofa-sw] notificationclick nhận được, notification =', event.notification);
   // Một số nền tảng (Safari/iOS) từ chối đóng thông báo NGAY lúc vừa hiện ("Persistent
   // notifications cannot be closed shortly after they are shown") — lỗi này ném ra đồng bộ,
   // bọc try/catch để không làm dừng cả hàm nếu gặp.
   try {
     event.notification.close();
   } catch (e) {
-    console.log('[hofa-sw] notification.close() lỗi, bỏ qua và tiếp tục điều hướng', e);
+    // Bỏ qua — không chặn phần điều hướng bên dưới.
   }
   event.waitUntil(
-    readLastPushData()
-      .then((data) => {
-        console.log('[hofa-sw] readLastPushData() =', data);
-        const path = targetPathFor(data);
-        console.log('[hofa-sw] targetPathFor() =', path);
-        return writePendingDeepLink(path).then(() => {
-          console.log('[hofa-sw] đã ghi pendingDeepLink =', path);
-          // self.registration.scope KHÔNG phải origin của app — Firebase đăng ký worker này ở
-          // scope riêng '/firebase-cloud-messaging-push-scope' (xác nhận qua Web Inspector
-          // thật), khác hẳn '/' nơi các trang thật của app chạy. Dùng self.location.origin để
-          // so khớp tab đang mở, không dùng self.registration.scope.
-          const origin = self.location.origin;
-          const targetUrl = new URL(path, origin).href;
-          console.log('[hofa-sw] targetUrl =', targetUrl, ', origin =', origin);
-          return clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
-            console.log('[hofa-sw] số client đang mở =', windowClients.length, windowClients.map((c) => c.url));
-            for (const client of windowClients) {
-              if (client.url.startsWith(origin) && 'focus' in client) {
-                console.log('[hofa-sw] navigate client có sẵn tới', targetUrl);
-                return client
-                  .navigate(targetUrl)
-                  .then((c) => {
-                    console.log('[hofa-sw] client.navigate() thành công');
-                    return (c || client).focus();
-                  })
-                  .catch((e) => {
-                    console.log('[hofa-sw] client.navigate() lỗi', e);
-                    return client.focus();
-                  });
-              }
+    readLastPushData().then((data) => {
+      const path = targetPathFor(data);
+      return writePendingDeepLink(path).then(() => {
+        // self.registration.scope KHÔNG phải origin của app — Firebase đăng ký worker này ở
+        // scope riêng '/firebase-cloud-messaging-push-scope', khác hẳn '/' nơi các trang thật
+        // của app chạy. Dùng self.location.origin để so khớp tab đang mở.
+        const origin = self.location.origin;
+        const targetUrl = new URL(path, origin).href;
+        return clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+          for (const client of windowClients) {
+            if (client.url.startsWith(origin) && 'focus' in client) {
+              return client
+                .navigate(targetUrl)
+                .then((c) => (c || client).focus())
+                .catch(() => client.focus());
             }
-            if (clients.openWindow) {
-              console.log('[hofa-sw] không có client nào đang mở, gọi clients.openWindow()');
-              return clients.openWindow(targetUrl);
-            }
-          });
+          }
+          if (clients.openWindow) return clients.openWindow(targetUrl);
         });
-      })
-      .catch((e) => console.log('[hofa-sw] notificationclick lỗi', e))
+      });
+    })
   );
 });
