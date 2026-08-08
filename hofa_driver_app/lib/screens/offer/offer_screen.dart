@@ -2,18 +2,34 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:slide_to_act/slide_to_act.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../core/format.dart';
 import '../../models/branch.dart';
 import '../../models/delivery.dart';
 import '../../models/order.dart' as model;
+import '../../providers/auth_provider.dart';
 import '../../providers/delivery_providers.dart';
 import '../../repositories/delivery_repository.dart';
 import '../../repositories/order_repository.dart';
 import '../../repositories/pickup_repository.dart';
 
-/// Màn hình đơn mới cần xác nhận — mở toàn màn hình ngay khi có push (kể cả khi app
-/// đang mở sẵn), có đếm ngược khớp với accept_deadline phía server. Hết giờ mà không
-/// bấm gì thì tự coi như từ chối (server cũng tự làm điều này nếu app bị đóng).
+final _offerOrderProvider = FutureProvider.autoDispose.family<model.Order, String>((ref, id) => OrderRepository().get(id));
+final _offerBranchProvider = FutureProvider.autoDispose.family<Branch, String>((ref, id) => PickupRepository().branch(id));
+
+/// Màn hình đơn giao hàng mới cần xác nhận — mở toàn màn hình ngay khi có push (kể cả khi app
+/// đang mở sẵn). Luôn hiện thanh trượt xác nhận với 1 dải màu chạy, thuần phía client
+/// (AnimationController riêng của màn này) trong đúng khoảng deliveries.accept_deadline mà
+/// server đã tính sẵn (xem dispatch.offerToNearestDriver) — thời lượng + hậu quả hết giờ tuỳ
+/// vào công tắc "Tự động nhận đơn" của chính tài xế (drivers.auto_accept, đổi ở Trang chủ):
+///   - BẬT: thanh xanh chạy ngắn (driver_accept_settings.auto_accept_sweep_seconds, admin cấu
+///     hình ở "Thông số tài xế") — hết giờ tự chốt "Nhận đơn" luôn.
+///   - TẮT: thanh cam chạy dài hơn (manual_accept_sweep_seconds) — hết giờ tự chuyển đơn cho
+///     tài xế gần nhất tiếp theo.
+/// Khác bên cửa hàng (đã bỏ hẳn quét server): driver app GIỮ server làm nguồn xác thực chính
+/// (accept_deadline + sweepExpiredOffers quét mỗi 10s, xem dispatch.js) vì tài xế di chuyển
+/// ngoài đường, mạng không ổn định bằng cửa hàng — thanh màu ở đây chỉ là hiển thị trực quan +
+/// tự gọi API sớm hơn (không đợi vòng quét), không tự thay thế server.
 class OfferScreen extends ConsumerStatefulWidget {
   final String deliveryId;
   const OfferScreen({super.key, required this.deliveryId});
@@ -22,75 +38,72 @@ class OfferScreen extends ConsumerStatefulWidget {
   ConsumerState<OfferScreen> createState() => _OfferScreenState();
 }
 
-class _OfferScreenState extends ConsumerState<OfferScreen> {
+class _OfferScreenState extends ConsumerState<OfferScreen> with SingleTickerProviderStateMixin {
   final _deliveryRepo = DeliveryRepository();
-  Timer? _timer;
-  int _secondsLeft = 0;
+  AnimationController? _sweepController;
+  bool _sweepStarted = false;
+  bool _sweepIsAutoAccept = true;
   bool _resolved = false;
   bool _busy = false;
 
-  void _startCountdown(Delivery delivery) {
-    _timer?.cancel();
-    final deadline = delivery.acceptDeadline;
-    if (deadline == null) return;
-    void tick() {
-      final remaining = deadline.difference(DateTime.now()).inSeconds;
-      if (!mounted) return;
-      setState(() => _secondsLeft = remaining < 0 ? 0 : remaining);
-      if (remaining <= 0) {
-        _timer?.cancel();
-        _autoDeclineOnExpiry();
-      }
-    }
-
-    tick();
-    _timer = Timer.periodic(const Duration(seconds: 1), (_) => tick());
+  @override
+  void dispose() {
+    _sweepController?.dispose();
+    super.dispose();
   }
 
-  Future<void> _autoDeclineOnExpiry() async {
+  Future<void> _accept() async {
     if (_resolved) return;
     _resolved = true;
-    // Chủ động gọi decline để đơn được chuyển ngay cho tài xế khác, không phải chờ
-    // tới lần tài xế này bấm "Nhận đơn" trễ (server mới phát hiện quá hạn) hoặc chờ cron quét.
+    setState(() => _busy = true);
+    try {
+      await _deliveryRepo.updateStatus(widget.deliveryId, 'accepted');
+      ref.invalidate(activeDeliveryProvider);
+      if (mounted) context.pushReplacement('/deliveries/${widget.deliveryId}');
+    } catch (e) {
+      _resolved = false; // cho thử lại (tự động hoặc trượt tay) nếu lỗi
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// Hết giờ thanh chạy màu lúc tài xế TẮT "Tự động nhận đơn" — chủ động gọi decline ngay
+  /// (thay vì đợi tới lúc server quét, tối đa 10s) để đơn được chuyển cho tài xế khác sớm hơn.
+  Future<void> _declineOnExpiry() async {
+    if (_resolved) return;
+    _resolved = true;
     try {
       await _deliveryRepo.decline(widget.deliveryId);
     } catch (_) {
-      // im lặng — server tự chặn accept trễ + cron quét (nếu có cấu hình) vẫn dọn được
+      // im lặng — server tự chặn accept trễ + vòng quét vẫn dọn được dù gọi lỗi ở đây
     }
     if (mounted) context.pop();
   }
 
-  Future<void> _accept() async {
-    setState(() => _busy = true);
-    try {
-      await _deliveryRepo.updateStatus(widget.deliveryId, 'accepted');
-      _resolved = true;
-      ref.invalidate(activeDeliveryProvider);
-      if (mounted) context.pushReplacement('/deliveries/${widget.deliveryId}');
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
   Future<void> _decline() async {
+    if (_resolved) return;
+    _resolved = true;
     setState(() => _busy = true);
     try {
       await _deliveryRepo.decline(widget.deliveryId);
-      _resolved = true;
       if (mounted) context.pop();
     } catch (e) {
+      _resolved = false;
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
 
-  @override
-  void dispose() {
-    _timer?.cancel();
-    super.dispose();
+  Future<void> _call(String phone) async {
+    final uri = Uri(scheme: 'tel', path: phone);
+    if (await canLaunchUrl(uri)) await launchUrl(uri);
+  }
+
+  Future<void> _sms(String phone) async {
+    final uri = Uri(scheme: 'sms', path: phone);
+    if (await canLaunchUrl(uri)) await launchUrl(uri);
   }
 
   @override
@@ -129,112 +142,138 @@ class _OfferScreenState extends ConsumerState<OfferScreen> {
                 });
                 return const Center(child: CircularProgressIndicator());
               }
-              if (_timer == null) _startCountdown(delivery);
-              return _OfferBody(
-                delivery: delivery,
-                secondsLeft: _secondsLeft,
-                busy: _busy,
-                onAccept: _accept,
-                onDecline: _decline,
-              );
+              return _buildBody(context, delivery);
             },
           ),
         ),
       ),
     );
   }
-}
 
-class _OfferBody extends StatelessWidget {
-  final Delivery delivery;
-  final int secondsLeft;
-  final bool busy;
-  final VoidCallback onAccept;
-  final VoidCallback onDecline;
-
-  const _OfferBody({
-    required this.delivery,
-    required this.secondsLeft,
-    required this.busy,
-    required this.onAccept,
-    required this.onDecline,
-  });
-
-  @override
-  Widget build(BuildContext context) {
+  Widget _buildBody(BuildContext context, Delivery delivery) {
     final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        children: [
-          const SizedBox(height: 12),
-          Text('Đơn giao hàng mới', style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 16),
-          _CountdownRing(secondsLeft: secondsLeft),
-          const SizedBox(height: 24),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: [
-              _AmountChip(icon: Icons.route, label: delivery.distanceKm != null ? '${delivery.distanceKm!.toStringAsFixed(1)} km' : '—'),
-              _AmountChip(icon: Icons.payments, label: formatVnd(delivery.driverFee), highlight: true),
-            ],
-          ),
-          const SizedBox(height: 24),
-          Expanded(child: _OfferDetails(orderId: delivery.orderId)),
-          Row(
+    final driverAsync = ref.watch(myDriverProvider);
+    final orderAsync = ref.watch(_offerOrderProvider(delivery.orderId));
+
+    // Đợi tải xong myDriverProvider rồi mới tạo controller — tạo ngay ở lần build đầu tiên
+    // (lúc còn đang loading) sẽ luôn khoá cứng ở autoAccept=false vì _sweepStarted bật lên
+    // true ngay, không bao giờ tạo lại controller dù dữ liệu thật đã tải xong sau đó (đã xác
+    // nhận qua thực tế với confirm_sweep_seconds bên store app trước đây).
+    if (!_sweepStarted && !driverAsync.isLoading) {
+      final deadline = delivery.acceptDeadline;
+      final duration = deadline != null ? deadline.difference(DateTime.now()) : Duration.zero;
+      _sweepStarted = true;
+      _sweepIsAutoAccept = driverAsync.valueOrNull?.autoAccept ?? false;
+      _sweepController = AnimationController(
+        vsync: this,
+        duration: duration.isNegative ? Duration.zero : duration,
+      )..forward();
+      _sweepController!.addStatusListener((status) {
+        if (status != AnimationStatus.completed) return;
+        if (_sweepIsAutoAccept) {
+          _accept();
+        } else {
+          _declineOnExpiry();
+        }
+      });
+    }
+
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+          child: Row(
             children: [
               Expanded(
-                child: OutlinedButton(
-                  onPressed: busy ? null : onDecline,
-                  style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16), foregroundColor: theme.colorScheme.error),
-                  child: const Text('Từ chối'),
-                ),
+                child: Text('Đơn giao hàng mới', style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
               ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: FilledButton(
-                  onPressed: busy ? null : onAccept,
-                  style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 16)),
-                  child: busy
-                      ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                      : const Text('Nhận đơn'),
+              orderAsync.when(
+                data: (order) => Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      tooltip: 'Gọi khách',
+                      icon: const Icon(Icons.call_outlined),
+                      onPressed: () => _call(order.shipRecipientPhone),
+                    ),
+                    IconButton(
+                      tooltip: 'Nhắn tin',
+                      icon: const Icon(Icons.sms_outlined),
+                      onPressed: () => _sms(order.shipRecipientPhone),
+                    ),
+                  ],
                 ),
+                loading: () => const SizedBox(),
+                error: (_, _) => const SizedBox(),
               ),
             ],
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _CountdownRing extends StatelessWidget {
-  final int secondsLeft;
-  const _CountdownRing({required this.secondsLeft});
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return SizedBox(
-      width: 96,
-      height: 96,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          SizedBox(
-            width: 96,
-            height: 96,
-            child: CircularProgressIndicator(
-              value: (secondsLeft.clamp(0, 60)) / 25,
-              strokeWidth: 6,
-              backgroundColor: theme.colorScheme.surfaceContainerHighest,
-              color: secondsLeft <= 5 ? theme.colorScheme.error : theme.colorScheme.primary,
+        ),
+        Expanded(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Column(
+              children: [
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    _AmountChip(
+                      icon: Icons.route,
+                      label: delivery.distanceKm != null ? '${delivery.distanceKm!.toStringAsFixed(1)} km' : '—',
+                    ),
+                    _AmountChip(
+                      icon: Icons.timer_outlined,
+                      label: delivery.etaMinutes != null ? '${delivery.etaMinutes} phút' : '—',
+                    ),
+                    _AmountChip(icon: Icons.payments, label: formatVnd(delivery.driverFee), highlight: true),
+                  ],
+                ),
+                const SizedBox(height: 24),
+                orderAsync.when(
+                  loading: () => const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 24),
+                    child: Center(child: CircularProgressIndicator()),
+                  ),
+                  error: (e, _) => Text('Không tải được đơn: $e'),
+                  data: (order) => _OfferDetails(order: order),
+                ),
+              ],
             ),
           ),
-          Text('${secondsLeft}s', style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
-        ],
-      ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+          child: Column(
+            children: [
+              if (_sweepStarted && !_sweepIsAutoAccept) ...[
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(
+                    'Bạn đang tắt "Tự động nhận đơn" — hết giờ mà chưa trượt, đơn sẽ chuyển cho tài xế khác.',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+              _sweepController == null
+                  ? const SizedBox(height: 60, child: Center(child: CircularProgressIndicator(strokeWidth: 2)))
+                  : _SweepSlideToConfirm(
+                      sweep: _sweepController!,
+                      busy: _busy,
+                      onConfirm: _accept,
+                      baseColor: _sweepIsAutoAccept ? theme.colorScheme.primary : theme.colorScheme.secondary,
+                    ),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: _busy ? null : _decline,
+                style: TextButton.styleFrom(foregroundColor: theme.colorScheme.error),
+                child: const Text('Từ chối đơn này'),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
@@ -264,50 +303,63 @@ class _AmountChip extends StatelessWidget {
   }
 }
 
-class _OfferDetails extends StatelessWidget {
-  final String orderId;
-  const _OfferDetails({required this.orderId});
+class _OfferDetails extends ConsumerWidget {
+  final model.Order order;
+  const _OfferDetails({required this.order});
 
   @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<model.Order>(
-      future: OrderRepository().get(orderId),
-      builder: (context, orderSnap) {
-        if (!orderSnap.hasData) return const Center(child: CircularProgressIndicator());
-        final order = orderSnap.data!;
-        return FutureBuilder<Branch>(
-          future: PickupRepository().branch(order.branchId),
-          builder: (context, branchSnap) {
-            final theme = Theme.of(context);
-            return SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  _AddressTile(
-                    icon: Icons.storefront,
-                    label: 'Lấy hàng',
-                    title: branchSnap.data?.name ?? 'Đang tải...',
-                    subtitle: branchSnap.data?.fullLine ?? '',
-                  ),
-                  const Padding(
-                    padding: EdgeInsets.only(left: 19),
-                    child: SizedBox(height: 20, child: VerticalDivider(thickness: 2)),
-                  ),
-                  _AddressTile(
-                    icon: Icons.flag,
-                    label: 'Giao hàng',
-                    title: order.shipRecipientName,
-                    subtitle: order.shipFullAddress,
-                  ),
-                  const SizedBox(height: 8),
-                  Text('${order.orderCode} · ${order.items.length} món · ${order.paymentMethod == 'cod' ? 'Thu hộ ${formatVnd(order.totalAmount)}' : 'Đã thanh toán'}',
-                      style: theme.textTheme.bodySmall),
-                ],
-              ),
-            );
-          },
-        );
-      },
+  Widget build(BuildContext context, WidgetRef ref) {
+    final branchAsync = ref.watch(_offerBranchProvider(order.branchId));
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        branchAsync.when(
+          data: (branch) => _AddressTile(
+            icon: Icons.storefront,
+            label: 'Lấy hàng',
+            title: branch.name,
+            subtitle: branch.fullLine,
+          ),
+          loading: () => const _AddressTile(icon: Icons.storefront, label: 'Lấy hàng', title: 'Đang tải...', subtitle: ''),
+          error: (_, _) => const _AddressTile(icon: Icons.storefront, label: 'Lấy hàng', title: '—', subtitle: ''),
+        ),
+        const Padding(
+          padding: EdgeInsets.only(left: 19),
+          child: SizedBox(height: 20, child: VerticalDivider(thickness: 2)),
+        ),
+        _AddressTile(
+          icon: Icons.flag,
+          label: 'Giao hàng',
+          title: order.shipRecipientName,
+          subtitle: order.shipFullAddress,
+        ),
+        if (order.shipNote != null && order.shipNote!.trim().isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: theme.colorScheme.secondaryContainer.withValues(alpha: 0.5),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.info_outline, size: 18, color: theme.colorScheme.secondary),
+                const SizedBox(width: 8),
+                Expanded(child: Text(order.shipNote!, style: TextStyle(color: theme.colorScheme.secondary))),
+              ],
+            ),
+          ),
+        ],
+        const SizedBox(height: 12),
+        Text(
+          '${order.orderCode} · ${order.items.length} món · '
+          '${order.paymentMethod == 'cod' ? 'Thu hộ ${formatVnd(order.totalAmount)}' : 'Đã thanh toán'}',
+          style: theme.textTheme.bodySmall,
+        ),
+      ],
     );
   }
 }
@@ -337,6 +389,69 @@ class _AddressTile extends StatelessWidget {
             ],
           ),
         ),
+      ],
+    );
+  }
+}
+
+/// Thanh trượt xác nhận nhận đơn — dải màu cảnh báo chạy dần từ trái sang phải phía sau thanh
+/// trượt trong đúng thời lượng của [sweep] (đã khớp deliveries.accept_deadline server tính
+/// sẵn). Trượt hết thanh bất kỳ lúc nào = nhận đơn ngay; không trượt thì hết giờ [sweep] tự
+/// hoàn tất và gọi [onConfirm] hoặc tự chuyển tài xế khác, tuỳ nơi tạo controller (xem
+/// addStatusListener trong _buildBody). [baseColor] là màu nền CHƯA chạy tới — khác nhau giữa 2
+/// chế độ (xanh lá khi BẬT "Tự động nhận đơn" = hết giờ tự nhận, cam khi TẮT = hết giờ tự
+/// chuyển tài xế khác) để tài xế phân biệt ngay hậu quả nếu không trượt kịp.
+class _SweepSlideToConfirm extends StatelessWidget {
+  final Animation<double> sweep;
+  final bool busy;
+  final Future<void> Function() onConfirm;
+  final Color baseColor;
+
+  const _SweepSlideToConfirm({
+    required this.sweep,
+    required this.busy,
+    required this.onConfirm,
+    required this.baseColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final slide = SlideAction(
+      key: const ValueKey('offer-accept-slide'),
+      enabled: !busy,
+      text: 'Trượt để nhận đơn',
+      textStyle: theme.textTheme.titleMedium?.copyWith(color: Colors.white, fontWeight: FontWeight.w600),
+      outerColor: Colors.transparent,
+      innerColor: Colors.white,
+      sliderButtonIcon: Icon(Icons.arrow_forward, color: baseColor),
+      height: 60,
+      borderRadius: 30,
+      onSubmit: onConfirm,
+    );
+
+    return Stack(
+      children: [
+        AnimatedBuilder(
+          animation: sweep,
+          builder: (context, _) {
+            final usedFlex = (sweep.value * 1000).round().clamp(0, 1000);
+            return ClipRRect(
+              borderRadius: BorderRadius.circular(30),
+              child: SizedBox(
+                height: 60,
+                child: Row(
+                  children: [
+                    if (usedFlex > 0)
+                      Expanded(flex: usedFlex, child: Container(color: theme.colorScheme.error.withValues(alpha: 0.55))),
+                    if (usedFlex < 1000) Expanded(flex: 1000 - usedFlex, child: Container(color: baseColor)),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+        slide,
       ],
     );
   }

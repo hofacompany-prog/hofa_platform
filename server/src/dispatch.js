@@ -2,7 +2,6 @@ const db = require('./db');
 const { haversineKm } = require('./utils');
 const push = require('./push');
 
-const ACCEPT_WINDOW_SECONDS = 25;
 // Công thức phí tạm thời — dễ chỉnh sau này khi có số liệu thật.
 const BASE_FEE = 12000;
 const PER_KM_FEE = 4000;
@@ -11,6 +10,13 @@ const AVG_SPEED_KMH = 25; // giả định tốc độ trung bình nội thành,
 function computeDriverFee(distanceKm) {
   const raw = BASE_FEE + PER_KM_FEE * (distanceKm || 0);
   return Math.round(raw / 500) * 500;
+}
+
+/** Chỉ giữ 1 dòng đang áp dụng — dòng mới nhất theo updated_at. Fallback 8s/25s nếu chưa
+ * từng chạy migration hofa-db/41_driver_accept_sweep.sql. */
+async function currentDriverAcceptSettings() {
+  const row = await db.queryOne('SELECT * FROM driver_accept_settings ORDER BY updated_at DESC LIMIT 1');
+  return row || { auto_accept_sweep_seconds: 8, manual_accept_sweep_seconds: 25 };
 }
 
 async function findNearestOnlineDriver(pickupLat, pickupLng, excludeDriverIds) {
@@ -30,9 +36,14 @@ async function findNearestOnlineDriver(pickupLat, pickupLng, excludeDriverIds) {
 }
 
 /**
- * Tìm tài xế online gần chi nhánh nhất và gán cho đơn.
- * - Tài xế bật auto_accept: gán thẳng, tự chuyển sang 'accepted', gửi push thông báo.
- * - Tài xế thường: gán với accept_deadline, gửi push kèm nút xác nhận/từ chối.
+ * Tìm tài xế online gần chi nhánh nhất và gán cho đơn — LUÔN gửi push kèm màn nhận đơn (không
+ * còn nhánh "auto_accept thì bỏ qua thẳng" như trước), chỉ khác thời lượng + hậu quả hết giờ
+ * theo drivers.auto_accept của tài xế được gán (xem driver_accept_settings, admin cấu hình ở
+ * "Thông số tài xế"):
+ * - auto_accept=true: accept_window ngắn hơn (auto_accept_sweep_seconds) — hết giờ mà tài xế
+ *   chưa trượt thì sweepExpiredOffers() tự NHẬN hộ (autoAcceptExpiredOffer).
+ * - auto_accept=false: accept_window dài hơn (manual_accept_sweep_seconds) — hết giờ thì
+ *   reassignAfterDecline() chuyển cho tài xế gần nhất kế tiếp, y hệt khi tài xế tự bấm Từ chối.
  * Trả về { delivery, driver } hoặc null nếu không còn tài xế nào online phù hợp.
  */
 async function offerToNearestDriver(orderId, { excludeDriverIds = [] } = {}) {
@@ -50,7 +61,7 @@ async function offerToNearestDriver(orderId, { excludeDriverIds = [] } = {}) {
   const driverFee = computeDriverFee(distanceKm ?? 0);
   const etaMinutes = distanceKm != null ? Math.max(1, Math.round((distanceKm / AVG_SPEED_KMH) * 60)) : null;
 
-  let delivery = await db.callRpc('assign_driver', {
+  const delivery = await db.callRpc('assign_driver', {
     p_order_id: orderId,
     p_driver_id: driver.id,
     p_distance_km: distanceKm,
@@ -58,33 +69,25 @@ async function offerToNearestDriver(orderId, { excludeDriverIds = [] } = {}) {
     p_driver_fee: driverFee
   });
 
-  if (driver.auto_accept) {
-    delivery = await db.callRpc('update_delivery_status', { p_delivery_id: delivery.id, p_new_status: 'accepted' });
-    await push.sendPushToUser(driver.user_id, {
-      title: 'Đơn mới đã tự động gán cho bạn',
-      body: `${order.order_code} · ${distanceKm != null ? distanceKm.toFixed(1) + ' km' : ''} · ${driverFee.toLocaleString('vi-VN')}đ`,
-      data: { type: 'delivery_assigned', delivery_id: delivery.id, order_id: orderId }
-    });
-    return { delivery, driver };
-  }
-
-  const deadline = new Date(Date.now() + ACCEPT_WINDOW_SECONDS * 1000).toISOString();
+  const settings = await currentDriverAcceptSettings();
+  const windowSeconds = driver.auto_accept ? settings.auto_accept_sweep_seconds : settings.manual_accept_sweep_seconds;
+  const deadline = new Date(Date.now() + windowSeconds * 1000).toISOString();
   await db.query('UPDATE deliveries SET accept_deadline = $1 WHERE id = $2', [deadline, delivery.id]);
   await push.sendPushToUser(driver.user_id, {
     title: 'Đơn mới gần bạn!',
-    body: `${order.order_code} · ${distanceKm != null ? distanceKm.toFixed(1) + ' km' : ''} · ${driverFee.toLocaleString('vi-VN')}đ — xác nhận trong ${ACCEPT_WINDOW_SECONDS}s`,
+    body: `${order.order_code} · ${distanceKm != null ? distanceKm.toFixed(1) + ' km' : ''} · ${driverFee.toLocaleString('vi-VN')}đ — xác nhận trong ${windowSeconds}s`,
     data: {
       type: 'delivery_offer',
       delivery_id: delivery.id,
       order_id: orderId,
       accept_deadline: deadline,
-      accept_window_seconds: ACCEPT_WINDOW_SECONDS
+      accept_window_seconds: windowSeconds
     }
   });
   return { delivery: { ...delivery, accept_deadline: deadline }, driver };
 }
 
-/** Tài xế từ chối, hoặc hết hạn accept_deadline mà chưa xác nhận — trả tài xế cũ về
+/** Tài xế từ chối, hoặc hết hạn accept_deadline mà TẮT "Tự động nhận đơn" — trả tài xế cũ về
  * online rồi thử gán tiếp cho tài xế gần nhất kế tiếp (loại các tài xế đã từ chối). */
 async function reassignAfterDecline(deliveryId) {
   const delivery = await db.queryOne('SELECT * FROM deliveries WHERE id = $1', [deliveryId]);
@@ -99,18 +102,51 @@ async function reassignAfterDecline(deliveryId) {
   return offerToNearestDriver(delivery.order_id, { excludeDriverIds: declined });
 }
 
-/** Quét các delivery đang chờ xác nhận nhưng đã quá accept_deadline — gọi định kỳ
- * từ 1 cron ngoài (xem POST /internal/sweep-expired-offers) vì repo này chưa có
- * job scheduler nội bộ. Không có cron thì hạn vẫn được chặn ở bước accept (lười kiểm tra). */
+/** Hết hạn accept_deadline mà tài xế BẬT "Tự động nhận đơn" — tự NHẬN hộ (đối xứng với
+ * reassignAfterDecline dùng khi tắt). Báo cho tài xế bằng push vì sweep này có thể chạy lúc
+ * app tài xế đã đóng (client cũng chủ động gọi accept sớm hơn lúc app còn mở, xem OfferScreen
+ * driver app — hàm này là lưới an toàn phía server). */
+async function autoAcceptExpiredOffer(deliveryId) {
+  const delivery = await db.queryOne('SELECT * FROM deliveries WHERE id = $1', [deliveryId]);
+  if (!delivery || delivery.status !== 'assigned') return null;
+  const driver = await db.queryOne('SELECT * FROM drivers WHERE id = $1', [delivery.driver_id]);
+
+  const updated = await db.callRpc('update_delivery_status', { p_delivery_id: deliveryId, p_new_status: 'accepted' });
+  await db.query('UPDATE deliveries SET accept_deadline = NULL WHERE id = $1', [deliveryId]);
+
+  if (driver?.user_id) {
+    await push.sendPushToUser(driver.user_id, {
+      title: 'Đơn đã tự động nhận',
+      body: `Đơn đã tự nhận hộ vì bạn không phản hồi kịp — nhớ đến lấy hàng nhé!`,
+      data: { type: 'delivery_assigned', delivery_id: deliveryId, order_id: delivery.order_id }
+    });
+  }
+  push.notifyCustomerOrderStatus(delivery.order_id, 'accepted').catch(() => {});
+  return updated;
+}
+
+/** Quét các delivery đang chờ xác nhận nhưng đã quá accept_deadline — gọi định kỳ từ setInterval
+ * (index.js) và cũng lộ ra POST /internal/sweep-expired-offers cho 1 cron ngoài dự phòng.
+ * Rẽ nhánh theo drivers.auto_accept của tài xế đang được gán: bật thì tự nhận hộ, tắt thì
+ * chuyển tài xế khác — không có cron thì hạn vẫn được chặn ở bước accept (lười kiểm tra). */
 async function sweepExpiredOffers() {
   const expired = await db.query(
-    `SELECT id FROM deliveries WHERE status = 'assigned' AND accept_deadline IS NOT NULL AND accept_deadline < now()`
+    `SELECT d.id, dr.auto_accept
+       FROM deliveries d
+       JOIN drivers dr ON dr.id = d.driver_id
+      WHERE d.status = 'assigned' AND d.accept_deadline IS NOT NULL AND d.accept_deadline < now()`
   );
   const results = [];
   for (const row of expired) {
-    results.push(await reassignAfterDecline(row.id));
+    results.push(row.auto_accept ? await autoAcceptExpiredOffer(row.id) : await reassignAfterDecline(row.id));
   }
   return { swept: expired.length, results };
 }
 
-module.exports = { offerToNearestDriver, reassignAfterDecline, sweepExpiredOffers, computeDriverFee, ACCEPT_WINDOW_SECONDS };
+module.exports = {
+  offerToNearestDriver,
+  reassignAfterDecline,
+  autoAcceptExpiredOffer,
+  sweepExpiredOffers,
+  computeDriverFee
+};

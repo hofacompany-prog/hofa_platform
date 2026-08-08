@@ -172,7 +172,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         SwitchListTile(
                           contentPadding: EdgeInsets.zero,
                           title: const Text('Tự động nhận đơn'),
-                          subtitle: const Text('Bật: hệ thống tự gán đơn gần nhất, không cần xác nhận.\nTắt: bạn xem và chấp nhận từng đơn.'),
+                          subtitle: const Text(
+                              'Màn nhận đơn luôn hiện khi có đơn mới. Bật: thanh trượt chạy nhanh rồi tự nhận hộ.\n'
+                              'Tắt: thanh trượt chạy lâu hơn, hết giờ chưa trượt thì đơn chuyển tài xế khác.'),
                           value: driver.autoAccept,
                           onChanged: _busy ? null : _toggleAutoAccept,
                         ),

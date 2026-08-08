@@ -79,8 +79,14 @@ class AdminShell extends ConsumerWidget {
     (
       icon: Icons.tune_outlined,
       selected: Icons.tune,
-      label: 'Thông số',
+      label: 'Thông số cửa hàng',
       path: '/auto-accept-settings',
+    ),
+    (
+      icon: Icons.speed_outlined,
+      selected: Icons.speed,
+      label: 'Thông số tài xế',
+      path: '/driver-accept-settings',
     ),
   ];
 

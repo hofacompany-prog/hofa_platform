@@ -92,8 +92,14 @@ router.patch('/deliveries/:id/status', asyncHandler(async (req, res) => {
   const delivery = await requireOwnDelivery(req.ctx, req.params.id);
 
   if (req.body.status === 'accepted' && delivery.accept_deadline && new Date(delivery.accept_deadline) < new Date()) {
-    await dispatch.reassignAfterDecline(req.params.id);
-    throw new ApiError('OFFER_EXPIRED', 'Đã quá hạn xác nhận — đơn đã được gán cho tài xế khác', 409);
+    const driver = await db.queryOne('SELECT auto_accept FROM drivers WHERE user_id = $1', [req.ctx.userId]);
+    // BẬT "Tự động nhận đơn": trễ 1 nhịp so với sweepExpiredOffers (client tự gọi accept ngay
+    // lúc thanh màu chạy hết, có thể tới sau accept_deadline vài trăm ms vì độ trễ mạng) vẫn
+    // đúng Ý ĐỊNH tự nhận — cho qua, không chặn/chuyển tài xế khác.
+    if (!driver?.auto_accept) {
+      await dispatch.reassignAfterDecline(req.params.id);
+      throw new ApiError('OFFER_EXPIRED', 'Đã quá hạn xác nhận — đơn đã được gán cho tài xế khác', 409);
+    }
   }
 
   const updated = await db.callRpc('update_delivery_status', {

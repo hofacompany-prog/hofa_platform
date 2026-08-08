@@ -14,6 +14,7 @@ import '../models/shipping_fee_settings.dart';
 import '../models/voucher.dart';
 import '../models/order_settings.dart';
 import '../models/auto_accept_settings.dart';
+import '../models/driver_accept_settings.dart';
 import '../models/admin_notification.dart';
 import '../models/notification_settings.dart';
 import '../repositories/admin_repository.dart';
@@ -127,6 +128,10 @@ final orderSettingsProvider = FutureProvider.autoDispose<OrderSettings>(
 
 final autoAcceptSettingsProvider = FutureProvider.autoDispose<AutoAcceptSettings>(
   (ref) => ref.watch(adminRepoProvider).autoAcceptSettings(),
+);
+
+final driverAcceptSettingsProvider = FutureProvider.autoDispose<DriverAcceptSettings>(
+  (ref) => ref.watch(adminRepoProvider).driverAcceptSettings(),
 );
 
 final notificationsProvider =

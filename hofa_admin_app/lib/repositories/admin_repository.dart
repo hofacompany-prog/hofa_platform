@@ -13,6 +13,7 @@ import '../models/shipping_fee_settings.dart';
 import '../models/voucher.dart';
 import '../models/order_settings.dart';
 import '../models/auto_accept_settings.dart';
+import '../models/driver_accept_settings.dart';
 import '../models/admin_notification.dart';
 import '../models/notification_inbox_item.dart';
 import '../models/notification_settings.dart';
@@ -369,6 +370,21 @@ class AdminRepository {
   Future<AutoAcceptSettings> updateAutoAcceptSettings(AutoAcceptSettings settings) async =>
       AutoAcceptSettings.fromJson(
         await _api.patch('/auto-accept-settings', body: settings.toJson())
+            as Map<String, dynamic>,
+      );
+
+  // ---- Thông số "Nhận đơn" tài xế ----
+
+  Future<DriverAcceptSettings> driverAcceptSettings() async {
+    final data = await _api.get('/driver-accept-settings');
+    return data == null
+        ? DriverAcceptSettings.fallback()
+        : DriverAcceptSettings.fromJson(data as Map<String, dynamic>);
+  }
+
+  Future<DriverAcceptSettings> updateDriverAcceptSettings(DriverAcceptSettings settings) async =>
+      DriverAcceptSettings.fromJson(
+        await _api.patch('/driver-accept-settings', body: settings.toJson())
             as Map<String, dynamic>,
       );
 
