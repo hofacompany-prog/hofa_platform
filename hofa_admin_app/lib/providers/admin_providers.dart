@@ -8,6 +8,8 @@ import '../models/merchant.dart';
 import '../models/merchant_device.dart';
 import '../models/merchant_fee_tier.dart';
 import '../models/driver.dart';
+import '../models/bank.dart';
+import '../models/driver_wallet_request.dart';
 import '../models/admin_delivery.dart';
 import '../models/order.dart';
 import '../models/category.dart';
@@ -121,6 +123,18 @@ final deliveryDetailProvider = FutureProvider.autoDispose.family<AdminDelivery, 
 
 final categoriesProvider = FutureProvider.autoDispose<List<Category>>(
   (ref) => ref.watch(adminRepoProvider).categories(),
+);
+
+final banksProvider = FutureProvider.autoDispose<List<Bank>>(
+  (ref) => ref.watch(adminRepoProvider).banks(),
+);
+
+final pendingWalletDepositsProvider = FutureProvider.autoDispose<List<DriverWalletRequest>>(
+  (ref) => ref.watch(adminRepoProvider).walletDeposits(status: 'pending'),
+);
+
+final pendingWalletWithdrawalsProvider = FutureProvider.autoDispose<List<DriverWalletRequest>>(
+  (ref) => ref.watch(adminRepoProvider).walletWithdrawals(status: 'pending'),
 );
 
 final shippingFeeSettingsProvider =

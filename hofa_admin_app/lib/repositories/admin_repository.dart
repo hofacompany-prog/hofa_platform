@@ -7,6 +7,8 @@ import '../models/merchant_device.dart';
 import '../models/merchant_fee_tier.dart';
 import '../models/branch_hours.dart';
 import '../models/driver.dart';
+import '../models/bank.dart';
+import '../models/driver_wallet_request.dart';
 import '../models/admin_delivery.dart';
 import '../models/order.dart';
 import '../models/category.dart';
@@ -245,6 +247,10 @@ class AdminRepository {
     await _api.post('/admin/drivers/$id/verify') as Map<String, dynamic>,
   );
 
+  Future<Driver> rejectDriver(String id, String reason) async => Driver.fromJson(
+    await _api.post('/admin/drivers/$id/reject', body: {'reason': reason}) as Map<String, dynamic>,
+  );
+
   /// Gỡ tài xế bị kẹt trạng thái (thường là 'busy' không tự về 'online' được) — không đụng gì
   /// tới deliveries, chỉ đổi đúng cột status của drivers.
   Future<Driver> forceDriverStatus(String id, String status) async => Driver.fromJson(
@@ -377,6 +383,58 @@ class AdminRepository {
 
   Future<void> deleteCategory(String id) async {
     await _api.delete('/categories/$id');
+  }
+
+  // ---- Danh sách ngân hàng (tài xế chọn lúc đăng ký/sửa hồ sơ) ----
+
+  Future<List<Bank>> banks() async {
+    final list = await _api.get('/banks') as List;
+    return list.map((e) => Bank.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<Bank> createBank({required String name, required String bin, int? sortOrder}) async => Bank.fromJson(
+        await _api.post('/banks', body: {
+          'name': name,
+          'bin': bin,
+          if (sortOrder != null) 'sort_order': sortOrder,
+        }) as Map<String, dynamic>,
+      );
+
+  Future<Bank> updateBank(String id, Map<String, dynamic> data) async =>
+      Bank.fromJson(await _api.patch('/banks/$id', body: data) as Map<String, dynamic>);
+
+  Future<void> deleteBank(String id) async {
+    await _api.delete('/banks/$id');
+  }
+
+  // ---- Ví tài xế: duyệt nạp/rút tiền ----
+
+  Future<List<DriverWalletRequest>> walletDeposits({String? status}) async {
+    final list = await _api.get('/admin/wallet-deposits', query: {
+      'limit': 100,
+      if (status != null) 'status': status,
+    }) as List;
+    return list.map((e) => DriverWalletRequest.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<void> confirmWalletDeposit(String id) async {
+    await _api.post('/admin/wallet-deposits/$id/confirm');
+  }
+
+  Future<List<DriverWalletRequest>> walletWithdrawals({String? status}) async {
+    final list = await _api.get('/admin/wallet-withdrawals', query: {
+      'limit': 100,
+      if (status != null) 'status': status,
+    }) as List;
+    return list.map((e) => DriverWalletRequest.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<void> confirmWalletWithdrawal(String id) async {
+    await _api.post('/admin/wallet-withdrawals/$id/confirm');
+  }
+
+  Future<void> rejectWalletWithdrawal(String id, {String? reason}) async {
+    await _api.post('/admin/wallet-withdrawals/$id/reject', body: {if (reason != null) 'reason': reason});
   }
 
   // ---- Phí ship ----

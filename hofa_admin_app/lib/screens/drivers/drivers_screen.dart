@@ -4,6 +4,14 @@ import '../../core/format.dart';
 import '../../models/driver.dart';
 import '../../providers/admin_providers.dart';
 
+const _rejectionReasonPresets = [
+  'Giấy tờ mờ/không rõ',
+  'Thông tin không khớp giấy tờ',
+  'Thiếu ảnh giấy tờ',
+  'Thông tin ngân hàng không hợp lệ',
+  'Khác',
+];
+
 class DriversScreen extends ConsumerStatefulWidget {
   const DriversScreen({super.key});
 
@@ -37,6 +45,66 @@ class _DriversScreenState extends ConsumerState<DriversScreen> {
     setState(() => _busy = true);
     try {
       await ref.read(adminRepoProvider).verifyDriver(d.id);
+      ref.invalidate(driversProvider);
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _reject(Driver d) async {
+    var reason = _rejectionReasonPresets.first;
+    final customCtrl = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setInner) => AlertDialog(
+          title: const Text('Từ chối hồ sơ tài xế?'),
+          content: SizedBox(
+            width: 360,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('Tài xế sẽ nhận được thông báo kèm lý do, sửa/nộp lại hồ sơ để được xét duyệt tiếp.'),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<String>(
+                  initialValue: reason,
+                  decoration: const InputDecoration(labelText: 'Lý do', border: OutlineInputBorder(), isDense: true),
+                  items: _rejectionReasonPresets.map((r) => DropdownMenuItem(value: r, child: Text(r))).toList(),
+                  onChanged: (v) => setInner(() => reason = v ?? reason),
+                ),
+                if (reason == 'Khác') ...[
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: customCtrl,
+                    autofocus: true,
+                    decoration: const InputDecoration(labelText: 'Ghi rõ lý do', border: OutlineInputBorder()),
+                    maxLines: 2,
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Huỷ')),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Từ chối'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (ok != true) return;
+    final finalReason = reason == 'Khác' ? customCtrl.text.trim() : reason;
+    if (finalReason.isEmpty) return;
+
+    setState(() => _busy = true);
+    try {
+      await ref.read(adminRepoProvider).rejectDriver(d.id, finalReason);
       ref.invalidate(driversProvider);
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
@@ -143,24 +211,33 @@ class _DriversScreenState extends ConsumerState<DriversScreen> {
                     final d = list[i];
                     // Ví âm nghĩa là tài xế đang giữ tiền COD chưa nộp về (xem HUONG_DAN.md)
                     final owing = d.walletBalance < 0;
+                    final verification = driverVerificationState(d);
+                    final (statusIcon, statusColor) = switch (verification) {
+                      DriverVerificationState.verified => (Icons.verified_user, Colors.green),
+                      DriverVerificationState.rejected => (Icons.block, theme.colorScheme.error),
+                      DriverVerificationState.pending => (Icons.pending, Colors.orange),
+                    };
                     return Card(
                       elevation: 0,
                       color: theme.colorScheme.surfaceContainerLow,
                       child: ListTile(
                         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        leading: CircleAvatar(
-                          backgroundColor: d.isVerified
-                              ? Colors.green.withValues(alpha: 0.12)
-                              : Colors.orange.withValues(alpha: 0.12),
-                          child: Icon(d.isVerified ? Icons.verified_user : Icons.pending,
-                              color: d.isVerified ? Colors.green : Colors.orange),
+                        leading: Tooltip(
+                          message: verification == DriverVerificationState.rejected
+                              ? 'Bị từ chối: ${d.rejectionReason ?? ""}'
+                              : '',
+                          child: CircleAvatar(
+                            backgroundColor: statusColor.withValues(alpha: 0.12),
+                            child: Icon(statusIcon, color: statusColor),
+                          ),
                         ),
                         title: Text('${d.vehicleType ?? "Xe"} · ${d.vehiclePlate ?? "—"}',
                             style: const TextStyle(fontWeight: FontWeight.w500)),
                         subtitle: Text(
                           '${d.totalDeliveries} chuyến · ${d.ratingAvg}★'
-                          '${owing ? ' · Đang giữ ${formatVnd(-d.walletBalance)} tiền COD' : ''}',
-                          style: TextStyle(color: owing ? theme.colorScheme.error : null),
+                          '${owing ? ' · Đang giữ ${formatVnd(-d.walletBalance)} tiền COD' : ''}'
+                          '${verification == DriverVerificationState.rejected ? ' · Bị từ chối: ${d.rejectionReason ?? ""}' : ''}',
+                          style: TextStyle(color: owing || verification == DriverVerificationState.rejected ? theme.colorScheme.error : null),
                         ),
                         trailing: Row(
                           mainAxisSize: MainAxisSize.min,
@@ -171,12 +248,18 @@ class _DriversScreenState extends ConsumerState<DriversScreen> {
                               onPressed: _busy ? null : () => _changeStatus(d),
                             ),
                             const SizedBox(width: 8),
-                            if (!d.isVerified)
+                            if (!d.isVerified) ...[
+                              OutlinedButton(
+                                style: OutlinedButton.styleFrom(foregroundColor: theme.colorScheme.error),
+                                onPressed: _busy ? null : () => _reject(d),
+                                child: const Text('Từ chối'),
+                              ),
+                              const SizedBox(width: 8),
                               FilledButton(
                                 onPressed: _busy ? null : () => _verify(d),
                                 child: const Text('Duyệt hồ sơ'),
-                              )
-                            else
+                              ),
+                            ] else
                               const Padding(
                                 padding: EdgeInsets.symmetric(horizontal: 8),
                                 child: Text('Đã duyệt', style: TextStyle(color: Colors.green)),

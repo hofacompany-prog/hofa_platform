@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -55,6 +56,21 @@ final routerProvider = Provider<GoRouter>((ref) {
     routes: [
       GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
       GoRoute(path: '/register-driver', builder: (context, state) => const RegisterDriverScreen()),
+      // Sửa/nộp lại hồ sơ sau khi bị admin từ chối — khác /register-driver (route đó luôn bị
+      // redirect() đá về '/' nếu đã có bản ghi drivers, xem redirect ở trên).
+      GoRoute(
+        path: '/edit-driver-profile',
+        builder: (context, state) => Consumer(
+          builder: (context, ref, _) {
+            final driverAsync = ref.watch(myDriverProvider);
+            return driverAsync.when(
+              loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
+              error: (e, _) => Scaffold(body: Center(child: Text('Lỗi: $e'))),
+              data: (driver) => RegisterDriverScreen(existing: driver),
+            );
+          },
+        ),
+      ),
       GoRoute(
         path: '/offer/:deliveryId',
         builder: (context, state) => OfferScreen(deliveryId: state.pathParameters['deliveryId']!),

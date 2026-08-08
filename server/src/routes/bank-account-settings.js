@@ -3,7 +3,7 @@ const db = require('../db');
 const asyncHandler = require('../asyncHandler');
 const { pickFields, requireRole } = require('../utils');
 
-const FIELDS = ['bank_name', 'bank_bin', 'account_number', 'account_holder_name'];
+const FIELDS = ['bank_name', 'bank_bin', 'account_number', 'account_holder_name', 'min_withdrawal_balance'];
 
 /** Chỉ giữ 1 dòng đang áp dụng — dòng mới nhất theo updated_at. */
 async function currentSettings() {

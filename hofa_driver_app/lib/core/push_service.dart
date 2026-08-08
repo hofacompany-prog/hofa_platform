@@ -148,6 +148,16 @@ class PushService {
       if (screen != null && screen.isNotEmpty) context.go(screen);
       return;
     }
+    // Hồ sơ bị từ chối — mở trang chủ, nơi có banner + nút "Sửa hồ sơ" (xem home_screen.dart).
+    if (data['type'] == 'driver_verification_rejected') {
+      context.go('/');
+      return;
+    }
+    // Kết quả duyệt nạp/rút ví — mở màn Ví để tài xế thấy số dư mới.
+    if (data['type'] == 'driver_wallet_update') {
+      context.push('/earnings');
+      return;
+    }
     final deliveryId = data['delivery_id'] as String?;
     if (deliveryId == null) return;
 

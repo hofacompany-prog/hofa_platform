@@ -214,6 +214,45 @@ async function notifyCustomerRepickDriver(orderId, reason) {
   });
 }
 
+/** Hồ sơ tài xế bị admin từ chối — báo kèm lý do, tài xế sửa/nộp lại hồ sơ ở PATCH /drivers/me
+ * để đưa hồ sơ về lại "đang chờ xét duyệt" (xem routes/drivers.js). [driverId] là drivers.id,
+ * không phải user_id — cần tra ngược qua user_id mới gửi push được. */
+async function notifyDriverRejected(driverId, reason) {
+  const driver = await db.queryOne('SELECT user_id FROM drivers WHERE id = $1', [driverId]);
+  if (!driver) return;
+  await sendPushToUser(driver.user_id, {
+    title: 'Hồ sơ tài xế bị từ chối',
+    body: `Lý do: ${reason} — sửa lại hồ sơ và nộp lại để được xét duyệt tiếp.`,
+    data: { type: 'driver_verification_rejected' }
+  });
+}
+
+const DRIVER_WALLET_MESSAGES = {
+  deposit_confirmed: (amount) => ({
+    title: 'Nạp tiền thành công',
+    body: `Ví đã được cộng ${amount.toLocaleString('vi-VN')}đ.`
+  }),
+  withdrawal_confirmed: (amount) => ({
+    title: 'Rút tiền thành công',
+    body: `Đã chuyển khoản ${amount.toLocaleString('vi-VN')}đ vào tài khoản ngân hàng của bạn.`
+  }),
+  withdrawal_rejected: (amount, reason) => ({
+    title: 'Yêu cầu rút tiền bị từ chối',
+    body: `Đã hoàn lại ${amount.toLocaleString('vi-VN')}đ vào ví.${reason ? ` Lý do: ${reason}` : ''}`
+  })
+};
+
+/** Kết quả duyệt nạp/rút ví — [driverId] là drivers.id, tra ngược user_id giống
+ * notifyDriverRejected. [kind] khớp key của DRIVER_WALLET_MESSAGES. */
+async function notifyDriverWallet(driverId, kind, amount, reason) {
+  const compose = DRIVER_WALLET_MESSAGES[kind];
+  if (!compose) return;
+  const driver = await db.queryOne('SELECT user_id FROM drivers WHERE id = $1', [driverId]);
+  if (!driver) return;
+  const { title, body } = compose(amount, reason);
+  await sendPushToUser(driver.user_id, { title, body, data: { type: 'driver_wallet_update', kind } });
+}
+
 /** Tự xoá các dòng hộp thư (bảng notifications) cũ hơn notification_settings.ttl_hours — bỏ
  * qua lặng lẽ nếu chưa cấu hình (ttl_hours NULL, mặc định) hoặc chưa có dòng settings nào.
  * Gọi định kỳ từ index.js, cùng kiểu sweepExpiredOffers (dispatch.js). */
@@ -231,6 +270,8 @@ module.exports = {
   sendPushToUser,
   notifyCustomerOrderStatus,
   notifyCustomerRepickDriver,
+  notifyDriverRejected,
+  notifyDriverWallet,
   sendBroadcastToRoles,
   resolveMerchantUserIds,
   sendToUserIds,

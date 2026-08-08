@@ -1,16 +1,149 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/format.dart';
+import '../../core/vietqr.dart';
 import '../../models/earnings.dart';
+import '../../providers/auth_provider.dart';
 import '../../repositories/driver_repository.dart';
 
 final _earningsProvider = FutureProvider.autoDispose<Earnings>((ref) => DriverRepository().earnings());
+final _driverRepo = DriverRepository();
 
-class EarningsScreen extends ConsumerWidget {
+class EarningsScreen extends ConsumerStatefulWidget {
   const EarningsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<EarningsScreen> createState() => _EarningsScreenState();
+}
+
+class _EarningsScreenState extends ConsumerState<EarningsScreen> {
+  Future<void> _deposit() async {
+    final amountCtrl = TextEditingController();
+    final amount = await showDialog<int>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Nạp tiền vào ví'),
+        content: TextField(
+          controller: amountCtrl,
+          autofocus: true,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(labelText: 'Số tiền muốn nạp (đ)'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Huỷ')),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, int.tryParse(amountCtrl.text.trim())),
+            child: const Text('Tiếp tục'),
+          ),
+        ],
+      ),
+    );
+    if (amount == null || amount <= 0 || !mounted) return;
+
+    try {
+      final depositId = await _driverRepo.createDeposit(amount);
+      final settings = await ref.read(bankAccountSettingsProvider.future);
+      if (!mounted) return;
+      if (!settings.isConfigured) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('HOFA chưa cấu hình tài khoản ngân hàng — liên hệ hỗ trợ để nạp tiền.')),
+        );
+        return;
+      }
+      final qrUrl = buildVietQrUrl(
+        bankBin: settings.bankBin!,
+        accountNumber: settings.accountNumber!,
+        amount: amount,
+        addInfo: 'NAP-${depositId.substring(0, 8).toUpperCase()}',
+        accountName: settings.accountHolderName,
+      );
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Quét mã để nạp tiền'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.network(qrUrl, width: 240, height: 240, fit: BoxFit.contain),
+                ),
+                const SizedBox(height: 12),
+                Text('${settings.bankName ?? ''} · ${settings.accountNumber}'),
+                if (settings.accountHolderName != null) Text(settings.accountHolderName!),
+                const SizedBox(height: 8),
+                Text(
+                  'Số tiền: ${formatVnd(amount)}',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'HOFA sẽ cộng tiền vào ví ngay sau khi xác nhận đã nhận được chuyển khoản.',
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            FilledButton(onPressed: () => Navigator.pop(context), child: const Text('Đã hiểu')),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+    }
+  }
+
+  Future<void> _withdraw(int currentBalance) async {
+    final amountCtrl = TextEditingController();
+    final settings = await ref.read(bankAccountSettingsProvider.future);
+    if (!mounted) return;
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Rút tiền'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Số dư hiện tại: ${formatVnd(currentBalance)}'),
+            Text('Số dư tối thiểu sau khi rút: ${formatVnd(settings.minWithdrawalBalance)}'),
+            const SizedBox(height: 12),
+            TextField(
+              controller: amountCtrl,
+              autofocus: true,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(labelText: 'Số tiền muốn rút (đ)'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Huỷ')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Gửi yêu cầu')),
+        ],
+      ),
+    );
+    final amount = int.tryParse(amountCtrl.text.trim());
+    if (ok != true || amount == null || amount <= 0 || !mounted) return;
+
+    try {
+      await _driverRepo.createWithdrawal(amount);
+      ref.invalidate(_earningsProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Đã gửi yêu cầu rút tiền — HOFA sẽ chuyển khoản sớm.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final earningsAsync = ref.watch(_earningsProvider);
     final theme = Theme.of(context);
 
@@ -42,6 +175,26 @@ class EarningsScreen extends ConsumerWidget {
                             ? 'Số âm là tiền COD bạn đang giữ hộ, cần nộp lại cho HOFA'
                             : 'Có thể rút về tài khoản ngân hàng',
                         style: theme.textTheme.bodySmall,
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: _deposit,
+                              icon: const Icon(Icons.add_card_outlined),
+                              label: const Text('Nạp tiền'),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () => _withdraw(earnings.walletBalance),
+                              icon: const Icon(Icons.savings_outlined),
+                              label: const Text('Rút tiền'),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),

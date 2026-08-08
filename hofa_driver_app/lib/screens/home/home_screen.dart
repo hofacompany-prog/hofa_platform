@@ -174,11 +174,28 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          driver.isVerified ? 'Hồ sơ đã được duyệt' : 'Hồ sơ đang chờ HOFA duyệt',
+                          driver.isVerified
+                              ? 'Hồ sơ đã được duyệt'
+                              : (driver.isRejected ? 'Hồ sơ bị từ chối' : 'Hồ sơ đang chờ HOFA duyệt'),
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: driver.isVerified ? null : theme.colorScheme.error,
                           ),
                         ),
+                        if (driver.isRejected) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            'Lý do: ${driver.rejectionReason ?? "—"}',
+                            style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error),
+                          ),
+                          const SizedBox(height: 8),
+                          SizedBox(
+                            width: double.infinity,
+                            child: OutlinedButton(
+                              onPressed: () => context.push('/edit-driver-profile'),
+                              child: const Text('Sửa hồ sơ'),
+                            ),
+                          ),
+                        ],
                         const SizedBox(height: 12),
                         SwitchListTile(
                           contentPadding: EdgeInsets.zero,

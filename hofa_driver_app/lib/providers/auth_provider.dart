@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/api_exception.dart';
+import '../models/bank.dart';
+import '../models/bank_account_settings.dart';
 import '../models/user_profile.dart';
 import '../models/driver.dart';
 import '../repositories/user_repository.dart';
@@ -37,3 +39,11 @@ final myDriverProvider = FutureProvider.autoDispose<Driver?>((ref) async {
   if (profile == null) return null;
   return _driverRepo.me();
 });
+
+/// Danh sách ngân hàng admin quản lý — dropdown lúc đăng ký/sửa hồ sơ.
+final banksProvider = FutureProvider.autoDispose<List<Bank>>((ref) => _driverRepo.banks());
+
+/// Tài khoản ngân hàng CỦA SÀN — dựng QR nạp tiền + đọc hạn mức rút tối thiểu ở màn Ví.
+final bankAccountSettingsProvider = FutureProvider.autoDispose<BankAccountSettings>(
+  (ref) => _driverRepo.bankAccountSettings(),
+);

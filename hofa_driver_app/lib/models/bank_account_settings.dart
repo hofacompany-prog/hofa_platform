@@ -1,6 +1,6 @@
-/// Thông tin tài khoản ngân hàng của sàn — dùng tạo mã VietQR cho khách quét chuyển khoản.
+/// Thông tin tài khoản ngân hàng CỦA SÀN — dùng dựng QR để tài xế nạp tiền vào ví, và đọc
+/// min_withdrawal_balance để hiện hạn mức rút. Chỉ đọc (admin mới sửa được).
 class BankAccountSettings {
-  final String? id;
   final String? bankName;
   final String? bankBin;
   final String? accountNumber;
@@ -8,7 +8,6 @@ class BankAccountSettings {
   final int minWithdrawalBalance;
 
   BankAccountSettings({
-    this.id,
     this.bankName,
     this.bankBin,
     this.accountNumber,
@@ -20,7 +19,6 @@ class BankAccountSettings {
       (bankBin != null && bankBin!.isNotEmpty) && (accountNumber != null && accountNumber!.isNotEmpty);
 
   factory BankAccountSettings.fromJson(Map<String, dynamic> json) => BankAccountSettings(
-        id: json['id'] as String?,
         bankName: json['bank_name'] as String?,
         bankBin: json['bank_bin'] as String?,
         accountNumber: json['account_number'] as String?,
@@ -28,14 +26,5 @@ class BankAccountSettings {
         minWithdrawalBalance: (json['min_withdrawal_balance'] as num?)?.toInt() ?? 0,
       );
 
-  /// Mặc định dùng khi server chưa có dòng cấu hình nào (chưa từng chạy migration).
-  factory BankAccountSettings.fallback() => BankAccountSettings();
-
-  Map<String, dynamic> toJson() => {
-        'bank_name': bankName,
-        'bank_bin': bankBin,
-        'account_number': accountNumber,
-        'account_holder_name': accountHolderName,
-        'min_withdrawal_balance': minWithdrawalBalance,
-      };
+  factory BankAccountSettings.empty() => BankAccountSettings();
 }

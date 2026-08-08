@@ -15,6 +15,12 @@ class Driver {
   final num ratingAvg;
   final int ratingCount;
   final DateTime? verifiedAt;
+  final DateTime? rejectedAt;
+  final String? rejectionReason;
+  final String? bankName;
+  final String? bankBin;
+  final String? bankAccountNumber;
+  final String? bankAccountHolder;
 
   Driver({
     required this.id,
@@ -33,10 +39,18 @@ class Driver {
     required this.ratingAvg,
     required this.ratingCount,
     this.verifiedAt,
+    this.rejectedAt,
+    this.rejectionReason,
+    this.bankName,
+    this.bankBin,
+    this.bankAccountNumber,
+    this.bankAccountHolder,
   });
 
   bool get isVerified => verifiedAt != null;
+  bool get isRejected => rejectedAt != null && verifiedAt == null;
   bool get isOnline => status == 'online' || status == 'busy';
+  bool get hasBankInfo => (bankBin?.isNotEmpty ?? false) && (bankAccountNumber?.isNotEmpty ?? false);
 
   factory Driver.fromJson(Map<String, dynamic> json) => Driver(
         id: json['id'] as String,
@@ -56,5 +70,11 @@ class Driver {
         ratingAvg: num.tryParse('${json['rating_avg']}') ?? 0,
         ratingCount: (json['rating_count'] as num?)?.toInt() ?? 0,
         verifiedAt: json['verified_at'] != null ? DateTime.tryParse(json['verified_at'] as String) : null,
+        rejectedAt: json['rejected_at'] != null ? DateTime.tryParse(json['rejected_at'] as String) : null,
+        rejectionReason: json['rejection_reason'] as String?,
+        bankName: json['bank_name'] as String?,
+        bankBin: json['bank_bin'] as String?,
+        bankAccountNumber: json['bank_account_number'] as String?,
+        bankAccountHolder: json['bank_account_holder'] as String?,
       );
 }
