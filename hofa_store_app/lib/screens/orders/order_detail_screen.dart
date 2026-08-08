@@ -253,7 +253,8 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> with Sing
           ),
         ),
         Expanded(
-          child: Center(
+          child: Align(
+            alignment: Alignment.topCenter,
             child: SingleChildScrollView(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
               child: ConstrainedBox(
