@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/format.dart';
 import '../../models/auto_accept_settings.dart';
 import '../../providers/admin_providers.dart';
 
@@ -179,6 +180,41 @@ class _AutoAcceptSettingsScreenState extends ConsumerState<AutoAcceptSettingsScr
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
+  /// Bảng bậc tính live từ nội dung đang gõ trong ô (kể cả chưa lưu) — giúp hình dung ngay
+  /// từng bậc dịch ra bao nhiêu phút, không cần tự nhẩm base + tăng×bậc trong đầu. Dừng sớm
+  /// (thay vì luôn liệt kê đủ 11 bậc) ngay khi cả 2 cột "Mặc định" và "Trần +/-" đã chạm trần —
+  /// các bậc sau đó cho ra số giống hệt nhau, liệt kê thêm chỉ gây rối mắt.
+  List<_TierPreviewRow> _previewRows() {
+    final tierItems = int.tryParse(_tierItemsCtrl.text.trim()) ?? 0;
+    final tierValue = int.tryParse(_tierValueCtrl.text.trim()) ?? 0;
+    if (tierItems <= 0 || tierValue <= 0) return const [];
+    final defBase = int.tryParse(_prepDefaultBaseCtrl.text.trim()) ?? 0;
+    final defInc = int.tryParse(_prepDefaultIncrementCtrl.text.trim()) ?? 0;
+    final defMax = int.tryParse(_prepDefaultMaxCtrl.text.trim()) ?? 0;
+    final ceilBase = int.tryParse(_prepCeilingBaseCtrl.text.trim()) ?? 0;
+    final ceilInc = int.tryParse(_prepCeilingIncrementCtrl.text.trim()) ?? 0;
+    final ceilMax = int.tryParse(_prepCeilingMaxCtrl.text.trim()) ?? 0;
+
+    final rows = <_TierPreviewRow>[];
+    for (var tier = 0; tier <= 10; tier++) {
+      final rawDefault = defBase + defInc * tier;
+      final rawCeiling = ceilBase + ceilInc * tier;
+      final defaultMinutes = defMax > 0 && rawDefault > defMax ? defMax : rawDefault;
+      final ceilingMinutes = ceilMax > 0 && rawCeiling > ceilMax ? ceilMax : rawCeiling;
+      rows.add(_TierPreviewRow(
+        tier: tier,
+        fromItems: tier * tierItems,
+        fromValue: tier * tierValue,
+        defaultMinutes: defaultMinutes,
+        ceilingMinutes: ceilingMinutes,
+      ));
+      final defSaturated = defMax > 0 && defaultMinutes >= defMax;
+      final ceilSaturated = ceilMax > 0 && ceilingMinutes >= ceilMax;
+      if (tier > 0 && defSaturated && ceilSaturated) break;
+    }
+    return rows;
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -351,6 +387,20 @@ class _AutoAcceptSettingsScreenState extends ConsumerState<AutoAcceptSettingsScr
                         ],
                       ),
                     ),
+                    const SizedBox(height: 16),
+                    AnimatedBuilder(
+                      animation: Listenable.merge([
+                        _tierItemsCtrl,
+                        _tierValueCtrl,
+                        _prepDefaultBaseCtrl,
+                        _prepDefaultIncrementCtrl,
+                        _prepDefaultMaxCtrl,
+                        _prepCeilingBaseCtrl,
+                        _prepCeilingIncrementCtrl,
+                        _prepCeilingMaxCtrl,
+                      ]),
+                      builder: (context, _) => _TierPreviewTable(rows: _previewRows()),
+                    ),
                     const SizedBox(height: 24),
                     SizedBox(
                       width: double.infinity,
@@ -386,6 +436,96 @@ class _NumberField extends StatelessWidget {
       decoration: InputDecoration(labelText: label, helperText: helper, helperMaxLines: 3, border: const OutlineInputBorder()),
     );
   }
+}
+
+class _TierPreviewRow {
+  final int tier;
+  final int fromItems;
+  final int fromValue;
+  final int defaultMinutes;
+  final int ceilingMinutes;
+  const _TierPreviewRow({
+    required this.tier,
+    required this.fromItems,
+    required this.fromValue,
+    required this.defaultMinutes,
+    required this.ceilingMinutes,
+  });
+}
+
+/// Bảng xem trước — hiện ngay dưới 3 mục cấu hình bậc, cập nhật live theo nội dung đang gõ.
+class _TierPreviewTable extends StatelessWidget {
+  final List<_TierPreviewRow> rows;
+  const _TierPreviewTable({required this.rows});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    if (rows.isEmpty) {
+      return _SectionCard(
+        title: 'Xem trước theo bậc',
+        child: Text(
+          'Điền đủ 2 mốc bậc ở trên để xem bảng bậc thực tế.',
+          style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline),
+        ),
+      );
+    }
+    return _SectionCard(
+      title: 'Xem trước theo bậc',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Cập nhật ngay theo số bạn đang gõ (kể cả chưa lưu) — mỗi dòng là 1 bậc, cho biết đơn '
+            'đạt tới đó thì thời gian mặc định/trần +/- là bao nhiêu.',
+            style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline),
+          ),
+          const SizedBox(height: 12),
+          Table(
+            border: TableBorder(horizontalInside: BorderSide(color: theme.colorScheme.outlineVariant)),
+            columnWidths: const {
+              0: FlexColumnWidth(0.6),
+              1: FlexColumnWidth(1.1),
+              2: FlexColumnWidth(1.5),
+              3: FlexColumnWidth(1.2),
+              4: FlexColumnWidth(1.2),
+            },
+            children: [
+              TableRow(
+                children: [
+                  _headerCell(theme, 'Bậc'),
+                  _headerCell(theme, '≥ Phần'),
+                  _headerCell(theme, '≥ Giá trị'),
+                  _headerCell(theme, 'Mặc định'),
+                  _headerCell(theme, 'Trần +/-'),
+                ],
+              ),
+              for (final row in rows)
+                TableRow(
+                  children: [
+                    _cell(theme, '${row.tier}'),
+                    _cell(theme, '${row.fromItems}'),
+                    _cell(theme, formatVnd(row.fromValue)),
+                    _cell(theme, '${row.defaultMinutes} phút'),
+                    _cell(theme, '${row.ceilingMinutes} phút'),
+                  ],
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _headerCell(ThemeData theme, String text) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+        child: Text(text, style: theme.textTheme.labelMedium?.copyWith(fontWeight: FontWeight.bold)),
+      );
+
+  Widget _cell(ThemeData theme, String text) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+        child: Text(text, style: theme.textTheme.bodyMedium),
+      );
 }
 
 class _SectionCard extends StatelessWidget {
