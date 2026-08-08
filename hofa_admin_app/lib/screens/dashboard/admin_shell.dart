@@ -41,12 +41,6 @@ class AdminShell extends ConsumerWidget {
       path: '/drivers',
     ),
     (
-      icon: Icons.moped_outlined,
-      selected: Icons.moped,
-      label: 'Chuyến giao hàng',
-      path: '/deliveries',
-    ),
-    (
       icon: Icons.category_outlined,
       selected: Icons.category,
       label: 'Danh mục',
@@ -89,12 +83,6 @@ class AdminShell extends ConsumerWidget {
       path: '/auto-accept-settings',
     ),
     (
-      icon: Icons.speed_outlined,
-      selected: Icons.speed,
-      label: 'Thông số tài xế',
-      path: '/driver-accept-settings',
-    ),
-    (
       icon: Icons.qr_code_outlined,
       selected: Icons.qr_code,
       label: 'Thanh toán',
@@ -105,6 +93,11 @@ class AdminShell extends ConsumerWidget {
   int _indexFor(String location) {
     // '/' chỉ khớp khi đúng bằng '/', nếu không mọi route đều khớp tiền tố này
     if (location == '/') return 0;
+    // Chi tiết chuyến giao hàng (/deliveries/:id) nằm trong tab con "Chuyến giao hàng" của mục
+    // "Tài xế" (/drivers), không còn là mục riêng ở NavigationRail — vẫn phải highlight đúng.
+    if (location.startsWith('/deliveries')) {
+      return _items.indexWhere((d) => d.path == '/drivers');
+    }
     final i = _items.indexWhere(
       (d) => d.path != '/' && location.startsWith(d.path),
     );

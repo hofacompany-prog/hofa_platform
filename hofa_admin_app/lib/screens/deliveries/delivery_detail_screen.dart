@@ -148,7 +148,7 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
       ref.invalidate(deliveriesProvider);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Đã xoá chuyến của đơn ${d.orderCode}')));
-        context.go('/deliveries');
+        context.go('/drivers?tab=1');
       }
     } catch (e) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));

@@ -14,15 +14,13 @@ import 'screens/orders/orders_screen.dart';
 import 'screens/orders/order_detail_screen.dart';
 import 'screens/users/users_screen.dart';
 import 'screens/users/user_detail_screen.dart';
-import 'screens/drivers/drivers_screen.dart';
-import 'screens/deliveries/deliveries_screen.dart';
+import 'screens/drivers/driver_hub_screen.dart';
 import 'screens/deliveries/delivery_detail_screen.dart';
 import 'screens/catalog/categories_screen.dart';
 import 'screens/settings/finance_settings_screen.dart';
 import 'screens/settings/shipping_fee_screen.dart';
 import 'screens/settings/order_code_screen.dart';
 import 'screens/settings/auto_accept_settings_screen.dart';
-import 'screens/settings/driver_accept_settings_screen.dart';
 import 'screens/settings/payment_settings_screen.dart';
 import 'screens/vouchers/vouchers_screen.dart';
 import 'screens/notifications/notifications_screen.dart';
@@ -102,11 +100,9 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/drivers',
-            builder: (context, state) => const DriversScreen(),
-          ),
-          GoRoute(
-            path: '/deliveries',
-            builder: (context, state) => const DeliveriesScreen(),
+            builder: (context, state) => DriverHubScreen(
+              initialTab: int.tryParse(state.uri.queryParameters['tab'] ?? '') ?? 0,
+            ),
           ),
           GoRoute(
             path: '/deliveries/:id',
@@ -139,10 +135,6 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/auto-accept-settings',
             builder: (context, state) => const AutoAcceptSettingsScreen(),
-          ),
-          GoRoute(
-            path: '/driver-accept-settings',
-            builder: (context, state) => const DriverAcceptSettingsScreen(),
           ),
           GoRoute(
             path: '/payments',
