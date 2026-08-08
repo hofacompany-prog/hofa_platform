@@ -199,16 +199,19 @@ router.delete('/merchants/:id', asyncHandler(async (req, res) => {
 }));
 
 /** Số liệu nhanh cho màn Trang chủ store app — đơn đang chuẩn bị (không tính riêng theo
- * ngày, cửa hàng cần biết đang có bao nhiêu đơn tồn đọng) và thu nhập/số đơn HÔM NAY theo
- * giờ Việt Nam (không dùng giờ server, tránh lệch múi giờ làm sai mốc "hôm nay"). Thu nhập
- * loại trừ đơn đã huỷ/hoàn tiền, số đơn "hôm nay" thì tính luôn cả đơn huỷ để đúng số đơn
- * thực nhận trong ngày (khớp cảm nhận thông thường của cửa hàng: "hôm nay có bao nhiêu đơn").
+ * ngày, cửa hàng cần biết đang có bao nhiêu đơn tồn đọng; gồm cả 'confirmed' lẫn 'preparing' —
+ * khớp đúng nhóm "Đang chuẩn bị" ở màn danh sách đơn hàng, orders_list_screen.dart, và cũng là
+ * số hiện ở badge icon "Đơn hàng" trên Trang chủ + thanh điều hướng chính, store app) và thu
+ * nhập/số đơn HÔM NAY theo giờ Việt Nam (không dùng giờ server, tránh lệch múi giờ làm sai mốc
+ * "hôm nay"). Thu nhập loại trừ đơn đã huỷ/hoàn tiền, số đơn "hôm nay" thì tính luôn cả đơn huỷ
+ * để đúng số đơn thực nhận trong ngày (khớp cảm nhận thông thường của cửa hàng: "hôm nay có bao
+ * nhiêu đơn").
  */
 router.get('/merchants/:merchantId/stats/today', asyncHandler(async (req, res) => {
   await requireMerchantAccess(req.ctx, req.params.merchantId);
   const [preparing, today] = await Promise.all([
     db.queryOne(
-      `SELECT COUNT(*)::int AS count FROM orders WHERE merchant_id = $1 AND status = 'preparing'`,
+      `SELECT COUNT(*)::int AS count FROM orders WHERE merchant_id = $1 AND status IN ('confirmed', 'preparing')`,
       [req.params.merchantId]
     ),
     db.queryOne(

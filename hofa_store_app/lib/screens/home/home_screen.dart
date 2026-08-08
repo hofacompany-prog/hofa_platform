@@ -7,7 +7,6 @@ import '../../models/branch.dart';
 import '../../models/finance_summary.dart';
 import '../../models/merchant_today_stats.dart';
 import '../../providers/auth_provider.dart';
-import '../../providers/notification_providers.dart';
 import '../../repositories/merchant_repository.dart';
 import '../../widgets/notification_bell.dart';
 
@@ -39,7 +38,7 @@ class HomeScreen extends ConsumerWidget {
     final statsAsync = ref.watch(merchantTodayStatsProvider);
     final todayFinanceAsync = ref.watch(financeSummaryProvider('today'));
     final branches = ref.watch(_homeBranchesProvider).valueOrNull ?? const <Branch>[];
-    final unreadOrders = ref.watch(unreadOrderCountProvider).valueOrNull ?? 0;
+    final preparingCount = statsAsync.valueOrNull?.preparingCount ?? 0;
     final mainBranch = branches.isEmpty
         ? null
         : branches.firstWhere((b) => b.isMain, orElse: () => branches.first);
@@ -119,7 +118,7 @@ class HomeScreen extends ConsumerWidget {
                             icon: d.selected,
                             label: d.label,
                             path: d.path,
-                            badgeCount: d.path == '/orders' ? unreadOrders : 0,
+                            badgeCount: d.path == '/orders' ? preparingCount : 0,
                           )),
                   // Danh mục và Kho hàng không còn nằm trong thanh điều hướng chính (đỡ chật,
                   // nhường chỗ cho Tài chính) nhưng vẫn cần dùng được — giữ lại làm lối tắt ở

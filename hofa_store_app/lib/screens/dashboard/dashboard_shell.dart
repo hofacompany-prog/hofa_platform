@@ -36,11 +36,13 @@ class DashboardShell extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final merchantAsync = ref.watch(myMerchantProvider);
     final location = GoRouterState.of(context).matchedLocation;
-    // Watch ở đây (widget luôn mounted xuyên suốt app) để badge biểu tượng PWA ở màn hình
-    // chính luôn tự đồng bộ đúng số đơn chưa đọc — side effect nằm trong provider, xem
-    // notification_providers.dart. Kết quả count cũng tận dụng luôn để hiện badge ngay
-    // trên tab "Đơn hàng" của điều hướng chính cho rõ ràng hơn nữa.
-    final unreadOrders = ref.watch(unreadOrderCountProvider).valueOrNull ?? 0;
+    // Watch ở đây (widget luôn mounted xuyên suốt app) CHỈ để side effect BadgeService.set()
+    // (badge biểu tượng PWA) tự đồng bộ đúng số thông báo chưa đọc — xem notification_
+    // providers.dart. Không dùng giá trị này cho badge trên tab "Đơn hàng" nữa (xem bên dưới).
+    ref.watch(unreadOrderCountProvider);
+    // Badge trên tab "Đơn hàng" hiện số đơn đang chuẩn bị (confirmed+preparing) — số việc cửa
+    // hàng còn tồn đọng cần làm, đúng nghĩa hơn hẳn số thông báo chưa đọc.
+    final preparingCount = ref.watch(merchantTodayStatsProvider).valueOrNull?.preparingCount ?? 0;
     final selectedIndex = _indexFor(location);
     final isMobile = MediaQuery.of(context).size.width < _kMobileBreakpoint;
 
@@ -66,8 +68,8 @@ class DashboardShell extends ConsumerWidget {
             labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
             destinations: _shellDestinations
                 .map((d) => NavigationDestination(
-                      icon: _destinationIcon(d, d.icon, unreadOrders, size: 22),
-                      selectedIcon: _destinationIcon(d, d.selected, unreadOrders, size: 22),
+                      icon: _destinationIcon(d, d.icon, preparingCount, size: 22),
+                      selectedIcon: _destinationIcon(d, d.selected, preparingCount, size: 22),
                       label: d.label,
                     ))
                 .toList(),
@@ -124,8 +126,8 @@ class DashboardShell extends ConsumerWidget {
             ),
             destinations: _shellDestinations
                 .map((d) => NavigationRailDestination(
-                      icon: _destinationIcon(d, d.icon, unreadOrders),
-                      selectedIcon: _destinationIcon(d, d.selected, unreadOrders),
+                      icon: _destinationIcon(d, d.icon, preparingCount),
+                      selectedIcon: _destinationIcon(d, d.selected, preparingCount),
                       label: Text(d.label),
                     ))
                 .toList(),
@@ -137,9 +139,9 @@ class DashboardShell extends ConsumerWidget {
     );
   }
 
-  Widget _destinationIcon(NavDestination d, IconData icon, int unreadOrders, {double? size}) {
-    final showBadge = d.path == '/orders' && unreadOrders > 0;
+  Widget _destinationIcon(NavDestination d, IconData icon, int preparingCount, {double? size}) {
+    final showBadge = d.path == '/orders' && preparingCount > 0;
     final iconWidget = Icon(icon, size: size);
-    return showBadge ? Badge(label: Text('$unreadOrders'), child: iconWidget) : iconWidget;
+    return showBadge ? Badge(label: Text('$preparingCount'), child: iconWidget) : iconWidget;
   }
 }
