@@ -204,11 +204,71 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             ),
                           ),
                         )
-                      : _ActiveDeliveryCard(delivery: delivery),
+                      // 'assigned' = đơn đã gán nhưng CHƯA xác nhận (OfferScreen, /offer/:id) —
+                      // khác các trạng thái sau đó (đã nhận, đang chạy) mở /deliveries/:id. Có
+                      // nút riêng ở đây phòng khi lỡ push (không bấm vào thông báo kịp) vẫn có
+                      // cách quay lại đúng màn xác nhận thay vì phải chờ push tới lần nữa.
+                      : delivery.status == 'assigned'
+                          ? _PendingOfferCard(delivery: delivery)
+                          : _ActiveDeliveryCard(delivery: delivery),
                 ),
               ],
             );
           },
+        ),
+      ),
+    );
+  }
+}
+
+/// Đơn đã gán nhưng chưa xác nhận — nút mở thẳng OfferScreen (/offer/:id), chỗ dựa khi lỡ bấm
+/// vào push thông báo (thông báo bị tắt, hoặc trình duyệt/thiết bị chặn) nhưng đơn vẫn đang
+/// chờ, không phải chờ push tới lần nữa mới thấy lại được.
+class _PendingOfferCard extends StatelessWidget {
+  final Delivery delivery;
+  const _PendingOfferCard({required this.delivery});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      elevation: 0,
+      color: theme.colorScheme.secondary,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.notifications_active, color: Colors.white),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Bạn có 1 đơn đang chờ xác nhận!',
+                    style: theme.textTheme.titleMedium?.copyWith(color: Colors.white, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              [
+                if (delivery.distanceKm != null) '${delivery.distanceKm!.toStringAsFixed(1)} km',
+                formatVnd(delivery.driverFee),
+              ].join(' · '),
+              style: const TextStyle(color: Colors.white),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                style: FilledButton.styleFrom(backgroundColor: Colors.white, foregroundColor: theme.colorScheme.secondary),
+                onPressed: () => context.push('/offer/${delivery.id}'),
+                child: const Text('Mở màn xác nhận'),
+              ),
+            ),
+          ],
         ),
       ),
     );
