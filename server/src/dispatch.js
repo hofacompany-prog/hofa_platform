@@ -58,11 +58,35 @@ async function offerToNearestDriver(orderId, { excludeDriverIds = [] } = {}) {
     branch?.latitude != null && order.ship_latitude != null
       ? haversineKm(branch.latitude, branch.longitude, order.ship_latitude, order.ship_longitude)
       : null;
+  return assignDriverAndNotify(order, driver, distanceKm);
+}
+
+/** Gán CHÍNH XÁC 1 tài xế khách đã chỉ định (đơn mua hộ — khách tự chọn ở checkout hoặc lúc
+ * chọn lại sau khi tài xế trước từ chối) — không tự tìm tài xế khác nếu người này không còn
+ * online, trả về null để nơi gọi tự báo lại cho khách chọn người khác. */
+async function offerToSpecificDriver(orderId, driverId) {
+  const order = await db.queryOne('SELECT * FROM orders WHERE id = $1', [orderId]);
+  if (!order) return null;
+  const driver = await db.queryOne(`SELECT * FROM drivers WHERE id = $1 AND status = 'online'`, [driverId]);
+  if (!driver) return null;
+  const branch = await db.queryOne('SELECT * FROM branches WHERE id = $1', [order.branch_id]);
+
+  const distanceKm =
+    branch?.latitude != null && order.ship_latitude != null
+      ? haversineKm(branch.latitude, branch.longitude, order.ship_latitude, order.ship_longitude)
+      : null;
+  return assignDriverAndNotify(order, driver, distanceKm);
+}
+
+/** Gán tài xế cụ thể đã xác định sẵn (order + driver + khoảng cách) — gọi RPC assign_driver,
+ * chốt accept_deadline bằng now() của Postgres, gửi push mời nhận đơn. Dùng chung cho cả
+ * offerToNearestDriver (tự tìm gần nhất) lẫn offerToSpecificDriver (khách tự chọn tài xế). */
+async function assignDriverAndNotify(order, driver, distanceKm) {
   const driverFee = computeDriverFee(distanceKm ?? 0);
   const etaMinutes = distanceKm != null ? Math.max(1, Math.round((distanceKm / AVG_SPEED_KMH) * 60)) : null;
 
   const delivery = await db.callRpc('assign_driver', {
-    p_order_id: orderId,
+    p_order_id: order.id,
     p_driver_id: driver.id,
     p_distance_km: distanceKm,
     p_eta_minutes: etaMinutes,
@@ -85,7 +109,7 @@ async function offerToNearestDriver(orderId, { excludeDriverIds = [] } = {}) {
     data: {
       type: 'delivery_offer',
       delivery_id: delivery.id,
-      order_id: orderId,
+      order_id: order.id,
       accept_deadline: deadline,
       accept_window_seconds: windowSeconds
     }
@@ -106,6 +130,26 @@ async function reassignAfterDecline(deliveryId) {
     [declined, deliveryId]
   );
   return offerToNearestDriver(delivery.order_id, { excludeDriverIds: declined });
+}
+
+/** Đơn mua hộ: tài xế khách CHỌN TAY từ chối/hết hạn — KHÔNG tự tìm tài xế khác như đơn thường
+ * (reassignAfterDecline), mà báo lại cho khách tự chọn người khác (xem
+ * push.notifyCustomerRepickDriver, routes GET /drivers/available + POST /orders/:id/select-driver
+ * phía app khách). Vẫn trả tài xế cũ về online + ghi declined_driver_ids y hệt
+ * reassignAfterDecline để lần chọn sau loại được người vừa từ chối. */
+async function repickNeeded(deliveryId, reason) {
+  const delivery = await db.queryOne('SELECT * FROM deliveries WHERE id = $1', [deliveryId]);
+  if (!delivery || !delivery.driver_id) return null;
+
+  await db.query(`UPDATE drivers SET status = 'online' WHERE id = $1 AND status = 'busy'`, [delivery.driver_id]);
+  const declined = [...new Set([...(delivery.declined_driver_ids || []), delivery.driver_id])];
+  await db.query(
+    `UPDATE deliveries SET driver_id = NULL, status = 'pending', accept_deadline = NULL, declined_driver_ids = $1 WHERE id = $2`,
+    [declined, deliveryId]
+  );
+  await db.query('UPDATE orders SET selected_driver_id = NULL WHERE id = $1', [delivery.order_id]);
+  await push.notifyCustomerRepickDriver(delivery.order_id, reason);
+  return { needsRepick: true };
 }
 
 /** Hết hạn accept_deadline mà tài xế BẬT "Tự động nhận đơn" — tự NHẬN hộ (đối xứng với
@@ -133,25 +177,37 @@ async function autoAcceptExpiredOffer(deliveryId) {
 
 /** Quét các delivery đang chờ xác nhận nhưng đã quá accept_deadline — gọi định kỳ từ setInterval
  * (index.js) và cũng lộ ra POST /internal/sweep-expired-offers cho 1 cron ngoài dự phòng.
- * Rẽ nhánh theo drivers.auto_accept của tài xế đang được gán: bật thì tự nhận hộ, tắt thì
- * chuyển tài xế khác — không có cron thì hạn vẫn được chặn ở bước accept (lười kiểm tra). */
+ * Rẽ nhánh theo drivers.auto_accept của tài xế đang được gán: bật thì tự nhận hộ, tắt thì chuyển
+ * tài xế khác — TRỪ đơn mua hộ (merchant_type=buy_on_behalf), tắt thì báo khách tự chọn lại
+ * (repickNeeded) chứ không tự tìm tài xế khác, vì khách đã chủ động chọn người này rồi. Không có
+ * cron thì hạn vẫn được chặn ở bước accept (lười kiểm tra, xem routes/deliveries.js). */
 async function sweepExpiredOffers() {
   const expired = await db.query(
-    `SELECT d.id, dr.auto_accept
+    `SELECT d.id, dr.auto_accept, m.merchant_type
        FROM deliveries d
        JOIN drivers dr ON dr.id = d.driver_id
+       JOIN orders o ON o.id = d.order_id
+       JOIN merchants m ON m.id = o.merchant_id
       WHERE d.status = 'assigned' AND d.accept_deadline IS NOT NULL AND d.accept_deadline < now()`
   );
   const results = [];
   for (const row of expired) {
-    results.push(row.auto_accept ? await autoAcceptExpiredOffer(row.id) : await reassignAfterDecline(row.id));
+    if (row.auto_accept) {
+      results.push(await autoAcceptExpiredOffer(row.id));
+    } else if (row.merchant_type === 'buy_on_behalf') {
+      results.push(await repickNeeded(row.id, 'Tài xế bạn chọn không xác nhận kịp thời gian'));
+    } else {
+      results.push(await reassignAfterDecline(row.id));
+    }
   }
   return { swept: expired.length, results };
 }
 
 module.exports = {
   offerToNearestDriver,
+  offerToSpecificDriver,
   reassignAfterDecline,
+  repickNeeded,
   autoAcceptExpiredOffer,
   sweepExpiredOffers,
   computeDriverFee

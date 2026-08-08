@@ -90,6 +90,8 @@ class Order {
   final DateTime createdAt;
   final List<OrderItem> items;
   final String? merchantName;
+  final String? merchantType;
+  final String? selectedDriverId;
 
   Order({
     required this.id,
@@ -113,11 +115,16 @@ class Order {
     required this.createdAt,
     required this.items,
     this.merchantName,
+    this.merchantType,
+    this.selectedDriverId,
   });
 
   bool get canCancel =>
       ['pending_payment', 'placed', 'confirmed'].contains(status);
   bool get canReview => ['delivered', 'completed'].contains(status);
+  bool get isBuyOnBehalf => merchantType == 'buy_on_behalf';
+  /// Đơn mua hộ đang chờ khách chọn tài xế (chưa từng chọn, hoặc tài xế trước đã từ chối).
+  bool get needsDriverPick => isBuyOnBehalf && status == 'ready_for_pickup' && selectedDriverId == null;
 
   factory Order.fromJson(Map<String, dynamic> json) => Order(
     id: json['id'] as String,
@@ -149,6 +156,8 @@ class Order {
             .toList() ??
         [],
     merchantName: json['merchant_name'] as String?,
+    merchantType: json['merchant_type'] as String?,
+    selectedDriverId: json['selected_driver_id'] as String?,
   );
 }
 

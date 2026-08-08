@@ -31,6 +31,23 @@ async function offerOrderToMerchant(orderId) {
 }
 
 /**
+ * Gán đơn mua hộ cho ĐÚNG tài xế khách đã chọn (orders.selected_driver_id) — dùng chung cho lần
+ * gán đầu tiên (ngay sau khi thanh toán, xem dispatchBuyOnBehalfOrder) LẪN mỗi lần khách chọn
+ * lại sau khi tài xế trước từ chối/hết hạn (POST /orders/:id/select-driver). Tài xế đã chọn
+ * không còn online thì báo lại NGAY cho khách tự chọn người khác — không tự tìm người thay
+ * khách, đúng yêu cầu để khách chọn được tài xế ưng ý chứ không phải hệ thống tự quyết.
+ */
+async function dispatchToSelectedDriver(orderId) {
+  const order = await db.queryOne('SELECT selected_driver_id FROM orders WHERE id = $1', [orderId]);
+  if (!order?.selected_driver_id) return null;
+  const result = await dispatch.offerToSpecificDriver(orderId, order.selected_driver_id);
+  if (!result) {
+    await push.notifyCustomerRepickDriver(orderId, 'Tài xế bạn chọn hiện không còn online');
+  }
+  return result;
+}
+
+/**
  * Đơn ở cửa hàng mua hộ (merchant_type='buy_on_behalf') — cửa hàng không chuẩn bị/xác nhận gì
  * cả, tài xế mới là người trực tiếp đi mua, nên bỏ hẳn 2 bước 'confirmed'/'preparing' (không có
  * ý nghĩa gì với đơn này) và chuyển thẳng sang 'ready_for_pickup' rồi gọi dispatch ngay khi
@@ -40,7 +57,7 @@ async function offerOrderToMerchant(orderId) {
  */
 async function dispatchBuyOnBehalfOrder(orderId) {
   const order = await db.queryOne(
-    `SELECT o.status, m.merchant_type
+    `SELECT o.status, o.selected_driver_id, m.merchant_type
        FROM orders o JOIN merchants m ON m.id = o.merchant_id
       WHERE o.id = $1`,
     [orderId]
@@ -57,10 +74,14 @@ async function dispatchBuyOnBehalfOrder(orderId) {
   });
   push.notifyCustomerOrderStatus(orderId, 'ready_for_pickup').catch(() => {});
 
-  const result = await dispatch.offerToNearestDriver(orderId);
+  // selected_driver_id lẽ ra luôn có (bắt buộc chọn ở checkout) — fallback tự tìm gần nhất chỉ
+  // để không kẹt đơn nếu vì lý do gì đó (đơn cũ trước khi có tính năng này...) chưa có lựa chọn.
+  const result = order.selected_driver_id
+    ? await dispatchToSelectedDriver(orderId)
+    : await dispatch.offerToNearestDriver(orderId);
   if (!result) {
-    console.warn('[orderOffer] Đơn mua hộ', orderId, 'không tìm được tài xế online — cần admin gán tay.');
+    console.warn('[orderOffer] Đơn mua hộ', orderId, 'chưa gán được tài xế — chờ khách chọn hoặc admin can thiệp.');
   }
 }
 
-module.exports = { offerOrderToMerchant, dispatchBuyOnBehalfOrder };
+module.exports = { offerOrderToMerchant, dispatchBuyOnBehalfOrder, dispatchToSelectedDriver };

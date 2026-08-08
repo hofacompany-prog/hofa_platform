@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/format.dart';
 import '../../models/order.dart';
 import '../../providers/app_providers.dart';
+import '../../widgets/driver_picker_dialog.dart';
 import 'orders_list_screen.dart' show orderStatusColor;
 
 class OrderDetailScreen extends ConsumerStatefulWidget {
@@ -129,6 +130,25 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
     }
   }
 
+  /// Đơn mua hộ cần khách chọn (hoặc chọn lại, sau khi tài xế trước từ chối/hết hạn) tài xế —
+  /// xem Order.needsDriverPick. Dùng chung màn chọn với checkout_screen.dart.
+  Future<void> _pickDriver(Order o) async {
+    final branch = await ref.read(branchDetailProvider(o.branchId).future);
+    if (branch.latitude == null || branch.longitude == null || !mounted) return;
+    final picked = await showDriverPickerDialog(context, lat: branch.latitude!, lng: branch.longitude!);
+    if (picked == null) return;
+
+    setState(() => _busy = true);
+    try {
+      await ref.read(orderRepoProvider).selectDriver(o.id, picked.id);
+      ref.invalidate(orderDetailProvider(widget.orderId));
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final orderAsync = ref.watch(orderDetailProvider(widget.orderId));
@@ -195,6 +215,41 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                     ),
                   ),
                 ),
+                if (o.needsDriverPick) ...[
+                  const SizedBox(height: 12),
+                  Card(
+                    elevation: 0,
+                    color: theme.colorScheme.primaryContainer.withValues(alpha: 0.5),
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.person_search, color: theme.colorScheme.primary),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Cần chọn tài xế để tiếp tục đơn mua hộ',
+                                  style: theme.textTheme.titleSmall,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          SizedBox(
+                            width: double.infinity,
+                            child: FilledButton(
+                              onPressed: _busy ? null : () => _pickDriver(o),
+                              child: const Text('Chọn tài xế'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 12),
                 Card(
                   elevation: 0,

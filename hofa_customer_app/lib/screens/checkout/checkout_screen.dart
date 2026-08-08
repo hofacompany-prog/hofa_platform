@@ -12,7 +12,9 @@ import '../../models/wholesale_tier.dart';
 import '../../providers/app_providers.dart';
 import '../../providers/auth_providers.dart';
 import '../../providers/cart_provider.dart';
+import '../../models/available_driver.dart';
 import '../../widgets/buy_on_behalf_fee_notice.dart';
+import '../../widgets/driver_picker_dialog.dart';
 import '../../widgets/voucher_picker_dialog.dart';
 import '../address/address_picker_screen.dart';
 
@@ -34,6 +36,7 @@ class CheckoutScreen extends ConsumerStatefulWidget {
 
 class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   String? _selectedAddressId;
+  AvailableDriver? _selectedDriver;
   String _paymentMethod = 'cod';
   DateTime? _scheduledFor;
   final _noteCtrl = TextEditingController();
@@ -42,6 +45,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   String? _voucherError;
   bool _voucherChecking = false;
   bool _placing = false;
+  String? _driverPickError;
 
   int get _voucherDiscount =>
       _appliedVouchers.fold(0, (sum, v) => sum + v.discount);
@@ -353,6 +357,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     'ship_latitude': address.latitude,
     'ship_longitude': address.longitude,
     'payment_method': _effectivePaymentMethod(cart),
+    if (_selectedDriver != null) 'selected_driver_id': _selectedDriver!.id,
     'delivery_fee': deliveryFee,
     if (_appliedVouchers.isNotEmpty)
       'voucher_codes': _appliedVouchers.map((v) => v.code).toList(),
@@ -472,6 +477,13 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       return;
     final items = _relevantItems(cart);
     if (items.isEmpty) return;
+
+    final merchant = ref.read(merchantDetailProvider(cart.merchantId!)).valueOrNull;
+    if (merchant?.isBuyOnBehalf == true && _selectedDriver == null) {
+      setState(() => _driverPickError = 'Chọn 1 tài xế trước khi đặt hàng');
+      return;
+    }
+    setState(() => _driverPickError = null);
 
     final orders = _groupByOccurrence(items);
     if (orders.isEmpty) return;
@@ -606,6 +618,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final merchant = cart.merchantId == null
         ? null
         : ref.watch(merchantDetailProvider(cart.merchantId!)).valueOrNull;
+    final branch = cart.branchId == null
+        ? null
+        : ref.watch(branchDetailProvider(cart.branchId!)).valueOrNull;
     final feeTiers = (merchant != null && merchant.isBuyOnBehalf)
         ? ref.watch(merchantFeeTiersProvider(cart.merchantId!)).valueOrNull ?? const []
         : const <MerchantFeeTier>[];
@@ -773,7 +788,42 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               ),
             ),
           const Divider(height: 32),
-          if (merchant != null && merchant.isBuyOnBehalf) BuyOnBehalfFeeNotice(merchant: merchant),
+          if (merchant != null && merchant.isBuyOnBehalf) ...[
+            BuyOnBehalfFeeNotice(merchant: merchant),
+            const SizedBox(height: 12),
+            Text('Chọn tài xế', style: theme.textTheme.titleSmall),
+            const SizedBox(height: 8),
+            Card(
+              elevation: 0,
+              color: theme.colorScheme.surfaceContainerLow,
+              child: ListTile(
+                leading: CircleAvatar(
+                  backgroundImage: _selectedDriver?.avatarUrl != null ? NetworkImage(_selectedDriver!.avatarUrl!) : null,
+                  child: _selectedDriver?.avatarUrl == null ? const Icon(Icons.person) : null,
+                ),
+                title: Text(_selectedDriver?.fullName ?? 'Chưa chọn tài xế'),
+                subtitle: _selectedDriver != null
+                    ? Text(
+                        '★ ${_selectedDriver!.ratingAvg.toStringAsFixed(1)}'
+                        '${_selectedDriver!.vehicleType != null ? ' · ${_selectedDriver!.vehicleType}' : ''}',
+                      )
+                    : const Text('Bấm để xem tài xế đang online gần cửa hàng'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: (branch?.latitude == null || branch?.longitude == null)
+                    ? null
+                    : () async {
+                        final picked = await showDriverPickerDialog(context, lat: branch!.latitude!, lng: branch.longitude!);
+                        if (picked != null) setState(() => _selectedDriver = picked);
+                      },
+              ),
+            ),
+            if (_driverPickError != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(_driverPickError!, style: TextStyle(color: theme.colorScheme.error)),
+              ),
+            const Divider(height: 32),
+          ],
           Text('Phương thức thanh toán', style: theme.textTheme.titleSmall),
           RadioGroup<String>(
             groupValue: _effectivePaymentMethod(cart),

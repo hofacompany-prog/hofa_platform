@@ -33,4 +33,9 @@ class OrderRepository {
         'status': 'cancelled',
         if (note != null) 'note': note,
       }) as Map<String, dynamic>);
+
+  /// Chọn (hoặc chọn lại) tài xế cho đơn mua hộ — xem models/order.dart Order.needsDriverPick.
+  Future<void> selectDriver(String orderId, String driverId) async {
+    await _api.post('/orders/$orderId/select-driver', body: {'driver_id': driverId});
+  }
 }

@@ -200,6 +200,20 @@ async function notifyCustomerOrderStatus(orderId, status) {
   });
 }
 
+/** Đơn mua hộ: tài xế khách chọn từ chối/hết hạn/không còn online — báo khách tự chọn tài xế
+ * khác (xem dispatch.repickNeeded, orderOffer.dispatchToSelectedDriver). Không dùng
+ * CUSTOMER_STATUS_MESSAGES/order_status_changed vì order.status KHÔNG đổi lúc này (vẫn đứng ở
+ * ready_for_pickup) — cần type riêng để app khách biết mở đúng màn "Chọn tài xế". */
+async function notifyCustomerRepickDriver(orderId, reason) {
+  const order = await db.queryOne('SELECT customer_id, order_code FROM orders WHERE id = $1', [orderId]);
+  if (!order) return;
+  await sendPushToUser(order.customer_id, {
+    title: 'Cần chọn tài xế khác',
+    body: `${order.order_code} · ${reason} — chọn tài xế khác để đơn tiếp tục nhé!`,
+    data: { type: 'buy_on_behalf_repick', order_id: orderId }
+  });
+}
+
 /** Tự xoá các dòng hộp thư (bảng notifications) cũ hơn notification_settings.ttl_hours — bỏ
  * qua lặng lẽ nếu chưa cấu hình (ttl_hours NULL, mặc định) hoặc chưa có dòng settings nào.
  * Gọi định kỳ từ index.js, cùng kiểu sweepExpiredOffers (dispatch.js). */
@@ -216,6 +230,7 @@ async function sweepOldNotifications() {
 module.exports = {
   sendPushToUser,
   notifyCustomerOrderStatus,
+  notifyCustomerRepickDriver,
   sendBroadcastToRoles,
   resolveMerchantUserIds,
   sendToUserIds,
