@@ -199,14 +199,30 @@ class _OfferScreenState extends ConsumerState<OfferScreen> with SingleTickerProv
     // true ngay, không bao giờ tạo lại controller dù dữ liệu thật đã tải xong sau đó (đã xác
     // nhận qua thực tế với confirm_sweep_seconds bên store app trước đây).
     if (!_sweepStarted && !driverAsync.isLoading) {
-      final deadline = delivery.acceptDeadline;
-      final duration = deadline != null ? deadline.difference(DateTime.now()) : Duration.zero;
+      // QUAN TRỌNG: AnimationController.duration là tổng thời lượng CHO CẢ QUÃNG 0→1, không
+      // phải "thời gian còn lại" — nếu chỉ truyền thời gian còn lại rồi forward() từ 0 như
+      // trước, thanh sẽ hiện lại RỖNG rồi chạy nhanh hơn hẳn (chỉ trong phần thời gian còn lại)
+      // trông như 1 lượt đếm MỚI, NGẮN HƠN — dễ khiến tài xế hiểu lầm là bị reset. Đúng ra phải
+      // giữ nguyên TỔNG thời lượng gốc (assignedAt → acceptDeadline), chỉ nhảy thẳng tới đúng %
+      // đã trôi qua (forward(from: ...)) để thanh tiếp tục đúng chỗ đã thoát ra, cùng tốc độ.
+      final Duration totalDuration;
+      final double startValue;
+      if (delivery.acceptDeadline != null && delivery.assignedAt != null) {
+        totalDuration = delivery.acceptDeadline!.difference(delivery.assignedAt!);
+        final elapsed = DateTime.now().difference(delivery.assignedAt!);
+        startValue = totalDuration.inMilliseconds > 0
+            ? (elapsed.inMilliseconds / totalDuration.inMilliseconds).clamp(0.0, 1.0)
+            : 1.0;
+      } else {
+        totalDuration = Duration.zero;
+        startValue = 1.0;
+      }
       _sweepStarted = true;
       _sweepIsAutoAccept = driverAsync.valueOrNull?.autoAccept ?? false;
       _sweepController = AnimationController(
         vsync: this,
-        duration: duration.isNegative ? Duration.zero : duration,
-      )..forward();
+        duration: totalDuration > Duration.zero ? totalDuration : const Duration(milliseconds: 1),
+      );
       _sweepController!.addStatusListener((status) {
         if (status != AnimationStatus.completed) return;
         if (_sweepIsAutoAccept) {
@@ -215,6 +231,7 @@ class _OfferScreenState extends ConsumerState<OfferScreen> with SingleTickerProv
           _declineOnExpiry();
         }
       });
+      _sweepController!.forward(from: startValue);
     }
 
     return Column(

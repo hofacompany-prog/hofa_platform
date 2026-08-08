@@ -224,20 +224,39 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> with Sing
         // Mặc định coi như BẬT (an toàn hơn) nếu không tải được thông tin chi nhánh — tránh lỡ
         // tự huỷ đơn + đóng cửa hàng chỉ vì lỗi mạng tạm thời.
         final autoAccept = branchAsync.valueOrNull?.autoAcceptOrders ?? true;
-        final deadline = o.confirmSweepDeadline ??
-            DateTime.now().add(Duration(
-              seconds: autoAccept
-                  ? (confirmSweepAsync.valueOrNull ?? _defaultSweepSeconds)
-                  : (manualSweepAsync.valueOrNull ?? _defaultManualSweepSeconds),
-            ));
-        final duration = deadline.difference(DateTime.now());
         final branch = branchAsync.valueOrNull;
+
+        // QUAN TRỌNG: AnimationController.duration là tổng thời lượng CHO CẢ QUÃNG 0→1, không
+        // phải "thời gian còn lại" — nếu chỉ truyền thời gian còn lại rồi forward() từ 0 như
+        // trước, thanh sẽ hiện lại RỖNG rồi chạy nhanh hơn hẳn (chỉ trong phần thời gian còn
+        // lại) trông như một lượt đếm MỚI, NGẮN HƠN — dễ khiến cửa hàng hiểu lầm là bị reset.
+        // Đúng ra phải giữ nguyên TỔNG thời lượng gốc, chỉ nhảy thẳng tới đúng % đã trôi qua
+        // (forward(from: ...)) để thanh tiếp tục đúng chỗ đã thoát ra, cùng tốc độ như ban đầu.
+        final Duration totalDuration;
+        final double startValue;
+        if (o.confirmSweepDeadline != null) {
+          // confirmSweepDeadline và createdAt được chốt CÙNG 1 now() trong create_order() (cùng
+          // 1 transaction Postgres) — hiệu số này chính XÁC là tổng thời lượng ban đầu.
+          totalDuration = o.confirmSweepDeadline!.difference(o.createdAt);
+          final elapsed = DateTime.now().difference(o.createdAt);
+          startValue = totalDuration.inMilliseconds > 0
+              ? (elapsed.inMilliseconds / totalDuration.inMilliseconds).clamp(0.0, 1.0)
+              : 1.0;
+        } else {
+          // Đơn cũ tạo trước migration 42 — chưa có mốc backend, coi như vừa bắt đầu ngay bây giờ.
+          totalDuration = Duration(
+            seconds: autoAccept
+                ? (confirmSweepAsync.valueOrNull ?? _defaultSweepSeconds)
+                : (manualSweepAsync.valueOrNull ?? _defaultManualSweepSeconds),
+          );
+          startValue = 0.0;
+        }
         _sweepStarted = true;
         _sweepIsAutoAccept = autoAccept;
         _sweepController = AnimationController(
           vsync: this,
-          duration: duration.isNegative ? Duration.zero : duration,
-        )..forward();
+          duration: totalDuration > Duration.zero ? totalDuration : const Duration(milliseconds: 1),
+        );
         _sweepController!.addStatusListener((status) {
           if (status != AnimationStatus.completed) return;
           if (autoAccept) {
@@ -246,6 +265,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> with Sing
             _cancelDueToTimeout(branch);
           }
         });
+        _sweepController!.forward(from: startValue);
       }
     }
 
