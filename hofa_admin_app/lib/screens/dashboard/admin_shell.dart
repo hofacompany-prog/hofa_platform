@@ -53,40 +53,10 @@ class AdminShell extends ConsumerWidget {
       path: '/finance',
     ),
     (
-      icon: Icons.local_shipping_outlined,
-      selected: Icons.local_shipping,
-      label: 'Phí ship',
-      path: '/shipping-fee',
-    ),
-    (
-      icon: Icons.confirmation_number_outlined,
-      selected: Icons.confirmation_number,
-      label: 'Voucher',
-      path: '/vouchers',
-    ),
-    (
-      icon: Icons.tag_outlined,
-      selected: Icons.tag,
-      label: 'Mã đơn hàng',
-      path: '/order-code',
-    ),
-    (
       icon: Icons.notifications_outlined,
       selected: Icons.notifications,
       label: 'Thông báo',
       path: '/notifications',
-    ),
-    (
-      icon: Icons.tune_outlined,
-      selected: Icons.tune,
-      label: 'Thông số cửa hàng',
-      path: '/auto-accept-settings',
-    ),
-    (
-      icon: Icons.qr_code_outlined,
-      selected: Icons.qr_code,
-      label: 'Thanh toán',
-      path: '/payments',
     ),
   ];
 

@@ -7,7 +7,7 @@ import 'providers/admin_providers.dart';
 import 'screens/auth/admin_login_screen.dart';
 import 'screens/dashboard/admin_shell.dart';
 import 'screens/dashboard/dashboard_screen.dart';
-import 'screens/merchants/merchants_screen.dart';
+import 'screens/merchants/merchant_hub_screen.dart';
 import 'screens/merchants/merchant_form_screen.dart';
 import 'screens/merchants/merchant_detail_screen.dart';
 import 'screens/orders/orders_screen.dart';
@@ -17,12 +17,7 @@ import 'screens/users/user_detail_screen.dart';
 import 'screens/drivers/driver_hub_screen.dart';
 import 'screens/deliveries/delivery_detail_screen.dart';
 import 'screens/catalog/categories_screen.dart';
-import 'screens/settings/finance_settings_screen.dart';
-import 'screens/settings/shipping_fee_screen.dart';
-import 'screens/settings/order_code_screen.dart';
-import 'screens/settings/auto_accept_settings_screen.dart';
-import 'screens/settings/payment_settings_screen.dart';
-import 'screens/vouchers/vouchers_screen.dart';
+import 'screens/settings/finance_hub_screen.dart';
 import 'screens/notifications/notifications_screen.dart';
 
 final adminNavigatorKey = GlobalKey<NavigatorState>();
@@ -69,7 +64,9 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/merchants',
-            builder: (context, state) => const MerchantsScreen(),
+            builder: (context, state) => MerchantHubScreen(
+              initialTab: int.tryParse(state.uri.queryParameters['tab'] ?? '') ?? 0,
+            ),
           ),
           GoRoute(
             path: '/merchants/new',
@@ -114,31 +111,13 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/finance',
-            builder: (context, state) => const FinanceSettingsScreen(),
-          ),
-          GoRoute(
-            path: '/shipping-fee',
-            builder: (context, state) => const ShippingFeeScreen(),
-          ),
-          GoRoute(
-            path: '/vouchers',
-            builder: (context, state) => const VouchersScreen(),
-          ),
-          GoRoute(
-            path: '/order-code',
-            builder: (context, state) => const OrderCodeScreen(),
+            builder: (context, state) => FinanceHubScreen(
+              initialTab: int.tryParse(state.uri.queryParameters['tab'] ?? '') ?? 0,
+            ),
           ),
           GoRoute(
             path: '/notifications',
             builder: (context, state) => const NotificationsScreen(),
-          ),
-          GoRoute(
-            path: '/auto-accept-settings',
-            builder: (context, state) => const AutoAcceptSettingsScreen(),
-          ),
-          GoRoute(
-            path: '/payments',
-            builder: (context, state) => const PaymentSettingsScreen(),
           ),
         ],
       ),
