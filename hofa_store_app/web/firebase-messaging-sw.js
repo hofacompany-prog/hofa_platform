@@ -132,6 +132,7 @@ function writePendingDeepLink(path) {
 // gì tới việc hiển thị.
 messaging.onBackgroundMessage(async (payload) => {
   const data = payload.data || {};
+  console.log('[hofa-sw] onBackgroundMessage nhận data =', data);
   await writeLastPushData(data);
 
   if (data.category === 'order' && 'setAppBadge' in self.registration) {
@@ -157,21 +158,42 @@ function targetPathFor(data) {
 }
 
 self.addEventListener('notificationclick', (event) => {
+  console.log('[hofa-sw] notificationclick nhận được, notification =', event.notification);
   event.notification.close();
   event.waitUntil(
-    readLastPushData().then((data) => {
-      const path = targetPathFor(data);
-      return writePendingDeepLink(path).then(() => {
-        const targetUrl = new URL(path, self.registration.scope).href;
-        return clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
-          for (const client of windowClients) {
-            if (client.url.startsWith(self.registration.scope) && 'focus' in client) {
-              return client.navigate(targetUrl).then((c) => (c || client).focus()).catch(() => client.focus());
+    readLastPushData()
+      .then((data) => {
+        console.log('[hofa-sw] readLastPushData() =', data);
+        const path = targetPathFor(data);
+        console.log('[hofa-sw] targetPathFor() =', path);
+        return writePendingDeepLink(path).then(() => {
+          console.log('[hofa-sw] đã ghi pendingDeepLink =', path);
+          const targetUrl = new URL(path, self.registration.scope).href;
+          console.log('[hofa-sw] targetUrl =', targetUrl, ', scope =', self.registration.scope);
+          return clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+            console.log('[hofa-sw] số client đang mở =', windowClients.length, windowClients.map((c) => c.url));
+            for (const client of windowClients) {
+              if (client.url.startsWith(self.registration.scope) && 'focus' in client) {
+                console.log('[hofa-sw] navigate client có sẵn tới', targetUrl);
+                return client
+                  .navigate(targetUrl)
+                  .then((c) => {
+                    console.log('[hofa-sw] client.navigate() thành công');
+                    return (c || client).focus();
+                  })
+                  .catch((e) => {
+                    console.log('[hofa-sw] client.navigate() lỗi', e);
+                    return client.focus();
+                  });
+              }
             }
-          }
-          if (clients.openWindow) return clients.openWindow(targetUrl);
+            if (clients.openWindow) {
+              console.log('[hofa-sw] không có client nào đang mở, gọi clients.openWindow()');
+              return clients.openWindow(targetUrl);
+            }
+          });
         });
-      });
-    })
+      })
+      .catch((e) => console.log('[hofa-sw] notificationclick lỗi', e))
   );
 });

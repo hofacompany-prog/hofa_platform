@@ -45,6 +45,13 @@
     * https://docs.flutter.dev/platform-integration/web/initialization
   -->
 
+  <!-- Chẩn đoán tạm thời: log ngay lúc trang tải, để biết chính xác app thực sự mở ở URL nào
+       lúc bấm push từ trạng thái tắt hẳn — xem qua Safari Web Inspector (Mac > Safari > Develop
+       > tên iPhone > tên trang). Xoá đoạn này sau khi tìm ra nguyên nhân. -->
+  <script>
+    console.log('[hofa-index] Trang tải ở URL =', window.location.href);
+  </script>
+
   <!-- Xoá badge trên icon PWA (Badging API) mỗi khi mở/quay lại app — badge được cộng ở
        firebase-messaging-sw.js lúc app không mở, dùng chung 1 IndexedDB store để đếm. -->
   <script>
@@ -77,7 +84,10 @@
   <script>
     window.hofaReadPendingDeepLink = function () {
       return new Promise(function (resolve) {
-        if (!('indexedDB' in window)) return resolve(null);
+        if (!('indexedDB' in window)) {
+          console.log('[hofa-index] indexedDB không tồn tại trong window');
+          return resolve(null);
+        }
         var req = indexedDB.open('hofa-badge', 1);
         req.onupgradeneeded = function () { req.result.createObjectStore('counter'); };
         req.onsuccess = function () {
@@ -86,12 +96,19 @@
           var getReq = store.get('pendingDeepLink');
           getReq.onsuccess = function () {
             var path = getReq.result || null;
+            console.log('[hofa-index] hofaReadPendingDeepLink() đọc được =', path);
             if (path) store.delete('pendingDeepLink');
             resolve(path);
           };
-          getReq.onerror = function () { resolve(null); };
+          getReq.onerror = function (e) {
+            console.log('[hofa-index] hofaReadPendingDeepLink() lỗi đọc', e);
+            resolve(null);
+          };
         };
-        req.onerror = function () { resolve(null); };
+        req.onerror = function (e) {
+          console.log('[hofa-index] hofaReadPendingDeepLink() lỗi mở DB', e);
+          resolve(null);
+        };
       });
     };
   </script>

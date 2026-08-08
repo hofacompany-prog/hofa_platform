@@ -95,10 +95,13 @@ class PushService {
   /// hướng, độc lập hoàn toàn với getInitialMessage().
   Future<void> _checkPendingDeepLink() async {
     final path = await PendingDeepLink.readAndClear();
+    debugPrint('[push] _checkPendingDeepLink đọc được path = $path');
     if (path == null || path.isEmpty || path == '/') return;
     final context = _navigatorKey?.currentContext;
+    debugPrint('[push] _checkPendingDeepLink context == null? ${context == null}');
     if (context == null) return;
     context.go(path);
+    debugPrint('[push] _checkPendingDeepLink đã gọi context.go($path)');
   }
 
   Future<void> _registerTokenIfLoggedIn() async {
