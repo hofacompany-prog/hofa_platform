@@ -96,6 +96,20 @@
     };
   </script>
 
+  <!-- App đang mở nền (chưa tắt hẳn) rồi bấm push: notificationclick của service worker không
+       phải lúc nào cũng khiến trang tải lại thật qua client.navigate() (xem firebase-messaging-
+       sw.js) — service worker postMessage cho trang này, gọi lại hàm Dart đăng ký ở
+       pending_deep_link_web.dart để app tự đọc IndexedDB + điều hướng bằng router hiện có. -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('message', function (event) {
+        if (event.data && event.data.type === 'hofa-deep-link' && typeof window.hofaTriggerDeepLinkCheck === 'function') {
+          window.hofaTriggerDeepLinkCheck();
+        }
+      });
+    }
+  </script>
+
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

@@ -1,22 +1,8 @@
-importScripts('https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js');
-importScripts('https://www.gstatic.com/firebasejs/10.13.2/firebase-messaging-compat.js');
-
-firebase.initializeApp({
-  apiKey: 'AIzaSyDxy5zm1SaYYZh5Z3TbTeMZBSaqqmxlbPA',
-  authDomain: 'hofa-production.firebaseapp.com',
-  projectId: 'hofa-production',
-  storageBucket: 'hofa-production.firebasestorage.app',
-  messagingSenderId: '265406466413',
-  appId: '1:265406466413:web:cca1f24788dafe39143264',
-});
-
-const messaging = firebase.messaging();
-
 // Trình duyệt mặc định giữ service worker CŨ chạy cho tới khi mọi tab/instance của app đóng
-// hẳn, kể cả khi đã tải xong bản service worker mới — mọi sửa đổi ở file này (kể cả các bản
-// vá điều hướng push trước đó) có thể ÂM THẦM không có hiệu lực trên máy thật vì lý do này,
-// không phải vì logic sai. skipWaiting() bỏ qua bước "waiting", clients.claim() chiếm quyền
-// kiểm soát các tab đang mở ngay lập tức — bản mới có hiệu lực ngay lần mở app kế tiếp.
+// hẳn, kể cả khi đã tải xong bản service worker mới — mọi sửa đổi ở file này có thể ÂM THẦM
+// không có hiệu lực trên máy thật vì lý do này, không phải vì logic sai. skipWaiting() bỏ qua
+// bước "waiting", clients.claim() chiếm quyền kiểm soát các tab đang mở ngay lập tức — bản mới
+// có hiệu lực ngay lần mở app kế tiếp.
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', (event) => event.waitUntil(clients.claim()));
 
@@ -57,11 +43,10 @@ function writeBadgeCount(count) {
 
 /**
  * Lưu lại data của push gần nhất — để notificationclick bên dưới đọc lại. KHÔNG đọc từ
- * event.notification.data (đã thử — cấu trúc đó do firebase-messaging-compat.js tự quyết định
- * lúc tự hiện thông báo và không ổn định/không tài liệu hoá rõ ràng giữa các bản SDK, thực tế
- * đã xác nhận không lấy được data đúng, khiến bấm push mở app nhưng không nhảy đúng màn). Ghi
- * lại data thẳng từ onBackgroundMessage (đáng tin cậy — dùng chung cho đếm badge) là cách chắc
- * chắn duy nhất. Cùng 1 object store 'counter' với hàm đếm badge ở trên, khác key.
+ * event.notification.data — cấu trúc đó không ổn định giữa các nền tảng/SDK, thực tế đã xác
+ * nhận không lấy được data đúng. Ghi lại data thẳng từ push event (đáng tin cậy — dùng chung
+ * cho đếm badge) là cách chắc chắn duy nhất. Cùng 1 object store 'counter' với hàm đếm badge
+ * ở trên, khác key.
  */
 function writeLastPushData(data) {
   return new Promise((resolve) => {
@@ -117,18 +102,25 @@ function writePendingDeepLink(path) {
 }
 
 /**
- * Firebase JS SDK chỉ định tuyến message vào đây khi KHÔNG có tab nào của app đang mở/focus
- * — đúng lúc icon màn hình chính là thứ người dùng thật sự nhìn thấy, nên badge chỉ cần xử lý
- * ở service worker. data.badge do server/src/push.js quyết định: 'true' cho thông báo đơn
- * hàng (mặc định) hoặc khi admin tick "Hiển thị số trên biểu tượng ứng dụng".
+ * Xử lý push event THẲNG (không qua firebase-messaging-compat.js/onBackgroundMessage) — SDK
+ * Firebase trong service worker từng khiến showNotification() bị gọi ngoài vòng đời push event
+ * thật trên iOS (xác nhận qua Web Inspector lúc vá lỗi tương tự bên store app), gây thông báo
+ * hiện lặp và notification tạo ra không phải 1 Notification object thật để notificationclick
+ * gắn vào. Tự đọc event.data + tự gọi showNotification() bên trong event.waitUntil() của
+ * CHÍNH push event là cách chuẩn, đúng vòng đời Push API — SDK Firebase chỉ còn cần ở phía
+ * Dart để lấy token, không cần importScripts gì ở đây nữa.
  */
-// KHÔNG tự gọi self.registration.showNotification() ở đây — payload luôn có sẵn field
-// "notification" (xem server/src/push.js sendToTokens), nên firebase-messaging-compat.js đã
-// TỰ hiện thông báo trước khi callback này chạy. Gọi thêm 1 lần nữa sẽ hiện lặp 2 thông báo
-// giống hệt nhau cho MỌI push (bug thật đã xảy ra, xác nhận qua log server chỉ gửi 1 lần).
-// onBackgroundMessage ở đây chỉ còn dùng để cộng dồn badge — side effect độc lập, không đụng
-// gì tới việc hiển thị.
-messaging.onBackgroundMessage(async (payload) => {
+self.addEventListener('push', (event) => {
+  event.waitUntil(handlePush(event));
+});
+
+async function handlePush(event) {
+  let payload = {};
+  try {
+    payload = event.data ? event.data.json() : {};
+  } catch (e) {
+    // Payload không phải JSON hợp lệ — bỏ qua, coi như rỗng.
+  }
   const data = payload.data || {};
   await writeLastPushData(data);
 
@@ -137,14 +129,20 @@ messaging.onBackgroundMessage(async (payload) => {
     await writeBadgeCount(count);
     self.registration.setAppBadge(count).catch(() => {});
   }
-});
+
+  const title = (payload.notification && payload.notification.title) || data.title || 'HOFA';
+  const body = (payload.notification && payload.notification.body) || data.body || '';
+  await self.registration.showNotification(title, {
+    body,
+    icon: '/icons/Icon-192.png',
+    data,
+  });
+}
 
 /**
- * Đường dẫn trong app tương ứng với data của push — khớp switch trong
- * lib/core/push_service.dart#handleData, NHƯNG chạy ở đây (service worker, ngoài Dart) vì lúc
- * app đang đóng/nền, Dart code không chạy nên handleData không có cơ hội được gọi — trước đây
- * bấm vào thông báo chỉ mở trang chủ (self.registration.scope), bỏ qua hẳn delivery_id, nên
- * không bao giờ nhảy tới đúng màn nhận chuyến/chi tiết chuyến được.
+ * Đường dẫn trong app tương ứng với data của push — chạy ở đây (service worker, ngoài Dart)
+ * vì lúc app đang đóng/nền, Dart code không chạy nên handleData (push_service.dart) không có
+ * cơ hội được gọi.
  */
 function targetPathFor(data) {
   if (data.type === 'admin_broadcast' && data.screen) return data.screen;
@@ -154,16 +152,36 @@ function targetPathFor(data) {
 }
 
 self.addEventListener('notificationclick', (event) => {
-  event.notification.close();
+  // Một số nền tảng (Safari/iOS) từ chối đóng thông báo NGAY lúc vừa hiện ("Persistent
+  // notifications cannot be closed shortly after they are shown") — lỗi này ném ra đồng bộ,
+  // bọc try/catch để không làm dừng cả hàm nếu gặp.
+  try {
+    event.notification.close();
+  } catch (e) {
+    // Bỏ qua — không chặn phần điều hướng bên dưới.
+  }
   event.waitUntil(
     readLastPushData().then((data) => {
       const path = targetPathFor(data);
       return writePendingDeepLink(path).then(() => {
-        const targetUrl = new URL(path, self.registration.scope).href;
+        // self.registration.scope KHÔNG phải origin của app trong mọi trường hợp — dùng
+        // self.location.origin để so khớp tab đang mở cho chắc chắn.
+        const origin = self.location.origin;
+        const targetUrl = new URL(path, origin).href;
         return clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
           for (const client of windowClients) {
-            if (client.url.startsWith(self.registration.scope) && 'focus' in client) {
-              return client.navigate(targetUrl).then((c) => (c || client).focus()).catch(() => client.focus());
+            if (client.url.startsWith(origin) && 'focus' in client) {
+              // App đang mở nền (chưa tắt hẳn): focus TRƯỚC rồi mới navigate — gọi navigate()
+              // trên 1 client chưa được focus có thể bị từ chối âm thầm trên 1 số nền tảng
+              // (đã xác nhận với bên store app: bấm push lúc app thu gọn chỉ mở app lên lại
+              // đúng màn cũ, không tới đúng màn). postMessage cho trang đó để Dart tự điều
+              // hướng bằng router hiện có (đọc lại IndexedDB, xem pending_deep_link_web.dart)
+              // — không phụ thuộc navigate() có thật sự tải lại trang hay không; navigate()
+              // vẫn thử thêm cho các trường hợp postMessage không được lắng nghe kịp.
+              return client.focus().then((focused) => {
+                (focused || client).postMessage({ type: 'hofa-deep-link', path });
+                return client.navigate(targetUrl).catch(() => {});
+              });
             }
           }
           if (clients.openWindow) return clients.openWindow(targetUrl);
