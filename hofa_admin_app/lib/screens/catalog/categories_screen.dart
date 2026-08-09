@@ -6,7 +6,10 @@ import '../../providers/admin_providers.dart';
 import '../../widgets/icon_picker_field.dart';
 
 /// Danh mục ngành hàng dùng chung cho cả sàn — tối đa 2 cấp (gốc và con), mỗi cấp đều
-/// chọn được icon. Chỉ admin được tạo/sửa/xoá — cửa hàng chỉ gắn sản phẩm vào danh mục có sẵn.
+/// chọn được icon. Chỉ admin được tạo/sửa — cửa hàng chỉ gắn sản phẩm vào danh mục có sẵn.
+/// Cố ý KHÔNG cho xoá (kể cả admin): xoá 1 danh mục gốc/con sẽ kéo theo mất luôn mọi
+/// merchant_categories mà từng cửa hàng tự tạo dựa trên nó (ON DELETE CASCADE) — rủi ro mất
+/// dữ liệu 2 tầng khó lường trước, xem server/src/routes/products.js.
 class CategoriesScreen extends ConsumerStatefulWidget {
   const CategoriesScreen({super.key});
 
@@ -191,39 +194,6 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
     }
   }
 
-  Future<void> _deleteDialog(Category category, {required int childCount}) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Xoá danh mục?'),
-        content: Text(
-          childCount > 0
-              ? 'Danh mục "${category.name}" đang có $childCount danh mục con — xoá sẽ khiến chúng trở thành danh mục gốc riêng. Sản phẩm đang gắn danh mục này chỉ mất tag, không bị xoá.'
-              : 'Sản phẩm đang gắn danh mục "${category.name}" sẽ chỉ mất tag, không bị xoá.',
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Huỷ')),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Xoá'),
-          ),
-        ],
-      ),
-    );
-    if (ok != true) return;
-
-    setState(() => _busy = true);
-    try {
-      await ref.read(adminRepoProvider).deleteCategory(category.id);
-      ref.invalidate(categoriesProvider);
-    } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final categoriesAsync = ref.watch(categoriesProvider);
@@ -280,7 +250,6 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
                             onMoveDown: rootIndex < roots.length - 1 ? () => _move(roots, rootIndex, 1) : null,
                             onAddChild: () => _addDialog(all, parentId: root.id),
                             onEdit: () => _editDialog(root),
-                            onDelete: () => _deleteDialog(root, childCount: 0),
                           ),
                         )
                       : ExpansionTile(
@@ -293,7 +262,6 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
                             onMoveDown: rootIndex < roots.length - 1 ? () => _move(roots, rootIndex, 1) : null,
                             onAddChild: () => _addDialog(all, parentId: root.id),
                             onEdit: () => _editDialog(root),
-                            onDelete: () => _deleteDialog(root, childCount: kids.length),
                           ),
                           children: [
                             ...kids.asMap().entries.map((kidEntry) {
@@ -310,7 +278,6 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
                                       onMoveUp: kidIndex > 0 ? () => _move(kids, kidIndex, -1) : null,
                                       onMoveDown: kidIndex < kids.length - 1 ? () => _move(kids, kidIndex, 1) : null,
                                       onEdit: () => _editDialog(kid),
-                                      onDelete: () => _deleteDialog(kid, childCount: 0),
                                     ),
                                   ),
                                 );
@@ -344,7 +311,6 @@ class _CategoryActions extends StatelessWidget {
   final VoidCallback? onMoveDown;
   final VoidCallback? onAddChild;
   final VoidCallback onEdit;
-  final VoidCallback onDelete;
 
   const _CategoryActions({
     required this.busy,
@@ -352,7 +318,6 @@ class _CategoryActions extends StatelessWidget {
     this.onMoveDown,
     this.onAddChild,
     required this.onEdit,
-    required this.onDelete,
   });
 
   @override
@@ -376,16 +341,10 @@ class _CategoryActions extends StatelessWidget {
             icon: const Icon(Icons.add),
             onPressed: busy ? null : onAddChild,
           ),
-        PopupMenuButton<String>(
-          enabled: !busy,
-          onSelected: (v) {
-            if (v == 'edit') onEdit();
-            if (v == 'delete') onDelete();
-          },
-          itemBuilder: (context) => const [
-            PopupMenuItem(value: 'edit', child: Text('Sửa')),
-            PopupMenuItem(value: 'delete', child: Text('Xoá')),
-          ],
+        IconButton(
+          tooltip: 'Sửa',
+          icon: const Icon(Icons.edit_outlined),
+          onPressed: busy ? null : onEdit,
         ),
       ],
     );

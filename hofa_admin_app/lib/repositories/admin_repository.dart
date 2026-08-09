@@ -387,9 +387,8 @@ class AdminRepository {
         await _api.patch('/categories/$id', body: data) as Map<String, dynamic>,
       );
 
-  Future<void> deleteCategory(String id) async {
-    await _api.delete('/categories/$id');
-  }
+  // Cố ý không có deleteCategory — xem comment DELETE /categories/:id (đã gỡ khỏi server)
+  // trong server/src/routes/products.js.
 
   // ---- Danh sách ngân hàng (tài xế chọn lúc đăng ký/sửa hồ sơ) ----
 

@@ -50,15 +50,10 @@ router.patch('/categories/:id', asyncHandler(async (req, res) => {
   res.json({ ok: true, data: updated });
 }));
 
-/** Xoá danh mục — danh mục con của nó tự chuyển thành danh mục gốc (parent_id ON DELETE
- * SET NULL), sản phẩm gắn danh mục này chỉ mất tag (ON DELETE CASCADE trên bảng nối
- * product_categories), không xoá sản phẩm. */
-router.delete('/categories/:id', asyncHandler(async (req, res) => {
-  requireRole(req.ctx, ['admin']);
-  const deleted = await db.deleteById('categories', req.params.id);
-  if (!deleted) throw new ApiError('NOT_FOUND', 'Không tìm thấy danh mục', 404);
-  res.json({ ok: true, data: deleted });
-}));
+// Cố ý KHÔNG có DELETE /categories/:id — danh mục ngành hàng là dữ liệu nền tảng dùng chung
+// toàn sàn, xoá sẽ kéo theo mất luôn mọi merchant_categories con mà từng cửa hàng tự tạo dựa
+// trên danh mục đó (ON DELETE CASCADE, xem hofa-db/01_schema.sql) — rủi ro mất dữ liệu 2 tầng
+// mà admin khó lường trước. Chỉ cho sửa tên/icon (PATCH ở trên) và thêm mới (POST ở trên).
 
 // ---- Danh mục cửa hàng (nằm dưới 1 danh mục con hệ thống) ----
 // Công khai (không cần đăng nhập) để app khách nhóm sản phẩm theo danh mục cửa hàng.
