@@ -208,8 +208,11 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
 
   /// Đặt trước: giá bậc tốt nhất có thể đạt được trong số các ngày món này đã chọn (ngày
   /// nào có tổng số phần cả nhóm cao nhất) — chỉ xét bậc đặt trước (minDaysPerWeek > 0),
-  /// không lẫn giá bậc giá sỉ. Trả về null nếu món này không thuộc tab Đặt trước hoặc
-  /// biến thể không có bậc đặt trước nào (khi đó dùng giá gốc/giá sỉ như bình thường).
+  /// không lẫn giá bậc giá sỉ. Điều kiện số ngày/tuần so theo TỔNG số ngày khác nhau của
+  /// CẢ ĐƠN (gộp lịch giao của mọi sản phẩm trong [allItems]), không phải riêng số ngày
+  /// của món này — đặt món A thứ 2, món B thứ 4 thì cả 2 món đều tính đơn có 2 ngày/tuần.
+  /// Trả về null nếu món này không thuộc tab Đặt trước hoặc biến thể không có bậc đặt
+  /// trước nào (khi đó dùng giá gốc/giá sỉ như bình thường).
   int? _bestPreorderPrice(CartItem item, List<CartItem> allItems) {
     if (item.orderKind != 'preorder' || item.deliverySlots.isEmpty) {
       return null;
@@ -229,10 +232,14 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
           .fold<int>(0, (sum, i) => sum + i.quantity);
       if (dayQty > bestOrderQty) bestOrderQty = dayQty;
     }
+    final orderDaysCount = allItems
+        .expand((i) => i.deliverySlots.map((s) => s.weekday))
+        .toSet()
+        .length;
     return _matchedTierPrice(
       item.quantity,
       bestOrderQty,
-      item.deliverySlots.length,
+      orderDaysCount,
       item.basePrice,
       preorderTiers,
     );
@@ -241,8 +248,9 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
   /// Bậc giá sỉ (minDaysPerWeek = 0) chỉ có điều kiện số lượng, so theo [ownQty] — số
   /// lượng riêng món này. Bậc đặt trước (minDaysPerWeek > 0) có 2 điều kiện độc lập: số
   /// lượng so theo [orderQty] (tổng số lượng cả lần giao, gộp mọi món) và số ngày/tuần so
-  /// theo [daysCount] (số ngày/tuần riêng món này) — đạt điều kiện nào lấy giá tương ứng,
-  /// đúng như resolve_variant_price() phía backend chốt giá thật.
+  /// theo [daysCount] (tổng số ngày khác nhau của CẢ ĐƠN, gộp mọi món — không phải riêng
+  /// món này) — đạt điều kiện nào lấy giá tương ứng, đúng như resolve_variant_price() phía
+  /// backend chốt giá thật.
   int _matchedTierPrice(
     int ownQty,
     int orderQty,

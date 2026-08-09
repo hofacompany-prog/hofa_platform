@@ -229,7 +229,8 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                     decoration: const InputDecoration(
                       labelText: 'Số ngày đặt tối thiểu trong tuần',
                       helperText:
-                          'Khách phải đặt sản phẩm này đủ số ngày/tuần này mới đạt điều kiện giá theo ngày',
+                          'Tính theo TỔNG số ngày khác nhau của cả đơn đặt trước (gộp mọi sản phẩm khách đặt cùng đơn), không phải riêng sản phẩm này',
+                      helperMaxLines: 2,
                       border: OutlineInputBorder(),
                     ),
                     keyboardType: TextInputType.number,

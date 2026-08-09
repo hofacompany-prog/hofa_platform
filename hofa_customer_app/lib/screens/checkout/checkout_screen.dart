@@ -321,12 +321,20 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     return _paymentMethod;
   }
 
+  /// Tổng số ngày/tuần KHÁC NHAU của cả đơn đặt trước — gộp lịch giao của MỌI sản phẩm
+  /// trong [items] (không phải riêng từng món) — dùng để so điều kiện bậc giá "đặt trước"
+  /// (wholesale_tiers.min_days_per_week), khớp đúng cách preorder_screen tính giá xem
+  /// trước và cách backend chốt giá thật.
+  int _orderDaysCount(List<CartItem> items) =>
+      items.expand((i) => i.deliverySlots.map((s) => s.weekday)).toSet().length;
+
   Map<String, dynamic> _orderBody(
     CartState cart,
     List<CartItem> items,
     Address address,
     DateTime? scheduledFor,
     int deliveryFee,
+    int orderDaysCount,
   ) => {
     'merchant_id': cart.merchantId,
     'branch_id': cart.branchId,
@@ -339,10 +347,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             // orderKind cho backend biết chỉ xét đúng loại bậc giá (giá sỉ/đặt trước) —
             // 1 biến thể có thể có cả 2 loại, không được lẫn giá của tab kia.
             if (e.orderKind != null) 'order_kind': e.orderKind,
-            // Số ngày/tuần khách đặt RIÊNG món này — backend dùng để so bậc "đặt trước"
-            // theo điều kiện số ngày (chỉ có ý nghĩa với món ở tab Đặt trước).
+            // Tổng số ngày/tuần KHÁC NHAU của CẢ ĐƠN (gộp mọi sản phẩm, không phải riêng
+            // món này) — backend dùng để so bậc "đặt trước" theo điều kiện số ngày.
             if (e.deliverySlots.isNotEmpty)
-              'days_count': e.deliverySlots.length,
+              'days_count': orderDaysCount,
             if (e.note != null) 'note': e.note,
             if (e.toppings.isNotEmpty)
               'topping_ids': e.toppings.map((t) => t.id).toList(),
@@ -394,8 +402,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   /// Bậc giá sỉ (minDaysPerWeek = 0) chỉ có điều kiện số lượng, so theo [ownQty] — số
   /// lượng riêng món này. Bậc đặt trước (minDaysPerWeek > 0) có 2 điều kiện độc lập: số
   /// lượng so theo [orderQty] (tổng số lượng cả đơn) và số ngày/tuần so theo [daysCount]
-  /// (số ngày/tuần riêng món này) — đạt điều kiện nào lấy giá tương ứng, đúng như
-  /// resolve_variant_price() phía backend, để giá xem trước ở đây khớp với giá thực chốt.
+  /// (tổng số ngày khác nhau của CẢ ĐƠN, gộp mọi món — không phải riêng món này) — đạt
+  /// điều kiện nào lấy giá tương ứng, đúng như resolve_variant_price() phía backend, để
+  /// giá xem trước ở đây khớp với giá thực chốt.
   int _matchedTierPrice(
     int ownQty,
     int orderQty,
@@ -439,7 +448,10 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   /// (đúng 1 entry gồm mọi món, chỉ xét bậc giá sỉ — xem _groupByOccurrence khi
   /// preorderSchedule null) — items trong 1 entry luôn cùng 1 orderKind, không lẫn lộn
   /// (xem _relevantItems).
-  int _tierAwareSubtotal(List<MapEntry<DateTime, List<CartItem>>> orders) {
+  int _tierAwareSubtotal(
+    List<MapEntry<DateTime, List<CartItem>>> orders,
+    int orderDaysCount,
+  ) {
     var total = 0;
     for (final entry in orders) {
       final dayItems = entry.value;
@@ -462,7 +474,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             : _matchedTierPrice(
                 i.quantity,
                 orderQty,
-                i.deliverySlots.length,
+                orderDaysCount,
                 i.basePrice,
                 tiers,
               );
@@ -478,6 +490,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       return;
     final items = _relevantItems(cart);
     if (items.isEmpty) return;
+    final orderDaysCount = _orderDaysCount(items);
 
     final merchant = ref.read(merchantDetailProvider(cart.merchantId!)).valueOrNull;
     if (merchant?.isBuyOnBehalf == true && !_autoFindDriver && _selectedDriver == null) {
@@ -533,7 +546,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         final order = await ref
             .read(orderRepoProvider)
             .createOrder(
-              _orderBody(cart, entry.value, address, entry.key, deliveryFee),
+              _orderBody(cart, entry.value, address, entry.key, deliveryFee, orderDaysCount),
             );
         lastOrderId = order.id;
         created++;
@@ -598,7 +611,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         ? _groupByOccurrence(items)
         : null;
     final itemsSubtotal = scheduledOrders != null
-        ? _tierAwareSubtotal(scheduledOrders)
+        ? _tierAwareSubtotal(scheduledOrders, _orderDaysCount(items))
         : items.fold<int>(0, (sum, i) => sum + i.lineTotal);
 
     // Chốt địa chỉ mặc định sớm (trước khi cần tới trong shippingFee/nút Đặt hàng) —
