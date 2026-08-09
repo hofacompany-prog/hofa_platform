@@ -90,6 +90,14 @@ class _InstallPwaScreenState extends State<InstallPwaScreen> {
                             ),
                     ),
                   ),
+                if (canPromptNative) ...[
+                  const SizedBox(height: 16),
+                  Text(
+                    'Thoát ra màn hình vào app HOFA Tài xế để tiếp tục',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.outline),
+                  ),
+                ],
               ],
             ),
           ),
