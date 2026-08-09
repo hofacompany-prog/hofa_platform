@@ -92,8 +92,8 @@ class CategoryTile extends StatelessWidget {
                         // đệm, vẽ nhỏ hơn khung — icon thư viện vẽ gần sát viền).
                         ? Image.network(
                             iconUrl!,
-                            width: 24,
-                            height: 24,
+                            width: 12,
+                            height: 12,
                             fit: BoxFit.contain,
                             color: theme.colorScheme.primary,
                             colorBlendMode: BlendMode.srcIn,
