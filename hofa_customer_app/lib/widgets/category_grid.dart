@@ -90,15 +90,18 @@ class CategoryTile extends StatelessWidget {
                         // rasterize (thường ra đen) thay vì xanh thương hiệu, và cover làm icon
                         // trông to hơn hẳn icon Material bên cạnh (glyph Material vốn có sẵn
                         // đệm, vẽ nhỏ hơn khung — icon thư viện vẽ gần sát viền).
-                        ? Image.network(
-                            iconUrl!,
-                            width: 12,
-                            height: 12,
-                            fit: BoxFit.contain,
-                            color: theme.colorScheme.primary,
-                            colorBlendMode: BlendMode.srcIn,
-                            errorBuilder: (_, _, _) =>
-                                Icon(Icons.category_outlined, color: theme.colorScheme.primary),
+                        ? Transform.scale(
+                            scale: 0.5,
+                            child: Image.network(
+                              iconUrl!,
+                              width: 24,
+                              height: 24,
+                              fit: BoxFit.contain,
+                              color: theme.colorScheme.primary,
+                              colorBlendMode: BlendMode.srcIn,
+                              errorBuilder: (_, _, _) =>
+                                  Icon(Icons.category_outlined, color: theme.colorScheme.primary),
+                            ),
                           )
                         : Icon(Icons.category_outlined, color: theme.colorScheme.primary),
           ),
