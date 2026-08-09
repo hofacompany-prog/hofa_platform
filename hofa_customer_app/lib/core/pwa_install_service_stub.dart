@@ -4,10 +4,8 @@ bool isStandalone() => true;
 
 bool isIOSSafari() => false;
 
+bool isIOSNonSafari() => false;
+
 bool hasDeferredPrompt() => false;
 
 Future<String> promptInstall() async => 'unavailable';
-
-bool wasRecentlyDismissed() => true;
-
-void markDismissed() {}

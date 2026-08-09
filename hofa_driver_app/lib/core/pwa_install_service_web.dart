@@ -1,9 +1,6 @@
 import 'dart:html' as html;
 import 'dart:js_interop';
 
-const _dismissedKey = 'hofa_pwa_install_dismissed_at';
-const _cooldownDays = 3;
-
 // beforeinstallprompt không có typing chuẩn — window.__hofaPwaDeferredPrompt được set từ
 // script tay trong web/index.html (bắt sự kiện NGAY từ đầu, trước khi Flutter kịp tải xong,
 // vì trình duyệt chỉ bắn sự kiện này đúng 1 lần). dart:js_interop (không phải dart:js_util,
@@ -28,6 +25,11 @@ extension type _UserChoice(JSObject _) implements JSObject {
   external String get outcome;
 }
 
+bool _isIOSDevice() {
+  final ua = html.window.navigator.userAgent.toLowerCase();
+  return ua.contains('iphone') || ua.contains('ipad') || ua.contains('ipod');
+}
+
 bool isStandalone() {
   try {
     final standaloneMedia = html.window.matchMedia('(display-mode: standalone)').matches;
@@ -37,14 +39,28 @@ bool isStandalone() {
   }
 }
 
+/// Safari thật trên iPhone/iPad — trình duyệt DUY NHẤT trên iOS có nút "Thêm vào MH chính".
+/// Best-effort: loại các trình duyệt iOS đã biết chắc chắn không phải Safari (đều chỉ là "vỏ"
+/// giao diện quanh WebKit theo yêu cầu bắt buộc của Apple) qua user agent — không có cách nào
+/// nhận diện được 100% mọi trình duyệt bên thứ 3 chưa từng biết tới.
 bool isIOSSafari() {
+  if (!_isIOSDevice()) return false;
   final ua = html.window.navigator.userAgent.toLowerCase();
-  final isIOSDevice = ua.contains('iphone') || ua.contains('ipad') || ua.contains('ipod');
-  // Chrome/Firefox/Edge trên iOS đều chỉ là "vỏ" quanh WebKit của Safari — không có nút
-  // "Thêm vào MH chính" trong menu của chính chúng, chỉ Safari thật mới có.
-  final isOtherIOSBrowser = ua.contains('crios') || ua.contains('fxios') || ua.contains('edgios');
-  return isIOSDevice && !isOtherIOSBrowser;
+  const otherBrowserTokens = [
+    'crios', // Chrome
+    'fxios', // Firefox
+    'edgios', // Edge
+    'opios', // Opera
+    'coccoc', 'coc_coc', // Cốc Cốc
+    'duckduckgo',
+  ];
+  return !otherBrowserTokens.any(ua.contains);
 }
+
+/// Trình duyệt bên thứ 3 (Chrome/Cốc Cốc/Firefox...) trên iOS — không có API cài PWA thật,
+/// chỉ Safari mới cài được, nên chỉ hướng dẫn đổi trình duyệt thay vì hiện nút cài không hoạt
+/// động được.
+bool isIOSNonSafari() => _isIOSDevice() && !isIOSSafari();
 
 bool hasDeferredPrompt() {
   try {
@@ -66,25 +82,5 @@ Future<String> promptInstall() async {
     return outcome;
   } catch (_) {
     return 'unavailable';
-  }
-}
-
-bool wasRecentlyDismissed() {
-  try {
-    final raw = html.window.localStorage[_dismissedKey];
-    if (raw == null) return false;
-    final dismissedAt = DateTime.tryParse(raw);
-    if (dismissedAt == null) return false;
-    return DateTime.now().difference(dismissedAt).inDays < _cooldownDays;
-  } catch (_) {
-    return false;
-  }
-}
-
-void markDismissed() {
-  try {
-    html.window.localStorage[_dismissedKey] = DateTime.now().toIso8601String();
-  } catch (_) {
-    // localStorage có thể bị chặn (chế độ ẩn danh nghiêm ngặt...) — không chặn luồng chính.
   }
 }
