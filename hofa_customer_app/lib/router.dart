@@ -16,6 +16,7 @@ import 'screens/cart/cart_screen.dart';
 import 'screens/preorder/preorder_screen.dart';
 import 'screens/checkout/checkout_screen.dart';
 import 'models/preorder_schedule.dart';
+import 'models/buy_now_request.dart';
 import 'screens/orders/orders_list_screen.dart';
 import 'screens/orders/order_detail_screen.dart';
 import 'screens/notifications/notifications_screen.dart';
@@ -107,6 +108,7 @@ final routerProvider = Provider<GoRouter>((ref) {
               return CheckoutScreen(
                 preorderSchedule: extra is PreorderSchedule ? extra : null,
                 initialScheduledFor: extra is DateTime ? extra : null,
+                buyNowRequest: extra is BuyNowRequest ? extra : null,
               );
             },
           ),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/format.dart';
+import '../../models/buy_now_request.dart';
 import '../../models/cart_item.dart';
 import '../../models/product.dart';
 import '../../models/product_variant.dart';
@@ -98,41 +99,45 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
       if (!mounted) return;
     }
 
-    final cartNotifier = ref.read(cartProvider.notifier);
-    final cartState = ref.read(cartProvider);
-
-    if (!cartNotifier.belongsToCurrentCart(
-      product.merchantId,
-      product.salesModel,
-    )) {
-      final differentMerchant = cartState.merchantId != product.merchantId;
-      final confirm = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: Text(
-            differentMerchant
-                ? 'Giỏ hàng có món của cửa hàng khác'
-                : 'Giỏ hàng có món khác hình thức bán',
-          ),
-          content: Text(
-            differentMerchant
-                ? 'Giỏ hàng hiện đang có món từ "${cartState.merchantName}". Mỗi đơn chỉ đặt được 1 cửa hàng — xoá giỏ hiện tại để thêm món mới?'
-                : 'Giỏ hàng hiện đang có món ${cartState.salesModel == 'scheduled' ? 'đặt trước/bán sỉ' : 'giao ngay'}, khác với sản phẩm này. Giao ngay và đặt trước/bán sỉ đặt riêng — xoá giỏ hiện tại để thêm món mới?',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Huỷ'),
+    // "Mua ngay" tính tiền/đặt đơn riêng cho đúng sản phẩm này, không đụng tới giỏ hàng
+    // chung — bỏ qua hoàn toàn bước kiểm tra xung đột + thêm vào giỏ ở dưới, giữ nguyên
+    // mọi món khách đã có sẵn trong giỏ.
+    if (!buyNow) {
+      final cartNotifier = ref.read(cartProvider.notifier);
+      final cartState = ref.read(cartProvider);
+      if (!cartNotifier.belongsToCurrentCart(
+        product.merchantId,
+        product.salesModel,
+      )) {
+        final differentMerchant = cartState.merchantId != product.merchantId;
+        final confirm = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text(
+              differentMerchant
+                  ? 'Giỏ hàng có món của cửa hàng khác'
+                  : 'Giỏ hàng có món khác hình thức bán',
             ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Xoá giỏ cũ'),
+            content: Text(
+              differentMerchant
+                  ? 'Giỏ hàng hiện đang có món từ "${cartState.merchantName}". Mỗi đơn chỉ đặt được 1 cửa hàng — xoá giỏ hiện tại để thêm món mới?'
+                  : 'Giỏ hàng hiện đang có món ${cartState.salesModel == 'scheduled' ? 'đặt trước/bán sỉ' : 'giao ngay'}, khác với sản phẩm này. Giao ngay và đặt trước/bán sỉ đặt riêng — xoá giỏ hiện tại để thêm món mới?',
             ),
-          ],
-        ),
-      );
-      if (confirm != true) return;
-      await cartNotifier.clear();
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Huỷ'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Xoá giỏ cũ'),
+              ),
+            ],
+          ),
+        );
+        if (confirm != true) return;
+        await cartNotifier.clear();
+      }
     }
 
     setState(() => _adding = true);
@@ -158,47 +163,67 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
         merchantDetailProvider(product.merchantId).future,
       );
 
-      await cartNotifier.addItem(
-        merchantId: product.merchantId,
-        merchantName: merchant.name,
-        branchId: branch.id,
-        salesModel: product.salesModel,
-        item: CartItem(
-          lineId: '${variant.id}_${DateTime.now().microsecondsSinceEpoch}',
-          productId: product.id,
-          productName: product.name,
-          productImage: product.images.isNotEmpty ? product.images.first : null,
-          variantId: variant.id,
-          variantName: variant.name,
-          unitPrice: unitPrice,
-          basePrice: variant.price,
-          quantity: _quantity,
-          unit: product.unit,
-          toppings: toppings,
-          note: note,
-          orderKind: orderKind,
-        ),
+      final item = CartItem(
+        lineId: '${variant.id}_${DateTime.now().microsecondsSinceEpoch}',
+        productId: product.id,
+        productName: product.name,
+        productImage: product.images.isNotEmpty ? product.images.first : null,
+        variantId: variant.id,
+        variantName: variant.name,
+        unitPrice: unitPrice,
+        basePrice: variant.price,
+        quantity: _quantity,
+        unit: product.unit,
+        toppings: toppings,
+        note: note,
+        orderKind: orderKind,
       );
+
+      if (buyNow) {
+        if (mounted) {
+          setState(() {
+            _selectedToppings = [];
+            _note = null;
+          });
+          context.push(
+            '/checkout',
+            extra: BuyNowRequest(
+              merchantId: product.merchantId,
+              merchantName: merchant.name,
+              branchId: branch.id,
+              salesModel: product.salesModel,
+              item: item,
+            ),
+          );
+        }
+        return;
+      }
+
+      await ref
+          .read(cartProvider.notifier)
+          .addItem(
+            merchantId: product.merchantId,
+            merchantName: merchant.name,
+            branchId: branch.id,
+            salesModel: product.salesModel,
+            item: item,
+          );
       if (mounted) {
         setState(() {
           _selectedToppings = [];
           _note = null;
         });
-        if (buyNow) {
-          context.push('/checkout');
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                orderKind == 'wholesale'
-                    ? 'Đã thêm vào Giá sỉ'
-                    : orderKind == 'preorder'
-                    ? 'Đã thêm vào Đặt trước'
-                    : 'Đã thêm vào Giỏ hàng',
-              ),
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              orderKind == 'wholesale'
+                  ? 'Đã thêm vào Giá sỉ'
+                  : orderKind == 'preorder'
+                  ? 'Đã thêm vào Đặt trước'
+                  : 'Đã thêm vào Giỏ hàng',
             ),
-          );
-        }
+          ),
+        );
       }
     } catch (e) {
       if (mounted)

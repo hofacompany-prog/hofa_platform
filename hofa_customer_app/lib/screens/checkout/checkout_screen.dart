@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/format.dart';
 import '../../core/geo.dart';
 import '../../models/address.dart';
+import '../../models/buy_now_request.dart';
 import '../../models/cart_item.dart';
 import '../../models/merchant_fee_tier.dart';
 import '../../models/preorder_schedule.dart';
@@ -24,10 +25,16 @@ class CheckoutScreen extends ConsumerStatefulWidget {
   /// Ngày+giờ giao đã chọn sẵn từ tab "Giá sỉ" (chỉ 1 lần giao, không lặp lại) — khác
   /// với [preorderSchedule] vốn dùng cho tab "Đặt trước" (theo thứ trong tuần).
   final DateTime? initialScheduledFor;
+
+  /// Có giá trị khi vào từ nút "Mua ngay" ở trang chi tiết sản phẩm — thanh toán CHỈ tính
+  /// tiền cho đúng sản phẩm này, không đọc/không đụng tới giỏ hàng chung (cartProvider),
+  /// giữ nguyên mọi món khách đã bỏ vào giỏ trước đó.
+  final BuyNowRequest? buyNowRequest;
   const CheckoutScreen({
     super.key,
     this.preorderSchedule,
     this.initialScheduledFor,
+    this.buyNowRequest,
   });
 
   @override
@@ -65,9 +72,22 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     super.dispose();
   }
 
+  /// Giỏ ảo chỉ chứa đúng 1 món của [BuyNowRequest] — không đọc/không ghi cartProvider,
+  /// dùng để tái sử dụng toàn bộ logic tính tiền/đặt đơn của màn này mà không đụng tới
+  /// giỏ hàng thật của khách.
+  CartState _buyNowCart(BuyNowRequest req) => CartState(
+    merchantId: req.merchantId,
+    merchantName: req.merchantName,
+    branchId: req.branchId,
+    salesModel: req.salesModel,
+    items: [req.item],
+  );
+
   /// Giỏ "đặt trước/bán sỉ" chứa lẫn món của cả tab Giá sỉ lẫn Đặt trước — đặt hàng từ
   /// tab nào chỉ được gửi/xoá đúng món của tab đó, không đụng tới món của tab còn lại.
+  /// Giỏ "Mua ngay" luôn chỉ có đúng 1 món cần thanh toán nên bỏ qua bộ lọc theo tab.
   List<CartItem> _relevantItems(CartState cart) {
+    if (widget.buyNowRequest != null) return cart.items;
     if (cart.salesModel != 'scheduled') return cart.items;
     if (widget.initialScheduledFor != null) {
       return cart.items.where((i) => i.orderKind == 'wholesale').toList();
@@ -485,7 +505,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   }
 
   Future<void> _placeOrder(Address address, int deliveryFee) async {
-    final cart = ref.read(cartProvider);
+    final cart = widget.buyNowRequest != null
+        ? _buyNowCart(widget.buyNowRequest!)
+        : ref.read(cartProvider);
     if (cart.isEmpty || cart.merchantId == null || cart.branchId == null)
       return;
     final items = _relevantItems(cart);
@@ -551,9 +573,13 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         lastOrderId = order.id;
         created++;
       }
-      await ref
-          .read(cartProvider.notifier)
-          .removeItems(items.map((i) => i.lineId).toList());
+      // "Mua ngay" chưa từng thêm món vào giỏ hàng thật — không có gì để xoá, giữ nguyên
+      // giỏ hàng hiện có của khách.
+      if (widget.buyNowRequest == null) {
+        await ref
+            .read(cartProvider.notifier)
+            .removeItems(items.map((i) => i.lineId).toList());
+      }
       if (mounted) {
         if (orders.length > 1) {
           ScaffoldMessenger.of(
@@ -581,7 +607,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final cart = ref.watch(cartProvider);
+    final cart = widget.buyNowRequest != null
+        ? _buyNowCart(widget.buyNowRequest!)
+        : ref.watch(cartProvider);
     final addressesAsync = ref.watch(addressesProvider);
     final publicVouchersAsync = cart.merchantId == null
         ? null
