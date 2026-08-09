@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/category_icons.dart';
+import '../../core/cloudinary_uploader.dart';
 import '../../models/category.dart';
 import '../../providers/admin_providers.dart';
+import '../../widgets/icon_picker_dialog.dart';
 import '../../widgets/icon_picker_field.dart';
 
 /// Danh mục ngành hàng dùng chung cho cả sàn — tối đa 2 cấp (gốc và con), mỗi cấp đều
@@ -36,6 +38,8 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
     final nameCtrl = TextEditingController();
     String? selectedParent = parentId;
     String? iconName;
+    String? iconUrl;
+    var iconVersion = 0;
 
     final ok = await showDialog<bool>(
       context: context,
@@ -43,7 +47,7 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
         builder: (context, setInner) => AlertDialog(
           title: const Text('Thêm danh mục'),
           content: SizedBox(
-            width: 360,
+            width: 400,
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -70,10 +74,36 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
                   const SizedBox(height: 16),
                   Align(
                     alignment: Alignment.centerLeft,
-                    child: IconPickerField(
-                      label: 'Icon danh mục (hiện ở trang chủ app khách)',
-                      onChanged: (name) => setInner(() => iconName = name),
+                    child: Text(
+                      'Icon danh mục (hiện ở trang chủ app khách) — chọn 1 trong 2 nguồn:',
+                      style: Theme.of(context).textTheme.labelLarge,
                     ),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 16,
+                    runSpacing: 12,
+                    children: [
+                      IconPickerField(
+                        key: ValueKey('material-$iconVersion'),
+                        label: 'Icon Material có sẵn',
+                        initialIconName: iconName,
+                        onChanged: (name) => setInner(() {
+                          iconName = name;
+                          iconUrl = null;
+                          iconVersion++;
+                        }),
+                      ),
+                      _LibraryIconPickerField(
+                        key: ValueKey('library-$iconVersion'),
+                        initialIconUrl: iconUrl,
+                        onChanged: (url) => setInner(() {
+                          iconUrl = url;
+                          iconName = null;
+                          iconVersion++;
+                        }),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -102,6 +132,7 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
             slug: '${_slugify(name)}-${DateTime.now().millisecondsSinceEpoch % 10000}',
             parentId: selectedParent,
             iconName: iconName,
+            iconUrl: iconUrl,
             sortOrder: nextSortOrder,
           );
       ref.invalidate(categoriesProvider);
@@ -115,6 +146,8 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
   Future<void> _editDialog(Category category) async {
     final nameCtrl = TextEditingController(text: category.name);
     String? iconName = category.iconName;
+    String? iconUrl = category.iconUrl;
+    var iconVersion = 0;
 
     final ok = await showDialog<bool>(
       context: context,
@@ -122,7 +155,7 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
         builder: (context, setInner) => AlertDialog(
           title: const Text('Sửa danh mục'),
           content: SizedBox(
-            width: 360,
+            width: 400,
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -135,11 +168,36 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
                   const SizedBox(height: 16),
                   Align(
                     alignment: Alignment.centerLeft,
-                    child: IconPickerField(
-                      label: 'Icon danh mục',
-                      initialIconName: iconName,
-                      onChanged: (name) => setInner(() => iconName = name),
+                    child: Text(
+                      'Icon danh mục — chọn 1 trong 2 nguồn:',
+                      style: Theme.of(context).textTheme.labelLarge,
                     ),
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 16,
+                    runSpacing: 12,
+                    children: [
+                      IconPickerField(
+                        key: ValueKey('material-$iconVersion'),
+                        label: 'Icon Material có sẵn',
+                        initialIconName: iconName,
+                        onChanged: (name) => setInner(() {
+                          iconName = name;
+                          iconUrl = null;
+                          iconVersion++;
+                        }),
+                      ),
+                      _LibraryIconPickerField(
+                        key: ValueKey('library-$iconVersion'),
+                        initialIconUrl: iconUrl,
+                        onChanged: (url) => setInner(() {
+                          iconUrl = url;
+                          iconName = null;
+                          iconVersion++;
+                        }),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -158,7 +216,8 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
     try {
       await ref.read(adminRepoProvider).updateCategory(category.id, {
         'name': nameCtrl.text.trim(),
-        if (iconName != null) 'icon_name': iconName,
+        'icon_name': iconName,
+        'icon_url': iconUrl,
       });
       ref.invalidate(categoriesProvider);
     } catch (e) {
@@ -363,15 +422,108 @@ class _CategoryLeadingIcon extends StatelessWidget {
       return Icon(categoryIconOf(iconName), size: size, color: Theme.of(context).colorScheme.primary);
     }
     if (iconUrl == null || iconUrl!.isEmpty) return Icon(Icons.folder_outlined, size: size);
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(6),
-      child: Image.network(
-        iconUrl!,
-        width: size + 4,
-        height: size + 4,
-        fit: BoxFit.cover,
-        errorBuilder: (_, _, _) => Icon(Icons.folder_outlined, size: size),
-      ),
+    return Image.network(
+      iconUrl!,
+      width: size,
+      height: size,
+      color: Theme.of(context).colorScheme.primary,
+      colorBlendMode: BlendMode.srcIn,
+      errorBuilder: (_, _, _) => Icon(Icons.folder_outlined, size: size),
+    );
+  }
+}
+
+/// Chọn 1 icon từ thư viện Lucide/Online (mở popup dùng chung với màn Icon tabbar), tải lên
+/// Cloudinary rồi trả về URL — cùng kiểu ô vuông 140x140 với IconPickerField (icon Material)
+/// để 2 lựa chọn nhìn cân đối cạnh nhau trong dialog thêm/sửa danh mục.
+class _LibraryIconPickerField extends StatefulWidget {
+  final String? initialIconUrl;
+  final ValueChanged<String?> onChanged;
+  const _LibraryIconPickerField({super.key, this.initialIconUrl, required this.onChanged});
+
+  @override
+  State<_LibraryIconPickerField> createState() => _LibraryIconPickerFieldState();
+}
+
+class _LibraryIconPickerFieldState extends State<_LibraryIconPickerField> {
+  String? _iconUrl;
+  bool _uploading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _iconUrl = widget.initialIconUrl;
+  }
+
+  Future<void> _pick() async {
+    final picked = await showIconPickerDialog(context);
+    if (picked == null) return;
+    if (!mounted) return;
+    setState(() => _uploading = true);
+    try {
+      final secureUrl = await CloudinaryUploader().uploadImage(
+        picked.bytes,
+        picked.filename,
+        folder: 'categories',
+      );
+      final pngUrl = toCloudinaryPngUrl(secureUrl);
+      if (mounted) setState(() => _iconUrl = pngUrl);
+      widget.onChanged(pngUrl);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _uploading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Icon từ thư viện (Lucide/Online)', style: theme.textTheme.labelLarge),
+        const SizedBox(height: 8),
+        InkWell(
+          onTap: _uploading ? null : _pick,
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            width: 140,
+            height: 140,
+            decoration: BoxDecoration(
+              border: Border.all(color: theme.colorScheme.outlineVariant),
+              borderRadius: BorderRadius.circular(12),
+              color: theme.colorScheme.surfaceContainerHighest,
+            ),
+            child: _uploading
+                ? const Center(child: CircularProgressIndicator())
+                : _iconUrl != null
+                    ? Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Image.network(
+                          _iconUrl!,
+                          fit: BoxFit.contain,
+                          color: theme.colorScheme.primary,
+                          colorBlendMode: BlendMode.srcIn,
+                          errorBuilder: (_, _, _) =>
+                              Icon(Icons.broken_image_outlined, color: theme.colorScheme.outline),
+                        ),
+                      )
+                    : Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.add_circle_outline, color: theme.colorScheme.outline, size: 28),
+                            const SizedBox(height: 4),
+                            Text('Chọn icon', style: theme.textTheme.bodySmall),
+                          ],
+                        ),
+                      ),
+          ),
+        ),
+      ],
     );
   }
 }
