@@ -109,11 +109,26 @@ class _HofaDriverAppState extends ConsumerState<HofaDriverApp> {
     final install = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Cài đặt HOFA Tài xế lên máy?'),
-        content: Text(
-          canPromptNative
-              ? 'Thêm HOFA Tài xế vào màn hình chính để mở nhanh hơn, dùng như ứng dụng thật và nhận được thông báo đơn mới.'
-              : 'Nhấn nút Chia sẻ ở thanh trình duyệt, sau đó chọn "Thêm vào MH chính" để dùng HOFA Tài xế như ứng dụng thật và nhận được thông báo đơn mới.',
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Icon(canPromptNative ? Icons.install_mobile : Icons.ios_share, size: 40),
+            const SizedBox(height: 12),
+            Text(
+              canPromptNative ? 'Cài đặt HOFA Tài xế ngay!' : 'Hãy thêm vào Màn hình chính!',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            if (!canPromptNative) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Nhấn nút Chia sẻ, rồi chọn mục này',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+          ],
         ),
         actions: [
           TextButton(

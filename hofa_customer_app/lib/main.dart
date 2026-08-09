@@ -109,11 +109,26 @@ class _HofaCustomerAppState extends ConsumerState<HofaCustomerApp> {
     final install = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Cài đặt HOFA lên máy?'),
-        content: Text(
-          canPromptNative
-              ? 'Thêm HOFA vào màn hình chính để mở nhanh hơn, dùng như ứng dụng thật và nhận được thông báo đơn hàng.'
-              : 'Nhấn nút Chia sẻ ở thanh trình duyệt, sau đó chọn "Thêm vào MH chính" để dùng HOFA như ứng dụng thật và nhận được thông báo đơn hàng.',
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Icon(canPromptNative ? Icons.install_mobile : Icons.ios_share, size: 40),
+            const SizedBox(height: 12),
+            Text(
+              canPromptNative ? 'Cài đặt HOFA ngay!' : 'Hãy thêm vào Màn hình chính!',
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            if (!canPromptNative) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Nhấn nút Chia sẻ, rồi chọn mục này',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+          ],
         ),
         actions: [
           TextButton(

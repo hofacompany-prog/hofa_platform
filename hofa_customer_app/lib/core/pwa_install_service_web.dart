@@ -2,7 +2,7 @@ import 'dart:html' as html;
 import 'dart:js_interop';
 
 const _dismissedKey = 'hofa_pwa_install_dismissed_at';
-const _cooldownDays = 14;
+const _cooldownDays = 3;
 
 // beforeinstallprompt không có typing chuẩn — window.__hofaPwaDeferredPrompt được set từ
 // script tay trong web/index.html (bắt sự kiện NGAY từ đầu, trước khi Flutter kịp tải xong,
