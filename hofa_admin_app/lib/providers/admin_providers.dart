@@ -15,6 +15,7 @@ import '../models/order.dart';
 import '../models/category.dart';
 import '../models/shipping_fee_settings.dart';
 import '../models/voucher.dart';
+import '../models/voucher_amount_tier.dart';
 import '../models/order_settings.dart';
 import '../models/auto_accept_settings.dart';
 import '../models/driver_accept_settings.dart';
@@ -149,6 +150,11 @@ final vouchersProvider = FutureProvider.autoDispose<List<Voucher>>(
 final voucherMaxCountProvider = FutureProvider.autoDispose<int>(
   (ref) => ref.watch(adminRepoProvider).voucherMaxCount(),
 );
+
+final voucherAmountTiersProvider = FutureProvider.autoDispose
+    .family<List<VoucherAmountTier>, String>(
+      (ref, voucherId) => ref.watch(adminRepoProvider).voucherAmountTiers(voucherId),
+    );
 
 final orderSettingsProvider = FutureProvider.autoDispose<OrderSettings>(
   (ref) => ref.watch(adminRepoProvider).orderSettings(),

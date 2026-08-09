@@ -18,6 +18,9 @@ class Voucher {
   final bool isActive;
   final bool isPublic;
   final DateTime? createdAt;
+  final List<String>? applicableOrderKinds;
+  final List<String>? applicableMerchantTypes;
+  final int? minConcurrentOrders;
 
   Voucher({
     required this.id,
@@ -36,6 +39,9 @@ class Voucher {
     required this.isActive,
     required this.isPublic,
     this.createdAt,
+    this.applicableOrderKinds,
+    this.applicableMerchantTypes,
+    this.minConcurrentOrders,
   });
 
   factory Voucher.fromJson(Map<String, dynamic> json) => Voucher(
@@ -60,6 +66,13 @@ class Voucher {
     createdAt: json['created_at'] != null
         ? DateTime.tryParse(json['created_at'] as String)
         : null,
+    applicableOrderKinds: (json['applicable_order_kinds'] as List?)
+        ?.map((e) => e as String)
+        .toList(),
+    applicableMerchantTypes: (json['applicable_merchant_types'] as List?)
+        ?.map((e) => e as String)
+        .toList(),
+    minConcurrentOrders: (json['min_concurrent_orders'] as num?)?.toInt(),
   );
 
   bool get isExpired => endsAt != null && endsAt!.isBefore(DateTime.now());

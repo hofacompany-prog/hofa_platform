@@ -14,6 +14,7 @@ import '../models/order.dart';
 import '../models/category.dart';
 import '../models/shipping_fee_settings.dart';
 import '../models/voucher.dart';
+import '../models/voucher_amount_tier.dart';
 import '../models/order_settings.dart';
 import '../models/auto_accept_settings.dart';
 import '../models/driver_accept_settings.dart';
@@ -693,5 +694,28 @@ class AdminRepository {
             )
             as Map<String, dynamic>;
     return (data['max_vouchers_per_order'] as num?)?.toInt() ?? 1;
+  }
+
+  // ---- Bậc giảm giá theo giá trị đơn của voucher ----
+
+  Future<List<VoucherAmountTier>> voucherAmountTiers(String voucherId) async {
+    final list = await _api.get('/vouchers/$voucherId/amount-tiers') as List;
+    return list.map((e) => VoucherAmountTier.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<VoucherAmountTier> createVoucherAmountTier(
+    String voucherId,
+    Map<String, dynamic> data,
+  ) async => VoucherAmountTier.fromJson(
+        await _api.post('/vouchers/$voucherId/amount-tiers', body: data) as Map<String, dynamic>,
+      );
+
+  Future<VoucherAmountTier> updateVoucherAmountTier(String id, Map<String, dynamic> data) async =>
+      VoucherAmountTier.fromJson(
+        await _api.patch('/voucher-amount-tiers/$id', body: data) as Map<String, dynamic>,
+      );
+
+  Future<void> deleteVoucherAmountTier(String id) async {
+    await _api.delete('/voucher-amount-tiers/$id');
   }
 }

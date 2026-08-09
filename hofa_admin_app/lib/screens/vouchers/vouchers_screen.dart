@@ -3,13 +3,21 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/format.dart';
 import '../../models/merchant.dart';
 import '../../models/voucher.dart';
+import '../../models/voucher_amount_tier.dart';
 import '../../providers/admin_providers.dart';
 import '../../widgets/stat_card.dart';
+import '../merchants/merchant_detail_screen.dart' show merchantTypeLabels;
 
 const _discountTypeLabels = {
   'percent': 'Phần trăm (%)',
   'fixed': 'Số tiền cố định',
   'free_shipping': 'Miễn phí vận chuyển',
+};
+
+const _orderKindLabels = {
+  'instant': 'Tức thời',
+  'preorder': 'Đặt trước',
+  'wholesale': 'Giá sỉ',
 };
 
 const _statusFilters = ['Tất cả', 'Đang chạy', 'Đã tắt', 'Hết hạn/hết lượt'];
@@ -50,13 +58,27 @@ class _VouchersScreenState extends ConsumerState<VouchersScreen> {
     final usageLimitPerUserCtrl = TextEditingController(
       text: existing?.usageLimitPerUser.toString() ?? '1',
     );
+    final minConcurrentCtrl = TextEditingController(
+      text: existing?.minConcurrentOrders?.toString() ?? '',
+    );
     String? merchantId = existing?.merchantId;
     String discountType = existing?.discountType ?? 'percent';
     var startsAt = existing?.startsAt ?? DateTime.now();
     var endsAt = existing?.endsAt;
     var isPublic = existing?.isPublic ?? false;
     var isActive = existing?.isActive ?? true;
+    final orderKinds = <String>{...?existing?.applicableOrderKinds};
+    final merchantTypes = <String>{...?existing?.applicableMerchantTypes};
+    var tiers = <VoucherAmountTier>[];
+    if (existing != null) {
+      try {
+        tiers = await ref.read(adminRepoProvider).voucherAmountTiers(existing.id);
+      } catch (_) {
+        // im lặng — mục "Bậc giảm giá" chỉ hiện rỗng, không chặn sửa voucher
+      }
+    }
     String? error;
+    if (!mounted) return;
 
     final ok = await showDialog<bool>(
       context: context,
@@ -80,6 +102,102 @@ class _VouchersScreenState extends ConsumerState<VouchersScreen> {
               lastDate: DateTime.now().add(const Duration(days: 365 * 2)),
             );
             if (picked != null) setInner(() => endsAt = picked);
+          }
+
+          Future<void> reloadTiers() async {
+            if (existing == null) return;
+            try {
+              final fresh = await ref.read(adminRepoProvider).voucherAmountTiers(existing.id);
+              setInner(() => tiers = fresh);
+            } catch (_) {}
+          }
+
+          Future<void> tierDialog({VoucherAmountTier? tier}) async {
+            final tierMinCtrl = TextEditingController(
+              text: tier?.minOrderAmount.toString() ?? '',
+            );
+            final tierValueCtrl = TextEditingController(
+              text: tier?.discountValue.toString() ?? '',
+            );
+            final tierMaxCtrl = TextEditingController(
+              text: tier?.maxDiscount?.toString() ?? '',
+            );
+            final tierOk = await showDialog<bool>(
+              context: context,
+              builder: (context) => AlertDialog(
+                title: Text(tier == null ? 'Thêm bậc' : 'Sửa bậc'),
+                content: SizedBox(
+                  width: 320,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextField(
+                        controller: tierMinCtrl,
+                        autofocus: true,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Giá trị đơn tối thiểu (VNĐ)',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: tierValueCtrl,
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(
+                          labelText: discountType == 'percent'
+                              ? 'Phần trăm giảm ở bậc này (%)'
+                              : 'Số tiền giảm ở bậc này (VNĐ)',
+                          border: const OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: tierMaxCtrl,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Giảm tối đa (VNĐ, để trống = không giới hạn)',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                actions: [
+                  TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Huỷ')),
+                  FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Lưu')),
+                ],
+              ),
+            );
+            if (tierOk != true || existing == null) return;
+            final tierData = {
+              'min_order_amount': int.tryParse(tierMinCtrl.text.trim()) ?? 0,
+              'discount_value': int.tryParse(tierValueCtrl.text.trim()) ?? 0,
+              'max_discount': int.tryParse(tierMaxCtrl.text.trim()),
+            };
+            try {
+              if (tier == null) {
+                await ref.read(adminRepoProvider).createVoucherAmountTier(existing.id, tierData);
+              } else {
+                await ref.read(adminRepoProvider).updateVoucherAmountTier(tier.id, tierData);
+              }
+              await reloadTiers();
+            } catch (e) {
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+              }
+            }
+          }
+
+          Future<void> deleteTier(VoucherAmountTier tier) async {
+            try {
+              await ref.read(adminRepoProvider).deleteVoucherAmountTier(tier.id);
+              await reloadTiers();
+            } catch (e) {
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+              }
+            }
           }
 
           return AlertDialog(
@@ -185,6 +303,131 @@ class _VouchersScreenState extends ConsumerState<VouchersScreen> {
                         border: OutlineInputBorder(),
                       ),
                     ),
+                    const SizedBox(height: 20),
+                    Text(
+                      'Điều kiện áp dụng',
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Loại đơn (bỏ trống = áp dụng mọi loại)',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 4),
+                    Wrap(
+                      spacing: 8,
+                      children: _orderKindLabels.entries
+                          .map(
+                            (e) => FilterChip(
+                              label: Text(e.value),
+                              selected: orderKinds.contains(e.key),
+                              onSelected: (v) => setInner(
+                                () => v ? orderKinds.add(e.key) : orderKinds.remove(e.key),
+                              ),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Loại cửa hàng (bỏ trống = áp dụng mọi loại)',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 4),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: merchantTypeLabels.entries
+                          .map(
+                            (e) => FilterChip(
+                              label: Text(e.value),
+                              selected: merchantTypes.contains(e.key),
+                              onSelected: (v) => setInner(
+                                () => v ? merchantTypes.add(e.key) : merchantTypes.remove(e.key),
+                              ),
+                            ),
+                          )
+                          .toList(),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: minConcurrentCtrl,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Số đơn cùng lúc tối thiểu (để trống = không yêu cầu)',
+                        helperText:
+                            'Khách phải đang có ít nhất N đơn (tính cả đơn đang đặt) chưa tới lúc tài xế xác nhận đang giao mới dùng được mã.',
+                        helperMaxLines: 2,
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Bậc giảm giá theo giá trị đơn',
+                          style: Theme.of(context).textTheme.titleSmall,
+                        ),
+                        if (existing != null && discountType != 'free_shipping')
+                          TextButton.icon(
+                            onPressed: () => tierDialog(),
+                            icon: const Icon(Icons.add, size: 18),
+                            label: const Text('Thêm bậc'),
+                          ),
+                      ],
+                    ),
+                    if (existing == null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          'Lưu voucher trước, sau đó bấm Sửa để thêm bậc giảm giá theo giá trị đơn.',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      )
+                    else if (discountType == 'free_shipping')
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          'Không áp dụng bậc cho voucher miễn phí vận chuyển.',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      )
+                    else if (tiers.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          'Chưa có bậc nào — dùng nguyên mức giảm cố định ở trên.',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      )
+                    else
+                      ...(tiers..sort((a, b) => a.minOrderAmount.compareTo(b.minOrderAmount))).map(
+                        (t) => ListTile(
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          title: Text('Từ ${formatVnd(t.minOrderAmount)}'),
+                          subtitle: Text(
+                            discountType == 'percent'
+                                ? 'Giảm ${t.discountValue}%'
+                                    '${t.maxDiscount != null ? ' (tối đa ${formatVnd(t.maxDiscount!)})' : ''}'
+                                : 'Giảm ${formatVnd(t.discountValue)}',
+                          ),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: const Icon(Icons.edit_outlined, size: 20),
+                                onPressed: () => tierDialog(tier: t),
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.delete_outline, size: 20),
+                                onPressed: () => deleteTier(t),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                     const SizedBox(height: 20),
                     Text(
                       'Giới hạn lượt dùng',
@@ -326,6 +569,9 @@ class _VouchersScreenState extends ConsumerState<VouchersScreen> {
       'ends_at': endsAt?.toIso8601String(),
       'is_public': isPublic,
       'is_active': isActive,
+      'applicable_order_kinds': orderKinds.isEmpty ? null : orderKinds.toList(),
+      'applicable_merchant_types': merchantTypes.isEmpty ? null : merchantTypes.toList(),
+      'min_concurrent_orders': int.tryParse(minConcurrentCtrl.text.trim()),
     };
 
     setState(() => _busy = true);
@@ -584,6 +830,28 @@ class _VouchersScreenState extends ConsumerState<VouchersScreen> {
                                     if (v.isPublic)
                                       const Chip(
                                         label: Text('Cho khách chọn'),
+                                        visualDensity: VisualDensity.compact,
+                                        side: BorderSide.none,
+                                      ),
+                                    if (v.applicableOrderKinds != null)
+                                      Chip(
+                                        label: Text(v.applicableOrderKinds!
+                                            .map((k) => _orderKindLabels[k] ?? k)
+                                            .join(', ')),
+                                        visualDensity: VisualDensity.compact,
+                                        side: BorderSide.none,
+                                      ),
+                                    if (v.applicableMerchantTypes != null)
+                                      Chip(
+                                        label: Text(v.applicableMerchantTypes!
+                                            .map((t) => merchantTypeLabels[t] ?? t)
+                                            .join(', ')),
+                                        visualDensity: VisualDensity.compact,
+                                        side: BorderSide.none,
+                                      ),
+                                    if (v.minConcurrentOrders != null)
+                                      Chip(
+                                        label: Text('≥${v.minConcurrentOrders} đơn cùng lúc'),
                                         visualDensity: VisualDensity.compact,
                                         side: BorderSide.none,
                                       ),
