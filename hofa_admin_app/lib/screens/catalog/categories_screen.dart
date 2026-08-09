@@ -426,6 +426,7 @@ class _CategoryLeadingIcon extends StatelessWidget {
       iconUrl!,
       width: size,
       height: size,
+      fit: BoxFit.contain,
       color: Theme.of(context).colorScheme.primary,
       colorBlendMode: BlendMode.srcIn,
       errorBuilder: (_, _, _) => Icon(Icons.folder_outlined, size: size),

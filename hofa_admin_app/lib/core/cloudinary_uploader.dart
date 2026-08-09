@@ -33,10 +33,15 @@ class CloudinaryUploader {
 /// (từ thư viện Lucide) nhưng luôn PHÁT ra PNG, để 3 app khách/cửa hàng/tài xế chỉ cần
 /// Image.network như mọi ảnh khác, không cần thêm gói flutter_svg. Cloudinary tự rasterize
 /// SVG sang PNG phía server theo transform này, không đụng gì tới ảnh gốc đã lưu.
+///
+/// w_256: BẮT BUỘC phải chỉ định chiều rộng — không có w_ thì Cloudinary rasterize SVG đúng
+/// theo kích thước khai trong file gốc (icon Lucide/Iconify luôn là 24x24), ra 1 ảnh PNG chỉ
+/// 24x24 điểm ảnh thật, phóng to lên khung 100-140px ở UI sẽ vỡ nét/mờ nhoè như 1 vệt màu,
+/// không còn thấy rõ hình icon (bug đã xác nhận qua ảnh chụp màn hình thật).
 String toCloudinaryPngUrl(String secureUrl) {
   const marker = '/image/upload/';
   final i = secureUrl.indexOf(marker);
   if (i < 0) return secureUrl;
   final insertAt = i + marker.length;
-  return '${secureUrl.substring(0, insertAt)}f_png,q_auto/${secureUrl.substring(insertAt)}';
+  return '${secureUrl.substring(0, insertAt)}f_png,q_auto,w_256/${secureUrl.substring(insertAt)}';
 }

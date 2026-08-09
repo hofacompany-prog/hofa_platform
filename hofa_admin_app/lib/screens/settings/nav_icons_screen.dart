@@ -134,6 +134,7 @@ class _NavIconsScreenState extends ConsumerState<NavIconsScreen> {
                                         iconUrl,
                                         width: 28,
                                         height: 28,
+                                        fit: BoxFit.contain,
                                         color: theme.colorScheme.primary,
                                         colorBlendMode: BlendMode.srcIn,
                                         errorBuilder: (_, _, _) => Icon(

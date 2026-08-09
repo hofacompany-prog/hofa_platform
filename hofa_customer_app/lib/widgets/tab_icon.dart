@@ -19,6 +19,7 @@ class TabIcon extends StatelessWidget {
       url!,
       width: size,
       height: size,
+      fit: BoxFit.contain,
       color: color,
       colorBlendMode: BlendMode.srcIn,
       errorBuilder: (_, _, _) => Icon(fallback, size: size, color: color),
