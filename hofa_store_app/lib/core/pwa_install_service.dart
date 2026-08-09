@@ -12,10 +12,6 @@ class PwaInstallService {
   /// không có API để tự bật popup cài như Chrome/Edge, phải hướng dẫn tay qua nút Chia sẻ.
   static bool isIOSSafari() => impl.isIOSSafari();
 
-  /// Trình duyệt bên thứ 3 (Chrome/Cốc Cốc...) trên iOS — không cài PWA được, chỉ nên hướng
-  /// dẫn đổi sang Safari.
-  static bool isIOSNonSafari() => impl.isIOSNonSafari();
-
   /// Trình duyệt đã bắn sự kiện beforeinstallprompt (đủ điều kiện cài, có thể tự bật popup) —
   /// xem web/index.html.
   static bool hasDeferredPrompt() => impl.hasDeferredPrompt();

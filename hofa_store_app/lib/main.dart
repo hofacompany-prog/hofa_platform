@@ -93,41 +93,14 @@ class _HofaStoreAppState extends ConsumerState<HofaStoreApp> {
   }
 
   /// Gợi ý "Thêm vào màn hình chính" khi máy chưa cài PWA — hỏi lại MỖI LẦN mở app cho tới khi
-  /// cài xong (không nhớ trạng thái "đã từ chối"), bỏ qua nếu đã cài hoặc trình duyệt desktop
-  /// không hỗ trợ cài kiểu này.
+  /// cài xong (không nhớ trạng thái "đã từ chối"), bỏ qua nếu đã cài hoặc trình duyệt không hỗ
+  /// trợ cài kiểu này (không phải Chrome/Edge/Safari iOS).
   Future<void> _checkPwaInstall() async {
     if (PwaInstallService.isStandalone()) return;
 
     if (!mounted) return;
     final context = navigatorKey.currentContext;
     if (context == null || !context.mounted) return;
-
-    // Chrome/Cốc Cốc/Firefox... trên iOS đều chỉ là "vỏ" giao diện quanh WebKit của Safari,
-    // không có API cài PWA thật — chỉ hướng dẫn đổi trình duyệt, không có gì để tự bật cài.
-    if (PwaInstallService.isIOSNonSafari()) {
-      await showDialog<void>(
-        context: context,
-        builder: (context) => AlertDialog(
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              const Icon(Icons.explore_outlined, size: 40),
-              const SizedBox(height: 12),
-              Text(
-                'Hãy mở bằng Safari để cài đặt!',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
-              ),
-            ],
-          ),
-          actions: [
-            FilledButton(onPressed: () => Navigator.pop(context), child: const Text('Đã hiểu')),
-          ],
-        ),
-      );
-      return;
-    }
 
     final canPromptNative = PwaInstallService.hasDeferredPrompt();
     final isIOSSafari = PwaInstallService.isIOSSafari();

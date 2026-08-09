@@ -57,11 +57,6 @@ bool isIOSSafari() {
   return !otherBrowserTokens.any(ua.contains);
 }
 
-/// Trình duyệt bên thứ 3 (Chrome/Cốc Cốc/Firefox...) trên iOS — không có API cài PWA thật,
-/// chỉ Safari mới cài được, nên chỉ hướng dẫn đổi trình duyệt thay vì hiện nút cài không hoạt
-/// động được.
-bool isIOSNonSafari() => _isIOSDevice() && !isIOSSafari();
-
 bool hasDeferredPrompt() {
   try {
     return _deferredPromptRaw != null;
