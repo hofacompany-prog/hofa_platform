@@ -23,6 +23,7 @@ import '../models/admin_notification.dart';
 import '../models/notification_inbox_item.dart';
 import '../models/notification_settings.dart';
 import '../models/nav_tab_icon.dart';
+import '../models/icon_library.dart';
 
 /// Gom mọi lời gọi API mà web admin cần. Tất cả endpoint ở đây đều yêu cầu
 /// role = 'admin' ở phía server (server/src/utils.js requireRole).
@@ -423,6 +424,21 @@ class AdminRepository {
   /// [iconUrl] = null thì xoá icon tuỳ chỉnh, tab quay lại dùng icon Material mặc định.
   Future<void> setNavIcon(String app, String tabKey, String? iconUrl) async {
     await _api.put('/nav-icons/$app/$tabKey', body: {'icon_url': iconUrl});
+  }
+
+  // ---- Thư viện icon online (Iconify) đã bật ----
+
+  Future<List<IconLibrary>> iconLibraries() async {
+    final list = await _api.get('/icon-libraries') as List;
+    return list.map((e) => IconLibrary.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<void> enableIconLibrary(String prefix, String name) async {
+    await _api.post('/icon-libraries', body: {'prefix': prefix, 'name': name});
+  }
+
+  Future<void> disableIconLibrary(String prefix) async {
+    await _api.delete('/icon-libraries/$prefix');
   }
 
   // ---- Ví tài xế: duyệt nạp/rút tiền ----

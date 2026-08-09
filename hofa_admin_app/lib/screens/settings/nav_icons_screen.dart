@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/cloudinary_uploader.dart';
 import '../../core/nav_tab_slots.dart';
 import '../../providers/admin_providers.dart';
-import '../../widgets/lucide_icon_picker_dialog.dart';
+import '../../widgets/icon_picker_dialog.dart';
+import 'icon_library_manager_screen.dart';
 
 /// Chọn icon tabbar tuỳ chỉnh cho từng tab của cả 4 app (admin/customer/store/driver) — icon
-/// lấy từ thư viện Lucide bundled sẵn trong app này (assets/lucide_icons/, xem
-/// widgets/lucide_icon_picker_dialog.dart), chọn xong tải lên Cloudinary rồi lưu URL vào
+/// lấy từ thư viện Lucide bundled sẵn trong app này hoặc tìm online qua Iconify (xem
+/// widgets/icon_picker_dialog.dart), chọn xong tải lên Cloudinary rồi lưu URL vào
 /// nav_tab_icons (GET/PUT /nav-icons) để app tương ứng tự đọc lúc khởi động. Không chọn thì
 /// tab đó giữ nguyên icon Material mặc định trong code app đó, không có gì bị ảnh hưởng.
 class NavIconsScreen extends ConsumerStatefulWidget {
@@ -24,17 +24,14 @@ class _NavIconsScreenState extends ConsumerState<NavIconsScreen> {
   String _key(String app, String tabKey) => '$app::$tabKey';
 
   Future<void> _pickIcon(String app, String tabKey) async {
-    final name = await showLucideIconPickerDialog(context);
-    if (name == null) return;
+    final picked = await showIconPickerDialog(context);
+    if (picked == null) return;
     if (!mounted) return;
     setState(() => _busyKeys.add(_key(app, tabKey)));
     try {
-      final bytes = (await rootBundle.load('assets/lucide_icons/svg/$name.svg'))
-          .buffer
-          .asUint8List();
       final secureUrl = await CloudinaryUploader().uploadImage(
-        bytes,
-        '$name.svg',
+        picked.bytes,
+        picked.filename,
         folder: 'nav_icons',
       );
       final pngUrl = toCloudinaryPngUrl(secureUrl);
@@ -78,6 +75,19 @@ class _NavIconsScreenState extends ConsumerState<NavIconsScreen> {
     final navIconsAsync = ref.watch(navIconsProvider);
 
     return Scaffold(
+      appBar: AppBar(
+        title: const Text('Icon tabbar'),
+        actions: [
+          TextButton.icon(
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const IconLibraryManagerScreen()),
+            ),
+            icon: const Icon(Icons.tune),
+            label: const Text('Quản lý thư viện icon'),
+          ),
+          const SizedBox(width: 8),
+        ],
+      ),
       body: navIconsAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Lỗi: $e')),

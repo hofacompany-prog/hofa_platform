@@ -39,6 +39,7 @@ app.use('/', require('./routes/driver-accept-settings'));
 app.use('/', require('./routes/bank-account-settings'));
 app.use('/', require('./routes/banks'));
 app.use('/', require('./routes/nav-icons'));
+app.use('/', require('./routes/icon-libraries'));
 app.use('/', require('./routes/admin-notifications'));
 app.use('/', require('./routes/notifications'));
 app.use('/', require('./routes/notification-settings'));
