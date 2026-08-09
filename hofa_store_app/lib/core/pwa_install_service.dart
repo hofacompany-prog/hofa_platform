@@ -8,9 +8,9 @@ class PwaInstallService {
   /// Đã chạy ở chế độ standalone (đã cài lên máy) chưa — true thì không hỏi nữa.
   static bool isStandalone() => impl.isStandalone();
 
-  /// Safari trên iPhone/iPad — trình duyệt DUY NHẤT trên iOS hỗ trợ "Thêm vào MH chính", và
-  /// không có API để tự bật popup cài như Chrome/Edge, phải hướng dẫn tay qua nút Chia sẻ.
-  static bool isIOSSafari() => impl.isIOSSafari();
+  /// Bất kỳ trình duyệt nào trên iPhone/iPad — không trình duyệt iOS nào có API để tự bật
+  /// popup cài như Chrome/Edge trên Android, phải hướng dẫn tay qua nút Chia sẻ.
+  static bool isIOS() => impl.isIOS();
 
   /// Trình duyệt đã bắn sự kiện beforeinstallprompt (đủ điều kiện cài, có thể tự bật popup) —
   /// xem web/index.html.

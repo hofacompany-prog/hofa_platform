@@ -25,11 +25,6 @@ extension type _UserChoice(JSObject _) implements JSObject {
   external String get outcome;
 }
 
-bool _isIOSDevice() {
-  final ua = html.window.navigator.userAgent.toLowerCase();
-  return ua.contains('iphone') || ua.contains('ipad') || ua.contains('ipod');
-}
-
 bool isStandalone() {
   try {
     final standaloneMedia = html.window.matchMedia('(display-mode: standalone)').matches;
@@ -39,22 +34,13 @@ bool isStandalone() {
   }
 }
 
-/// Safari thật trên iPhone/iPad — trình duyệt DUY NHẤT trên iOS có nút "Thêm vào MH chính".
-/// Best-effort: loại các trình duyệt iOS đã biết chắc chắn không phải Safari (đều chỉ là "vỏ"
-/// giao diện quanh WebKit theo yêu cầu bắt buộc của Apple) qua user agent — không có cách nào
-/// nhận diện được 100% mọi trình duyệt bên thứ 3 chưa từng biết tới.
-bool isIOSSafari() {
-  if (!_isIOSDevice()) return false;
+/// Bất kỳ trình duyệt nào trên iPhone/iPad (Safari, Chrome, Cốc Cốc, Firefox...) — không
+/// riêng Safari nữa: không trình duyệt iOS nào có beforeinstallprompt (kể cả Chrome-iOS, vì
+/// đều chỉ là "vỏ" giao diện quanh WebKit của Safari), nên tất cả đều dùng chung hướng dẫn tay
+/// "Nhấn nút Chia sẻ, rồi chọn Thêm vào MH chính".
+bool isIOS() {
   final ua = html.window.navigator.userAgent.toLowerCase();
-  const otherBrowserTokens = [
-    'crios', // Chrome
-    'fxios', // Firefox
-    'edgios', // Edge
-    'opios', // Opera
-    'coccoc', 'coc_coc', // Cốc Cốc
-    'duckduckgo',
-  ];
-  return !otherBrowserTokens.any(ua.contains);
+  return ua.contains('iphone') || ua.contains('ipad') || ua.contains('ipod');
 }
 
 bool hasDeferredPrompt() {

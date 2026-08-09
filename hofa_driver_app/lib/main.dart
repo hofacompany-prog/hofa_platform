@@ -93,8 +93,9 @@ class _HofaDriverAppState extends ConsumerState<HofaDriverApp> {
   }
 
   /// Gợi ý "Thêm vào màn hình chính" khi máy chưa cài PWA — hỏi lại MỖI LẦN mở app cho tới khi
-  /// cài xong (không nhớ trạng thái "đã từ chối"), bỏ qua nếu đã cài hoặc trình duyệt không hỗ
-  /// trợ cài kiểu này (không phải Chrome/Edge/Safari iOS).
+  /// cài xong (không nhớ trạng thái "đã từ chối"), bỏ qua nếu đã cài hoặc trình duyệt desktop
+  /// không hỗ trợ cài kiểu này. Mọi trình duyệt trên iOS (Safari, Chrome, Cốc Cốc...) đều dùng
+  /// chung hướng dẫn tay "Nhấn nút Chia sẻ" — không riêng Safari nữa.
   Future<void> _checkPwaInstall() async {
     if (PwaInstallService.isStandalone()) return;
 
@@ -103,8 +104,8 @@ class _HofaDriverAppState extends ConsumerState<HofaDriverApp> {
     if (context == null || !context.mounted) return;
 
     final canPromptNative = PwaInstallService.hasDeferredPrompt();
-    final isIOSSafari = PwaInstallService.isIOSSafari();
-    if (!canPromptNative && !isIOSSafari) return;
+    final isIOS = PwaInstallService.isIOS();
+    if (!canPromptNative && !isIOS) return;
 
     final install = await showDialog<bool>(
       context: context,
