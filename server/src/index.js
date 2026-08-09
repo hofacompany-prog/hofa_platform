@@ -8,6 +8,7 @@ const { attachContext } = require('./middleware/auth');
 const { ApiError } = require('./errors');
 const dispatch = require('./dispatch');
 const push = require('./push');
+const orderOffer = require('./orderOffer');
 
 const app = express();
 app.use(helmet());
@@ -74,3 +75,10 @@ setInterval(() => {
 setInterval(() => {
   push.sweepOldNotifications().catch((e) => console.error('[sweep-old-notifications]', e));
 }, 60 * 60 * 1000);
+
+// Tự kích hoạt đơn đặt trước (sales_model=scheduled) còn đang "ngủ" khi tới ngưỡng còn
+// default_prep_minutes phút nữa là tới scheduled_for — xem hofa-db/49_preorder_gating.sql +
+// orderOffer.sweepDuePreorders. 30s là đủ mịn vì ngưỡng tính theo phút.
+setInterval(() => {
+  orderOffer.sweepDuePreorders().catch((e) => console.error('[sweep-due-preorders]', e));
+}, 30_000);

@@ -69,7 +69,14 @@ class Order {
   final int? lateMinutes;
   final int? defaultPrepMinutes;
   final DateTime? confirmSweepDeadline;
+  final String salesModel;
+  final DateTime? scheduledFor;
+  final DateTime? preorderNotifiedAt;
   final List<OrderItem> items;
+
+  /// Đơn đặt trước (salesModel='scheduled') chưa được sweep kích hoạt — cửa hàng chỉ xem được
+  /// món, chưa thao tác/nhận thông báo được, xem hofa-db/49_preorder_gating.sql.
+  bool get isPreorderPending => salesModel == 'scheduled' && preorderNotifiedAt == null;
 
   Order({
     required this.id,
@@ -94,6 +101,9 @@ class Order {
     this.lateMinutes,
     this.defaultPrepMinutes,
     this.confirmSweepDeadline,
+    this.salesModel = 'instant',
+    this.scheduledFor,
+    this.preorderNotifiedAt,
     required this.items,
   });
 
@@ -121,6 +131,10 @@ class Order {
         defaultPrepMinutes: (json['default_prep_minutes'] as num?)?.toInt(),
         confirmSweepDeadline:
             json['confirm_sweep_deadline'] != null ? DateTime.tryParse(json['confirm_sweep_deadline'].toString()) : null,
+        salesModel: json['sales_model'] as String? ?? 'instant',
+        scheduledFor: json['scheduled_for'] != null ? DateTime.tryParse(json['scheduled_for'].toString()) : null,
+        preorderNotifiedAt:
+            json['preorder_notified_at'] != null ? DateTime.tryParse(json['preorder_notified_at'].toString()) : null,
         items: (json['items'] as List?)?.map((e) => OrderItem.fromJson(e as Map<String, dynamic>)).toList() ?? [],
       );
 }

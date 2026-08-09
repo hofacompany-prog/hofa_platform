@@ -21,7 +21,13 @@ const _statusGroups = <String, List<String>>{
   'Đã hủy': ['cancelled', 'refunded'],
 };
 
-final _selectedGroupProvider = StateProvider.autoDispose<String>((ref) => _statusGroups.keys.first);
+/// "Đặt trước" không phải nhóm theo status thuần (đơn đặt trước còn "ngủ" vẫn status='placed',
+/// xem Order.isPreorderPending) nên tách riêng khỏi _statusGroups — thứ tự tab hiển thị dùng
+/// list này thay vì _statusGroups.keys, giữ nguyên tab mặc định lúc mở màn ("Đang chuẩn bị").
+const _tabOrder = ['Đang chuẩn bị', 'Đã làm xong', 'Sắp tới', 'Đặt trước', 'Đã hoàn tất', 'Đã hủy'];
+const _preorderGroup = 'Đặt trước';
+
+final _selectedGroupProvider = StateProvider.autoDispose<String>((ref) => _tabOrder.first);
 
 final _ordersProvider = FutureProvider.autoDispose<List<Order>>((ref) async {
   final merchant = await ref.watch(myMerchantProvider.future);
@@ -58,7 +64,7 @@ class OrdersListScreen extends ConsumerWidget {
             child: ListView(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              children: _statusGroups.keys
+              children: _tabOrder
                   .map((name) => Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 4),
                         child: ChoiceChip(
@@ -76,8 +82,11 @@ class OrdersListScreen extends ConsumerWidget {
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (e, _) => Center(child: Text('Lỗi tải đơn hàng: $e')),
               data: (allOrders) {
-                final statuses = _statusGroups[selectedGroup]!;
-                final orders = allOrders.where((o) => statuses.contains(o.status)).toList();
+                final orders = selectedGroup == _preorderGroup
+                    ? allOrders.where((o) => o.isPreorderPending).toList()
+                    : allOrders
+                        .where((o) => _statusGroups[selectedGroup]!.contains(o.status) && !o.isPreorderPending)
+                        .toList();
                 if (orders.isEmpty) {
                   return const Center(child: Text('Không có đơn nào'));
                 }

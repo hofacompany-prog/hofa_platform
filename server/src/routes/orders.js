@@ -83,12 +83,23 @@ router.post('/orders', asyncHandler(async (req, res) => {
     order.selected_driver_id = body.selected_driver_id;
   }
 
-  // Báo ngay cho cửa hàng (push + màn xác nhận có đếm ngược), giống luồng offer bên
-  // tài xế — không tìm được cấu hình cửa hàng thì bỏ qua lặng lẽ, cửa hàng vẫn thấy
-  // đơn trong danh sách "Chờ xác nhận" như bình thường.
-  orderOffer.offerOrderToMerchant(order.id).catch((err) => {
-    console.error('[orderOffer] Không báo được cửa hàng cho đơn', order.id, err.message);
-  });
+  // Đơn đặt trước (sales_model=scheduled) đặt đủ sớm thì KHÔNG báo ngay — để "ngủ" tới lúc còn
+  // default_prep_minutes phút nữa là tới scheduled_for, sweepDuePreorders (index.js) sẽ kích
+  // hoạt + báo sau, xem hofa-db/49_preorder_gating.sql. Đặt gấp (đã trong ngưỡng đó ngay lúc
+  // tạo) thì coi như đơn tức thời, báo ngay như bình thường.
+  if (order.status === 'placed' && orderOffer.isPreorderDormant(order)) {
+    // để nguyên preorder_notified_at = NULL, không báo — sweep lo phần còn lại.
+  } else {
+    if (order.status === 'placed' && order.sales_model === 'scheduled') {
+      await db.updateById('orders', order.id, { preorder_notified_at: new Date().toISOString() });
+    }
+    // Báo ngay cho cửa hàng (push + màn xác nhận có đếm ngược), giống luồng offer bên
+    // tài xế — không tìm được cấu hình cửa hàng thì bỏ qua lặng lẽ, cửa hàng vẫn thấy
+    // đơn trong danh sách "Chờ xác nhận" như bình thường.
+    orderOffer.offerOrderToMerchant(order.id).catch((err) => {
+      console.error('[orderOffer] Không báo được cửa hàng cho đơn', order.id, err.message);
+    });
+  }
 
   res.status(201).json({ ok: true, data: order });
 }));
@@ -242,6 +253,7 @@ router.patch('/orders/:id/status', asyncHandler(async (req, res) => {
   requireAuth(req.ctx);
   requireFields(req.body, ['status']);
   const order = await requireOrderAccess(req.ctx, req.params.id);
+  orderOffer.assertPreorderActive(order, req.ctx.role);
 
   if (req.ctx.role !== 'admin') {
     const allowedRoles = ORDER_STATUS_ROLES[req.body.status];

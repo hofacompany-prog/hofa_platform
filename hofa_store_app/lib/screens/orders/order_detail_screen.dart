@@ -196,7 +196,10 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> with Sing
 
   Widget _buildBody(BuildContext context, Order o, AsyncValue<Delivery?> deliveryAsync) {
     final theme = Theme.of(context);
-    final isPlaced = o.status == 'placed';
+    // Đơn đặt trước còn "ngủ" (xem Order.isPreorderPending, hofa-db/49_preorder_gating.sql) vẫn
+    // status='placed' nhưng chưa tới lúc thao tác được — loại khỏi isPlaced để tự động tắt luôn
+    // thanh trượt xác nhận (block bên dưới), nút "Đã làm xong"/"Huỷ đơn" (canCancel).
+    final isPlaced = o.status == 'placed' && !o.isPreorderPending;
     final isPrepPhase = o.status == 'confirmed' || o.status == 'preparing';
     final canCancel = isPlaced || isPrepPhase;
 
@@ -273,6 +276,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> with Sing
     return Column(
       children: [
         _buildHeader(context, o, canCancel),
+        if (o.isPreorderPending) _buildPreorderBanner(context, o),
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
           child: Row(
@@ -463,6 +467,37 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> with Sing
         if (isPlaced) _buildPlacedBottom(context, o),
         if (isPrepPhase) _buildPrepPhaseBottom(context, o),
       ],
+    );
+  }
+
+  /// Đơn đặt trước còn "ngủ" — giải thích vì sao không thấy thanh xác nhận/nút thao tác nào,
+  /// tránh cửa hàng tưởng bị lỗi. Thời điểm kích hoạt = scheduled_for trừ default_prep_minutes,
+  /// đúng ngưỡng sweepDuePreorders phía server dùng.
+  Widget _buildPreorderBanner(BuildContext context, Order o) {
+    final theme = Theme.of(context);
+    final prepMinutes = o.defaultPrepMinutes ?? _fallbackPrepMinutes;
+    final activatesAt = o.scheduledFor?.subtract(Duration(minutes: prepMinutes));
+    return Container(
+      margin: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.primary.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.schedule, color: theme.colorScheme.primary, size: 20),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              activatesAt != null
+                  ? 'Đơn đặt trước — chỉ xem được món lúc này, sẽ xử lý được lúc ${formatDateTime(activatesAt)}'
+                  : 'Đơn đặt trước — chỉ xem được món lúc này, chưa thao tác được',
+              style: theme.textTheme.bodySmall,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
