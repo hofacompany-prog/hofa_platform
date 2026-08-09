@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../core/category_icons.dart';
 import '../models/category.dart';
-import 'network_image_box.dart';
 
 const _maxTiles = 8; // 2 hàng x 4 cột — ô cuối luôn dành cho "Xem tất cả"
 
@@ -84,18 +83,24 @@ class CategoryTile extends StatelessWidget {
                 ? Icon(icon, color: theme.colorScheme.primary)
                 : (iconName != null && iconName!.isNotEmpty)
                     ? Icon(categoryIconOf(iconName), color: theme.colorScheme.primary)
-                    : ClipOval(
-                        child: Padding(
-                          padding: const EdgeInsets.all(10),
-                          child: NetworkImageBox(
-                            url: iconUrl,
-                            width: 36,
-                            height: 36,
-                            borderRadius: BorderRadius.circular(100),
-                            fallbackIcon: Icons.category_outlined,
-                          ),
-                        ),
-                      ),
+                    : (iconUrl != null && iconUrl!.isNotEmpty)
+                        // Icon từ thư viện (Lucide/Online, xem widgets/icon_picker_dialog.dart ở
+                        // admin) là ảnh nét đơn sắc — KHÔNG dùng NetworkImageBox (dành cho ảnh
+                        // thật, BoxFit.cover, không tô màu) vì nó khiến icon hiện đúng màu gốc
+                        // rasterize (thường ra đen) thay vì xanh thương hiệu, và cover làm icon
+                        // trông to hơn hẳn icon Material bên cạnh (glyph Material vốn có sẵn
+                        // đệm, vẽ nhỏ hơn khung — icon thư viện vẽ gần sát viền).
+                        ? Image.network(
+                            iconUrl!,
+                            width: 24,
+                            height: 24,
+                            fit: BoxFit.contain,
+                            color: theme.colorScheme.primary,
+                            colorBlendMode: BlendMode.srcIn,
+                            errorBuilder: (_, _, _) =>
+                                Icon(Icons.category_outlined, color: theme.colorScheme.primary),
+                          )
+                        : Icon(Icons.category_outlined, color: theme.colorScheme.primary),
           ),
           const SizedBox(height: 6),
           Text(
