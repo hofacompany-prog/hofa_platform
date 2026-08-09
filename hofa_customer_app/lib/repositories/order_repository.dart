@@ -8,9 +8,10 @@ class OrderRepository {
   Future<Order> createOrder(Map<String, dynamic> data) async =>
       Order.fromJson(await _api.post('/orders', body: data) as Map<String, dynamic>);
 
-  Future<List<Order>> myOrders({String? status, int limit = 50}) async {
+  Future<List<Order>> myOrders({String? status, int limit = 50, int offset = 0}) async {
     final list = await _api.get('/orders/mine', query: {
       'limit': limit,
+      'offset': offset,
       if (status != null) 'status': status,
     }) as List;
     return list.map((e) => Order.fromJson(e as Map<String, dynamic>)).toList();

@@ -44,10 +44,11 @@ router.get('/merchants', asyncHandler(async (req, res) => {
             ) AS has_open_branch
        FROM merchants m
       WHERE ${clauses.join(' AND ')}
-      ORDER BY m.rating_avg DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
+      ORDER BY m.rating_avg DESC, m.created_at DESC, m.id DESC
+      LIMIT $${params.length - 1} OFFSET $${params.length}`,
     params
   );
-  res.json({ ok: true, data: rows });
+  res.json({ ok: true, data: rows, hasMore: rows.length === limit });
 }));
 
 /** Cửa hàng của chính user hiện tại — bất kể trạng thái (draft/pending_review/active...),

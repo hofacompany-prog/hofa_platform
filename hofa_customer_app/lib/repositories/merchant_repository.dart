@@ -10,12 +10,14 @@ class MerchantRepository {
     String? q,
     String? merchantType,
     int limit = 50,
+    int offset = 0,
   }) async {
     final list =
         await _api.get(
               '/merchants',
               query: {
                 'limit': limit,
+                'offset': offset,
                 if (q != null && q.isNotEmpty) 'q': q,
                 if (merchantType != null) 'merchant_type': merchantType,
               },

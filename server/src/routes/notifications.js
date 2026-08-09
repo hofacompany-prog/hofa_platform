@@ -18,10 +18,10 @@ router.get('/notifications', asyncHandler(async (req, res) => {
   }
   params.push(limit, offset);
   const rows = await db.query(
-    `SELECT * FROM notifications WHERE user_id = $1${categoryClause} ORDER BY created_at DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
+    `SELECT * FROM notifications WHERE user_id = $1${categoryClause} ORDER BY created_at DESC, id DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
     params
   );
-  res.json({ ok: true, data: rows });
+  res.json({ ok: true, data: rows, hasMore: rows.length === limit });
 }));
 
 router.get('/notifications/unread-count', asyncHandler(async (req, res) => {

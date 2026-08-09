@@ -33,12 +33,14 @@ class ProductRepository {
     String? categoryId,
     bool? isFeatured,
     int limit = 50,
+    int offset = 0,
   }) async {
     final list =
         await _api.get(
               '/products',
               query: {
                 'limit': limit,
+                'offset': offset,
                 if (merchantId != null) 'merchant_id': merchantId,
                 if (q != null && q.isNotEmpty) 'q': q,
                 if (salesModel != null) 'sales_model': salesModel,

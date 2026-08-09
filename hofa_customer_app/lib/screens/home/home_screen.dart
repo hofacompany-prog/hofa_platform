@@ -20,15 +20,35 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   final _searchCtrl = TextEditingController();
+  final _scrollController = ScrollController();
   Timer? _debounce;
   List<Product> _suggestions = [];
   bool _suggesting = false;
 
   @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+  }
+
+  @override
   void dispose() {
     _debounce?.cancel();
     _searchCtrl.dispose();
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
     super.dispose();
+  }
+
+  /// Chỉ tải thêm cửa hàng khi đang ở chế độ duyệt mặc định (không tìm kiếm) — tránh gọi
+  /// thừa lúc khách đang cuộn xem kết quả tìm kiếm (danh sách khác hẳn, không phân trang).
+  void _onScroll() {
+    final isSearching = ref.read(productSearchProvider).isNotEmpty;
+    if (isSearching) return;
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 300) {
+      ref.read(merchantsPagedProvider.notifier).loadMore();
+    }
   }
 
   void _onSearchChanged(String value) {
@@ -66,7 +86,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final merchantsAsync = ref.watch(merchantsProvider);
+    final merchantsState = ref.watch(merchantsPagedProvider);
     final categoriesAsync = ref.watch(categoriesProvider);
     final searchQuery = ref.watch(productSearchProvider);
     final searchedProductsAsync = ref.watch(searchedProductsProvider);
@@ -88,8 +108,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         actions: const [NotificationBell()],
       ),
       body: RefreshIndicator(
-        onRefresh: () async => ref.invalidate(merchantsProvider),
+        onRefresh: () async => ref.invalidate(merchantsPagedProvider),
         child: ListView(
+          controller: _scrollController,
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
           children: [
             TextField(
@@ -223,33 +244,44 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ),
               ),
               const SizedBox(height: 20),
-              merchantsAsync.when(
-                loading: () => const Padding(
+              if (merchantsState.isInitialLoading)
+                const Padding(
                   padding: EdgeInsets.only(top: 40),
                   child: Center(child: CircularProgressIndicator()),
-                ),
-                error: (e, _) => Padding(padding: const EdgeInsets.only(top: 40), child: Center(child: Text('Lỗi: $e'))),
-                data: (allMerchants) {
-                  // Cửa hàng tạm đóng (không còn chi nhánh nào mở) chỉ hiện lại khi khách chủ
-                  // động tìm kiếm (xem MerchantCard vẫn xám nó ở đó) — ở đây là danh sách
-                  // duyệt mặc định của trang chủ nên ẩn hẳn, đỡ dẫn khách bấm vào rồi thất vọng.
-                  final merchants = allMerchants.where((m) => m.hasOpenBranch).toList();
-                  if (merchants.isEmpty) {
-                    return const Padding(
-                      padding: EdgeInsets.only(top: 40),
-                      child: Center(child: Text('Không tìm thấy cửa hàng nào')),
-                    );
-                  }
-                  return Column(
-                    children: merchants
-                        .map((m) => Padding(
+                )
+              else if (merchantsState.error != null && merchantsState.items.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 40),
+                  child: Center(child: Text('Lỗi: ${merchantsState.error}')),
+                )
+              else
+                Builder(
+                  builder: (context) {
+                    // Cửa hàng tạm đóng (không còn chi nhánh nào mở) chỉ hiện lại khi khách chủ
+                    // động tìm kiếm (xem MerchantCard vẫn xám nó ở đó) — ở đây là danh sách
+                    // duyệt mặc định của trang chủ nên ẩn hẳn, đỡ dẫn khách bấm vào rồi thất vọng.
+                    final merchants = merchantsState.items.where((m) => m.hasOpenBranch).toList();
+                    if (merchants.isEmpty) {
+                      return const Padding(
+                        padding: EdgeInsets.only(top: 40),
+                        child: Center(child: Text('Không tìm thấy cửa hàng nào')),
+                      );
+                    }
+                    return Column(
+                      children: [
+                        ...merchants.map((m) => Padding(
                               padding: const EdgeInsets.only(bottom: 8),
                               child: MerchantCard(merchant: m, onTap: () => context.push('/merchants/${m.id}')),
-                            ))
-                        .toList(),
-                  );
-                },
-              ),
+                            )),
+                        if (merchantsState.hasMore)
+                          const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 12),
+                            child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                          ),
+                      ],
+                    );
+                  },
+                ),
             ],
           ],
         ),

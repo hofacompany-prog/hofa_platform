@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../core/paginated_list_notifier.dart';
 import '../models/address.dart';
 import '../models/bank_account_settings.dart';
 import '../models/branch.dart';
@@ -41,9 +42,14 @@ final navIconsProvider = FutureProvider.autoDispose<Map<String, String>>(
   (ref) => ref.watch(navIconRepoProvider).navIcons(),
 );
 
-/// Hộp thư thông báo — autoDispose để mỗi lần vào lại màn Thông báo đều lấy dữ liệu mới.
-final notificationsProvider = FutureProvider.autoDispose<List<AppNotification>>(
-  (ref) => ref.watch(notificationRepoProvider).list(),
+/// Hộp thư thông báo — tải dần theo trang (xem PaginatedListNotifier), autoDispose để mỗi lần
+/// vào lại màn Thông báo đều bắt đầu lại từ trang đầu.
+final notificationsPagedProvider = StateNotifierProvider.autoDispose<
+    PaginatedListNotifier<AppNotification>, PaginatedState<AppNotification>>(
+  (ref) => PaginatedListNotifier<AppNotification>(
+    (limit, offset) =>
+        ref.read(notificationRepoProvider).list(limit: limit, offset: offset),
+  ),
 );
 
 /// Số chưa đọc — hiện badge trên icon chuông ở màn chủ.
@@ -64,12 +70,15 @@ final voucherMaxCountProvider = FutureProvider.autoDispose<int>(
 
 // ---- Cửa hàng ----
 
-final merchantSearchProvider = StateProvider.autoDispose<String>((ref) => '');
-
-final merchantsProvider = FutureProvider.autoDispose<List<Merchant>>((ref) {
-  final q = ref.watch(merchantSearchProvider);
-  return ref.watch(merchantRepoProvider).merchants(q: q);
-});
+/// Danh sách cửa hàng duyệt ở trang chủ — tải dần theo trang khi khách lướt xuống, không tải
+/// hết 1 lần (xem PaginatedListNotifier).
+final merchantsPagedProvider = StateNotifierProvider.autoDispose<
+    PaginatedListNotifier<Merchant>, PaginatedState<Merchant>>(
+  (ref) => PaginatedListNotifier<Merchant>(
+    (limit, offset) =>
+        ref.read(merchantRepoProvider).merchants(limit: limit, offset: offset),
+  ),
+);
 
 final merchantDetailProvider = FutureProvider.autoDispose
     .family<Merchant, String>(
@@ -109,10 +118,14 @@ final categoriesProvider = FutureProvider.autoDispose<List<Category>>(
   (ref) => ref.watch(productRepoProvider).categories(),
 );
 
-final merchantProductsProvider = FutureProvider.autoDispose
-    .family<List<Product>, String>(
-      (ref, merchantId) =>
-          ref.watch(productRepoProvider).products(merchantId: merchantId),
+/// Sản phẩm của 1 cửa hàng — tải dần theo trang.
+final merchantProductsPagedProvider = StateNotifierProvider.autoDispose
+    .family<PaginatedListNotifier<Product>, PaginatedState<Product>, String>(
+      (ref, merchantId) => PaginatedListNotifier<Product>(
+        (limit, offset) => ref
+            .read(productRepoProvider)
+            .products(merchantId: merchantId, limit: limit, offset: offset),
+      ),
     );
 
 final merchantCategoriesProvider = FutureProvider.autoDispose
@@ -121,17 +134,17 @@ final merchantCategoriesProvider = FutureProvider.autoDispose
           ref.watch(productRepoProvider).merchantCategories(merchantId),
     );
 
-final categoryProductsProvider = FutureProvider.autoDispose
-    .family<List<Product>, String>(
-      (ref, categoryId) =>
-          ref.watch(productRepoProvider).products(categoryId: categoryId),
-    );
-
-final categoryFeaturedProductsProvider = FutureProvider.autoDispose
-    .family<List<Product>, String>(
-      (ref, categoryId) => ref
-          .watch(productRepoProvider)
-          .products(categoryId: categoryId, isFeatured: true, limit: 10),
+/// Sản phẩm thuộc 1 danh mục — categoryId là danh mục CHA thì server tự gộp cả sản phẩm của
+/// danh mục con (xem server/src/routes/products.js), là danh mục con thì lọc đúng con đó. Tải
+/// dần theo trang — dùng chung cho CategoryProductsScreen (danh mục con) lẫn
+/// CategoryDetailScreen (danh mục cha, hiện ngay dưới lưới danh mục con).
+final categoryProductsPagedProvider = StateNotifierProvider.autoDispose
+    .family<PaginatedListNotifier<Product>, PaginatedState<Product>, String>(
+      (ref, categoryId) => PaginatedListNotifier<Product>(
+        (limit, offset) => ref
+            .read(productRepoProvider)
+            .products(categoryId: categoryId, limit: limit, offset: offset),
+      ),
     );
 
 final productSearchProvider = StateProvider.autoDispose<String>((ref) => '');
@@ -179,10 +192,16 @@ final orderStatusFilterProvider = StateProvider.autoDispose<String?>(
   (ref) => null,
 );
 
-final myOrdersProvider = FutureProvider.autoDispose<List<Order>>((ref) {
-  final status = ref.watch(orderStatusFilterProvider);
-  return ref.watch(orderRepoProvider).myOrders(status: status);
-});
+/// Đơn hàng của khách — tải dần theo trang. family theo status: đổi bộ lọc trạng thái tự tạo
+/// notifier mới nên tự reset về trang đầu, không cần code riêng.
+final myOrdersPagedProvider = StateNotifierProvider.autoDispose
+    .family<PaginatedListNotifier<Order>, PaginatedState<Order>, String?>(
+      (ref, status) => PaginatedListNotifier<Order>(
+        (limit, offset) => ref
+            .read(orderRepoProvider)
+            .myOrders(status: status, limit: limit, offset: offset),
+      ),
+    );
 
 final orderDetailProvider = FutureProvider.autoDispose.family<Order, String>(
   (ref, id) => ref.watch(orderRepoProvider).order(id),

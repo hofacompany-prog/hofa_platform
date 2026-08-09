@@ -132,8 +132,14 @@ router.get('/products', asyncHandler(async (req, res) => {
   }
   if (req.query.sales_model) { params.push(req.query.sales_model); clauses.push(`sales_model = $${params.length}`); }
   if (req.query.category_id) {
+    // category_id có thể là danh mục CHA — gộp luôn sản phẩm của mọi danh mục CON (danh mục
+    // chỉ tối đa 2 cấp nên "id = $N OR parent_id = $N" luôn đủ, không cần đệ quy). Với danh
+    // mục con thì mệnh đề này tự thu về đúng 1 id (không danh mục nào có parent_id trỏ tới 1
+    // danh mục con khác), nên hành vi lọc theo danh mục con vẫn giữ nguyên như trước.
     params.push(req.query.category_id);
-    clauses.push(`id IN (SELECT product_id FROM product_categories WHERE category_id = $${params.length})`);
+    clauses.push(
+      `id IN (SELECT product_id FROM product_categories WHERE category_id IN (SELECT id FROM categories WHERE id = $${params.length} OR parent_id = $${params.length}))`
+    );
   }
   if (req.query.is_featured !== undefined) {
     params.push(req.query.is_featured === 'true');
@@ -142,10 +148,13 @@ router.get('/products', asyncHandler(async (req, res) => {
 
   params.push(limit, offset);
   const rows = await db.query(
-    `SELECT * FROM products WHERE ${clauses.join(' AND ')} ORDER BY created_at DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
+    // id DESC làm tiebreaker — created_at không unique (nhiều sản phẩm tạo cùng lúc lúc seed
+    // dữ liệu), thiếu tiebreaker thì phân trang (limit/offset) có thể lặp/bỏ sót dòng giữa các
+    // trang do thứ tự trả về không ổn định.
+    `SELECT * FROM products WHERE ${clauses.join(' AND ')} ORDER BY created_at DESC, id DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
     params
   );
-  res.json({ ok: true, data: await attachVariants(rows) });
+  res.json({ ok: true, data: await attachVariants(rows), hasMore: rows.length === limit });
 }));
 
 router.get('/products/:id', asyncHandler(async (req, res) => {

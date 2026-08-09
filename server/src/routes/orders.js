@@ -112,10 +112,10 @@ router.get('/orders/mine', asyncHandler(async (req, res) => {
   if (req.query.status) { params.push(req.query.status); clauses.push(`status = $${params.length}`); }
   params.push(limit, offset);
   const rows = await db.query(
-    `SELECT * FROM orders WHERE ${clauses.join(' AND ')} ORDER BY created_at DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
+    `SELECT * FROM orders WHERE ${clauses.join(' AND ')} ORDER BY created_at DESC, id DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
     params
   );
-  res.json({ ok: true, data: rows });
+  res.json({ ok: true, data: rows, hasMore: rows.length === limit });
 }));
 
 /** Toàn bộ đơn của mọi cửa hàng — chỉ admin. Kèm tên cửa hàng + tên khách để hiển thị

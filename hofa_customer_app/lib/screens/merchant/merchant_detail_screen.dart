@@ -9,14 +9,42 @@ import '../../widgets/buy_on_behalf_fee_notice.dart';
 import '../../widgets/network_image_box.dart';
 import '../../widgets/product_card.dart';
 
-class MerchantDetailScreen extends ConsumerWidget {
+class MerchantDetailScreen extends ConsumerStatefulWidget {
   final String merchantId;
   const MerchantDetailScreen({super.key, required this.merchantId});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MerchantDetailScreen> createState() => _MerchantDetailScreenState();
+}
+
+class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
+  final _scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 300) {
+      ref.read(merchantProductsPagedProvider(widget.merchantId).notifier).loadMore();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final merchantId = widget.merchantId;
     final merchantAsync = ref.watch(merchantDetailProvider(merchantId));
-    final productsAsync = ref.watch(merchantProductsProvider(merchantId));
+    final productsState = ref.watch(merchantProductsPagedProvider(merchantId));
     final categoriesAsync = ref.watch(merchantCategoriesProvider(merchantId));
     final theme = Theme.of(context);
 
@@ -30,6 +58,7 @@ class MerchantDetailScreen extends ConsumerWidget {
         error: (e, _) => Center(child: Text('Lỗi: $e')),
         data: (merchant) {
           return ListView(
+            controller: _scrollController,
             padding: const EdgeInsets.all(16),
             children: [
               Row(
@@ -106,20 +135,27 @@ class MerchantDetailScreen extends ConsumerWidget {
               const SizedBox(height: 8),
               Text('Sản phẩm', style: theme.textTheme.titleMedium),
               const SizedBox(height: 12),
-              productsAsync.when(
-                loading: () => const Padding(
+              if (productsState.isInitialLoading)
+                const Padding(
                   padding: EdgeInsets.only(top: 24),
                   child: Center(child: CircularProgressIndicator()),
-                ),
-                error: (e, _) => Center(child: Text('Lỗi: $e')),
-                data: (products) => _ProductGrid(
-                  products: products,
+                )
+              else if (productsState.error != null && productsState.items.isEmpty)
+                Center(child: Text('Lỗi: ${productsState.error}'))
+              else ...[
+                _ProductGrid(
+                  products: productsState.items,
                   categories: categoriesAsync.maybeWhen(
                     data: (v) => v,
                     orElse: () => const [],
                   ),
                 ),
-              ),
+                if (productsState.hasMore)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 12),
+                    child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                  ),
+              ],
             ],
           );
         },

@@ -46,7 +46,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
     try {
       await ref.read(orderRepoProvider).cancelOrder(o.id, note: 'Khách tự huỷ');
       ref.invalidate(orderDetailProvider(widget.orderId));
-      ref.invalidate(myOrdersProvider);
+      ref.invalidate(myOrdersPagedProvider(ref.read(orderStatusFilterProvider)));
     } catch (e) {
       if (mounted)
         ScaffoldMessenger.of(
