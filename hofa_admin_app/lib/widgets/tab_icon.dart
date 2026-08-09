@@ -14,10 +14,14 @@ class TabIcon extends StatelessWidget {
   Widget build(BuildContext context) {
     final color = IconTheme.of(context).color;
     if (url == null || url!.isEmpty) return Icon(fallback, color: color);
+    // Glyph icon Material thường có khoảng đệm sẵn trong chính glyph (nhìn nhỏ hơn khung),
+    // trong khi icon SVG thư viện (Lucide/Iconify) vẽ gần sát viền khung — cùng 1 kích thước
+    // khung thì icon thư viện trông to/đậm hơn hẳn icon Material bên cạnh. Vẽ nhỏ hơn khung
+    // 1 chút (0.8x) để cân bằng lại độ lớn nhìn bằng mắt cho khớp các tab còn lại.
     return Image.network(
       url!,
-      width: 24,
-      height: 24,
+      width: 24 * 0.8,
+      height: 24 * 0.8,
       fit: BoxFit.contain,
       color: color,
       colorBlendMode: BlendMode.srcIn,

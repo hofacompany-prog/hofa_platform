@@ -103,6 +103,10 @@ class AdminShell extends ConsumerWidget {
             minExtendedWidth: 210,
             selectedIndex: _indexFor(location),
             onDestinationSelected: (i) => context.go(_items[i].path),
+            // Mặc định Material 3 tô icon đang chọn bằng onSecondaryContainer (không phải màu
+            // thương hiệu) — ép rõ xanh lá khi chọn, xám khi chưa chọn.
+            selectedIconTheme: IconThemeData(color: theme.colorScheme.primary),
+            unselectedIconTheme: IconThemeData(color: theme.colorScheme.outline),
             leading: Padding(
               padding: const EdgeInsets.symmetric(vertical: 20),
               child: Column(

@@ -37,6 +37,7 @@ class DashboardShell extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
     final merchantAsync = ref.watch(myMerchantProvider);
     final location = GoRouterState.of(context).matchedLocation;
     // Watch ở đây (widget luôn mounted xuyên suốt app) CHỈ để side effect BadgeService.set()
@@ -65,6 +66,16 @@ class DashboardShell extends ConsumerWidget {
                 fontWeight: states.contains(WidgetState.selected) ? FontWeight.w600 : FontWeight.w400,
               ),
             ),
+            // Mặc định Material 3 tô icon đang chọn bằng onSecondaryContainer (không phải màu
+            // thương hiệu) — ép rõ xanh lá khi chọn, xám khi chưa chọn, khớp đúng màu xanh
+            // admin nhìn thấy lúc chọn icon custom ở màn Icon tabbar (xem widgets/tab_icon.dart).
+            iconTheme: WidgetStateProperty.resolveWith(
+              (states) => IconThemeData(
+                color: states.contains(WidgetState.selected)
+                    ? theme.colorScheme.primary
+                    : theme.colorScheme.outline,
+              ),
+            ),
           ),
           child: NavigationBar(
             selectedIndex: selectedIndex,
@@ -89,6 +100,8 @@ class DashboardShell extends ConsumerWidget {
             extended: MediaQuery.of(context).size.width > 900,
             selectedIndex: selectedIndex,
             onDestinationSelected: (i) => context.go(_shellDestinations[i].path),
+            selectedIconTheme: IconThemeData(color: theme.colorScheme.primary),
+            unselectedIconTheme: IconThemeData(color: theme.colorScheme.outline),
             leading: Padding(
               padding: const EdgeInsets.symmetric(vertical: 16),
               child: Column(

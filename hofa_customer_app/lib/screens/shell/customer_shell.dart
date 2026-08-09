@@ -60,6 +60,7 @@ class CustomerShell extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
     final location = GoRouterState.of(context).matchedLocation;
     final selectedIndex = _indexFor(location);
     final cart = ref.watch(cartProvider);
@@ -78,6 +79,17 @@ class CustomerShell extends ConsumerWidget {
             (states) => TextStyle(
               fontSize: 11,
               fontWeight: states.contains(WidgetState.selected) ? FontWeight.w600 : FontWeight.w400,
+            ),
+          ),
+          // Mặc định Material 3 tô icon đang chọn bằng onSecondaryContainer (không phải màu
+          // thương hiệu) — ép rõ xanh lá khi chọn, xám khi chưa chọn, để khớp đúng màu xanh
+          // admin nhìn thấy lúc chọn icon custom ở màn Icon tabbar (xem widgets/tab_icon.dart,
+          // tự đọc IconTheme.of(context).color).
+          iconTheme: WidgetStateProperty.resolveWith(
+            (states) => IconThemeData(
+              color: states.contains(WidgetState.selected)
+                  ? theme.colorScheme.primary
+                  : theme.colorScheme.outline,
             ),
           ),
         ),
