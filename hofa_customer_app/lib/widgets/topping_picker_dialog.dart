@@ -2,17 +2,20 @@ import 'package:flutter/material.dart';
 import '../core/format.dart';
 import '../models/topping.dart';
 
-/// Popup chọn topping (trượt lên từ dưới) dùng chung cho lúc thêm vào giỏ
-/// (product_detail_screen) và lúc sửa topping của 1 dòng đã có trong giỏ
-/// (cart_screen/preorder_screen). Trả về topping đã chọn + lưu ý riêng cho sản phẩm này
-/// (khác với lưu ý chung của cả đơn hàng nhập ở bước thanh toán), hoặc null nếu khách
-/// bấm Huỷ/vuốt xuống đóng popup.
-Future<({List<ProductTopping> toppings, String? note})?>
+/// Popup chọn topping + số lượng (trượt lên từ dưới) dùng chung cho lúc thêm nhanh vào giỏ
+/// (dấu "+" trên ProductCard ở danh sách sản phẩm) và lúc sửa topping của 1 dòng đã có
+/// trong giỏ (cart_screen/preorder_screen). [showQuantity] tắt phần chỉnh số lượng khi gọi
+/// từ trang chi tiết sản phẩm — trang đó đã có sẵn ô số lượng riêng ngoài popup, tránh lặp.
+/// Trả về topping đã chọn + số lượng + lưu ý riêng cho sản phẩm này (khác với lưu ý chung
+/// của cả đơn hàng nhập ở bước thanh toán), hoặc null nếu khách bấm Huỷ/vuốt xuống đóng popup.
+Future<({List<ProductTopping> toppings, String? note, int quantity})?>
 showToppingPickerDialog(
   BuildContext context, {
   required List<ToppingGroup> groups,
   List<ProductTopping> initiallySelected = const [],
   String? initialNote,
+  int initialQuantity = 1,
+  bool showQuantity = true,
 }) {
   final selectedByGroup = <String, Set<String>>{
     for (final g in groups)
@@ -22,8 +25,11 @@ showToppingPickerDialog(
           .toSet(),
   };
   final noteCtrl = TextEditingController(text: initialNote ?? '');
+  var quantity = initialQuantity < 1 ? 1 : initialQuantity;
 
-  return showModalBottomSheet<({List<ProductTopping> toppings, String? note})>(
+  return showModalBottomSheet<
+    ({List<ProductTopping> toppings, String? note, int quantity})
+  >(
     context: context,
     isScrollControlled: true,
     shape: const RoundedRectangleBorder(
@@ -49,6 +55,7 @@ showToppingPickerDialog(
           Navigator.pop(context, (
             toppings: toppings,
             note: note.isEmpty ? null : note,
+            quantity: quantity,
           ));
         }
 
@@ -78,7 +85,7 @@ showToppingPickerDialog(
                   child: Align(
                     alignment: Alignment.centerLeft,
                     child: Text(
-                      'Chọn topping',
+                      groups.isEmpty ? 'Số lượng' : 'Chọn topping',
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                   ),
@@ -91,6 +98,46 @@ showToppingPickerDialog(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
+                        if (showQuantity) ...[
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text(
+                                'Số lượng',
+                                style: TextStyle(fontWeight: FontWeight.w600),
+                              ),
+                              Row(
+                                children: [
+                                  IconButton.outlined(
+                                    visualDensity: VisualDensity.compact,
+                                    onPressed: quantity > 1
+                                        ? () => setInner(() => quantity--)
+                                        : null,
+                                    icon: const Icon(Icons.remove),
+                                  ),
+                                  SizedBox(
+                                    width: 40,
+                                    child: Center(
+                                      child: Text(
+                                        '$quantity',
+                                        style: Theme.of(
+                                          context,
+                                        ).textTheme.titleMedium,
+                                      ),
+                                    ),
+                                  ),
+                                  IconButton.outlined(
+                                    visualDensity: VisualDensity.compact,
+                                    onPressed: () =>
+                                        setInner(() => quantity++),
+                                    icon: const Icon(Icons.add),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                          if (groups.isNotEmpty) const SizedBox(height: 16),
+                        ],
                         for (final g in groups) ...[
                           Row(
                             children: [

@@ -2,15 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/cart_item.dart';
 import '../models/product.dart';
-import '../models/topping.dart';
 import '../providers/app_providers.dart';
 import '../providers/cart_provider.dart';
 import 'topping_picker_dialog.dart';
 
 /// Thêm nhanh 1 sản phẩm vào giỏ từ danh sách sản phẩm (dấu "+" trên ProductCard) — cùng luồng
-/// với nút thêm vào giỏ ở trang chi tiết sản phẩm (mở popup chọn topping nếu có, hỏi Giá sỉ/Đặt
-/// trước nếu sản phẩm bán sỉ, cảnh báo nếu giỏ đang có món của cửa hàng/hình thức khác) nhưng
-/// luôn dùng biến thể mặc định + số lượng 1, không cần mở trang chi tiết.
+/// với nút thêm vào giỏ ở trang chi tiết sản phẩm (hỏi Giá sỉ/Đặt trước nếu sản phẩm bán sỉ,
+/// cảnh báo nếu giỏ đang có món của cửa hàng/hình thức khác) nhưng luôn dùng biến thể mặc
+/// định, không cần mở trang chi tiết. Luôn mở popup topping trước khi thêm (kể cả sản phẩm
+/// không có topping) để khách chỉnh số lượng ngay trong popup đó.
 Future<void> quickAddToCart(
   BuildContext context,
   WidgetRef ref,
@@ -19,21 +19,15 @@ Future<void> quickAddToCart(
   final variant = product.defaultVariant;
   if (variant == null) return;
 
-  List<ProductTopping> toppings = [];
-  String? note;
   final toppingGroups = await ref.read(
     toppingGroupsProvider(product.id).future,
   );
-  if (toppingGroups.isNotEmpty) {
-    if (!context.mounted) return;
-    final result = await showToppingPickerDialog(
-      context,
-      groups: toppingGroups,
-    );
-    if (result == null) return; // huỷ popup thì không thêm vào giỏ
-    toppings = result.toppings;
-    note = result.note;
-  }
+  if (!context.mounted) return;
+  final result = await showToppingPickerDialog(context, groups: toppingGroups);
+  if (result == null) return; // huỷ popup thì không thêm vào giỏ
+  final toppings = result.toppings;
+  final note = result.note;
+  final quantity = result.quantity;
 
   String? orderKind;
   if (product.isWholesale) {
@@ -129,7 +123,7 @@ Future<void> quickAddToCart(
         variantName: variant.name,
         unitPrice: variant.price,
         basePrice: variant.price,
-        quantity: 1,
+        quantity: quantity,
         unit: product.unit,
         toppings: toppings,
         note: note,

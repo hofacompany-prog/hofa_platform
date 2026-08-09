@@ -64,6 +64,7 @@ class CartScreen extends ConsumerWidget {
       groups: groups,
       initiallySelected: item.toppings,
       initialNote: item.note,
+      showQuantity: false,
     );
     if (result != null) {
       await ref

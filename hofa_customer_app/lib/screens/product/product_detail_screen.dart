@@ -81,6 +81,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
         groups: toppingGroups,
         initiallySelected: _selectedToppings,
         initialNote: _note,
+        showQuantity: false,
       );
       if (result == null) return; // huỷ popup thì không thêm vào giỏ
       if (!mounted) return;

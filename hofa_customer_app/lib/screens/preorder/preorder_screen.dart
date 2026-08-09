@@ -348,6 +348,7 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
       groups: groups,
       initiallySelected: item.toppings,
       initialNote: item.note,
+      showQuantity: false,
     );
     if (result != null) {
       await ref
