@@ -87,61 +87,98 @@ class _InstallPwaScreenState extends State<InstallPwaScreen> {
                     onPressed: () => setState(() {}),
                     child: const Text('Đã gỡ app? Bấm để kiểm tra lại'),
                   ),
-                ] else ...[
-                  Icon(
-                    canPromptNative ? Icons.install_mobile : Icons.ios_share,
-                    size: 56,
-                    color: theme.colorScheme.primary,
-                  ),
+                ] else if (canPromptNative) ...[
+                  Icon(Icons.install_mobile, size: 56, color: theme.colorScheme.primary),
                   const SizedBox(height: 16),
                   Text(
-                    canPromptNative ? 'Cài đặt ứng dụng để tiếp tục!' : 'Hãy thêm vào Màn hình chính!',
+                    'Cài đặt ứng dụng để tiếp tục!',
                     textAlign: TextAlign.center,
-                    style: theme.textTheme.headlineLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                      color: canPromptNative ? null : theme.colorScheme.secondary,
-                    ),
+                    style: theme.textTheme.headlineLarge?.copyWith(fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    canPromptNative
-                        ? 'Bấm nút bên dưới để cài ứng dụng lên máy.'
-                        : 'Nhấn nút Chia sẻ ở thanh trình duyệt, rồi chọn "Thêm vào MH chính".',
+                    'Bấm nút bên dưới để cài ứng dụng lên máy.',
                     textAlign: TextAlign.center,
                     style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
                   ),
                   const SizedBox(height: 32),
-                  if (canPromptNative) ...[
-                    SizedBox(
-                      width: double.infinity,
-                      child: FilledButton(
-                        onPressed: _installing ? null : _install,
-                        style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 18)),
-                        child: _installing
-                            ? const SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(strokeWidth: 2),
-                              )
-                            : const Text(
-                                'Cài đặt ngay',
-                                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                              ),
-                      ),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: _installing ? null : _install,
+                      style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 18)),
+                      child: _installing
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Text(
+                              'Cài đặt ngay',
+                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                            ),
                     ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'Thoát ra màn hình vào app HOFA để tiếp tục',
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.outline),
-                    ),
-                  ],
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Thoát ra màn hình vào app HOFA để tiếp tục',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.outline),
+                  ),
+                ] else ...[
+                  // iOS không có API tự bật popup cài — đúng 3 bước thật trên Safari hiện nay:
+                  // Chia sẻ -> Xem thêm (mục "Thêm vào MH chính" đã bị gộp vào đây từ vài bản
+                  // iOS gần đây, không còn hiện thẳng ở hàng đầu) -> Thêm vào Màn hình chính.
+                  Text(
+                    'Làm theo 3 bước sau để cài đặt:',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 28),
+                  const _InstallStep(icon: Icons.ios_share, label: 'Nhấn Chia sẻ'),
+                  const SizedBox(height: 16),
+                  const _InstallStep(icon: Icons.expand_more, label: 'Xem thêm'),
+                  const SizedBox(height: 16),
+                  const _InstallStep(icon: Icons.add_box_outlined, label: 'Thêm vào Màn hình chính'),
                 ],
               ],
             ),
           ),
         ),
       ),
+    );
+  }
+}
+
+/// 1 bước trong hướng dẫn "Chia sẻ → Xem thêm → Thêm vào Màn hình chính" trên iOS Safari —
+/// icon riêng cho từng bước, khớp đúng icon thật trong bảng Chia sẻ của Safari.
+class _InstallStep extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  const _InstallStep({required this.icon, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Row(
+      children: [
+        Container(
+          width: 44,
+          height: 44,
+          decoration: BoxDecoration(
+            color: theme.colorScheme.primary.withValues(alpha: 0.12),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Icon(icon, color: theme.colorScheme.primary, size: 24),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Text(
+            label,
+            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+          ),
+        ),
+      ],
     );
   }
 }
