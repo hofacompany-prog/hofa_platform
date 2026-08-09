@@ -34,6 +34,17 @@
 
   <title>HOFA Store</title>
   <link rel="manifest" href="manifest.json">
+
+  <!-- Bắt sự kiện "đủ điều kiện cài PWA" NGAY từ đầu, trước khi Flutter kịp tải xong — trình
+       duyệt chỉ bắn sự kiện này 1 lần, Dart đăng ký nghe trễ có thể lỡ mất. Lưu tạm vào biến
+       toàn cục để lib/core/pwa_install_service_web.dart đọc lại bất cứ lúc nào. -->
+  <script>
+    window.__hofaPwaDeferredPrompt = null;
+    window.addEventListener('beforeinstallprompt', function (e) {
+      e.preventDefault();
+      window.__hofaPwaDeferredPrompt = e;
+    });
+  </script>
 </head>
 <body>
   <!--

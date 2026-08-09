@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'core/env.dart';
 import 'core/push_service.dart';
+import 'core/pwa_install_service.dart';
 import 'core/pwa_version_service.dart';
 import 'router.dart';
 import 'widgets/app_background.dart';
@@ -54,7 +55,11 @@ class _HofaDriverAppState extends ConsumerState<HofaDriverApp> {
   void initState() {
     super.initState();
     if (kIsWeb) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _checkPwaVersion());
+      // Nối tiếp nhau (không song song) để không hiện 2 popup chồng lên nhau — hỏi cài đặt
+      // chỉ sau khi đã chắc chắn không có bản cập nhật nào cần xử lý trước.
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _checkPwaVersion().then((_) => _checkPwaInstall()),
+      );
     }
   }
 
@@ -85,6 +90,47 @@ class _HofaDriverAppState extends ConsumerState<HofaDriverApp> {
         ],
       ),
     );
+  }
+
+  /// Gợi ý "Thêm vào màn hình chính" khi máy chưa cài PWA — bỏ qua nếu đã cài, mới bị từ chối
+  /// gần đây, hoặc trình duyệt không hỗ trợ cài (không phải Chrome/Edge/Safari iOS).
+  Future<void> _checkPwaInstall() async {
+    if (PwaInstallService.isStandalone()) return;
+    if (PwaInstallService.wasRecentlyDismissed()) return;
+
+    final canPromptNative = PwaInstallService.hasDeferredPrompt();
+    final isIOSSafari = PwaInstallService.isIOSSafari();
+    if (!canPromptNative && !isIOSSafari) return;
+
+    if (!mounted) return;
+    final context = navigatorKey.currentContext;
+    if (context == null || !context.mounted) return;
+
+    final install = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Cài đặt HOFA Tài xế lên máy?'),
+        content: Text(
+          canPromptNative
+              ? 'Thêm HOFA Tài xế vào màn hình chính để mở nhanh hơn, dùng như ứng dụng thật và nhận được thông báo đơn mới.'
+              : 'Nhấn nút Chia sẻ ở thanh trình duyệt, sau đó chọn "Thêm vào MH chính" để dùng HOFA Tài xế như ứng dụng thật và nhận được thông báo đơn mới.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(canPromptNative ? 'Để sau' : 'Đã hiểu'),
+          ),
+          if (canPromptNative)
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Cài đặt'),
+            ),
+        ],
+      ),
+    );
+
+    if (install == true) await PwaInstallService.promptInstall();
+    PwaInstallService.markDismissed();
   }
 
   @override
