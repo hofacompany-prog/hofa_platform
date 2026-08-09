@@ -179,21 +179,11 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
         ),
       );
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              orderKind == 'wholesale'
-                  ? 'Đã thêm vào Giá sỉ'
-                  : orderKind == 'preorder'
-                  ? 'Đã thêm vào Đặt trước'
-                  : 'Đã thêm vào Giỏ hàng',
-            ),
-          ),
-        );
         setState(() {
           _selectedToppings = [];
           _note = null;
         });
+        context.push('/checkout');
       }
     } catch (e) {
       if (mounted)
@@ -514,6 +504,10 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                           ),
                         ),
                       FilledButton.icon(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: theme.colorScheme.secondary,
+                          foregroundColor: Colors.white,
+                        ),
                         onPressed: (variant == null || _adding || isClosed)
                             ? null
                             : () => _addToCart(
@@ -526,13 +520,16 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                             ? const SizedBox(
                                 height: 18,
                                 width: 18,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
                               )
-                            : const Icon(Icons.add_shopping_cart),
+                            : const Icon(Icons.bolt),
                         label: Text(
                           isClosed
                               ? 'Cửa hàng đang đóng cửa'
-                              : 'Thêm vào giỏ · ${formatVnd((unitPrice + toppingsTotal) * _quantity)}',
+                              : 'Mua ngay · ${formatVnd((unitPrice + toppingsTotal) * _quantity)}',
                         ),
                       ),
                     ],

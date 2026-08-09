@@ -1,84 +1,167 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/format.dart';
 import '../models/product.dart';
 import 'network_image_box.dart';
+import 'quick_add_to_cart.dart';
 
-class ProductCard extends StatelessWidget {
+class ProductCard extends ConsumerStatefulWidget {
   final Product product;
   final VoidCallback onTap;
 
   const ProductCard({super.key, required this.product, required this.onTap});
 
   @override
+  ConsumerState<ProductCard> createState() => _ProductCardState();
+}
+
+class _ProductCardState extends ConsumerState<ProductCard> {
+  bool _adding = false;
+
+  Future<void> _quickAdd() async {
+    setState(() => _adding = true);
+    try {
+      await quickAddToCart(context, ref, widget.product);
+    } finally {
+      if (mounted) setState(() => _adding = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final product = widget.product;
     final variant = product.defaultVariant;
     return Card(
       elevation: 0,
       color: theme.colorScheme.surfaceContainerLow,
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: onTap,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+        onTap: widget.onTap,
+        child: Stack(
           children: [
-            AspectRatio(
-              aspectRatio: 1,
-              child: Stack(
-                children: [
-                  NetworkImageBox(
-                    url: product.images.isNotEmpty ? product.images.first : null,
-                    width: double.infinity,
-                    height: double.infinity,
-                    borderRadius: BorderRadius.zero,
-                    fallbackIcon: Icons.shopping_bag_outlined,
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                AspectRatio(
+                  aspectRatio: 1,
+                  child: Stack(
+                    children: [
+                      NetworkImageBox(
+                        url: product.images.isNotEmpty
+                            ? product.images.first
+                            : null,
+                        width: double.infinity,
+                        height: double.infinity,
+                        borderRadius: BorderRadius.zero,
+                        fallbackIcon: Icons.shopping_bag_outlined,
+                      ),
+                      if (product.isWholesale)
+                        Positioned(
+                          top: 8,
+                          left: 8,
+                          child: Chip(
+                            label: const Text(
+                              'Bán sỉ',
+                              style: TextStyle(fontSize: 11),
+                            ),
+                            backgroundColor: theme.colorScheme.secondary
+                                .withValues(alpha: 0.9),
+                            labelStyle: const TextStyle(color: Colors.white),
+                            visualDensity: VisualDensity.compact,
+                            padding: EdgeInsets.zero,
+                          ),
+                        ),
+                    ],
                   ),
-                  if (product.isWholesale)
-                    Positioned(
-                      top: 8,
-                      left: 8,
-                      child: Chip(
-                        label: const Text('Bán sỉ', style: TextStyle(fontSize: 11)),
-                        backgroundColor: theme.colorScheme.secondary.withValues(alpha: 0.9),
-                        labelStyle: const TextStyle(color: Colors.white),
-                        visualDensity: VisualDensity.compact,
-                        padding: EdgeInsets.zero,
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(10),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        product.name,
+                        style: const TextStyle(fontWeight: FontWeight.w500),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      const SizedBox(height: 6),
+                      if (variant != null)
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                formatVnd(variant.price),
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  color: theme.colorScheme.primary,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (variant.comparePrice != null &&
+                                variant.comparePrice! > variant.price)
+                              Padding(
+                                padding: const EdgeInsets.only(left: 6),
+                                child: Text(
+                                  formatVnd(variant.comparePrice!),
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    decoration: TextDecoration.lineThrough,
+                                    color: theme.colorScheme.outline,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      if (product.soldCount > 0)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Text(
+                            'Đã bán ${product.soldCount}',
+                            style: theme.textTheme.bodySmall,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            if (variant != null)
+              Positioned(
+                right: 8,
+                bottom: 8,
+                child: Material(
+                  color: theme.colorScheme.primary,
+                  shape: const CircleBorder(),
+                  elevation: 1,
+                  child: InkWell(
+                    customBorder: const CircleBorder(),
+                    onTap: _adding ? null : _quickAdd,
+                    child: SizedBox(
+                      width: 28,
+                      height: 28,
+                      child: Center(
+                        child: _adding
+                            ? const SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Icon(
+                                Icons.add,
+                                size: 18,
+                                color: Colors.white,
+                              ),
                       ),
                     ),
-                ],
+                  ),
+                ),
               ),
-            ),
-            Padding(
-              padding: const EdgeInsets.all(10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(product.name,
-                      style: const TextStyle(fontWeight: FontWeight.w500), maxLines: 2, overflow: TextOverflow.ellipsis),
-                  const SizedBox(height: 6),
-                  if (variant != null)
-                    Row(
-                      children: [
-                        Text(formatVnd(variant.price),
-                            style: TextStyle(fontWeight: FontWeight.w700, color: theme.colorScheme.primary)),
-                        if (variant.comparePrice != null && variant.comparePrice! > variant.price) ...[
-                          const SizedBox(width: 6),
-                          Text(
-                            formatVnd(variant.comparePrice!),
-                            style: theme.textTheme.bodySmall
-                                ?.copyWith(decoration: TextDecoration.lineThrough, color: theme.colorScheme.outline),
-                          ),
-                        ],
-                      ],
-                    ),
-                  if (product.soldCount > 0)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 2),
-                      child: Text('Đã bán ${product.soldCount}', style: theme.textTheme.bodySmall),
-                    ),
-                ],
-              ),
-            ),
           ],
         ),
       ),
