@@ -158,6 +158,12 @@ class Product {
   final List<String> images;
   final List<ProductVariant> variants;
 
+  /// Danh mục NỀN TẢNG (cây "Đồ ăn/Cơm/Phở..." khách duyệt ở app khách) sản phẩm này được
+  /// gắn vào — khác hẳn [merchantCategoryId] (danh mục nội bộ tự đặt của riêng cửa hàng).
+  /// Chỉ có giá trị khi tải qua ProductRepository.get() (GET /products/:id trả kèm), các
+  /// nơi khác (vd danh sách) luôn rỗng.
+  final List<String> categoryIds;
+
   Product({
     required this.id,
     required this.merchantId,
@@ -169,6 +175,7 @@ class Product {
     required this.unit,
     required this.images,
     required this.variants,
+    this.categoryIds = const [],
   });
 
   factory Product.fromJson(Map<String, dynamic> json) => Product(
@@ -185,6 +192,9 @@ class Product {
         (json['variants'] as List?)
             ?.map((e) => ProductVariant.fromJson(e as Map<String, dynamic>))
             .toList() ??
+        [],
+    categoryIds:
+        (json['category_ids'] as List?)?.map((e) => e.toString()).toList() ??
         [],
   );
 

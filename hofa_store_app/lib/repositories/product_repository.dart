@@ -96,6 +96,7 @@ class ProductRepository {
     int? costPrice,
     int? wholesalePrice,
     List<String> toppingGroupIds = const [],
+    List<String> categoryIds = const [],
     List<WholesaleTier> wholesaleTiers = const [],
     List<ProductVariant> extraVariants = const [],
     Map<String, List<WholesaleTier>> tiersByVariant = const {},
@@ -115,6 +116,7 @@ class ProductRepository {
             'images': [imageUrl],
             if (toppingGroupIds.isNotEmpty)
               'topping_group_ids': toppingGroupIds,
+            if (categoryIds.isNotEmpty) 'category_ids': categoryIds,
             'variants': [
               {
                 'name': unit,
@@ -153,6 +155,19 @@ class ProductRepository {
 
   Future<void> delete(String id) async {
     await _api.delete('/products/$id');
+  }
+
+  /// Đặt lại toàn bộ danh mục NỀN TẢNG (khách duyệt ở app khách) gắn vào 1 sản phẩm — thay
+  /// thế, không cộng dồn. Khác merchant_category_id (danh mục nội bộ, gửi kèm trong
+  /// update()) — danh mục nền tảng phải qua endpoint riêng này.
+  Future<void> setProductCategories(
+    String productId,
+    List<String> categoryIds,
+  ) async {
+    await _api.put(
+      '/products/$productId/categories',
+      body: {'category_ids': categoryIds},
+    );
   }
 
   Future<ProductVariant> createVariant({

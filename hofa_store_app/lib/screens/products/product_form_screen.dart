@@ -64,6 +64,9 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   String? _parentCategoryId;
   String? _childCategoryId;
   String? _merchantCategoryId;
+  // Danh mục NỀN TẢNG (khách duyệt thấy) — khác _merchantCategoryId ở trên (danh mục nội
+  // bộ cửa hàng tự đặt). Xem ProductRepository.setProductCategories.
+  List<String> _selectedCategoryIds = [];
 
   List<Category> get _rootCategories =>
       _allCategories.where((c) => c.parentId == null).toList();
@@ -138,6 +141,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
         _salesModel = p.salesModel;
         _status = p.status;
         _imageUrl = p.images.isNotEmpty ? p.images.first : null;
+        _selectedCategoryIds = p.categoryIds;
       });
       await _loadStock();
       await _loadLinkedToppingGroups();
@@ -772,6 +776,10 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
           widget.productId!,
           _selectedToppingGroupIds,
         );
+        await _repo.setProductCategories(
+          widget.productId!,
+          _selectedCategoryIds,
+        );
         await _load();
         if (mounted) {
           ScaffoldMessenger.of(
@@ -792,6 +800,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
           imageUrl: _imageUrl!,
           price: int.parse(_priceCtrl.text.trim()),
           toppingGroupIds: _selectedToppingGroupIds,
+          categoryIds: _selectedCategoryIds,
           wholesaleTiers: _tiersByVariant['default'] ?? [],
           extraVariants: _pendingVariants,
           tiersByVariant: _tiersByVariant,
@@ -1286,6 +1295,71 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                               ),
                             ),
                         ],
+                        const Divider(height: 32),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            'Danh mục ngành hàng (khách duyệt thấy)',
+                            style: Theme.of(context).textTheme.labelLarge,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Khách tìm sản phẩm qua danh mục này ở trang chủ app — khác hẳn "Danh mục cửa hàng" ở trên (chỉ cửa hàng bạn tự thấy để sắp xếp thực đơn). Chọn 1 hoặc nhiều mục phù hợp, để trống thì sản phẩm sẽ không hiện khi khách duyệt theo danh mục.',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                        const SizedBox(height: 8),
+                        if (_rootCategories.isEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Text(
+                              'Hệ thống chưa có danh mục nào',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          )
+                        else
+                          Column(
+                            children: _rootCategories.map((root) {
+                              final children = _childCategoriesOf(root.id);
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  CheckboxListTile(
+                                    dense: true,
+                                    contentPadding: EdgeInsets.zero,
+                                    controlAffinity: ListTileControlAffinity.leading,
+                                    title: Text(
+                                      root.name,
+                                      style: const TextStyle(fontWeight: FontWeight.w600),
+                                    ),
+                                    value: _selectedCategoryIds.contains(root.id),
+                                    onChanged: (v) => setState(() {
+                                      _selectedCategoryIds = v == true
+                                          ? [..._selectedCategoryIds, root.id]
+                                          : _selectedCategoryIds.where((id) => id != root.id).toList();
+                                    }),
+                                  ),
+                                  ...children.map(
+                                    (c) => Padding(
+                                      padding: const EdgeInsets.only(left: 24),
+                                      child: CheckboxListTile(
+                                        dense: true,
+                                        contentPadding: EdgeInsets.zero,
+                                        controlAffinity: ListTileControlAffinity.leading,
+                                        title: Text(c.name),
+                                        value: _selectedCategoryIds.contains(c.id),
+                                        onChanged: (v) => setState(() {
+                                          _selectedCategoryIds = v == true
+                                              ? [..._selectedCategoryIds, c.id]
+                                              : _selectedCategoryIds.where((id) => id != c.id).toList();
+                                        }),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              );
+                            }).toList(),
+                          ),
                         if (!_isEdit) ...[
                           const Divider(height: 32),
                           Align(
