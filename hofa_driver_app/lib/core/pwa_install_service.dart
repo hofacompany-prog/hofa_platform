@@ -18,4 +18,8 @@ class PwaInstallService {
 
   /// Bật popup cài đặt gốc của trình duyệt — trả về 'accepted' | 'dismissed' | 'unavailable'.
   static Future<String> promptInstall() => impl.promptInstall();
+
+  /// Trình duyệt từng bắn sự kiện appinstalled (cài xong thật) — lưu bền ở localStorage nên
+  /// vẫn đúng dù mở lại bằng trình duyệt thường ở lần sau, không chỉ đúng trong phiên vừa cài.
+  static bool wasInstalledPreviously() => impl.wasInstalledPreviously();
 }

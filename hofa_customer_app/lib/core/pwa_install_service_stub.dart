@@ -7,3 +7,5 @@ bool isIOS() => false;
 bool hasDeferredPrompt() => false;
 
 Future<String> promptInstall() async => 'unavailable';
+
+bool wasInstalledPreviously() => false;

@@ -51,6 +51,18 @@ bool hasDeferredPrompt() {
   }
 }
 
+/// Trình duyệt đã từng bắn sự kiện appinstalled (cài xong thật, dù qua nút của app hay menu
+/// riêng của trình duyệt) — lưu ở web/index.html. Không tự mất khi tắt tab, dùng để nhận biết
+/// những lần SAU mở lại bằng trình duyệt thường (chưa bấm vào icon màn hình chính) vẫn biết là
+/// máy đã cài rồi, thay vì hỏi cài lại từ đầu.
+bool wasInstalledPreviously() {
+  try {
+    return html.window.localStorage['hofa_pwa_installed'] == 'true';
+  } catch (_) {
+    return false;
+  }
+}
+
 Future<String> promptInstall() async {
   try {
     final raw = _deferredPromptRaw;

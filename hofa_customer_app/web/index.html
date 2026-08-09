@@ -46,6 +46,13 @@
       e.preventDefault();
       window.__hofaPwaDeferredPrompt = e;
     });
+    // Trình duyệt tự bắn sự kiện này khi cài xong THẬT SỰ (dù cài qua nút của app hay qua menu
+    // riêng của trình duyệt) — lưu lại localStorage để lần sau mở lại bằng trình duyệt thường
+    // (chưa mở từ icon màn hình chính) vẫn biết là đã cài rồi, nhắc mở app thay vì hỏi cài lại.
+    window.addEventListener('appinstalled', function () {
+      window.__hofaPwaDeferredPrompt = null;
+      try { localStorage.setItem('hofa_pwa_installed', 'true'); } catch (e) {}
+    });
   </script>
 </head>
 <body>

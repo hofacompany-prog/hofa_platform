@@ -40,9 +40,14 @@ final routerProvider = Provider<GoRouter>((ref) {
     redirect: (context, state) async {
       // Bắt buộc cài PWA trước khi dùng bất cứ gì khác (kể cả đăng nhập) — chỉ áp dụng khi
       // trình duyệt thực sự có cách cài (Android/Chrome hoặc bất kỳ trình duyệt nào trên iOS),
-      // desktop không hỗ trợ (Firefox, Safari desktop...) thì không bị chặn.
+      // desktop không hỗ trợ (Firefox, Safari desktop...) thì không bị chặn. Đã từng cài
+      // (appinstalled, xem PwaInstallService.wasInstalledPreviously) mà vẫn đang mở bằng trình
+      // duyệt thường (chưa mở từ icon màn hình chính) thì cũng vào màn này — InstallPwaScreen
+      // tự đổi sang thông báo "mở app ngoài màn hình" thay vì hỏi cài lại.
       final needsInstall = !PwaInstallService.isStandalone() &&
-          (PwaInstallService.hasDeferredPrompt() || PwaInstallService.isIOS());
+          (PwaInstallService.wasInstalledPreviously() ||
+              PwaInstallService.hasDeferredPrompt() ||
+              PwaInstallService.isIOS());
       if (needsInstall) {
         return state.matchedLocation == '/install-pwa' ? null : '/install-pwa';
       }
