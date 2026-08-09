@@ -16,6 +16,7 @@ import '../models/voucher.dart';
 import '../models/wholesale_tier.dart';
 import '../repositories/bank_settings_repository.dart';
 import '../repositories/merchant_repository.dart';
+import '../repositories/nav_icon_repository.dart';
 import '../repositories/notification_repository.dart';
 import '../repositories/order_repository.dart';
 import '../repositories/product_repository.dart';
@@ -32,6 +33,13 @@ final reviewRepoProvider = Provider((ref) => ReviewRepository());
 final shippingRepoProvider = Provider((ref) => ShippingRepository());
 final notificationRepoProvider = Provider((ref) => NotificationRepository());
 final bankSettingsRepoProvider = Provider((ref) => BankSettingsRepository());
+final navIconRepoProvider = Provider((ref) => NavIconRepository());
+
+/// Icon tabbar tuỳ chỉnh — không cần đăng nhập, lỗi mạng tự trả về map rỗng (xem
+/// NavIconRepository), không chặn khởi động app.
+final navIconsProvider = FutureProvider.autoDispose<Map<String, String>>(
+  (ref) => ref.watch(navIconRepoProvider).navIcons(),
+);
 
 /// Hộp thư thông báo — autoDispose để mỗi lần vào lại màn Thông báo đều lấy dữ liệu mới.
 final notificationsProvider = FutureProvider.autoDispose<List<AppNotification>>(

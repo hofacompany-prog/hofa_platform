@@ -22,6 +22,7 @@ import '../models/driver_accept_settings.dart';
 import '../models/bank_account_settings.dart';
 import '../models/admin_notification.dart';
 import '../models/notification_settings.dart';
+import '../models/nav_tab_icon.dart';
 import '../repositories/admin_repository.dart';
 import '../repositories/user_repository.dart';
 
@@ -128,6 +129,10 @@ final categoriesProvider = FutureProvider.autoDispose<List<Category>>(
 
 final banksProvider = FutureProvider.autoDispose<List<Bank>>(
   (ref) => ref.watch(adminRepoProvider).banks(),
+);
+
+final navIconsProvider = FutureProvider.autoDispose<List<NavTabIcon>>(
+  (ref) => ref.watch(adminRepoProvider).navIcons(),
 );
 
 final pendingWalletDepositsProvider = FutureProvider.autoDispose<List<DriverWalletRequest>>(

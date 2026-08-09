@@ -28,3 +28,15 @@ class CloudinaryUploader {
     return json['secure_url'] as String;
   }
 }
+
+/// Chèn transform "xuất ra PNG" vào URL Cloudinary — dùng cho icon tabbar: tải lên SVG gốc
+/// (từ thư viện Lucide) nhưng luôn PHÁT ra PNG, để 3 app khách/cửa hàng/tài xế chỉ cần
+/// Image.network như mọi ảnh khác, không cần thêm gói flutter_svg. Cloudinary tự rasterize
+/// SVG sang PNG phía server theo transform này, không đụng gì tới ảnh gốc đã lưu.
+String toCloudinaryPngUrl(String secureUrl) {
+  const marker = '/image/upload/';
+  final i = secureUrl.indexOf(marker);
+  if (i < 0) return secureUrl;
+  final insertAt = i + marker.length;
+  return '${secureUrl.substring(0, insertAt)}f_png,q_auto/${secureUrl.substring(insertAt)}';
+}

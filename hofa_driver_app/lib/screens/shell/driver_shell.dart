@@ -1,11 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../providers/nav_icon_providers.dart';
+import '../../widgets/tab_icon.dart';
 
-class DriverShell extends StatelessWidget {
+class DriverShell extends ConsumerWidget {
   final Widget child;
   const DriverShell({super.key, required this.child});
 
   static const _tabs = ['/', '/earnings', '/profile'];
+  static const _tabKeys = ['home', 'earnings', 'profile'];
+  static const _icons = [Icons.two_wheeler_outlined, Icons.payments_outlined, Icons.person_outline];
+  static const _selectedIcons = [Icons.two_wheeler, Icons.payments, Icons.person];
+  static const _labels = ['Trang chủ', 'Thu nhập', 'Cá nhân'];
 
   int _indexFor(String location) {
     final i = _tabs.indexWhere((t) => location == t || (t != '/' && location.startsWith(t)));
@@ -13,20 +20,23 @@ class DriverShell extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final location = GoRouterState.of(context).matchedLocation;
     final index = _indexFor(location);
+    final iconByTabKey = ref.watch(navIconsProvider).valueOrNull ?? const {};
 
     return Scaffold(
       body: SafeArea(child: child),
       bottomNavigationBar: NavigationBar(
         selectedIndex: index,
         onDestinationSelected: (i) => context.go(_tabs[i]),
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.two_wheeler_outlined), selectedIcon: Icon(Icons.two_wheeler), label: 'Trang chủ'),
-          NavigationDestination(
-              icon: Icon(Icons.payments_outlined), selectedIcon: Icon(Icons.payments), label: 'Thu nhập'),
-          NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Cá nhân'),
+        destinations: [
+          for (var i = 0; i < _tabs.length; i++)
+            NavigationDestination(
+              icon: TabIcon(url: iconByTabKey[_tabKeys[i]], fallback: _icons[i]),
+              selectedIcon: TabIcon(url: iconByTabKey[_tabKeys[i]], fallback: _selectedIcons[i]),
+              label: _labels[i],
+            ),
         ],
       ),
     );

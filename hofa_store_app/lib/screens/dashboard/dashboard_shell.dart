@@ -4,7 +4,9 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/nav_destinations.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/nav_icon_providers.dart';
 import '../../providers/notification_providers.dart';
+import '../../widgets/tab_icon.dart';
 
 /// Ngưỡng bề rộng chuyển giữa 2 kiểu điều hướng — dưới ngưỡng này (điện thoại/PWA cài trên
 /// điện thoại) dùng thanh tab dưới cùng kiểu app di động; từ ngưỡng này trở lên (tablet/máy
@@ -15,6 +17,7 @@ const _kMobileBreakpoint = 700.0;
 /// HomeScreen, vì lưới đó không cần link tới chính nó).
 const _shellDestinations = <NavDestination>[
   (
+    tabKey: 'home',
     icon: Icons.home_outlined,
     selected: Icons.home,
     label: 'Trang chủ',
@@ -43,6 +46,7 @@ class DashboardShell extends ConsumerWidget {
     // Badge trên tab "Đơn hàng" hiện số đơn đang chuẩn bị (confirmed+preparing) — số việc cửa
     // hàng còn tồn đọng cần làm, đúng nghĩa hơn hẳn số thông báo chưa đọc.
     final preparingCount = ref.watch(merchantTodayStatsProvider).valueOrNull?.preparingCount ?? 0;
+    final iconByTabKey = ref.watch(navIconsProvider).valueOrNull ?? const {};
     final selectedIndex = _indexFor(location);
     final isMobile = MediaQuery.of(context).size.width < _kMobileBreakpoint;
 
@@ -68,8 +72,8 @@ class DashboardShell extends ConsumerWidget {
             labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
             destinations: _shellDestinations
                 .map((d) => NavigationDestination(
-                      icon: _destinationIcon(d, d.icon, preparingCount, size: 22),
-                      selectedIcon: _destinationIcon(d, d.selected, preparingCount, size: 22),
+                      icon: _destinationIcon(d, d.icon, preparingCount, iconByTabKey, size: 22),
+                      selectedIcon: _destinationIcon(d, d.selected, preparingCount, iconByTabKey, size: 22),
                       label: d.label,
                     ))
                 .toList(),
@@ -126,8 +130,8 @@ class DashboardShell extends ConsumerWidget {
             ),
             destinations: _shellDestinations
                 .map((d) => NavigationRailDestination(
-                      icon: _destinationIcon(d, d.icon, preparingCount),
-                      selectedIcon: _destinationIcon(d, d.selected, preparingCount),
+                      icon: _destinationIcon(d, d.icon, preparingCount, iconByTabKey),
+                      selectedIcon: _destinationIcon(d, d.selected, preparingCount, iconByTabKey),
                       label: Text(d.label),
                     ))
                 .toList(),
@@ -139,9 +143,15 @@ class DashboardShell extends ConsumerWidget {
     );
   }
 
-  Widget _destinationIcon(NavDestination d, IconData icon, int preparingCount, {double? size}) {
+  Widget _destinationIcon(
+    NavDestination d,
+    IconData icon,
+    int preparingCount,
+    Map<String, String> iconByTabKey, {
+    double? size,
+  }) {
     final showBadge = d.path == '/orders' && preparingCount > 0;
-    final iconWidget = Icon(icon, size: size);
+    final iconWidget = TabIcon(url: iconByTabKey[d.tabKey], fallback: icon, size: size ?? 24);
     return showBadge ? Badge(label: Text('$preparingCount'), child: iconWidget) : iconWidget;
   }
 }

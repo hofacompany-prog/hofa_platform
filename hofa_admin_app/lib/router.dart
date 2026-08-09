@@ -16,7 +16,7 @@ import 'screens/users/users_screen.dart';
 import 'screens/users/user_detail_screen.dart';
 import 'screens/drivers/driver_hub_screen.dart';
 import 'screens/deliveries/delivery_detail_screen.dart';
-import 'screens/catalog/categories_screen.dart';
+import 'screens/catalog/categories_hub_screen.dart';
 import 'screens/settings/finance_hub_screen.dart';
 import 'screens/notifications/notifications_screen.dart';
 
@@ -107,7 +107,9 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/categories',
-            builder: (context, state) => const CategoriesScreen(),
+            builder: (context, state) => CategoriesHubScreen(
+              initialTab: int.tryParse(state.uri.queryParameters['tab'] ?? '') ?? 0,
+            ),
           ),
           GoRoute(
             path: '/finance',

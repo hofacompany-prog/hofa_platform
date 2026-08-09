@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../providers/app_providers.dart';
 import '../../providers/cart_provider.dart';
+import '../../widgets/tab_icon.dart';
 
 class CustomerShell extends ConsumerWidget {
   final Widget child;
@@ -9,30 +11,35 @@ class CustomerShell extends ConsumerWidget {
 
   static const _items = [
     (
+      tabKey: 'home',
       icon: Icons.storefront_outlined,
       selected: Icons.storefront,
       label: 'Trang chủ',
       path: '/',
     ),
     (
+      tabKey: 'cart',
       icon: Icons.shopping_cart_outlined,
       selected: Icons.shopping_cart,
       label: 'Giỏ hàng',
       path: '/cart',
     ),
     (
+      tabKey: 'preorder',
       icon: Icons.event_repeat_outlined,
       selected: Icons.event_repeat,
       label: 'Đặt trước',
       path: '/preorder',
     ),
     (
+      tabKey: 'orders',
       icon: Icons.receipt_long_outlined,
       selected: Icons.receipt_long,
       label: 'Đơn hàng',
       path: '/orders',
     ),
     (
+      tabKey: 'profile',
       icon: Icons.person_outline,
       selected: Icons.person,
       label: 'Tài khoản',
@@ -58,6 +65,7 @@ class CustomerShell extends ConsumerWidget {
     final cart = ref.watch(cartProvider);
     final instantCount = cart.salesModel == 'instant' ? cart.itemCount : 0;
     final preorderCount = cart.salesModel == 'scheduled' ? cart.itemCount : 0;
+    final iconByTabKey = ref.watch(navIconsProvider).valueOrNull ?? const {};
 
     return Scaffold(
       body: child,
@@ -83,13 +91,14 @@ class CustomerShell extends ConsumerWidget {
                 : d.label == 'Đặt trước'
                 ? preorderCount
                 : 0;
+            final iconUrl = iconByTabKey[d.tabKey];
             return NavigationDestination(
               icon: count > 0
-                  ? Badge(label: Text('$count'), child: Icon(d.icon, size: 22))
-                  : Icon(d.icon, size: 22),
+                  ? Badge(label: Text('$count'), child: TabIcon(url: iconUrl, fallback: d.icon, size: 22))
+                  : TabIcon(url: iconUrl, fallback: d.icon, size: 22),
               selectedIcon: count > 0
-                  ? Badge(label: Text('$count'), child: Icon(d.selected, size: 22))
-                  : Icon(d.selected, size: 22),
+                  ? Badge(label: Text('$count'), child: TabIcon(url: iconUrl, fallback: d.selected, size: 22))
+                  : TabIcon(url: iconUrl, fallback: d.selected, size: 22),
               label: d.label,
             );
           }).toList(),

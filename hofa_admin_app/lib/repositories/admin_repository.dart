@@ -22,6 +22,7 @@ import '../models/bank_account_settings.dart';
 import '../models/admin_notification.dart';
 import '../models/notification_inbox_item.dart';
 import '../models/notification_settings.dart';
+import '../models/nav_tab_icon.dart';
 
 /// Gom mọi lời gọi API mà web admin cần. Tất cả endpoint ở đây đều yêu cầu
 /// role = 'admin' ở phía server (server/src/utils.js requireRole).
@@ -410,6 +411,18 @@ class AdminRepository {
 
   Future<void> deleteBank(String id) async {
     await _api.delete('/banks/$id');
+  }
+
+  // ---- Icon tabbar tuỳ chỉnh (4 app) ----
+
+  Future<List<NavTabIcon>> navIcons() async {
+    final list = await _api.get('/nav-icons') as List;
+    return list.map((e) => NavTabIcon.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  /// [iconUrl] = null thì xoá icon tuỳ chỉnh, tab quay lại dùng icon Material mặc định.
+  Future<void> setNavIcon(String app, String tabKey, String? iconUrl) async {
+    await _api.put('/nav-icons/$app/$tabKey', body: {'icon_url': iconUrl});
   }
 
   // ---- Ví tài xế: duyệt nạp/rút tiền ----

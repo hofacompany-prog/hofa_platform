@@ -3,10 +3,10 @@ const crypto = require('crypto');
 const config = require('../config');
 const asyncHandler = require('../asyncHandler');
 const { ApiError } = require('../errors');
-const { requireAuth } = require('../utils');
+const { requireAuth, requireRole } = require('../utils');
 
 // Nơi lưu ảnh hợp lệ — chặn client tự đặt folder tuỳ ý trên Cloudinary.
-const ALLOWED_FOLDERS = ['merchants', 'products', 'drivers', 'deliveries', 'categories'];
+const ALLOWED_FOLDERS = ['merchants', 'products', 'drivers', 'deliveries', 'categories', 'nav_icons'];
 
 /**
  * Ký request upload ảnh lên Cloudinary — client (hofa_store_app) gọi API này trước,
@@ -22,6 +22,8 @@ router.post('/uploads/cloudinary-signature', asyncHandler(async (req, res) => {
   }
 
   const folder = ALLOWED_FOLDERS.includes(req.body.folder) ? req.body.folder : 'products';
+  // Icon tabbar chỉ admin được tải lên (khác các folder khác, tin mọi user đã đăng nhập).
+  if (folder === 'nav_icons') requireRole(req.ctx, ['admin']);
   const timestamp = Math.round(Date.now() / 1000);
 
   // Chuỗi ký PHẢI đúng thứ tự alphabet theo tên tham số, khớp với các tham số client

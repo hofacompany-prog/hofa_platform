@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../providers/admin_providers.dart';
 import '../../widgets/app_version_text.dart';
+import '../../widgets/tab_icon.dart';
 
 class AdminShell extends ConsumerWidget {
   final Widget child;
@@ -11,48 +12,56 @@ class AdminShell extends ConsumerWidget {
 
   static const _items = [
     (
+      tabKey: 'dashboard',
       icon: Icons.dashboard_outlined,
       selected: Icons.dashboard,
       label: 'Tổng quan',
       path: '/',
     ),
     (
+      tabKey: 'merchants',
       icon: Icons.storefront_outlined,
       selected: Icons.storefront,
       label: 'Cửa hàng',
       path: '/merchants',
     ),
     (
+      tabKey: 'orders',
       icon: Icons.receipt_long_outlined,
       selected: Icons.receipt_long,
       label: 'Đơn hàng',
       path: '/orders',
     ),
     (
+      tabKey: 'users',
       icon: Icons.people_outline,
       selected: Icons.people,
       label: 'Người dùng',
       path: '/users',
     ),
     (
+      tabKey: 'drivers',
       icon: Icons.two_wheeler_outlined,
       selected: Icons.two_wheeler,
       label: 'Tài xế',
       path: '/drivers',
     ),
     (
+      tabKey: 'categories',
       icon: Icons.category_outlined,
       selected: Icons.category,
       label: 'Danh mục',
       path: '/categories',
     ),
     (
+      tabKey: 'finance',
       icon: Icons.account_balance_wallet_outlined,
       selected: Icons.account_balance_wallet,
       label: 'Tài chính',
       path: '/finance',
     ),
     (
+      tabKey: 'notifications',
       icon: Icons.notifications_outlined,
       selected: Icons.notifications,
       label: 'Thông báo',
@@ -80,6 +89,11 @@ class AdminShell extends ConsumerWidget {
     final location = GoRouterState.of(context).matchedLocation;
     final profile = ref.watch(userProfileProvider).valueOrNull;
     final wide = MediaQuery.of(context).size.width > 1100;
+    final navIcons = ref.watch(navIconsProvider).valueOrNull ?? const [];
+    final iconByTabKey = {
+      for (final n in navIcons)
+        if (n.app == 'admin') n.tabKey: n.iconUrl,
+    };
 
     return Scaffold(
       body: Row(
@@ -142,8 +156,8 @@ class AdminShell extends ConsumerWidget {
             destinations: _items
                 .map(
                   (d) => NavigationRailDestination(
-                    icon: Icon(d.icon),
-                    selectedIcon: Icon(d.selected),
+                    icon: TabIcon(url: iconByTabKey[d.tabKey], fallback: d.icon),
+                    selectedIcon: TabIcon(url: iconByTabKey[d.tabKey], fallback: d.selected),
                     label: Text(d.label),
                   ),
                 )
