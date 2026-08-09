@@ -132,13 +132,18 @@ router.get('/products', asyncHandler(async (req, res) => {
   }
   if (req.query.sales_model) { params.push(req.query.sales_model); clauses.push(`sales_model = $${params.length}`); }
   if (req.query.category_id) {
-    // category_id có thể là danh mục CHA — gộp luôn sản phẩm của mọi danh mục CON (danh mục
-    // chỉ tối đa 2 cấp nên "id = $N OR parent_id = $N" luôn đủ, không cần đệ quy). Với danh
-    // mục con thì mệnh đề này tự thu về đúng 1 id (không danh mục nào có parent_id trỏ tới 1
-    // danh mục con khác), nên hành vi lọc theo danh mục con vẫn giữ nguyên như trước.
+    // Sản phẩm không gắn trực tiếp vào categories — suy ra qua merchant_category_id (danh
+    // mục cửa hàng tự tạo, LUÔN nằm dưới đúng 1 danh mục con hệ thống, xem POST
+    // /merchant-categories). Nhờ vậy admin/cửa hàng chỉ cần chọn 1 lần (danh mục cửa hàng),
+    // không cần gắn thêm danh mục ngành hàng riêng cho sản phẩm.
+    // category_id có thể là danh mục CHA — gộp luôn mọi danh mục CON và mọi danh mục cửa
+    // hàng nằm dưới các con đó (danh mục chỉ tối đa 2 cấp nên "id = $N OR parent_id = $N"
+    // luôn đủ, không cần đệ quy). Với danh mục con thì mệnh đề này tự thu về đúng 1 id, gộp
+    // TẤT CẢ danh mục cửa hàng nằm dưới nó — đúng ý "vào danh mục con thì không quan tâm
+    // đang thuộc danh mục cửa hàng nào".
     params.push(req.query.category_id);
     clauses.push(
-      `id IN (SELECT product_id FROM product_categories WHERE category_id IN (SELECT id FROM categories WHERE id = $${params.length} OR parent_id = $${params.length}))`
+      `merchant_category_id IN (SELECT id FROM merchant_categories WHERE category_id IN (SELECT id FROM categories WHERE id = $${params.length} OR parent_id = $${params.length}))`
     );
   }
   if (req.query.is_featured !== undefined) {
@@ -160,11 +165,8 @@ router.get('/products', asyncHandler(async (req, res) => {
 router.get('/products/:id', asyncHandler(async (req, res) => {
   const product = await db.queryOne('SELECT * FROM products WHERE id = $1 AND deleted_at IS NULL', [req.params.id]);
   if (!product) throw new ApiError('NOT_FOUND', 'Không tìm thấy sản phẩm', 404);
-  const [variants, categoryLinks] = await Promise.all([
-    db.query('SELECT * FROM product_variants WHERE product_id = $1 AND is_active', [req.params.id]),
-    db.query('SELECT category_id FROM product_categories WHERE product_id = $1', [req.params.id])
-  ]);
-  res.json({ ok: true, data: { ...product, variants, category_ids: categoryLinks.map((c) => c.category_id) } });
+  const variants = await db.query('SELECT * FROM product_variants WHERE product_id = $1 AND is_active', [req.params.id]);
+  res.json({ ok: true, data: { ...product, variants } });
 }));
 
 router.post('/products', asyncHandler(async (req, res) => {
@@ -175,9 +177,6 @@ router.post('/products', asyncHandler(async (req, res) => {
   data.merchant_id = req.body.merchant_id;
   const product = await db.insertRow('products', data);
 
-  if (Array.isArray(req.body.category_ids) && req.body.category_ids.length) {
-    await db.insertRows('product_categories', req.body.category_ids.map((cid) => ({ product_id: product.id, category_id: cid })));
-  }
   // Cho phép tạo luôn bậc giá sỉ/đặt trước theo từng biến thể ngay lúc tạo sản phẩm — lý do
   // giống topping_groups bên dưới: màn "Thêm sản phẩm" chưa có variant_id để gọi API bậc
   // giá riêng như lúc sửa sản phẩm.
@@ -194,7 +193,7 @@ router.post('/products', asyncHandler(async (req, res) => {
   }
 
   // Gắn sản phẩm vào các nhóm topping đã có sẵn của cửa hàng (thư viện dùng chung — xem
-  // topping_groups bên dưới), cùng pattern với category_ids ở trên.
+  // topping_groups bên dưới).
   if (Array.isArray(req.body.topping_group_ids) && req.body.topping_group_ids.length) {
     await db.insertRows('product_topping_group_links', req.body.topping_group_ids.map((gid) => ({ product_id: product.id, group_id: gid })));
   }
@@ -217,19 +216,6 @@ router.delete('/products/:id', asyncHandler(async (req, res) => {
   await requireMerchantAccess(req.ctx, product.merchant_id);
   const updated = await db.updateById('products', req.params.id, { deleted_at: new Date().toISOString(), status: 'archived' });
   res.json({ ok: true, data: updated });
-}));
-
-router.put('/products/:id/categories', asyncHandler(async (req, res) => {
-  requireFields(req.body, ['category_ids']);
-  const product = await db.queryOne('SELECT id, merchant_id FROM products WHERE id = $1', [req.params.id]);
-  if (!product) throw new ApiError('NOT_FOUND', 'Không tìm thấy sản phẩm', 404);
-  await requireMerchantAccess(req.ctx, product.merchant_id);
-
-  await db.query('DELETE FROM product_categories WHERE product_id = $1', [req.params.id]);
-  if (req.body.category_ids.length) {
-    await db.insertRows('product_categories', req.body.category_ids.map((cid) => ({ product_id: req.params.id, category_id: cid })));
-  }
-  res.json({ ok: true, data: { updated: true } });
 }));
 
 // ---- Biến thể (giá & tồn kho nằm ở đây) ----
