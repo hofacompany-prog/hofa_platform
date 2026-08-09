@@ -45,6 +45,10 @@
     window.addEventListener('beforeinstallprompt', function (e) {
       e.preventDefault();
       window.__hofaPwaDeferredPrompt = e;
+      // Trình duyệt CHỈ bắn lại sự kiện này khi hiện KHÔNG cài nữa (vd khách đã gỡ app ra) —
+      // xoá cờ "đã cài" cũ đi, tránh trường hợp gỡ app rồi mà vẫn bị nhắc "đã cài rồi, thoát
+      // ra mở app" mãi không cài lại được.
+      try { localStorage.removeItem('hofa_pwa_installed'); } catch (err) {}
     });
     // Trình duyệt tự bắn sự kiện này khi cài xong THẬT SỰ (dù cài qua nút của app hay qua menu
     // riêng của trình duyệt) — lưu lại localStorage để lần sau mở lại bằng trình duyệt thường

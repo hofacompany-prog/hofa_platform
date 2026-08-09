@@ -37,11 +37,14 @@ class _InstallPwaScreenState extends State<InstallPwaScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    // Đã cài (vừa xong trong phiên này, hoặc appinstalled đã bắn từ trước — xem
-    // PwaInstallService.wasInstalledPreviously) nhưng vẫn đang ở trong trình duyệt thường
-    // (chưa mở từ icon màn hình chính) — chỉ còn việc nhắc thoát ra, không hỏi cài lại nữa.
-    final alreadyInstalled = _justInstalled || PwaInstallService.wasInstalledPreviously();
     final canPromptNative = PwaInstallService.hasDeferredPrompt();
+    // Ưu tiên tín hiệu SỐNG từ trình duyệt (hasDeferredPrompt) hơn cờ đã lưu trước đó
+    // (wasInstalledPreviously) — trình duyệt CHỈ bắn lại beforeinstallprompt khi hiện KHÔNG
+    // còn cài nữa (vd khách đã gỡ app ra), nên nếu tín hiệu đó đang có thì phải cho cài lại
+    // ngay, không giữ mãi thông báo "đã cài rồi" cũ khiến không cài lại được (xem
+    // web/index.html — beforeinstallprompt cũng tự xoá cờ localStorage cũ).
+    final alreadyInstalled = !canPromptNative &&
+        (_justInstalled || PwaInstallService.wasInstalledPreviously());
 
     return Scaffold(
       body: SafeArea(
@@ -75,6 +78,14 @@ class _InstallPwaScreenState extends State<InstallPwaScreen> {
                     'Hãy thoát ra và mở app HOFA Tài xế ở màn hình chính để tiếp tục sử dụng.',
                     textAlign: TextAlign.center,
                     style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 20),
+                  TextButton(
+                    // Đã gỡ app rồi mà quay lại đây? Bấm để kiểm tra lại ngay, không cần tải
+                    // lại cả trang — hữu ích khi trình duyệt bắn beforeinstallprompt hơi trễ
+                    // sau khi màn này đã hiện sẵn.
+                    onPressed: () => setState(() {}),
+                    child: const Text('Đã gỡ app? Bấm để kiểm tra lại'),
                   ),
                 ] else ...[
                   Icon(
