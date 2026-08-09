@@ -695,6 +695,87 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     }
   }
 
+  /// Popup chọn danh mục ngành hàng (kiểu dropdown — gọn hơn hẳn liệt kê checkbox dài ngay
+  /// trong form) — bấm 1 mục thì cập nhật CẢ state của form (setState ngoài, để ô tóm tắt tự
+  /// đổi chữ) LẪN state của chính popup (setModalState, để tick/bỏ tick hiện ngay lập tức) —
+  /// 2 cây widget tách biệt nhau (popup không nằm trong cây build() của form), thiếu 1 trong 2
+  /// setState sẽ có chỗ không cập nhật kịp.
+  Future<void> _openCategoryPicker() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) {
+          void toggle(String id, bool selected) {
+            setState(() {
+              _selectedCategoryIds = selected
+                  ? [..._selectedCategoryIds, id]
+                  : _selectedCategoryIds.where((x) => x != id).toList();
+            });
+            setModalState(() {});
+          }
+
+          return SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Chọn danh mục ngành hàng',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Khách tìm sản phẩm qua danh mục này ở trang chủ app.',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 8),
+                    for (final root in _rootCategories) ...[
+                      CheckboxListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        controlAffinity: ListTileControlAffinity.leading,
+                        title: Text(
+                          root.name,
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        value: _selectedCategoryIds.contains(root.id),
+                        onChanged: (v) => toggle(root.id, v == true),
+                      ),
+                      for (final c in _childCategoriesOf(root.id))
+                        Padding(
+                          padding: const EdgeInsets.only(left: 24),
+                          child: CheckboxListTile(
+                            dense: true,
+                            contentPadding: EdgeInsets.zero,
+                            controlAffinity: ListTileControlAffinity.leading,
+                            title: Text(c.name),
+                            value: _selectedCategoryIds.contains(c.id),
+                            onChanged: (v) => toggle(c.id, v == true),
+                          ),
+                        ),
+                    ],
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: FilledButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text('Xong'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
   /// Nhóm topping đang gắn vào sản phẩm này (chỉ có ở màn sửa sản phẩm — sản phẩm chưa
   /// tạo thì chưa có gì để gắn).
   Future<void> _loadLinkedToppingGroups() async {
@@ -1318,47 +1399,26 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                             ),
                           )
                         else
-                          Column(
-                            children: _rootCategories.map((root) {
-                              final children = _childCategoriesOf(root.id);
-                              return Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  CheckboxListTile(
-                                    dense: true,
-                                    contentPadding: EdgeInsets.zero,
-                                    controlAffinity: ListTileControlAffinity.leading,
-                                    title: Text(
-                                      root.name,
-                                      style: const TextStyle(fontWeight: FontWeight.w600),
-                                    ),
-                                    value: _selectedCategoryIds.contains(root.id),
-                                    onChanged: (v) => setState(() {
-                                      _selectedCategoryIds = v == true
-                                          ? [..._selectedCategoryIds, root.id]
-                                          : _selectedCategoryIds.where((id) => id != root.id).toList();
-                                    }),
-                                  ),
-                                  ...children.map(
-                                    (c) => Padding(
-                                      padding: const EdgeInsets.only(left: 24),
-                                      child: CheckboxListTile(
-                                        dense: true,
-                                        contentPadding: EdgeInsets.zero,
-                                        controlAffinity: ListTileControlAffinity.leading,
-                                        title: Text(c.name),
-                                        value: _selectedCategoryIds.contains(c.id),
-                                        onChanged: (v) => setState(() {
-                                          _selectedCategoryIds = v == true
-                                              ? [..._selectedCategoryIds, c.id]
-                                              : _selectedCategoryIds.where((id) => id != c.id).toList();
-                                        }),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              );
-                            }).toList(),
+                          InkWell(
+                            onTap: _openCategoryPicker,
+                            borderRadius: BorderRadius.circular(4),
+                            child: InputDecorator(
+                              decoration: const InputDecoration(
+                                labelText: 'Danh mục ngành hàng',
+                                border: OutlineInputBorder(),
+                                suffixIcon: Icon(Icons.arrow_drop_down),
+                              ),
+                              child: Text(
+                                _selectedCategoryIds.isEmpty
+                                    ? 'Chưa chọn'
+                                    : _allCategories
+                                        .where((c) => _selectedCategoryIds.contains(c.id))
+                                        .map((c) => c.name)
+                                        .join(', '),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
                           ),
                         if (!_isEdit) ...[
                           const Divider(height: 32),

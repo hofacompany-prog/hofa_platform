@@ -175,6 +175,9 @@ class _ProductGrid extends StatefulWidget {
 
 class _ProductGridState extends State<_ProductGrid> {
   String _filter = 'all'; // all | instant | scheduled
+  // null = "Tất cả danh mục" — chọn 1 danh mục cụ thể thì bỏ hẳn cách chia theo từng nhóm,
+  // chỉ hiện đúng sản phẩm của danh mục đó (khách chủ động lọc rồi, không cần thấy nhóm khác).
+  String? _categoryFilter;
 
   Widget _grid(List<Product> items) => GridView.builder(
         shrinkWrap: true,
@@ -204,6 +207,25 @@ class _ProductGridState extends State<_ProductGrid> {
       return const Padding(padding: EdgeInsets.only(top: 24), child: Center(child: Text('Cửa hàng chưa có sản phẩm')));
     }
 
+    final categoryDropdown = widget.categories.isEmpty
+        ? const SizedBox.shrink()
+        : Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: DropdownButtonFormField<String?>(
+              initialValue: _categoryFilter,
+              decoration: const InputDecoration(
+                labelText: 'Danh mục cửa hàng',
+                border: OutlineInputBorder(),
+                isDense: true,
+              ),
+              items: [
+                const DropdownMenuItem(value: null, child: Text('Tất cả danh mục')),
+                ...widget.categories.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))),
+              ],
+              onChanged: (v) => setState(() => _categoryFilter = v),
+            ),
+          );
+
     final filterChips = showFilter
         ? Padding(
             padding: const EdgeInsets.only(bottom: 12),
@@ -222,11 +244,25 @@ class _ProductGridState extends State<_ProductGrid> {
           )
         : const SizedBox.shrink();
 
-    // Cửa hàng chưa tự cài đặt danh mục nào — giữ layout phẳng như trước.
-    if (widget.categories.isEmpty) {
+    // Cửa hàng chưa tự cài đặt danh mục nào, hoặc khách đã lọc còn đúng 1 danh mục cụ thể —
+    // cả 2 trường hợp đều không cần chia nhóm nữa, hiện phẳng 1 lưới duy nhất.
+    if (widget.categories.isEmpty || _categoryFilter != null) {
+      final filtered = _categoryFilter == null
+          ? visible
+          : visible.where((p) => p.merchantCategoryId == _categoryFilter).toList();
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: [filterChips, _grid(visible)],
+        children: [
+          categoryDropdown,
+          filterChips,
+          if (filtered.isEmpty)
+            const Padding(
+              padding: EdgeInsets.only(top: 12, bottom: 12),
+              child: Center(child: Text('Không có sản phẩm nào trong danh mục này')),
+            )
+          else
+            _grid(filtered),
+        ],
       );
     }
 
@@ -244,6 +280,7 @@ class _ProductGridState extends State<_ProductGrid> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        categoryDropdown,
         filterChips,
         for (final s in sections) ...[
           Padding(
