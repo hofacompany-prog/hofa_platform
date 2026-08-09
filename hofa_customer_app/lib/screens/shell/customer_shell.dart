@@ -81,17 +81,6 @@ class CustomerShell extends ConsumerWidget {
               fontWeight: states.contains(WidgetState.selected) ? FontWeight.w600 : FontWeight.w400,
             ),
           ),
-          // Mặc định Material 3 tô icon đang chọn bằng onSecondaryContainer (không phải màu
-          // thương hiệu) — ép rõ xanh lá khi chọn, xám khi chưa chọn, để khớp đúng màu xanh
-          // admin nhìn thấy lúc chọn icon custom ở màn Icon tabbar (xem widgets/tab_icon.dart,
-          // tự đọc IconTheme.of(context).color).
-          iconTheme: WidgetStateProperty.resolveWith(
-            (states) => IconThemeData(
-              color: states.contains(WidgetState.selected)
-                  ? theme.colorScheme.primary
-                  : theme.colorScheme.outline,
-            ),
-          ),
         ),
         child: NavigationBar(
           selectedIndex: selectedIndex,
@@ -104,13 +93,11 @@ class CustomerShell extends ConsumerWidget {
                 ? preorderCount
                 : 0;
             final iconUrl = iconByTabKey[d.tabKey];
+            final unselected = TabIcon(url: iconUrl, fallback: d.icon, color: theme.colorScheme.outline, size: 22);
+            final selected = TabIcon(url: iconUrl, fallback: d.selected, color: theme.colorScheme.primary, size: 22);
             return NavigationDestination(
-              icon: count > 0
-                  ? Badge(label: Text('$count'), child: TabIcon(url: iconUrl, fallback: d.icon, size: 22))
-                  : TabIcon(url: iconUrl, fallback: d.icon, size: 22),
-              selectedIcon: count > 0
-                  ? Badge(label: Text('$count'), child: TabIcon(url: iconUrl, fallback: d.selected, size: 22))
-                  : TabIcon(url: iconUrl, fallback: d.selected, size: 22),
+              icon: count > 0 ? Badge(label: Text('$count'), child: unselected) : unselected,
+              selectedIcon: count > 0 ? Badge(label: Text('$count'), child: selected) : selected,
               label: d.label,
             );
           }).toList(),

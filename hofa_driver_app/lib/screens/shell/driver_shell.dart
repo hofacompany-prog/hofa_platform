@@ -28,31 +28,25 @@ class DriverShell extends ConsumerWidget {
 
     return Scaffold(
       body: SafeArea(child: child),
-      bottomNavigationBar: NavigationBarTheme(
-        // Mặc định Material 3 tô icon đang chọn bằng onSecondaryContainer (không phải màu
-        // thương hiệu) — ép rõ xanh lá khi chọn, xám khi chưa chọn, khớp đúng màu xanh admin
-        // nhìn thấy lúc chọn icon custom ở màn Icon tabbar (xem widgets/tab_icon.dart).
-        data: NavigationBarThemeData(
-          iconTheme: WidgetStateProperty.resolveWith(
-            (states) => IconThemeData(
-              color: states.contains(WidgetState.selected)
-                  ? theme.colorScheme.primary
-                  : theme.colorScheme.outline,
-            ),
-          ),
-        ),
-        child: NavigationBar(
-          selectedIndex: index,
-          onDestinationSelected: (i) => context.go(_tabs[i]),
-          destinations: [
-            for (var i = 0; i < _tabs.length; i++)
-              NavigationDestination(
-                icon: TabIcon(url: iconByTabKey[_tabKeys[i]], fallback: _icons[i]),
-                selectedIcon: TabIcon(url: iconByTabKey[_tabKeys[i]], fallback: _selectedIcons[i]),
-                label: _labels[i],
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: index,
+        onDestinationSelected: (i) => context.go(_tabs[i]),
+        destinations: [
+          for (var i = 0; i < _tabs.length; i++)
+            NavigationDestination(
+              icon: TabIcon(
+                url: iconByTabKey[_tabKeys[i]],
+                fallback: _icons[i],
+                color: theme.colorScheme.outline,
               ),
-          ],
-        ),
+              selectedIcon: TabIcon(
+                url: iconByTabKey[_tabKeys[i]],
+                fallback: _selectedIcons[i],
+                color: theme.colorScheme.primary,
+              ),
+              label: _labels[i],
+            ),
+        ],
       ),
     );
   }

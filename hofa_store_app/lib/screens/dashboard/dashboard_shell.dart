@@ -66,16 +66,6 @@ class DashboardShell extends ConsumerWidget {
                 fontWeight: states.contains(WidgetState.selected) ? FontWeight.w600 : FontWeight.w400,
               ),
             ),
-            // Mặc định Material 3 tô icon đang chọn bằng onSecondaryContainer (không phải màu
-            // thương hiệu) — ép rõ xanh lá khi chọn, xám khi chưa chọn, khớp đúng màu xanh
-            // admin nhìn thấy lúc chọn icon custom ở màn Icon tabbar (xem widgets/tab_icon.dart).
-            iconTheme: WidgetStateProperty.resolveWith(
-              (states) => IconThemeData(
-                color: states.contains(WidgetState.selected)
-                    ? theme.colorScheme.primary
-                    : theme.colorScheme.outline,
-              ),
-            ),
           ),
           child: NavigationBar(
             selectedIndex: selectedIndex,
@@ -83,8 +73,8 @@ class DashboardShell extends ConsumerWidget {
             labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
             destinations: _shellDestinations
                 .map((d) => NavigationDestination(
-                      icon: _destinationIcon(d, d.icon, preparingCount, iconByTabKey, size: 22),
-                      selectedIcon: _destinationIcon(d, d.selected, preparingCount, iconByTabKey, size: 22),
+                      icon: _destinationIcon(d, d.icon, preparingCount, iconByTabKey, theme.colorScheme.outline, size: 22),
+                      selectedIcon: _destinationIcon(d, d.selected, preparingCount, iconByTabKey, theme.colorScheme.primary, size: 22),
                       label: d.label,
                     ))
                 .toList(),
@@ -100,8 +90,6 @@ class DashboardShell extends ConsumerWidget {
             extended: MediaQuery.of(context).size.width > 900,
             selectedIndex: selectedIndex,
             onDestinationSelected: (i) => context.go(_shellDestinations[i].path),
-            selectedIconTheme: IconThemeData(color: theme.colorScheme.primary),
-            unselectedIconTheme: IconThemeData(color: theme.colorScheme.outline),
             leading: Padding(
               padding: const EdgeInsets.symmetric(vertical: 16),
               child: Column(
@@ -143,8 +131,8 @@ class DashboardShell extends ConsumerWidget {
             ),
             destinations: _shellDestinations
                 .map((d) => NavigationRailDestination(
-                      icon: _destinationIcon(d, d.icon, preparingCount, iconByTabKey),
-                      selectedIcon: _destinationIcon(d, d.selected, preparingCount, iconByTabKey),
+                      icon: _destinationIcon(d, d.icon, preparingCount, iconByTabKey, theme.colorScheme.outline),
+                      selectedIcon: _destinationIcon(d, d.selected, preparingCount, iconByTabKey, theme.colorScheme.primary),
                       label: Text(d.label),
                     ))
                 .toList(),
@@ -160,11 +148,12 @@ class DashboardShell extends ConsumerWidget {
     NavDestination d,
     IconData icon,
     int preparingCount,
-    Map<String, String> iconByTabKey, {
+    Map<String, String> iconByTabKey,
+    Color color, {
     double? size,
   }) {
     final showBadge = d.path == '/orders' && preparingCount > 0;
-    final iconWidget = TabIcon(url: iconByTabKey[d.tabKey], fallback: icon, size: size ?? 24);
+    final iconWidget = TabIcon(url: iconByTabKey[d.tabKey], fallback: icon, color: color, size: size ?? 24);
     return showBadge ? Badge(label: Text('$preparingCount'), child: iconWidget) : iconWidget;
   }
 }

@@ -103,10 +103,6 @@ class AdminShell extends ConsumerWidget {
             minExtendedWidth: 210,
             selectedIndex: _indexFor(location),
             onDestinationSelected: (i) => context.go(_items[i].path),
-            // Mặc định Material 3 tô icon đang chọn bằng onSecondaryContainer (không phải màu
-            // thương hiệu) — ép rõ xanh lá khi chọn, xám khi chưa chọn.
-            selectedIconTheme: IconThemeData(color: theme.colorScheme.primary),
-            unselectedIconTheme: IconThemeData(color: theme.colorScheme.outline),
             leading: Padding(
               padding: const EdgeInsets.symmetric(vertical: 20),
               child: Column(
@@ -160,8 +156,8 @@ class AdminShell extends ConsumerWidget {
             destinations: _items
                 .map(
                   (d) => NavigationRailDestination(
-                    icon: TabIcon(url: iconByTabKey[d.tabKey], fallback: d.icon),
-                    selectedIcon: TabIcon(url: iconByTabKey[d.tabKey], fallback: d.selected),
+                    icon: TabIcon(url: iconByTabKey[d.tabKey], fallback: d.icon, color: theme.colorScheme.outline),
+                    selectedIcon: TabIcon(url: iconByTabKey[d.tabKey], fallback: d.selected, color: theme.colorScheme.primary),
                     label: Text(d.label),
                   ),
                 )
