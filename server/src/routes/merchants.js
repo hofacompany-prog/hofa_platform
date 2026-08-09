@@ -186,16 +186,17 @@ router.patch('/merchants/:id/pause', asyncHandler(async (req, res) => {
   res.json({ ok: true, data: updated });
 }));
 
-/** Xoá mềm — giữ deleted_at vì sản phẩm/đơn hàng cũ còn trỏ tới cửa hàng này. Chỉ admin. */
+/** Xoá THẬT — DELETE hẳn khỏi Postgres, không phải xoá mềm nữa (quyết định có chủ đích, xem
+ * hofa-db/52_merchant_hard_delete.sql). CASCADE kéo theo mất VĨNH VIỄN: branches, products,
+ * orders (+ order_items/lịch sử trạng thái/reviews/voucher_redemptions của các đơn đó),
+ * payments, stock_movements, merchant_staff, merchant_categories, topping_groups — không thể
+ * khôi phục. Chỉ admin, không guard bằng deleted_at nữa vì cột đó không còn ý nghĩa với route
+ * này (chỉ còn dùng lọc danh sách các cửa hàng đã xoá TRƯỚC migration 52, nếu còn sót). */
 router.delete('/merchants/:id', asyncHandler(async (req, res) => {
   requireRole(req.ctx, ['admin']);
-  const existing = await db.queryOne('SELECT id FROM merchants WHERE id = $1 AND deleted_at IS NULL', [req.params.id]);
-  if (!existing) throw new ApiError('NOT_FOUND', 'Không tìm thấy cửa hàng', 404);
-  const updated = await db.updateById('merchants', req.params.id, {
-    deleted_at: new Date().toISOString(),
-    status: 'closed'
-  });
-  res.json({ ok: true, data: updated });
+  const deleted = await db.deleteById('merchants', req.params.id);
+  if (!deleted) throw new ApiError('NOT_FOUND', 'Không tìm thấy cửa hàng', 404);
+  res.json({ ok: true, data: deleted });
 }));
 
 /** Số liệu nhanh cho màn Trang chủ store app — đơn đang chuẩn bị (không tính riêng theo

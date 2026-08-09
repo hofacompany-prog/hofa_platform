@@ -417,14 +417,18 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Xoá cửa hàng?'),
-        content: Text('"${m.name}" sẽ bị xoá mềm (ẩn khỏi hệ thống) nhưng đơn hàng cũ vẫn được giữ nguyên.'),
+        title: const Text('Xoá vĩnh viễn cửa hàng?'),
+        content: Text(
+            'Xoá triệt để "${m.name}" — không thể khôi phục. Mất luôn TOÀN BỘ chi nhánh, sản '
+            'phẩm, đơn hàng, giao dịch thanh toán, đánh giá, và sổ kho của cửa hàng này (không '
+            'còn chỉ là ẩn/đóng cửa hàng như trước). Dùng "Tạm dừng" nếu chỉ muốn ngừng nhận '
+            'đơn mà vẫn giữ lại lịch sử.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Huỷ')),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Xoá'),
+            child: const Text('Xoá vĩnh viễn'),
           ),
         ],
       ),
