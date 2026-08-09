@@ -3,8 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/go_router_refresh_stream.dart';
+import 'core/pwa_install_service.dart';
 import 'providers/auth_providers.dart';
 import 'screens/auth/login_screen.dart';
+import 'screens/install/install_pwa_screen.dart';
 import 'screens/auth/complete_profile_screen.dart';
 import 'screens/shell/customer_shell.dart';
 import 'screens/home/home_screen.dart';
@@ -36,6 +38,16 @@ final routerProvider = Provider<GoRouter>((ref) {
       Supabase.instance.client.auth.onAuthStateChange,
     ),
     redirect: (context, state) async {
+      // Bắt buộc cài PWA trước khi dùng bất cứ gì khác (kể cả đăng nhập) — chỉ áp dụng khi
+      // trình duyệt thực sự có cách cài (Android/Chrome hoặc bất kỳ trình duyệt nào trên iOS),
+      // desktop không hỗ trợ (Firefox, Safari desktop...) thì không bị chặn.
+      final needsInstall = !PwaInstallService.isStandalone() &&
+          (PwaInstallService.hasDeferredPrompt() || PwaInstallService.isIOS());
+      if (needsInstall) {
+        return state.matchedLocation == '/install-pwa' ? null : '/install-pwa';
+      }
+      if (state.matchedLocation == '/install-pwa') return '/';
+
       final session = Supabase.instance.client.auth.currentSession;
       final loggingIn = state.matchedLocation == '/login';
       final completingProfile = state.matchedLocation == '/complete-profile';
@@ -55,6 +67,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
+      GoRoute(path: '/install-pwa', builder: (context, state) => const InstallPwaScreen()),
       GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
       GoRoute(
         path: '/complete-profile',

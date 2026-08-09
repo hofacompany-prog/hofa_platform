@@ -5,7 +5,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'core/env.dart';
 import 'core/push_service.dart';
-import 'core/pwa_install_service.dart';
 import 'core/pwa_version_service.dart';
 import 'router.dart';
 import 'widgets/app_background.dart';
@@ -55,11 +54,7 @@ class _HofaDriverAppState extends ConsumerState<HofaDriverApp> {
   void initState() {
     super.initState();
     if (kIsWeb) {
-      // Nối tiếp nhau (không song song) để không hiện 2 popup chồng lên nhau — hỏi cài đặt
-      // chỉ sau khi đã chắc chắn không có bản cập nhật nào cần xử lý trước.
-      WidgetsBinding.instance.addPostFrameCallback(
-        (_) => _checkPwaVersion().then((_) => _checkPwaInstall()),
-      );
+      WidgetsBinding.instance.addPostFrameCallback((_) => _checkPwaVersion());
     }
   }
 
@@ -90,62 +85,6 @@ class _HofaDriverAppState extends ConsumerState<HofaDriverApp> {
         ],
       ),
     );
-  }
-
-  /// Gợi ý "Thêm vào màn hình chính" khi máy chưa cài PWA — hỏi lại MỖI LẦN mở app cho tới khi
-  /// cài xong (không nhớ trạng thái "đã từ chối"), bỏ qua nếu đã cài hoặc trình duyệt desktop
-  /// không hỗ trợ cài kiểu này. Mọi trình duyệt trên iOS (Safari, Chrome, Cốc Cốc...) đều dùng
-  /// chung hướng dẫn tay "Nhấn nút Chia sẻ" — không riêng Safari nữa.
-  Future<void> _checkPwaInstall() async {
-    if (PwaInstallService.isStandalone()) return;
-
-    if (!mounted) return;
-    final context = navigatorKey.currentContext;
-    if (context == null || !context.mounted) return;
-
-    final canPromptNative = PwaInstallService.hasDeferredPrompt();
-    final isIOS = PwaInstallService.isIOS();
-    if (!canPromptNative && !isIOS) return;
-
-    final install = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Icon(canPromptNative ? Icons.install_mobile : Icons.ios_share, size: 40),
-            const SizedBox(height: 12),
-            Text(
-              canPromptNative ? 'Cài đặt HOFA Tài xế ngay!' : 'Hãy thêm vào Màn hình chính!',
-              textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            if (!canPromptNative) ...[
-              const SizedBox(height: 8),
-              Text(
-                'Nhấn nút Chia sẻ, rồi chọn mục này',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ],
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: Text(canPromptNative ? 'Để sau' : 'Đã hiểu'),
-          ),
-          if (canPromptNative)
-            FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Cài đặt'),
-            ),
-        ],
-      ),
-    );
-
-    if (install == true) await PwaInstallService.promptInstall();
   }
 
   @override
