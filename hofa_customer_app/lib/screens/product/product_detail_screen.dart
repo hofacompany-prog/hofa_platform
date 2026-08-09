@@ -69,8 +69,9 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
     Product product,
     ProductVariant variant,
     int unitPrice,
-    List<ToppingGroup> toppingGroups,
-  ) async {
+    List<ToppingGroup> toppingGroups, {
+    bool buyNow = false,
+  }) async {
     var toppings = _selectedToppings;
     var note = _note;
     if (toppingGroups.isNotEmpty) {
@@ -183,7 +184,21 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
           _selectedToppings = [];
           _note = null;
         });
-        context.push('/checkout');
+        if (buyNow) {
+          context.push('/checkout');
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                orderKind == 'wholesale'
+                    ? 'Đã thêm vào Giá sỉ'
+                    : orderKind == 'preorder'
+                    ? 'Đã thêm vào Đặt trước'
+                    : 'Đã thêm vào Giỏ hàng',
+              ),
+            ),
+          );
+        }
       }
     } catch (e) {
       if (mounted)
@@ -503,35 +518,63 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                             style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error),
                           ),
                         ),
-                      FilledButton.icon(
-                        style: FilledButton.styleFrom(
-                          backgroundColor: theme.colorScheme.secondary,
-                          foregroundColor: Colors.white,
-                        ),
-                        onPressed: (variant == null || _adding || isClosed)
-                            ? null
-                            : () => _addToCart(
-                                product,
-                                variant,
-                                unitPrice,
-                                toppingGroups,
+                      if (isClosed)
+                        FilledButton(
+                          onPressed: null,
+                          child: const Text('Cửa hàng đang đóng cửa'),
+                        )
+                      else
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                onPressed: (variant == null || _adding)
+                                    ? null
+                                    : () => _addToCart(
+                                        product,
+                                        variant,
+                                        unitPrice,
+                                        toppingGroups,
+                                      ),
+                                icon: const Icon(Icons.add_shopping_cart),
+                                label: const Text('Thêm vào giỏ'),
                               ),
-                        icon: _adding
-                            ? const SizedBox(
-                                height: 18,
-                                width: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: Colors.white,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: FilledButton.icon(
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: theme.colorScheme.secondary,
+                                  foregroundColor: Colors.white,
                                 ),
-                              )
-                            : const Icon(Icons.bolt),
-                        label: Text(
-                          isClosed
-                              ? 'Cửa hàng đang đóng cửa'
-                              : 'Mua ngay · ${formatVnd((unitPrice + toppingsTotal) * _quantity)}',
+                                onPressed: (variant == null || _adding)
+                                    ? null
+                                    : () => _addToCart(
+                                        product,
+                                        variant,
+                                        unitPrice,
+                                        toppingGroups,
+                                        buyNow: true,
+                                      ),
+                                icon: _adding
+                                    ? const SizedBox(
+                                        height: 18,
+                                        width: 18,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Colors.white,
+                                        ),
+                                      )
+                                    : const Icon(Icons.bolt),
+                                label: Text(
+                                  'Mua ngay · ${formatVnd((unitPrice + toppingsTotal) * _quantity)}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                      ),
                     ],
                   ),
                 ),
