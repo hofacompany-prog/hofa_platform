@@ -31,11 +31,18 @@ class DashboardScreen extends ConsumerWidget {
         error: (e, _) => Center(child: Text('Không tải được số liệu: $e')),
         data: (s) => LayoutBuilder(
           builder: (context, constraints) {
+            // 2 cột trên điện thoại từng làm chữ (nhất là "sub" 2 số liệu gộp 1 dòng) bị bóp
+            // tràn/mất chữ — dưới 500 chỉ còn 1 cột, mỗi thẻ chiếm hết bề ngang, đủ chỗ hiện
+            // trọn số liệu. Thẻ 1 cột cũng không cần cao bằng thẻ nhiều cột (aspectRatio thấp
+            // hơn = thẻ thấp/rộng hơn) vì đã có sẵn đủ bề ngang.
             final columns = constraints.maxWidth > 1200
                 ? 4
                 : constraints.maxWidth > 800
                 ? 3
-                : 2;
+                : constraints.maxWidth > 500
+                ? 2
+                : 1;
+            final aspectRatio = columns == 1 ? 2.6 : 1.6;
             return SingleChildScrollView(
               padding: const EdgeInsets.all(24),
               child: Column(
@@ -47,7 +54,7 @@ class DashboardScreen extends ConsumerWidget {
                     physics: const NeverScrollableScrollPhysics(),
                     mainAxisSpacing: 16,
                     crossAxisSpacing: 16,
-                    childAspectRatio: 1.6,
+                    childAspectRatio: aspectRatio,
                     children: [
                       StatCard(
                         label: 'Đơn hôm nay',
