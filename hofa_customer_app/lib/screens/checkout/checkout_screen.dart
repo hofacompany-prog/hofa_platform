@@ -46,6 +46,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   bool _autoFindDriver = true;
   AvailableDriver? _selectedDriver;
   String _paymentMethod = 'cod';
+  // Đặt trước tạo nhiều đơn (1 đơn/lần giao) + chuyển khoản — tích chọn thì chỉ đơn ĐẦU
+  // TIÊN chờ xác nhận thanh toán như bình thường, các đơn sau gắn nhãn tham chiếu "đã gộp
+  // thanh toán" (payment_group_order_id) để cửa hàng không phải chờ chuyển khoản riêng
+  // từng đơn — xem _placeOrder.
+  bool _payWeekly = false;
   DateTime? _scheduledFor;
   final _noteCtrl = TextEditingController();
   // Nhiều voucher cùng lúc, tối đa theo voucherMaxCountProvider (admin cấu hình).
@@ -354,8 +359,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     Address address,
     DateTime? scheduledFor,
     int deliveryFee,
-    int orderDaysCount,
-  ) => {
+    int orderDaysCount, {
+    String? paymentGroupOrderId,
+  }) => {
     'merchant_id': cart.merchantId,
     'branch_id': cart.branchId,
     'sales_model': cart.salesModel,
@@ -388,6 +394,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     'payment_method': _effectivePaymentMethod(cart),
     if (!_autoFindDriver && _selectedDriver != null) 'selected_driver_id': _selectedDriver!.id,
     'delivery_fee': deliveryFee,
+    if (paymentGroupOrderId != null)
+      'payment_group_order_id': paymentGroupOrderId,
     if (_appliedVouchers.isNotEmpty)
       'voucher_codes': _appliedVouchers.map((v) => v.code).toList(),
     if (cart.salesModel == 'scheduled' && scheduledFor != null)
@@ -563,13 +571,28 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     setState(() => _placing = true);
     var created = 0;
     String? lastOrderId;
+    // "Thanh toán theo tuần" — chỉ đơn ĐẦU TIÊN tạo bình thường, các đơn sau gắn
+    // payment_group_order_id trỏ về đơn đầu (xem _orderBody/POST /orders).
+    String? firstOrderId;
     try {
       for (final entry in orders) {
+        final isFirst = firstOrderId == null;
         final order = await ref
             .read(orderRepoProvider)
             .createOrder(
-              _orderBody(cart, entry.value, address, entry.key, deliveryFee, orderDaysCount),
+              _orderBody(
+                cart,
+                entry.value,
+                address,
+                entry.key,
+                deliveryFee,
+                orderDaysCount,
+                paymentGroupOrderId: (_payWeekly && !isFirst)
+                    ? firstOrderId
+                    : null,
+              ),
             );
+        firstOrderId ??= order.id;
         lastOrderId = order.id;
         created++;
       }
@@ -916,6 +939,20 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               ],
             ),
           ),
+          if (_effectivePaymentMethod(cart) == 'bank_transfer' &&
+              orderCount > 1)
+            CheckboxListTile(
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              value: _payWeekly,
+              onChanged: (v) => setState(() => _payWeekly = v ?? false),
+              title: const Text('Thanh toán theo tuần'),
+              subtitle: Text(
+                'Chuyển khoản 1 lần cho cả $orderCount lần giao trong tuần — chỉ đơn đầu '
+                'tiên cần chờ cửa hàng xác nhận đã nhận tiền, các đơn sau không phải trả '
+                'riêng nữa.',
+              ),
+            ),
           if (cart.salesModel == 'scheduled') ...[
             const Divider(height: 32),
             Text('Lịch giao', style: theme.textTheme.titleSmall),

@@ -72,6 +72,10 @@ class Order {
   final String salesModel;
   final DateTime? scheduledFor;
   final DateTime? preorderNotifiedAt;
+  /// Đơn đầu tiên trong tuần mà đơn này gộp thanh toán chung (khách chọn "Thanh toán theo
+  /// tuần" lúc đặt trước) — null nghĩa là đơn tự thanh toán riêng như bình thường. Chỉ là
+  /// nhãn tham chiếu, KHÔNG tự đổi paymentStatus — vẫn phải tự xác nhận đã nhận tiền.
+  final String? paymentGroupOrderId;
   final List<OrderItem> items;
 
   /// Đơn đặt trước (salesModel='scheduled') chưa được sweep kích hoạt — cửa hàng chỉ xem được
@@ -104,6 +108,7 @@ class Order {
     this.salesModel = 'instant',
     this.scheduledFor,
     this.preorderNotifiedAt,
+    this.paymentGroupOrderId,
     required this.items,
   });
 
@@ -135,6 +140,7 @@ class Order {
         scheduledFor: json['scheduled_for'] != null ? DateTime.tryParse(json['scheduled_for'].toString()) : null,
         preorderNotifiedAt:
             json['preorder_notified_at'] != null ? DateTime.tryParse(json['preorder_notified_at'].toString()) : null,
+        paymentGroupOrderId: json['payment_group_order_id'] as String?,
         items: (json['items'] as List?)?.map((e) => OrderItem.fromJson(e as Map<String, dynamic>)).toList() ?? [],
       );
 }

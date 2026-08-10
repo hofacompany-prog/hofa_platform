@@ -83,6 +83,21 @@ router.post('/orders', asyncHandler(async (req, res) => {
     order.selected_driver_id = body.selected_driver_id;
   }
 
+  // "Thanh toán theo tuần" (đặt trước tạo nhiều đơn/lần giao) — đơn này gộp thanh toán với
+  // payment_group_order_id, chỉ là nhãn tham chiếu (không tự đổi payment_status, xem
+  // hofa-db/56_order_payment_group.sql). Validate đơn được tham chiếu THẬT SỰ là của chính
+  // khách này và cùng cửa hàng — khách không tự gắn được vào đơn của người khác.
+  if (body.payment_group_order_id) {
+    const target = await db.queryOne(
+      'SELECT id FROM orders WHERE id = $1 AND customer_id = $2 AND merchant_id = $3',
+      [body.payment_group_order_id, req.ctx.userId, body.merchant_id]
+    );
+    if (target) {
+      await db.query('UPDATE orders SET payment_group_order_id = $2 WHERE id = $1', [order.id, target.id]);
+      order.payment_group_order_id = target.id;
+    }
+  }
+
   // Đơn đặt trước (sales_model=scheduled) đặt đủ sớm thì KHÔNG báo ngay — để "ngủ" tới lúc còn
   // default_prep_minutes phút nữa là tới scheduled_for, sweepDuePreorders (index.js) sẽ kích
   // hoạt + báo sau, xem hofa-db/49_preorder_gating.sql. Đặt gấp (đã trong ngưỡng đó ngay lúc

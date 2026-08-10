@@ -410,6 +410,22 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> with Sing
                       'Thanh toán: ${o.paymentMethod.toUpperCase()} · ${o.paymentStatus}',
                       style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline),
                     ),
+                    if (o.paymentGroupOrderId != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Row(
+                          children: [
+                            Icon(Icons.link, size: 14, color: theme.colorScheme.primary),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                'Khách đã chuyển khoản gộp 1 lần cho cả tuần — không cần chờ thanh toán riêng cho đơn này',
+                                style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.primary),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     deliveryAsync.when(
                       loading: () => const SizedBox(),
                       error: (_, _) => const SizedBox(),
