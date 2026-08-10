@@ -1258,10 +1258,9 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
                 ),
         ),
         const Divider(height: 1),
-        // Icon trên nút đã đủ nói rõ đây là ngày/giờ giao — bỏ hẳn tiêu đề riêng phía trên để
-        // gọn hết mức, nhường khoảng trống cho danh sách sản phẩm ở trên (Expanded).
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+        // Tiêu đề "Giờ giao" luôn hiện, bấm vào mới mở/thu phần chọn ngày+giờ — mặc định
+        // đóng để nhường tối đa khoảng trống cho danh sách sản phẩm ở trên (Expanded).
+        _collapsibleOptions(
           child: Row(
             children: [
               Expanded(
@@ -1293,6 +1292,28 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
       ],
     );
   }
+
+  /// Khối cài đặt (ngày/giờ giao, hình thức giao...) đóng/mở được — tiêu đề "Giờ giao" +
+  /// mũi tên LUÔN hiện (ExpansionTile tự xoay mũi tên + hoạt ảnh mở/thu), mặc định đóng
+  /// (initiallyExpanded: false) để nhường tối đa khoảng trống cho danh sách sản phẩm ở trên.
+  /// ExpansionTile tự giữ trạng thái mở/đóng qua các lần rebuild (State riêng, không cần
+  /// biến state ở _PreorderScreenState) miễn giữ nguyên vị trí trong cây widget.
+  Widget _collapsibleOptions({required Widget child}) => ExpansionTile(
+    initiallyExpanded: false,
+    dense: true,
+    visualDensity: VisualDensity.compact,
+    tilePadding: const EdgeInsets.symmetric(horizontal: 16),
+    childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+    shape: const Border(),
+    collapsedShape: const Border(),
+    title: Text(
+      'Giờ giao',
+      style: Theme.of(
+        context,
+      ).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w600),
+    ),
+    children: [child],
+  );
 
   /// Nút gọn cho khối cài đặt phía dưới (ngày/giờ giao, hình thức giao...) — density nhỏ hơn
   /// OutlinedButton.icon mặc định để khối này chiếm ít chiều cao, nhường chỗ cho sản phẩm.
@@ -1383,113 +1404,114 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
                 ),
         ),
         const Divider(height: 1),
-        // Bỏ hết tiêu đề riêng dòng — icon đồng hồ + nhãn "Giao:"/"Tính:" ngắn gọn đặt NGANG
-        // hàng với nút/chip thay vì xếp trên-dưới, để khối này thấp hết mức có thể. Vẫn bọc
-        // chiều cao tối đa theo tỷ lệ màn hình + tự cuộn riêng phòng lúc "Giao nhiều lần"
-        // hiện thêm hàng, nhường khoảng trống cho danh sách sản phẩm/lịch ngày ở trên.
-        ConstrainedBox(
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.sizeOf(context).height * 0.22,
-          ),
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _compactOutlinedButton(
-                  icon: Icons.access_time_outlined,
-                  label: _time.format(context),
-                  onPressed: () async {
-                    await _pickTime();
-                    setState(() => _recurringConfirmed = false);
-                  },
-                ),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    Text('Giao:', style: theme.textTheme.labelMedium),
-                    const SizedBox(width: 6),
-                    _compactChoiceChip(
-                      label: '1 lần',
-                      selected: _mode == 'once',
-                      onSelected: () => setState(() {
-                        _mode = 'once';
-                        _recurringConfirmed = false;
-                      }),
-                    ),
-                    const SizedBox(width: 6),
-                    _compactChoiceChip(
-                      label: 'Nhiều lần',
-                      selected: _mode == 'recurring',
-                      onSelected: () => setState(() {
-                        _mode = 'recurring';
-                        _recurringConfirmed = false;
-                      }),
-                    ),
-                  ],
-                ),
-                if (_mode == 'recurring') ...[
+        // Tiêu đề "Giờ giao" luôn hiện, bấm vào mới mở/thu cả khối cài đặt (giờ giao, hình
+        // thức giao, cách tính tổng tiền...) — mặc định đóng để nhường tối đa khoảng trống
+        // cho danh sách sản phẩm/lịch ngày ở trên. Vẫn bọc chiều cao tối đa theo tỷ lệ màn
+        // hình + tự cuộn riêng phòng lúc "Giao nhiều lần" hiện thêm hàng khi đang mở.
+        _collapsibleOptions(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.sizeOf(context).height * 0.22,
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _compactOutlinedButton(
+                    icon: Icons.access_time_outlined,
+                    label: _time.format(context),
+                    onPressed: () async {
+                      await _pickTime();
+                      setState(() => _recurringConfirmed = false);
+                    },
+                  ),
                   const SizedBox(height: 6),
                   Row(
                     children: [
-                      Text('Số tuần:', style: theme.textTheme.labelMedium),
-                      const Spacer(),
-                      IconButton(
-                        visualDensity: VisualDensity.compact,
-                        iconSize: 18,
-                        icon: const Icon(Icons.remove_circle_outline),
-                        onPressed: _weeks > 1
-                            ? () => setState(() {
-                                _weeks--;
-                                _recurringConfirmed = false;
-                              })
-                            : null,
+                      Text('Giao:', style: theme.textTheme.labelMedium),
+                      const SizedBox(width: 6),
+                      _compactChoiceChip(
+                        label: '1 lần',
+                        selected: _mode == 'once',
+                        onSelected: () => setState(() {
+                          _mode = 'once';
+                          _recurringConfirmed = false;
+                        }),
                       ),
-                      Text(
-                        '$_weeks',
-                        style: const TextStyle(fontWeight: FontWeight.w600),
-                      ),
-                      IconButton(
-                        visualDensity: VisualDensity.compact,
-                        iconSize: 18,
-                        icon: const Icon(Icons.add_circle_outline),
-                        onPressed: _weeks < 12
-                            ? () => setState(() {
-                                _weeks++;
-                                _recurringConfirmed = false;
-                              })
-                            : null,
+                      const SizedBox(width: 6),
+                      _compactChoiceChip(
+                        label: 'Nhiều lần',
+                        selected: _mode == 'recurring',
+                        onSelected: () => setState(() {
+                          _mode = 'recurring';
+                          _recurringConfirmed = false;
+                        }),
                       ),
                     ],
                   ),
-                  const SizedBox(height: 4),
-                  _compactOutlinedButton(
-                    icon: _recurringConfirmed
-                        ? Icons.check_circle
-                        : Icons.event_available,
-                    label: _recurringConfirmed ? 'Đã xác nhận' : 'Xác nhận',
-                    onPressed: () => _confirmRecurring(items),
-                  ),
-                ],
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    Text('Tính:', style: theme.textTheme.labelMedium),
-                    const SizedBox(width: 6),
-                    _compactChoiceChip(
-                      label: 'Theo ngày',
-                      selected: _totalBasis == 'day',
-                      onSelected: () => setState(() => _totalBasis = 'day'),
+                  if (_mode == 'recurring') ...[
+                    const SizedBox(height: 6),
+                    Row(
+                      children: [
+                        Text('Số tuần:', style: theme.textTheme.labelMedium),
+                        const Spacer(),
+                        IconButton(
+                          visualDensity: VisualDensity.compact,
+                          iconSize: 18,
+                          icon: const Icon(Icons.remove_circle_outline),
+                          onPressed: _weeks > 1
+                              ? () => setState(() {
+                                  _weeks--;
+                                  _recurringConfirmed = false;
+                                })
+                              : null,
+                        ),
+                        Text(
+                          '$_weeks',
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        IconButton(
+                          visualDensity: VisualDensity.compact,
+                          iconSize: 18,
+                          icon: const Icon(Icons.add_circle_outline),
+                          onPressed: _weeks < 12
+                              ? () => setState(() {
+                                  _weeks++;
+                                  _recurringConfirmed = false;
+                                })
+                              : null,
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 6),
-                    _compactChoiceChip(
-                      label: 'Theo tuần',
-                      selected: _totalBasis == 'week',
-                      onSelected: () => setState(() => _totalBasis = 'week'),
+                    const SizedBox(height: 4),
+                    _compactOutlinedButton(
+                      icon: _recurringConfirmed
+                          ? Icons.check_circle
+                          : Icons.event_available,
+                      label: _recurringConfirmed ? 'Đã xác nhận' : 'Xác nhận',
+                      onPressed: () => _confirmRecurring(items),
                     ),
                   ],
-                ),
-              ],
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Text('Tính:', style: theme.textTheme.labelMedium),
+                      const SizedBox(width: 6),
+                      _compactChoiceChip(
+                        label: 'Theo ngày',
+                        selected: _totalBasis == 'day',
+                        onSelected: () => setState(() => _totalBasis = 'day'),
+                      ),
+                      const SizedBox(width: 6),
+                      _compactChoiceChip(
+                        label: 'Theo tuần',
+                        selected: _totalBasis == 'week',
+                        onSelected: () => setState(() => _totalBasis = 'week'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),
