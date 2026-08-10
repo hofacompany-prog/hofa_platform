@@ -214,4 +214,22 @@ class MerchantRepository {
   Future<void> deleteStaff(String merchantId, String staffId) async {
     await _api.delete('/merchants/$merchantId/staff/$staffId');
   }
+
+  // ---- Ví cửa hàng ----
+
+  /// Số dư ví thật (khác netIncome theo kỳ ở financeSummary) — nguồn sự thật là sổ cái
+  /// merchant_wallet_transactions, xem hofa-db/64_merchant_wallet_ledger.sql.
+  Future<int> walletBalance(String merchantId) async {
+    final data =
+        await _api.get('/merchants/$merchantId/wallet/balance')
+            as Map<String, dynamic>;
+    return (data['balance'] as num?)?.toInt() ?? 0;
+  }
+
+  Future<void> createWalletWithdrawal(String merchantId, int amount) async {
+    await _api.post(
+      '/merchants/$merchantId/wallet/withdrawals',
+      body: {'amount': amount},
+    );
+  }
 }

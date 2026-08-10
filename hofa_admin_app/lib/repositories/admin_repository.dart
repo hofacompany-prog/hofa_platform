@@ -28,6 +28,8 @@ import '../models/icon_library.dart';
 import '../models/cod_settlement_request.dart';
 import '../models/driver_finance_settings.dart';
 import '../models/driver_wallet_summary.dart';
+import '../models/merchant_wallet_summary.dart';
+import '../models/merchant_wallet_request.dart';
 
 /// Gom mọi lời gọi API mà web admin cần. Tất cả endpoint ở đây đều yêu cầu
 /// role = 'admin' ở phía server (server/src/utils.js requireRole).
@@ -583,6 +585,62 @@ class AdminRepository {
     await _api.patch('/driver-finance-settings', body: settings.toJson())
         as Map<String, dynamic>,
   );
+
+  // ---- Ví cửa hàng: tổng quan + rút tiền + điều chỉnh tay ----
+
+  Future<MerchantWalletSummary> merchantWalletSummary() async =>
+      MerchantWalletSummary.fromJson(
+        await _api.get('/admin/merchant-wallets/summary')
+            as Map<String, dynamic>,
+      );
+
+  Future<List<MerchantWalletBalance>> merchantWallets() async {
+    final list =
+        await _api.get('/admin/merchant-wallets', query: {'limit': 200})
+            as List;
+    return list
+        .map((e) => MerchantWalletBalance.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<List<MerchantWalletRequest>> merchantWalletWithdrawals({
+    String? status,
+  }) async {
+    final list =
+        await _api.get(
+              '/admin/merchant-wallet-withdrawals',
+              query: {'limit': 100, if (status != null) 'status': status},
+            )
+            as List;
+    return list
+        .map((e) => MerchantWalletRequest.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<void> confirmMerchantWalletWithdrawal(String id) async {
+    await _api.post('/admin/merchant-wallet-withdrawals/$id/confirm');
+  }
+
+  Future<void> rejectMerchantWalletWithdrawal(
+    String id, {
+    String? reason,
+  }) async {
+    await _api.post(
+      '/admin/merchant-wallet-withdrawals/$id/reject',
+      body: {if (reason != null) 'reason': reason},
+    );
+  }
+
+  Future<void> adjustMerchantWallet(
+    String merchantId, {
+    required int amount,
+    required String reason,
+  }) async {
+    await _api.post(
+      '/admin/merchants/$merchantId/wallet-adjustment',
+      body: {'amount': amount, 'reason': reason},
+    );
+  }
 
   // ---- Phí ship ----
 

@@ -266,6 +266,33 @@ async function notifyDriverWallet(driverId, kind, amount, reason) {
   await sendPushToUser(driver.user_id, { title, body, data: { type: 'driver_wallet_update', kind } });
 }
 
+const MERCHANT_WALLET_MESSAGES = {
+  withdrawal_confirmed: (amount) => ({
+    title: 'Rút tiền thành công',
+    body: `Đã chuyển khoản ${amount.toLocaleString('vi-VN')}đ vào tài khoản ngân hàng cửa hàng.`
+  }),
+  withdrawal_rejected: (amount, reason) => ({
+    title: 'Yêu cầu rút tiền bị từ chối',
+    body: `Đã hoàn lại ${amount.toLocaleString('vi-VN')}đ vào ví.${reason ? ` Lý do: ${reason}` : ''}`
+  }),
+  admin_adjustment: (amount, reason) => ({
+    title: amount >= 0 ? 'Ví được cộng thêm' : 'Ví bị trừ',
+    body: `${amount >= 0 ? '+' : ''}${amount.toLocaleString('vi-VN')}đ.${reason ? ` Lý do: ${reason}` : ''}`
+  })
+};
+
+/** Kết quả duyệt rút ví cửa hàng — báo cho cả chủ lẫn nhân viên (resolveMerchantUserIds, giống
+ * cách push đơn mới đã làm), khác notifyDriverWallet (chỉ 1 user) vì 1 cửa hàng có thể nhiều
+ * người quản lý cùng xem ví. [kind] khớp key của MERCHANT_WALLET_MESSAGES. */
+async function notifyMerchantWallet(merchantId, kind, amount, reason) {
+  const compose = MERCHANT_WALLET_MESSAGES[kind];
+  if (!compose) return;
+  const userIds = await resolveMerchantUserIds([merchantId]);
+  if (!userIds.length) return;
+  const { title, body } = compose(amount, reason);
+  await sendToUserIds(userIds, { title, body, category: 'system' });
+}
+
 /** Tự xoá các dòng hộp thư (bảng notifications) cũ hơn notification_settings.ttl_hours — bỏ
  * qua lặng lẽ nếu chưa cấu hình (ttl_hours NULL, mặc định) hoặc chưa có dòng settings nào.
  * Gọi định kỳ từ index.js, cùng kiểu sweepExpiredOffers (dispatch.js). */
@@ -285,6 +312,7 @@ module.exports = {
   notifyCustomerRepickDriver,
   notifyDriverRejected,
   notifyDriverWallet,
+  notifyMerchantWallet,
   sendBroadcastToRoles,
   resolveMerchantUserIds,
   sendToUserIds,

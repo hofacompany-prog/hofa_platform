@@ -6,6 +6,7 @@ import '../../models/branch_hours.dart' show weekdayLabels;
 import '../../models/finance_summary.dart';
 import '../../models/order.dart';
 import '../../providers/auth_provider.dart';
+import '../../repositories/merchant_repository.dart';
 import '../../repositories/order_repository.dart';
 import '../../widgets/nav_back_button.dart';
 
@@ -37,10 +38,9 @@ final _financeOrdersProvider = FutureProvider.autoDispose<List<Order>>((
 /// nền tảng giao đồ ăn khác: Tóm tắt (số liệu), Giao dịch (từng đơn), Số tiền thu về. Cả 3 tab
 /// CHỈ tính đơn đã ở trạng thái "Đã giao" (đọc từ sổ cái merchant_wallet_transactions, xem
 /// hofa-db/64_merchant_wallet_ledger.sql) — đơn đang chạy (đặt/chuẩn bị/đang giao) dù chưa huỷ
-/// không được tính là đã có tiền. Khác biệt quan trọng ở tab thứ 3: HOFA không đứng giữa giữ
-/// tiền hộ cửa hàng (đơn COD/chuyển khoản đều giữa khách và cửa hàng trực tiếp) nên KHÔNG có
-/// lịch sử chuyển khoản thật để hiện — chỉ hiện đúng số dư (thu nhập ròng) đã tính được, không
-/// bịa thêm dữ liệu đối soát.
+/// không được tính là đã có tiền. Tab thứ 3 đọc số dư ví thật (khác netIncome theo kỳ ở 2 tab
+/// đầu) và cho rút tiền — mirror luồng "Rút tiền" của tài xế, xem
+/// hofa-db/65_merchant_wallet_withdrawals.sql.
 class FinanceScreen extends ConsumerStatefulWidget {
   const FinanceScreen({super.key});
 
@@ -110,7 +110,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen>
               children: [
                 _SummaryTab(summaryAsync: summaryAsync),
                 _TransactionsTab(summaryAsync: summaryAsync),
-                _PayoutTab(summaryAsync: summaryAsync),
+                const _PayoutTab(),
               ],
             ),
           ),
@@ -375,18 +375,83 @@ class _TransactionsTab extends ConsumerWidget {
   }
 }
 
-class _PayoutTab extends StatelessWidget {
-  final AsyncValue<FinanceSummary?> summaryAsync;
-  const _PayoutTab({required this.summaryAsync});
+class _PayoutTab extends ConsumerWidget {
+  const _PayoutTab();
+
+  Future<void> _withdraw(
+    BuildContext context,
+    WidgetRef ref,
+    String merchantId,
+    int balance,
+  ) async {
+    final amountCtrl = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Rút tiền'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Số dư khả dụng: ${formatVnd(balance)}'),
+            const SizedBox(height: 12),
+            TextField(
+              controller: amountCtrl,
+              autofocus: true,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Số tiền muốn rút (đ)',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Huỷ'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Gửi yêu cầu'),
+          ),
+        ],
+      ),
+    );
+    final amount = int.tryParse(amountCtrl.text.trim());
+    if (ok != true || amount == null || amount <= 0 || !context.mounted) return;
+
+    try {
+      await MerchantRepository().createWalletWithdrawal(merchantId, amount);
+      ref.invalidate(merchantWalletBalanceProvider);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Đã gửi yêu cầu rút tiền — HOFA sẽ chuyển khoản sớm.',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      }
+    }
+  }
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    return summaryAsync.when(
+    final merchantAsync = ref.watch(myMerchantProvider);
+    final balanceAsync = ref.watch(merchantWalletBalanceProvider);
+
+    return balanceAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, _) => Center(child: Text('Lỗi: $e')),
-      data: (summary) {
-        if (summary == null)
+      data: (balance) {
+        if (balance == null)
           return const Center(child: Text('Chưa có dữ liệu'));
         return ListView(
           padding: const EdgeInsets.all(16),
@@ -399,10 +464,22 @@ class _PayoutTab extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              formatVnd(summary.netIncome),
+              formatVnd(balance),
               style: theme.textTheme.headlineMedium?.copyWith(
                 fontWeight: FontWeight.bold,
               ),
+            ),
+            const SizedBox(height: 16),
+            FilledButton.icon(
+              onPressed: balance <= 0
+                  ? null
+                  : () {
+                      final merchant = merchantAsync.valueOrNull;
+                      if (merchant == null) return;
+                      _withdraw(context, ref, merchant.id, balance);
+                    },
+              icon: const Icon(Icons.account_balance_outlined),
+              label: const Text('Rút tiền'),
             ),
             const SizedBox(height: 16),
             Container(
@@ -422,10 +499,9 @@ class _PayoutTab extends StatelessWidget {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Đơn hàng HOFA thanh toán trực tiếp giữa khách và cửa hàng (COD/chuyển '
-                      'khoản), không qua ví trung gian — nên không có lịch sử chuyển khoản '
-                      'từ HOFA để hiện ở đây. Số dư trên là thu nhập ròng đã trừ hoa hồng và '
-                      'thuế, không phải số tiền HOFA sẽ chuyển thêm.',
+                      'Số dư là thu nhập thật đã cộng vào ví sau khi đơn được giao và trừ hoa '
+                      'hồng (xem tab Tóm tắt để biết chi tiết khấu trừ). Cần cập nhật đủ thông '
+                      'tin ngân hàng ở Cài đặt → Hồ sơ cửa hàng trước khi rút.',
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant,
                       ),

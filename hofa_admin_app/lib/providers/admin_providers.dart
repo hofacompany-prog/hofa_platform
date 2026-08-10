@@ -28,6 +28,8 @@ import '../models/icon_library.dart';
 import '../models/cod_settlement_request.dart';
 import '../models/driver_finance_settings.dart';
 import '../models/driver_wallet_summary.dart';
+import '../models/merchant_wallet_summary.dart';
+import '../models/merchant_wallet_request.dart';
 import '../repositories/admin_repository.dart';
 import '../repositories/user_repository.dart';
 
@@ -187,6 +189,30 @@ final driverFinanceSettingsProvider =
     FutureProvider.autoDispose<DriverFinanceSettings>(
       (ref) => ref.watch(adminRepoProvider).driverFinanceSettings(),
     );
+
+// ---- Ví cửa hàng ----
+
+final merchantWalletSummaryProvider =
+    FutureProvider.autoDispose<MerchantWalletSummary>(
+      (ref) => ref.watch(adminRepoProvider).merchantWalletSummary(),
+    );
+
+final merchantWalletsProvider =
+    FutureProvider.autoDispose<List<MerchantWalletBalance>>(
+      (ref) => ref.watch(adminRepoProvider).merchantWallets(),
+    );
+
+/// null = mọi trạng thái, 'pending' = tab mặc định màn "Cửa hàng rút tiền".
+final merchantWithdrawalStatusFilterProvider =
+    StateProvider.autoDispose<String?>((ref) => 'pending');
+
+final merchantWalletWithdrawalsProvider =
+    FutureProvider.autoDispose<List<MerchantWalletRequest>>((ref) {
+      final status = ref.watch(merchantWithdrawalStatusFilterProvider);
+      return ref
+          .watch(adminRepoProvider)
+          .merchantWalletWithdrawals(status: status);
+    });
 
 final deliveryRadiusSettingsProvider =
     FutureProvider.autoDispose<DeliveryRadiusSettings>(

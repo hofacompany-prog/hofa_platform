@@ -7,23 +7,26 @@ import '../../models/bank.dart';
 import '../../models/bank_account_settings.dart';
 import '../../models/driver_wallet_request.dart';
 import '../../models/cod_settlement_request.dart';
+import '../../models/merchant_wallet_request.dart';
 import '../../models/order.dart';
 import '../../providers/admin_providers.dart';
 import '../../core/responsive.dart';
 
-/// 6 tab dưới 1 màn "Thanh toán" — tách nhỏ để mỗi tab không bị quá tải:
+/// 7 tab dưới 1 màn "Thanh toán" — tách nhỏ để mỗi tab không bị quá tải:
 /// Cấu hình (tài khoản ngân hàng của sàn), Đơn hàng (chờ xác nhận thanh toán chuyển khoản),
 /// Tài xế nạp tiền (nạp thẳng vào ví thu nhập — cần lại vì tài xế phải có earning_balance ≥
 /// giá trị đơn mới được gán đơn, xem hofa-db/63_driver_deposit_entry_type.sql), Đối soát COD
-/// (nộp lại tiền COD theo từng đơn) / Tài xế rút tiền (duyệt ví tài xế), Ngân hàng (danh sách
-/// cho dropdown ở app tài xế lúc đăng ký/sửa hồ sơ).
+/// (nộp lại tiền COD theo từng đơn) / Tài xế rút tiền (duyệt ví tài xế), Cửa hàng rút tiền
+/// (duyệt ví cửa hàng — xem hofa-db/65_merchant_wallet_withdrawals.sql, không có QR như tài xế
+/// vì merchants chưa thu thập mã BIN ngân hàng), Ngân hàng (danh sách cho dropdown ở app tài
+/// xế lúc đăng ký/sửa hồ sơ).
 class PaymentSettingsScreen extends StatelessWidget {
   const PaymentSettingsScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 6,
+      length: 7,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Thanh toán'),
@@ -35,6 +38,7 @@ class PaymentSettingsScreen extends StatelessWidget {
               Tab(text: 'Tài xế nạp tiền'),
               Tab(text: 'Đối soát COD'),
               Tab(text: 'Tài xế rút tiền'),
+              Tab(text: 'Cửa hàng rút tiền'),
               Tab(text: 'Ngân hàng'),
             ],
           ),
@@ -46,6 +50,7 @@ class PaymentSettingsScreen extends StatelessWidget {
             _WalletDepositsTab(),
             _CodSettlementsTab(),
             _WalletWithdrawalsTab(),
+            _MerchantWithdrawalsTab(),
             _BanksTab(),
           ],
         ),
@@ -1056,6 +1061,245 @@ class _WalletWithdrawalsTab extends ConsumerWidget {
                                 ),
                                 const SizedBox(height: 12),
                               ],
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: OutlinedButton(
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor:
+                                            theme.colorScheme.error,
+                                      ),
+                                      onPressed: () => _reject(context, ref, r),
+                                      child: const Text('Từ chối'),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: FilledButton(
+                                      onPressed: () =>
+                                          _confirm(context, ref, r),
+                                      child: const Text(
+                                        'Xác nhận đã chuyển khoản',
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _MerchantWithdrawalsTab extends ConsumerWidget {
+  const _MerchantWithdrawalsTab();
+
+  Future<void> _confirm(
+    BuildContext context,
+    WidgetRef ref,
+    MerchantWalletRequest r,
+  ) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Xác nhận đã chuyển khoản?'),
+        content: Text(
+          'Xác nhận đã chuyển ${formatVnd(r.amount)} cho cửa hàng ${r.merchantName} qua tài khoản ngân hàng ở trên.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Huỷ'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Xác nhận'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await ref.read(adminRepoProvider).confirmMerchantWalletWithdrawal(r.id);
+      ref.invalidate(merchantWalletWithdrawalsProvider);
+      if (context.mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Đã xác nhận rút tiền')));
+    } catch (e) {
+      if (context.mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+    }
+  }
+
+  Future<void> _reject(
+    BuildContext context,
+    WidgetRef ref,
+    MerchantWalletRequest r,
+  ) async {
+    final reasonCtrl = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Từ chối yêu cầu rút tiền?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${formatVnd(r.amount)} sẽ được hoàn lại vào ví cửa hàng ${r.merchantName}.',
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: reasonCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Lý do (không bắt buộc)',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Huỷ'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Từ chối'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await ref
+          .read(adminRepoProvider)
+          .rejectMerchantWalletWithdrawal(
+            r.id,
+            reason: reasonCtrl.text.trim().isEmpty
+                ? null
+                : reasonCtrl.text.trim(),
+          );
+      ref.invalidate(merchantWalletWithdrawalsProvider);
+      if (context.mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Đã từ chối, tiền được hoàn lại ví cửa hàng'),
+          ),
+        );
+    } catch (e) {
+      if (context.mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final withdrawalsAsync = ref.watch(merchantWalletWithdrawalsProvider);
+
+    return ListView(
+      padding: const EdgeInsets.all(24),
+      children: [
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 640),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Cửa hàng đang chờ rút tiền',
+                style: theme.textTheme.titleMedium,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Tiền đã bị trừ khỏi ví cửa hàng ngay lúc tạo yêu cầu — tự chuyển khoản theo '
+                'thông tin ngân hàng bên dưới rồi bấm "Xác nhận". Không chuyển được thì bấm '
+                '"Từ chối" để hoàn tiền lại ví.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.outline,
+                ),
+              ),
+              const SizedBox(height: 12),
+              withdrawalsAsync.when(
+                loading: () => const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(24),
+                    child: CircularProgressIndicator(),
+                  ),
+                ),
+                error: (e, _) => Text('Lỗi: $e'),
+                data: (rows) {
+                  if (rows.isEmpty) {
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      child: Text(
+                        'Không có yêu cầu rút tiền nào đang chờ.',
+                        style: theme.textTheme.bodyMedium,
+                      ),
+                    );
+                  }
+                  return Column(
+                    children: rows.map((r) {
+                      final hasBankInfo =
+                          (r.bankName?.isNotEmpty ?? false) &&
+                          (r.bankAccountNo?.isNotEmpty ?? false);
+                      return Card(
+                        elevation: 0,
+                        color: theme.colorScheme.surfaceContainerLow,
+                        margin: const EdgeInsets.only(bottom: 8),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      r.merchantName,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ),
+                                  Text(
+                                    formatVnd(r.amount),
+                                    style: theme.textTheme.titleMedium
+                                        ?.copyWith(fontWeight: FontWeight.bold),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 8),
+                              if (!hasBankInfo)
+                                Text(
+                                  'Cửa hàng chưa có thông tin ngân hàng.',
+                                  style: TextStyle(
+                                    color: theme.colorScheme.error,
+                                  ),
+                                )
+                              else
+                                Text(
+                                  '${r.bankName} · ${r.bankAccountNo}\n${r.bankAccountName ?? ""}',
+                                  style: theme.textTheme.bodyMedium,
+                                ),
+                              const SizedBox(height: 12),
                               Row(
                                 children: [
                                   Expanded(

@@ -74,11 +74,12 @@ bool hasPermission(List<String>? myPermissions, String permission) =>
     myPermissions == null || myPermissions.contains(permission);
 
 /// Số liệu nhanh (đơn đang chuẩn bị, thu nhập/số đơn hôm nay) cho màn Trang chủ.
-final merchantTodayStatsProvider = FutureProvider.autoDispose<MerchantTodayStats?>((ref) async {
-  final merchant = await ref.watch(myMerchantProvider.future);
-  if (merchant == null) return null;
-  return _merchantRepo.todayStats(merchant.id);
-});
+final merchantTodayStatsProvider =
+    FutureProvider.autoDispose<MerchantTodayStats?>((ref) async {
+      final merchant = await ref.watch(myMerchantProvider.future);
+      if (merchant == null) return null;
+      return _merchantRepo.todayStats(merchant.id);
+    });
 
 /// Tóm tắt tài chính theo period ('today'/'yesterday'/'week') — dùng cho card "Thu nhập hôm
 /// nay" ở Trang chủ (luôn gọi với 'today') và tab Tóm tắt ở màn Tài chính.
@@ -88,3 +89,12 @@ final financeSummaryProvider = FutureProvider.autoDispose
       if (merchant == null) return null;
       return _merchantRepo.financeSummary(merchant.id, period: period);
     });
+
+/// Số dư ví thật (tab "Số tiền thu về" ở màn Tài chính) — null nếu chưa có cửa hàng.
+final merchantWalletBalanceProvider = FutureProvider.autoDispose<int?>((
+  ref,
+) async {
+  final merchant = await ref.watch(myMerchantProvider.future);
+  if (merchant == null) return null;
+  return _merchantRepo.walletBalance(merchant.id);
+});
