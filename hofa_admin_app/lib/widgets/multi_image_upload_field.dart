@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../core/cloudinary_uploader.dart';
+import 'full_screen_gallery_viewer.dart';
 
 /// Ô chọn + upload NHIỀU ảnh lên Cloudinary (vd giấy tờ pháp lý). [onChanged] được gọi
 /// với danh sách URL đầy đủ mỗi khi thêm/xoá 1 ảnh.
@@ -69,7 +70,14 @@ class _MultiImageUploadFieldState extends State<MultiImageUploadField> {
                 children: [
                   ClipRRect(
                     borderRadius: BorderRadius.circular(12),
-                    child: Image.network(url, width: 100, height: 100, fit: BoxFit.cover),
+                    child: InkWell(
+                      onTap: () => FullScreenGalleryViewer.open(
+                        context,
+                        images: _urls,
+                        initialIndex: _urls.indexOf(url),
+                      ),
+                      child: Image.network(url, width: 100, height: 100, fit: BoxFit.cover),
+                    ),
                   ),
                   Positioned(
                     top: 2,

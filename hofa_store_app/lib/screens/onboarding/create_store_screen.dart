@@ -7,6 +7,7 @@ import '../../providers/auth_provider.dart';
 import '../../repositories/merchant_repository.dart';
 import '../../repositories/user_repository.dart';
 import '../../widgets/image_upload_field.dart';
+import '../../widgets/multi_image_upload_field.dart';
 import '../location/location_picker_screen.dart';
 
 class CreateStoreScreen extends ConsumerStatefulWidget {
@@ -31,6 +32,7 @@ class _CreateStoreScreenState extends ConsumerState<CreateStoreScreen> {
   bool _loading = false;
   String? _error;
   String? _logoUrl;
+  List<String> _photoUrls = [];
   double? _pickedLat;
   double? _pickedLng;
   bool _prefilled = false;
@@ -105,6 +107,7 @@ class _CreateStoreScreenState extends ConsumerState<CreateStoreScreen> {
         slug: slug,
         phone: _phoneCtrl.text.trim(),
         logoUrl: _logoUrl,
+        photoUrls: _photoUrls,
       );
       await _merchantRepo.createBranch(
         merchantId: merchant.id,
@@ -215,6 +218,13 @@ class _CreateStoreScreenState extends ConsumerState<CreateStoreScreen> {
                         label: 'Ảnh cửa hàng (bắt buộc)',
                         folder: 'merchants',
                         onChanged: (url) => setState(() => _logoUrl = url),
+                      ),
+                      const SizedBox(height: 16),
+                      MultiImageUploadField(
+                        label: 'Ảnh khác của cửa hàng (không bắt buộc)',
+                        folder: 'merchants',
+                        onChanged: (urls) =>
+                            setState(() => _photoUrls = urls),
                       ),
                       const SizedBox(height: 24),
                       Text(

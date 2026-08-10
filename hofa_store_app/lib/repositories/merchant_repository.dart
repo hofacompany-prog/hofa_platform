@@ -22,12 +22,14 @@ class MerchantRepository {
     required String slug,
     String? phone,
     String? logoUrl,
+    List<String> photoUrls = const [],
   }) async =>
       Merchant.fromJson(await _api.post('/merchants', body: {
         'name': name,
         'slug': slug,
         if (phone != null && phone.isNotEmpty) 'phone': phone,
         if (logoUrl != null) 'logo_url': logoUrl,
+        if (photoUrls.isNotEmpty) 'photo_urls': photoUrls,
       }) as Map<String, dynamic>);
 
   Future<Merchant> updateMerchant(String id, Map<String, dynamic> data) async =>

@@ -7,6 +7,7 @@ class Merchant {
   final String status;
   final String? logoUrl;
   final String? coverUrl;
+  final List<String> photoUrls;
   final String? phone;
   final int minOrderAmount;
   final int avgPrepMinutes;
@@ -30,6 +31,7 @@ class Merchant {
     required this.status,
     this.logoUrl,
     this.coverUrl,
+    this.photoUrls = const [],
     this.phone,
     required this.minOrderAmount,
     required this.avgPrepMinutes,
@@ -52,6 +54,10 @@ class Merchant {
         status: json['status'] as String? ?? 'active',
         logoUrl: json['logo_url'] as String?,
         coverUrl: json['cover_url'] as String?,
+        photoUrls: (json['photo_urls'] as List?)
+                ?.map((e) => e.toString())
+                .toList() ??
+            const [],
         phone: json['phone'] as String?,
         minOrderAmount: (json['min_order_amount'] as num?)?.toInt() ?? 0,
         avgPrepMinutes: (json['avg_prep_minutes'] as num?)?.toInt() ?? 15,

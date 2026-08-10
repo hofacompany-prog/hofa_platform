@@ -5,6 +5,7 @@ import '../../core/format.dart';
 import '../../models/merchant.dart';
 import '../../models/branch_hours.dart';
 import '../../providers/admin_providers.dart';
+import '../../widgets/full_screen_gallery_viewer.dart';
 import '../../widgets/image_upload_field.dart';
 import '../../widgets/multi_image_upload_field.dart';
 import 'merchant_devices_card.dart';
@@ -63,6 +64,7 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
     var logoUrl = m.logoUrl;
     var coverUrl = m.coverUrl;
     var legalDocUrls = List.of(m.legalDocUrls);
+    var photoUrls = List.of(m.photoUrls);
 
     final ok = await showDialog<bool>(
       context: context,
@@ -92,6 +94,13 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
                         onChanged: (url) => coverUrl = url,
                       ),
                     ],
+                  ),
+                  const SizedBox(height: 16),
+                  MultiImageUploadField(
+                    label: 'Ảnh khác của cửa hàng',
+                    folder: 'merchants',
+                    initialUrls: photoUrls,
+                    onChanged: (urls) => photoUrls = urls,
                   ),
                   const SizedBox(height: 16),
                   TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Tên cửa hàng')),
@@ -204,6 +213,7 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
           if (logoUrl != null) 'logo_url': logoUrl,
           if (coverUrl != null) 'cover_url': coverUrl,
           'legal_doc_urls': legalDocUrls,
+          'photo_urls': photoUrls,
           'phone': phoneCtrl.text.trim(),
           'email': emailCtrl.text.trim().isEmpty ? null : emailCtrl.text.trim(),
           'commission_rate': num.tryParse(commissionCtrl.text.trim()) ?? m.commissionRate,
@@ -499,6 +509,10 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
                                   backgroundImage: m.logoUrl != null ? NetworkImage(m.logoUrl!) : null,
                                   child: m.logoUrl == null ? Icon(Icons.storefront, color: theme.colorScheme.primary) : null,
                                 ),
+                                if (m.photoUrls.isNotEmpty) ...[
+                                  const SizedBox(width: 8),
+                                  _MerchantPhotoStrip(photoUrls: m.photoUrls),
+                                ],
                                 const SizedBox(width: 16),
                                 Expanded(
                                   child: Column(
@@ -722,6 +736,70 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+/// Dải ảnh nhỏ cạnh logo cửa hàng — tối đa 3 ảnh, ảnh cuối đè số "+N" nếu còn ảnh chưa hiện.
+/// Bấm ảnh nào mở xem full màn hình bắt đầu đúng ảnh đó, vuốt được sang các ảnh còn lại.
+class _MerchantPhotoStrip extends StatelessWidget {
+  final List<String> photoUrls;
+  const _MerchantPhotoStrip({required this.photoUrls});
+
+  @override
+  Widget build(BuildContext context) {
+    final shown = photoUrls.take(3).toList();
+    final remaining = photoUrls.length - shown.length;
+    return SizedBox(
+      width: 56,
+      height: 56,
+      child: Wrap(
+        spacing: 4,
+        runSpacing: 4,
+        children: [
+          for (var i = 0; i < shown.length; i++)
+            InkWell(
+              borderRadius: BorderRadius.circular(6),
+              onTap: () => FullScreenGalleryViewer.open(
+                context,
+                images: photoUrls,
+                initialIndex: i,
+              ),
+              child: Stack(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: Image.network(
+                      shown[i],
+                      width: 26,
+                      height: 26,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                  if (i == shown.length - 1 && remaining > 0)
+                    Positioned.fill(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: Colors.black45,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Center(
+                          child: Text(
+                            '+$remaining',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+        ],
       ),
     );
   }

@@ -6,8 +6,73 @@ import '../../models/product.dart';
 import '../../providers/app_providers.dart';
 import '../../widgets/buy_on_behalf_badge.dart';
 import '../../widgets/buy_on_behalf_fee_notice.dart';
+import '../../widgets/full_screen_gallery_viewer.dart';
 import '../../widgets/network_image_box.dart';
 import '../../widgets/product_card.dart';
+
+/// Dải ảnh nhỏ cạnh logo cửa hàng — tối đa 3 ảnh, ảnh cuối đè số "+N" nếu còn ảnh chưa hiện.
+/// Bấm ảnh nào mở xem full màn hình bắt đầu đúng ảnh đó, vuốt được sang các ảnh còn lại.
+class _MerchantPhotoStrip extends StatelessWidget {
+  final List<String> photoUrls;
+  const _MerchantPhotoStrip({required this.photoUrls});
+
+  @override
+  Widget build(BuildContext context) {
+    final shown = photoUrls.take(3).toList();
+    final remaining = photoUrls.length - shown.length;
+    return SizedBox(
+      width: 72,
+      height: 72,
+      child: Wrap(
+        spacing: 4,
+        runSpacing: 4,
+        children: [
+          for (var i = 0; i < shown.length; i++)
+            InkWell(
+              borderRadius: BorderRadius.circular(6),
+              onTap: () => FullScreenGalleryViewer.open(
+                context,
+                images: photoUrls,
+                initialIndex: i,
+              ),
+              child: Stack(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: Image.network(
+                      shown[i],
+                      width: 34,
+                      height: 34,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                  if (i == shown.length - 1 && remaining > 0)
+                    Positioned.fill(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: Colors.black45,
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Center(
+                          child: Text(
+                            '+$remaining',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
 
 class MerchantDetailScreen extends ConsumerStatefulWidget {
   final String merchantId;
@@ -65,6 +130,10 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   NetworkImageBox(url: merchant.logoUrl, width: 72, height: 72, fallbackIcon: Icons.storefront_outlined),
+                  if (merchant.photoUrls.isNotEmpty) ...[
+                    const SizedBox(width: 8),
+                    _MerchantPhotoStrip(photoUrls: merchant.photoUrls),
+                  ],
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(

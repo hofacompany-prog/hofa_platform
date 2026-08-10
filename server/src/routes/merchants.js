@@ -8,7 +8,7 @@ const push = require('../push');
 
 const MERCHANT_FIELDS = [
   'name', 'slug', 'description', 'merchant_type', 'logo_url', 'cover_url', 'phone', 'email',
-  'business_license_no', 'tax_code', 'legal_doc_urls',
+  'business_license_no', 'tax_code', 'legal_doc_urls', 'photo_urls',
   'bank_name', 'bank_account_no', 'bank_account_name',
   'commission_rate', 'min_order_amount', 'avg_prep_minutes',
   'buy_on_behalf_fee_basis', 'max_devices', 'vat_rate', 'pit_rate'

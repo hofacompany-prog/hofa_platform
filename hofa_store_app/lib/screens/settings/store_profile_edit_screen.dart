@@ -34,6 +34,7 @@ class _StoreProfileEditScreenState extends ConsumerState<StoreProfileEditScreen>
   late String? _logoUrl = widget.merchant.logoUrl;
   late String? _coverUrl = widget.merchant.coverUrl;
   late List<String> _legalDocUrls = List.of(widget.merchant.legalDocUrls);
+  late List<String> _photoUrls = List.of(widget.merchant.photoUrls);
 
   bool _loading = false;
   String? _error;
@@ -64,6 +65,7 @@ class _StoreProfileEditScreenState extends ConsumerState<StoreProfileEditScreen>
         if (_logoUrl != null) 'logo_url': _logoUrl,
         if (_coverUrl != null) 'cover_url': _coverUrl,
         'legal_doc_urls': _legalDocUrls,
+        'photo_urls': _photoUrls,
         'min_order_amount': int.tryParse(_minOrderCtrl.text.trim()) ?? widget.merchant.minOrderAmount,
         'avg_prep_minutes': int.tryParse(_prepCtrl.text.trim()) ?? widget.merchant.avgPrepMinutes,
         'bank_name': _bankNameCtrl.text.trim().isEmpty ? null : _bankNameCtrl.text.trim(),
@@ -113,6 +115,13 @@ class _StoreProfileEditScreenState extends ConsumerState<StoreProfileEditScreen>
                       onChanged: (url) => _coverUrl = url,
                     ),
                   ],
+                ),
+                const SizedBox(height: 16),
+                MultiImageUploadField(
+                  label: 'Ảnh khác của cửa hàng (không bắt buộc)',
+                  folder: 'merchants',
+                  initialUrls: _photoUrls,
+                  onChanged: (urls) => _photoUrls = urls,
                 ),
                 const SizedBox(height: 24),
                 TextField(

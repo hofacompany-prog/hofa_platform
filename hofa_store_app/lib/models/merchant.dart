@@ -18,6 +18,8 @@ class Merchant {
   final String? businessLicenseNo;
   final String? taxCode;
   final List<String> legalDocUrls;
+  /// Ảnh cửa hàng (không phải logo/bìa/giấy tờ) — hiện cạnh logo ở màn chi tiết cửa hàng.
+  final List<String> photoUrls;
   final String? bankName;
   final String? bankAccountNo;
   final String? bankAccountName;
@@ -45,6 +47,7 @@ class Merchant {
     this.businessLicenseNo,
     this.taxCode,
     this.legalDocUrls = const [],
+    this.photoUrls = const [],
     this.bankName,
     this.bankAccountNo,
     this.bankAccountName,
@@ -71,6 +74,7 @@ class Merchant {
         businessLicenseNo: json['business_license_no'] as String?,
         taxCode: json['tax_code'] as String?,
         legalDocUrls: _parseUrlList(json['legal_doc_urls']),
+        photoUrls: _parseUrlList(json['photo_urls']),
         bankName: json['bank_name'] as String?,
         bankAccountNo: json['bank_account_no'] as String?,
         bankAccountName: json['bank_account_name'] as String?,
