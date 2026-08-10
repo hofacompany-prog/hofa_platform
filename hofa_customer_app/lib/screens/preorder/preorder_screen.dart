@@ -47,6 +47,9 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
   late final TabController _tabController;
   int? _selectedViewDay;
   int _weekOffset = 0;
+  // Cột "Ngày giao" bên phải mặc định thu gọn về sát mép phải — bấm mũi tên mới hiện ra, để
+  // danh sách sản phẩm chiếm hết chiều rộng khi chưa cần xem/chọn lịch ngày.
+  bool _dayPickerExpanded = false;
   String _mode = 'once';
   int _weeks = 1;
   TimeOfDay _time = const TimeOfDay(hour: 8, minute: 0);
@@ -883,6 +886,39 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
     );
   }
 
+  /// Dải hẹp sát mép phải thay cho cột "Ngày giao" lúc đang thu gọn — bấm mũi tên mới mở
+  /// ra (xem _dayPickerExpanded), nhường hết chiều rộng còn lại cho danh sách sản phẩm.
+  Widget _dayPickerCollapsedTab() {
+    final theme = Theme.of(context);
+    return Container(
+      width: 40,
+      decoration: BoxDecoration(
+        border: Border(left: BorderSide(color: theme.dividerColor)),
+      ),
+      child: Column(
+        children: [
+          const SizedBox(height: 4),
+          IconButton(
+            icon: const Icon(Icons.chevron_left),
+            tooltip: 'Xem lịch ngày giao',
+            onPressed: () => setState(() => _dayPickerExpanded = true),
+          ),
+          Expanded(
+            child: RotatedBox(
+              quarterTurns: 3,
+              child: Text(
+                'Ngày giao',
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: theme.colorScheme.outline,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _dayPicker(BuildContext context, List<CartItem> items) {
     final theme = Theme.of(context);
     final viewDay = _selectedViewDay;
@@ -1398,8 +1434,27 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
                             .toList(),
                       ),
                     ),
-                    const VerticalDivider(width: 1),
-                    Expanded(child: _dayPicker(context, items)),
+                    if (_dayPickerExpanded) ...[
+                      const VerticalDivider(width: 1),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: IconButton(
+                                icon: const Icon(Icons.chevron_right),
+                                tooltip: 'Thu gọn lịch ngày',
+                                onPressed: () =>
+                                    setState(() => _dayPickerExpanded = false),
+                              ),
+                            ),
+                            Expanded(child: _dayPicker(context, items)),
+                          ],
+                        ),
+                      ),
+                    ] else
+                      _dayPickerCollapsedTab(),
                   ],
                 ),
         ),
