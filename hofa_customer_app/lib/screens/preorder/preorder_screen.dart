@@ -819,32 +819,41 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
                     ],
                   ),
                 ),
-                IconButton(
-                  visualDensity: VisualDensity.compact,
-                  icon: const Icon(Icons.delete_outline, size: 20),
-                  onPressed: () async {
-                    if (!await _confirmDeleteItem(item)) return;
-                    ref.read(cartProvider.notifier).removeItem(item.lineId);
-                  },
+                // Nút xoá + "Sửa topping" gộp chung 1 cột bên phải, không còn hàng riêng
+                // ngang hết bề rộng thẻ nữa — thẻ thấp hơn hẳn khi có topping.
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      icon: const Icon(Icons.delete_outline, size: 20),
+                      onPressed: () async {
+                        if (!await _confirmDeleteItem(item)) return;
+                        ref.read(cartProvider.notifier).removeItem(item.lineId);
+                      },
+                    ),
+                    if (hasToppings)
+                      TextButton.icon(
+                        style: TextButton.styleFrom(
+                          padding: EdgeInsets.zero,
+                          visualDensity: VisualDensity.compact,
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        onPressed: () => _editToppings(item),
+                        icon: const Icon(Icons.tune, size: 14),
+                        label: Text(
+                          item.toppings.isEmpty
+                              ? 'Chọn topping'
+                              : 'Sửa topping',
+                          style: theme.textTheme.bodySmall,
+                        ),
+                      ),
+                  ],
                 ),
               ],
             ),
-            if (hasToppings)
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton.icon(
-                  style: TextButton.styleFrom(
-                    padding: EdgeInsets.zero,
-                    visualDensity: VisualDensity.compact,
-                  ),
-                  onPressed: () => _editToppings(item),
-                  icon: const Icon(Icons.tune, size: 16),
-                  label: Text(
-                    item.toppings.isEmpty ? 'Chọn topping' : 'Sửa topping',
-                  ),
-                ),
-              ),
-            const Divider(height: 20),
+            const Divider(height: 12),
             Row(
               children: [
                 const Text('Số lượng'),
@@ -863,7 +872,7 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
               ],
             ),
             if (showSchedule) ...[
-              const SizedBox(height: 4),
+              const SizedBox(height: 2),
               InkWell(
                 onTap: () => _editScheduleDialog(item, allItems: allItems),
                 child: Text(
