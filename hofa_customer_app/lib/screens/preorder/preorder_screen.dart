@@ -1113,7 +1113,18 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
                                   style: const TextStyle(
                                     fontWeight: FontWeight.w500,
                                   ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
+                                if (i.toppings.isNotEmpty)
+                                  Text(
+                                    i.toppings.map((t) => t.name).join(', '),
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color: theme.colorScheme.secondary,
+                                    ),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                                 Builder(
                                   builder: (context) {
                                     final price = priceFor(i);
