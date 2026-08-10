@@ -193,14 +193,21 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
   /// sỉ (gộp mọi món trong [allItems]) — đúng như resolve_variant_price() phía backend.
   /// Trả về null nếu món này không thuộc tab Giá sỉ hoặc biến thể không có bậc giá sỉ nào.
   int? _bestWholesalePrice(CartItem item, List<CartItem> allItems) {
-    if (item.orderKind != 'wholesale') return null;
     final tiers =
-        ref
-            .watch(wholesaleTiersProvider(item.variantId))
-            .valueOrNull
-            ?.where((t) => t.minDaysPerWeek == 0)
-            .toList() ??
+        ref.watch(wholesaleTiersProvider(item.variantId)).valueOrNull ??
         const <WholesaleTier>[];
+    return _bestWholesalePriceFor(item, allItems, tiers);
+  }
+
+  /// Bản thuần (không gọi ref.watch) của [_bestWholesalePrice] — dùng được ngoài build(),
+  /// vd trong changeQuantity() để so giá TRƯỚC/SAU khi đổi số lượng (xem _showTierReachedDialog).
+  int? _bestWholesalePriceFor(
+    CartItem item,
+    List<CartItem> allItems,
+    List<WholesaleTier> allTiers,
+  ) {
+    if (item.orderKind != 'wholesale') return null;
+    final tiers = allTiers.where((t) => t.minDaysPerWeek == 0).toList();
     if (tiers.isEmpty) return null;
     final orderQty = allItems.fold<int>(0, (sum, i) => sum + i.quantity);
     return _matchedTierPrice(item.quantity, orderQty, 0, item.basePrice, tiers);
@@ -214,16 +221,23 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
   /// Trả về null nếu món này không thuộc tab Đặt trước hoặc biến thể không có bậc đặt
   /// trước nào (khi đó dùng giá gốc/giá sỉ như bình thường).
   int? _bestPreorderPrice(CartItem item, List<CartItem> allItems) {
+    final tiers =
+        ref.watch(wholesaleTiersProvider(item.variantId)).valueOrNull ??
+        const <WholesaleTier>[];
+    return _bestPreorderPriceFor(item, allItems, tiers);
+  }
+
+  /// Bản thuần (không gọi ref.watch) của [_bestPreorderPrice] — dùng được ngoài build(),
+  /// vd trong changeQuantity() để so giá TRƯỚC/SAU khi đổi số lượng (xem _showTierReachedDialog).
+  int? _bestPreorderPriceFor(
+    CartItem item,
+    List<CartItem> allItems,
+    List<WholesaleTier> allTiers,
+  ) {
     if (item.orderKind != 'preorder' || item.deliverySlots.isEmpty) {
       return null;
     }
-    final preorderTiers =
-        ref
-            .watch(wholesaleTiersProvider(item.variantId))
-            .valueOrNull
-            ?.where((t) => t.minDaysPerWeek > 0)
-            .toList() ??
-        const <WholesaleTier>[];
+    final preorderTiers = allTiers.where((t) => t.minDaysPerWeek > 0).toList();
     if (preorderTiers.isEmpty) return null;
     var bestOrderQty = 0;
     for (final weekday in item.deliverySlots.map((s) => s.weekday).toSet()) {
@@ -328,6 +342,52 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
       ),
     );
     return confirm == true;
+  }
+
+  /// Báo khi đổi số lượng làm giá 1 món trong giỏ ĐẶT TRƯỚC đạt bậc rẻ hơn (tab Giá sỉ lẫn
+  /// tab Đặt trước đều gọi, xem changeQuantity() trong _itemCard) — không cần biết đạt qua
+  /// điều kiện số lượng hay số ngày/tuần, chỉ cần giá giảm là báo.
+  Future<void> _showTierReachedDialog(CartItem item, int newPrice) {
+    final theme = Theme.of(context);
+    return showDialog<void>(
+      context: context,
+      // Cố ý không cho bấm ra ngoài để đóng — tránh khách bấm liên tục theo phản xạ mà
+      // không kịp đọc thông báo, phải bấm hẳn "Đã hiểu" mới đóng được.
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('🎉 Đã đạt bậc giá sỉ!'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(item.productName, style: theme.textTheme.titleMedium),
+            const SizedBox(height: 8),
+            Text.rich(
+              TextSpan(
+                style: theme.textTheme.bodyMedium,
+                children: [
+                  const TextSpan(text: 'Giá hiện tại: '),
+                  TextSpan(
+                    text: formatVnd(newPrice),
+                    style: TextStyle(
+                      color: theme.colorScheme.primary,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  TextSpan(text: ' / ${item.unit}'),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Đã hiểu'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _editToppings(CartItem item) async {
@@ -593,7 +653,41 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
         0,
         (sum, i) => sum + (i.lineId == item.lineId ? quantity : i.quantity),
       );
-      ref
+      // So giá TRƯỚC/SAU khi đổi số lượng để báo popup nếu đạt bậc rẻ hơn — đọc tiers bằng
+      // ref.read (không phải ref.watch) vì đang ở trong callback, không phải lúc build. Tính
+      // cho cả bậc giá sỉ lẫn bậc đặt trước (_bestWholesalePriceFor/_bestPreorderPriceFor tự
+      // biết áp dụng đúng loại theo item.orderKind), không cần biết khách đạt qua điều kiện
+      // số lượng hay số ngày/tuần.
+      int? oldPrice;
+      int? newPrice;
+      if (quantity > 0) {
+        final allTiers =
+            ref.read(wholesaleTiersProvider(item.variantId)).valueOrNull ??
+            const <WholesaleTier>[];
+        if (allTiers.isNotEmpty) {
+          final hypotheticalItem = item.copyWith(quantity: quantity);
+          final hypotheticalAllItems = allItems
+              .map((i) => i.lineId == item.lineId ? hypotheticalItem : i)
+              .toList();
+          oldPrice =
+              _bestPreorderPriceFor(item, allItems, allTiers) ??
+              _bestWholesalePriceFor(item, allItems, allTiers) ??
+              item.unitPrice;
+          newPrice =
+              _bestPreorderPriceFor(
+                hypotheticalItem,
+                hypotheticalAllItems,
+                allTiers,
+              ) ??
+              _bestWholesalePriceFor(
+                hypotheticalItem,
+                hypotheticalAllItems,
+                allTiers,
+              ) ??
+              item.basePrice;
+        }
+      }
+      await ref
           .read(cartProvider.notifier)
           .updateQuantity(
             item.lineId,
@@ -610,6 +704,9 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
                     wholesaleTiers,
                   ),
           );
+      if (oldPrice != null && newPrice != null && newPrice < oldPrice) {
+        await _showTierReachedDialog(item, newPrice);
+      }
     }
 
     final preorderPrice = _bestPreorderPrice(item, allItems);
