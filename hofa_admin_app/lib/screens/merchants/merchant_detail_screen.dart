@@ -749,7 +749,7 @@ class _MerchantPhotoStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final shown = photoUrls.take(2).toList();
+    final shown = photoUrls.take(1).toList();
     final hasMore = photoUrls.length > shown.length;
     return SizedBox(
       width: 56,
