@@ -5,7 +5,7 @@ const { ApiError } = require('../errors');
 const { pickFields, requireFields, pagination, requireRole, requireMerchantAccess } = require('../utils');
 
 const PRODUCT_FIELDS = [
-  'name', 'slug', 'description', 'sales_model', 'status', 'brand', 'unit',
+  'name', 'slug', 'description', 'sales_model', 'status', 'brand', 'unit', 'variant_group_name',
   'images', 'video_url', 'tags', 'is_featured', 'merchant_category_id'
 ];
 const MERCHANT_CATEGORY_FIELDS = ['category_id', 'name', 'sort_order', 'is_active'];

@@ -88,9 +88,11 @@ class ProductRepository {
     required String name,
     String? description,
     required String unit,
+    String? variantGroupName,
     required String salesModel,
     required String status,
     required String imageUrl,
+    required String defaultVariantName,
     required int price,
     int? comparePrice,
     int? costPrice,
@@ -110,6 +112,8 @@ class ProductRepository {
             if (description != null && description.isNotEmpty)
               'description': description,
             'unit': unit,
+            if (variantGroupName != null && variantGroupName.isNotEmpty)
+              'variant_group_name': variantGroupName,
             'sales_model': salesModel,
             'status': status,
             'images': [imageUrl],
@@ -117,7 +121,7 @@ class ProductRepository {
               'topping_group_ids': toppingGroupIds,
             'variants': [
               {
-                'name': unit,
+                'name': defaultVariantName,
                 'price': price,
                 if (comparePrice != null) 'compare_price': comparePrice,
                 if (costPrice != null) 'cost_price': costPrice,

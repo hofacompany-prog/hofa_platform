@@ -35,6 +35,8 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   final _nameCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
   final _unitCtrl = TextEditingController(text: 'cái');
+  final _variantGroupNameCtrl = TextEditingController();
+  final _defaultVariantNameCtrl = TextEditingController();
   final _priceCtrl = TextEditingController();
   final _stockCtrl = TextEditingController();
   String _salesModel = 'instant';
@@ -44,6 +46,9 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   Product? _product;
   Branch? _branch;
   Map<String, int> _stockByVariant = {};
+  // Tồn kho ban đầu cho biến thể THÊM lúc tạo mới (chưa có id thật) — khoá theo id tạm
+  // trong _pendingVariants, áp dụng sau khi sản phẩm + biến thể được tạo xong (xem _submit).
+  Map<String, int> _stockByPendingVariant = {};
   // Nhóm topping giờ là thư viện dùng chung của cửa hàng (xem topping_group_form_screen.dart)
   // — form sản phẩm chỉ chọn nhóm nào gắn vào sản phẩm này, không tự tạo/sửa nhóm ở đây.
   List<ToppingGroup> _availableToppingGroups = [];
@@ -90,6 +95,8 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     _nameCtrl.dispose();
     _descCtrl.dispose();
     _unitCtrl.dispose();
+    _variantGroupNameCtrl.dispose();
+    _defaultVariantNameCtrl.dispose();
     _priceCtrl.dispose();
     _stockCtrl.dispose();
     super.dispose();
@@ -135,6 +142,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
         _nameCtrl.text = p.name;
         _descCtrl.text = p.description ?? '';
         _unitCtrl.text = p.unit;
+        _variantGroupNameCtrl.text = p.variantGroupName ?? '';
         _salesModel = p.salesModel;
         _status = p.status;
         _imageUrl = p.images.isNotEmpty ? p.images.first : null;
@@ -726,6 +734,8 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
       _nameCtrl.text = c.name;
       _descCtrl.text = c.description ?? '';
       _unitCtrl.text = c.unit;
+      _variantGroupNameCtrl.text = c.variantGroupName ?? '';
+      _defaultVariantNameCtrl.text = c.defaultVariantName;
       _priceCtrl.text = c.price.toString();
       _salesModel = c.salesModel;
       _status = c.status;
@@ -763,6 +773,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
           'name': _nameCtrl.text.trim(),
           'description': _descCtrl.text.trim(),
           'unit': _unitCtrl.text.trim(),
+          'variant_group_name': _variantGroupNameCtrl.text.trim(),
           'sales_model': _salesModel,
           'status': _status,
           'images': [_imageUrl],
@@ -787,9 +798,11 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
           name: _nameCtrl.text.trim(),
           description: _descCtrl.text.trim(),
           unit: _unitCtrl.text.trim(),
+          variantGroupName: _variantGroupNameCtrl.text.trim(),
           salesModel: _salesModel,
           status: _status,
           imageUrl: _imageUrl!,
+          defaultVariantName: _defaultVariantNameCtrl.text.trim(),
           price: int.parse(_priceCtrl.text.trim()),
           toppingGroupIds: _selectedToppingGroupIds,
           wholesaleTiers: _tiersByVariant['default'] ?? [],
@@ -814,6 +827,26 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
             // chủ cửa hàng vẫn có thể nhập lại ở màn "Biến thể & giá" hoặc "Kho hàng"
           }
         }
+        // Biến thể thêm (extraVariants) — server tạo theo đúng thứ tự gửi lên nên
+        // created.variants[i + 1] khớp với _pendingVariants[i] (index 0 là biến thể mặc định).
+        if (_branch != null) {
+          for (var i = 0; i < _pendingVariants.length; i++) {
+            final pendingStock = _stockByPendingVariant[_pendingVariants[i].id];
+            if (pendingStock == null || pendingStock <= 0) continue;
+            if (created.variants.length <= i + 1) continue;
+            try {
+              await _inventoryRepo.adjust(
+                branchId: _branch!.id,
+                variantId: created.variants[i + 1].id,
+                moveType: 'purchase_in',
+                quantity: pendingStock,
+                note: 'Tồn kho ban đầu khi tạo sản phẩm',
+              );
+            } catch (_) {
+              // như trên — không chặn điều hướng vì sản phẩm/biến thể đã tạo xong
+            }
+          }
+        }
         if (mounted) context.pushReplacement('/products/${created.id}/edit');
       }
     } catch (e) {
@@ -825,18 +858,13 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
 
   Future<void> _variantDialog({ProductVariant? existing}) async {
     final nameCtrl = TextEditingController(text: existing?.name ?? '');
-    final skuCtrl = TextEditingController(text: existing?.sku ?? '');
     final priceCtrl = TextEditingController(
       text: existing?.price.toString() ?? '',
     );
-    final comparePriceCtrl = TextEditingController(
-      text: existing?.comparePrice?.toString() ?? '',
-    );
-    final costPriceCtrl = TextEditingController(
-      text: existing?.costPrice?.toString() ?? '',
-    );
     final currentStock = existing != null
-        ? (_stockByVariant[existing.id] ?? 0)
+        ? (_isEdit
+              ? (_stockByVariant[existing.id] ?? 0)
+              : (_stockByPendingVariant[existing.id] ?? 0))
         : 0;
     final stockCtrl = TextEditingController(
       text: existing != null ? currentStock.toString() : '',
@@ -864,14 +892,6 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                   ),
                   const SizedBox(height: 12),
                   TextField(
-                    controller: skuCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Mã SKU (không bắt buộc)',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
                     controller: priceCtrl,
                     decoration: const InputDecoration(
                       labelText: 'Giá bán (VNĐ)',
@@ -879,30 +899,12 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                     ),
                     keyboardType: TextInputType.number,
                   ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: comparePriceCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Giá gốc / gạch ngang (không bắt buộc)',
-                      border: OutlineInputBorder(),
-                    ),
-                    keyboardType: TextInputType.number,
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: costPriceCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Giá nhập (không bắt buộc)',
-                      border: OutlineInputBorder(),
-                    ),
-                    keyboardType: TextInputType.number,
-                  ),
-                  if (_branch != null && _isEdit) ...[
+                  if (_branch != null) ...[
                     const SizedBox(height: 12),
                     TextField(
                       controller: stockCtrl,
                       decoration: InputDecoration(
-                        labelText: existing == null
+                        labelText: existing == null || !_isEdit
                             ? 'Tồn kho ban đầu (không bắt buộc)'
                             : 'Tồn kho hiện tại',
                         border: const OutlineInputBorder(),
@@ -954,21 +956,18 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     // phẩm" (xem _submit). Đây luôn là biến thể THÊM (biến thể mặc định lấy từ khung
     // "Giá bán" phía trên).
     if (!_isEdit) {
-      final comparePrice = int.tryParse(comparePriceCtrl.text.trim());
-      final costPrice = int.tryParse(costPriceCtrl.text.trim());
-      final sku = skuCtrl.text.trim().isEmpty ? null : skuCtrl.text.trim();
+      final stock = int.tryParse(stockCtrl.text.trim());
+      final variantId =
+          existing?.id ?? 'local-${DateTime.now().microsecondsSinceEpoch}';
       setState(() {
         if (existing == null) {
           _pendingVariants = [
             ..._pendingVariants,
             ProductVariant(
-              id: 'local-${DateTime.now().microsecondsSinceEpoch}',
+              id: variantId,
               productId: '',
-              sku: sku,
               name: nameCtrl.text.trim(),
               price: price,
-              comparePrice: comparePrice,
-              costPrice: costPrice,
               isDefault: false,
               isActive: true,
             ),
@@ -980,17 +979,23 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                     ? ProductVariant(
                         id: v.id,
                         productId: v.productId,
-                        sku: sku,
                         name: nameCtrl.text.trim(),
                         price: price,
-                        comparePrice: comparePrice,
-                        costPrice: costPrice,
                         isDefault: v.isDefault,
                         isActive: v.isActive,
                       )
                     : v,
               )
               .toList();
+        }
+        if (stock != null && stock > 0) {
+          _stockByPendingVariant = {
+            ..._stockByPendingVariant,
+            variantId: stock,
+          };
+        } else {
+          _stockByPendingVariant = {..._stockByPendingVariant}
+            ..remove(variantId);
         }
       });
       return;
@@ -1001,10 +1006,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
         final created = await _repo.createVariant(
           productId: widget.productId!,
           name: nameCtrl.text.trim(),
-          sku: skuCtrl.text.trim(),
           price: price,
-          comparePrice: int.tryParse(comparePriceCtrl.text.trim()),
-          costPrice: int.tryParse(costPriceCtrl.text.trim()),
           isDefault: _product?.variants.isEmpty ?? true,
         );
         final stock = int.tryParse(stockCtrl.text.trim());
@@ -1020,10 +1022,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
       } else {
         await _repo.updateVariant(existing.id, {
           'name': nameCtrl.text.trim(),
-          'sku': skuCtrl.text.trim().isEmpty ? null : skuCtrl.text.trim(),
           'price': price,
-          'compare_price': int.tryParse(comparePriceCtrl.text.trim()),
-          'cost_price': int.tryParse(costPriceCtrl.text.trim()),
           'is_active': isActive,
           'is_default': isDefault,
         });
@@ -1051,11 +1050,12 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
 
   Future<void> _deleteVariant(String id) async {
     if (!_isEdit) {
-      setState(
-        () => _pendingVariants = _pendingVariants
+      setState(() {
+        _pendingVariants = _pendingVariants
             .where((v) => v.id != id)
-            .toList(),
-      );
+            .toList();
+        _stockByPendingVariant = {..._stockByPendingVariant}..remove(id);
+      });
       return;
     }
     try {
@@ -1127,44 +1127,28 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                           onChanged: (url) => setState(() => _imageUrl = url),
                         ),
                         const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: TextFormField(
-                                controller: _unitCtrl,
-                                decoration: const InputDecoration(
-                                  labelText: 'Đơn vị (kg, bó, hộp...)',
-                                  border: OutlineInputBorder(),
-                                ),
-                              ),
+                        DropdownButtonFormField<String>(
+                          initialValue: _salesModel,
+                          decoration: const InputDecoration(
+                            labelText: 'Hình thức bán',
+                            border: OutlineInputBorder(),
+                          ),
+                          items: const [
+                            DropdownMenuItem(
+                              value: 'instant',
+                              child: Text('Giao ngay'),
                             ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: DropdownButtonFormField<String>(
-                                initialValue: _salesModel,
-                                decoration: const InputDecoration(
-                                  labelText: 'Hình thức bán',
-                                  border: OutlineInputBorder(),
-                                ),
-                                items: const [
-                                  DropdownMenuItem(
-                                    value: 'instant',
-                                    child: Text('Giao ngay'),
-                                  ),
-                                  DropdownMenuItem(
-                                    value: 'scheduled',
-                                    child: Text('Đặt trước / bán sỉ'),
-                                  ),
-                                ],
-                                onChanged: (v) {
-                                  setState(() => _salesModel = v ?? 'instant');
-                                  if (_isEdit && _salesModel == 'scheduled') {
-                                    _loadWholesaleTiers();
-                                  }
-                                },
-                              ),
+                            DropdownMenuItem(
+                              value: 'scheduled',
+                              child: Text('Đặt trước / bán sỉ'),
                             ),
                           ],
+                          onChanged: (v) {
+                            setState(() => _salesModel = v ?? 'instant');
+                            if (_isEdit && _salesModel == 'scheduled') {
+                              _loadWholesaleTiers();
+                            }
+                          },
                         ),
                         const SizedBox(height: 12),
                         DropdownButtonFormField<String>(
@@ -1291,8 +1275,37 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                           Align(
                             alignment: Alignment.centerLeft,
                             child: Text(
-                              'Giá bán',
+                              'Biến thể',
                               style: Theme.of(context).textTheme.labelLarge,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Tên nhóm biến thể để gợi ý chung (VD: Trọng lượng, Kích cỡ), đơn vị hiển thị sau giá bán cho khách (VD: kg, hộp) — cả 2 đều không bắt buộc.',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                          const SizedBox(height: 12),
+                          TextFormField(
+                            controller: _variantGroupNameCtrl,
+                            decoration: const InputDecoration(
+                              labelText: 'Tên nhóm biến thể (không bắt buộc)',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          TextFormField(
+                            controller: _unitCtrl,
+                            decoration: const InputDecoration(
+                              labelText: 'Đơn vị (kg, bó, hộp...)',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          TextFormField(
+                            controller: _defaultVariantNameCtrl,
+                            decoration: const InputDecoration(
+                              labelText: 'Tên (VD: 500g, 1kg)',
+                              border: OutlineInputBorder(),
                             ),
                           ),
                           const SizedBox(height: 12),
@@ -1336,7 +1349,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'Giá ở trên là biến thể mặc định (VD: 500g) — thêm biến thể khác nếu sản phẩm có nhiều lựa chọn (VD: 1kg, 2kg) ngay từ lúc tạo.',
+                            'Ở trên là biến thể mặc định — thêm biến thể khác nếu sản phẩm có nhiều lựa chọn (VD: 1kg, 2kg) ngay từ lúc tạo.',
                             style: Theme.of(context).textTheme.bodySmall,
                           ),
                           const SizedBox(height: 8),
@@ -1367,12 +1380,41 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                             ),
                         ],
                         if (_isEdit) ...[
-                          const SizedBox(height: 32),
+                          const Divider(height: 32),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              'Biến thể & giá',
+                              style: Theme.of(context).textTheme.labelLarge,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Tên nhóm biến thể để gợi ý chung (VD: Trọng lượng, Kích cỡ), đơn vị hiển thị sau giá bán cho khách (VD: kg, hộp) — cả 2 đều không bắt buộc.',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                          const SizedBox(height: 12),
+                          TextFormField(
+                            controller: _variantGroupNameCtrl,
+                            decoration: const InputDecoration(
+                              labelText: 'Tên nhóm biến thể (không bắt buộc)',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          TextFormField(
+                            controller: _unitCtrl,
+                            decoration: const InputDecoration(
+                              labelText: 'Đơn vị (kg, bó, hộp...)',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                          const SizedBox(height: 24),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               Text(
-                                'Biến thể & giá',
+                                'Danh sách biến thể',
                                 style: Theme.of(context).textTheme.titleMedium,
                               ),
                               TextButton.icon(
@@ -1498,9 +1540,9 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                               ProductVariant(
                                 id: 'default',
                                 productId: '',
-                                name: _unitCtrl.text.trim().isEmpty
+                                name: _defaultVariantNameCtrl.text.trim().isEmpty
                                     ? 'Mặc định'
-                                    : _unitCtrl.text.trim(),
+                                    : _defaultVariantNameCtrl.text.trim(),
                                 price:
                                     int.tryParse(_priceCtrl.text.trim()) ?? 0,
                                 isDefault: true,

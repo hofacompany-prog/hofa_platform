@@ -155,6 +155,7 @@ class Product {
   final String salesModel;
   final String status;
   final String unit;
+  final String? variantGroupName;
   final List<String> images;
   final List<ProductVariant> variants;
 
@@ -167,6 +168,7 @@ class Product {
     required this.salesModel,
     required this.status,
     required this.unit,
+    this.variantGroupName,
     required this.images,
     required this.variants,
   });
@@ -180,6 +182,7 @@ class Product {
     salesModel: json['sales_model'] as String? ?? 'instant',
     status: json['status'] as String? ?? 'draft',
     unit: json['unit'] as String? ?? 'cái',
+    variantGroupName: json['variant_group_name'] as String?,
     images: (json['images'] as List?)?.map((e) => e.toString()).toList() ?? [],
     variants:
         (json['variants'] as List?)
@@ -200,9 +203,11 @@ class CopiedProduct {
   final String name;
   final String? description;
   final String unit;
+  final String? variantGroupName;
   final String salesModel;
   final String status;
   final String? imageUrl;
+  final String defaultVariantName;
   final int price;
   final List<WholesaleTier> defaultVariantTiers;
   final List<ProductVariant> extraVariants;
@@ -213,9 +218,11 @@ class CopiedProduct {
     required this.name,
     this.description,
     required this.unit,
+    this.variantGroupName,
     required this.salesModel,
     required this.status,
     this.imageUrl,
+    required this.defaultVariantName,
     required this.price,
     required this.defaultVariantTiers,
     required this.extraVariants,
