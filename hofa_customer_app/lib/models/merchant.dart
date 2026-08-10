@@ -14,6 +14,10 @@ class Merchant {
   final double ratingAvg;
   final int ratingCount;
   final DateTime? standardCertifiedAt;
+  // Km từ chi nhánh gần nhất tới toạ độ khách đang xem (địa chỉ mặc định) — null nếu server
+  // không nhận được lat/lng (khách chưa lưu địa chỉ nào) hoặc cửa hàng chưa có chi nhánh nào
+  // có toạ độ. Xem GET /merchants, GET /merchants/:id (server/src/routes/merchants.js).
+  final double? distanceKm;
   // 'quantity' hoặc 'value' — chỉ có ý nghĩa khi merchantType == 'buy_on_behalf', quyết
   // định bảng phí mua hộ (merchant_fee_tiers) tính ngưỡng theo gì.
   final String? buyOnBehalfFeeBasis;
@@ -40,6 +44,7 @@ class Merchant {
     this.standardCertifiedAt,
     this.buyOnBehalfFeeBasis,
     this.hasOpenBranch = true,
+    this.distanceKm,
   });
 
   bool get isStandard => standardCertifiedAt != null;
@@ -68,5 +73,8 @@ class Merchant {
             json['standard_certified_at'] != null ? DateTime.tryParse(json['standard_certified_at'] as String) : null,
         buyOnBehalfFeeBasis: json['buy_on_behalf_fee_basis'] as String?,
         hasOpenBranch: json['has_open_branch'] as bool? ?? true,
+        distanceKm: json['distance_km'] != null
+            ? num.tryParse('${json['distance_km']}')?.toDouble()
+            : null,
       );
 }

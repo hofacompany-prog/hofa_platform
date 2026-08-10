@@ -15,3 +15,10 @@ double haversineKm(double lat1, double lon1, double lat2, double lon2) {
           sin(dLon / 2);
   return r * 2 * atan2(sqrt(a), sqrt(1 - a));
 }
+
+/// Hiện khoảng cách ngắn gọn cạnh thời gian chuẩn bị — dưới 1km hiện theo mét cho dễ hình
+/// dung (vd "800m"), từ 1km trở lên làm tròn 1 số lẻ (vd "3.2km").
+String formatDistanceKm(double km) {
+  if (km < 1) return '${(km * 1000).round()}m';
+  return '${km.toStringAsFixed(1)}km';
+}

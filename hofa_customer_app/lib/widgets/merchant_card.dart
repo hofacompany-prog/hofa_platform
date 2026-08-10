@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../core/geo.dart';
 import '../models/merchant.dart';
 import 'buy_on_behalf_badge.dart';
 import 'network_image_box.dart';
@@ -121,6 +122,19 @@ class MerchantCard extends StatelessWidget {
                             '${merchant.avgPrepMinutes} phút',
                             style: theme.textTheme.bodySmall,
                           ),
+                          if (merchant.distanceKm != null) ...[
+                            const SizedBox(width: 12),
+                            Icon(
+                              Icons.place_outlined,
+                              size: 14,
+                              color: theme.colorScheme.outline,
+                            ),
+                            const SizedBox(width: 2),
+                            Text(
+                              formatDistanceKm(merchant.distanceKm!),
+                              style: theme.textTheme.bodySmall,
+                            ),
+                          ],
                         ],
                       ),
                     ],

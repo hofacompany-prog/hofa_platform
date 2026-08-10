@@ -25,6 +25,23 @@ const FEE_TIER_FIELDS = [
 
 // ---- Cửa hàng ----
 
+/** Công thức haversine tính km — dùng cùng SQL cho cả GET /merchants (danh sách) lẫn
+ * GET /merchants/:id (chi tiết), LEAST/GREATEST kẹp trong [-1,1] để tránh acos() lỗi domain vì
+ * sai số dấu phẩy động. latParam/lngParam là vị trí tham số ($n) trong mảng params truyền vào. */
+function haversineKmSql(latParam, lngParam) {
+  return `6371 * acos(LEAST(1, GREATEST(-1,
+    cos(radians($${latParam})) * cos(radians(b.latitude)) * cos(radians(b.longitude) - radians($${lngParam}))
+    + sin(radians($${latParam})) * sin(radians(b.latitude))
+  )))`;
+}
+
+function parseLatLng(query) {
+  const lat = query.lat !== undefined ? Number(query.lat) : null;
+  const lng = query.lng !== undefined ? Number(query.lng) : null;
+  if (lat == null || lng == null || Number.isNaN(lat) || Number.isNaN(lng)) return null;
+  return { lat, lng };
+}
+
 router.get('/merchants', asyncHandler(async (req, res) => {
   const { limit, offset } = pagination(req.query);
   const clauses = ['deleted_at IS NULL'];
@@ -35,14 +52,38 @@ router.get('/merchants', asyncHandler(async (req, res) => {
   if (req.query.merchant_type) { params.push(req.query.merchant_type); clauses.push(`merchant_type = $${params.length}`); }
   if (req.query.q) { params.push(`%${req.query.q}%`); clauses.push(`name ILIKE $${params.length}`); }
 
+  // Khoảng cách từ chi nhánh gần nhất (ưu tiên chi nhánh đang mở) tới toạ độ khách đang xem —
+  // chỉ tính khi client gửi kèm lat/lng (địa chỉ mặc định của khách, xem
+  // merchant_repository.dart phía app khách), bỏ qua (null) nếu khách chưa lưu địa chỉ nào.
+  let distanceSelect = 'NULL::numeric AS distance_km';
+  let distanceJoin = '';
+  const coords = parseLatLng(req.query);
+  if (coords) {
+    params.push(coords.lat, coords.lng);
+    const latParam = params.length - 1;
+    const lngParam = params.length;
+    distanceSelect = 'nearest_branch.distance_km';
+    distanceJoin = `
+      LEFT JOIN LATERAL (
+        SELECT (${haversineKmSql(latParam, lngParam)}) AS distance_km
+          FROM branches b
+         WHERE b.merchant_id = m.id AND b.deleted_at IS NULL
+           AND b.latitude IS NOT NULL AND b.longitude IS NOT NULL
+         ORDER BY b.is_open DESC, distance_km ASC
+         LIMIT 1
+      ) nearest_branch ON true`;
+  }
+
   params.push(limit, offset);
   const rows = await db.query(
     `SELECT m.*,
             EXISTS (
               SELECT 1 FROM branches b
                WHERE b.merchant_id = m.id AND b.deleted_at IS NULL AND b.is_open = true
-            ) AS has_open_branch
+            ) AS has_open_branch,
+            ${distanceSelect}
        FROM merchants m
+       ${distanceJoin}
       WHERE ${clauses.join(' AND ')}
       ORDER BY m.rating_avg DESC, m.created_at DESC, m.id DESC
       LIMIT $${params.length - 1} OFFSET $${params.length}`,
@@ -85,6 +126,21 @@ const SENSITIVE_MERCHANT_FIELDS = [
 router.get('/merchants/:id', asyncHandler(async (req, res) => {
   const row = await db.queryOne('SELECT * FROM merchants WHERE id = $1 AND deleted_at IS NULL', [req.params.id]);
   if (!row) throw new ApiError('NOT_FOUND', 'Không tìm thấy cửa hàng', 404);
+
+  // Cùng cách tính với GET /merchants (danh sách) — xem haversineKmSql.
+  const coords = parseLatLng(req.query);
+  if (coords) {
+    const nearest = await db.queryOne(
+      `SELECT (${haversineKmSql(1, 2)}) AS distance_km
+         FROM branches b
+        WHERE b.merchant_id = $3 AND b.deleted_at IS NULL
+          AND b.latitude IS NOT NULL AND b.longitude IS NOT NULL
+        ORDER BY b.is_open DESC, distance_km ASC
+        LIMIT 1`,
+      [coords.lat, coords.lng, req.params.id]
+    );
+    row.distance_km = nearest?.distance_km ?? null;
+  }
 
   const isPrivileged = req.ctx.authenticated && (req.ctx.role === 'admin' || row.owner_id === req.ctx.userId);
   if (!isPrivileged) {

@@ -76,15 +76,25 @@ final voucherMaxCountProvider = FutureProvider.autoDispose<int>(
 /// hết 1 lần (xem PaginatedListNotifier).
 final merchantsPagedProvider = StateNotifierProvider.autoDispose<
     PaginatedListNotifier<Merchant>, PaginatedState<Merchant>>(
-  (ref) => PaginatedListNotifier<Merchant>(
-    (limit, offset) =>
-        ref.read(merchantRepoProvider).merchants(limit: limit, offset: offset),
-  ),
+  (ref) {
+    final coords = ref.watch(customerCoordsProvider);
+    return PaginatedListNotifier<Merchant>(
+      (limit, offset) => ref.read(merchantRepoProvider).merchants(
+            limit: limit,
+            offset: offset,
+            lat: coords?.$1,
+            lng: coords?.$2,
+          ),
+    );
+  },
 );
 
 final merchantDetailProvider = FutureProvider.autoDispose
     .family<Merchant, String>(
-      (ref, id) => ref.watch(merchantRepoProvider).merchant(id),
+      (ref, id) {
+        final coords = ref.watch(customerCoordsProvider);
+        return ref.watch(merchantRepoProvider).merchant(id, lat: coords?.$1, lng: coords?.$2);
+      },
     );
 
 final merchantBranchesProvider = FutureProvider.autoDispose
@@ -168,7 +178,8 @@ final searchedMerchantsProvider = FutureProvider.autoDispose<List<Merchant>>((
 ) {
   final q = ref.watch(productSearchProvider);
   if (q.isEmpty) return Future.value(<Merchant>[]);
-  return ref.watch(merchantRepoProvider).merchants(q: q);
+  final coords = ref.watch(customerCoordsProvider);
+  return ref.watch(merchantRepoProvider).merchants(q: q, lat: coords?.$1, lng: coords?.$2);
 });
 
 final productDetailProvider = FutureProvider.autoDispose
@@ -224,6 +235,21 @@ final orderDeliveryProvider = FutureProvider.autoDispose
 final addressesProvider = FutureProvider.autoDispose<List<Address>>(
   (ref) => ref.watch(userRepoProvider).addresses(),
 );
+
+/// Toạ độ địa chỉ MẶC ĐỊNH của khách (hoặc địa chỉ đầu tiên nếu chưa đặt mặc định) — dùng để
+/// hiện khoảng cách từ cửa hàng tới khách ở MerchantCard/merchant_detail_screen.dart, cùng
+/// nguồn dữ liệu với cart_screen.dart#_estimatedShippingFee. null khi chưa có địa chỉ nào hoặc
+/// địa chỉ đó thiếu toạ độ (chưa từng chọn qua bản đồ).
+final customerCoordsProvider = Provider.autoDispose<(double, double)?>((ref) {
+  final addresses = ref.watch(addressesProvider).valueOrNull;
+  if (addresses == null || addresses.isEmpty) return null;
+  final address = addresses.firstWhere(
+    (a) => a.isDefault,
+    orElse: () => addresses.first,
+  );
+  if (address.latitude == null || address.longitude == null) return null;
+  return (address.latitude!, address.longitude!);
+});
 
 // ---- Đánh giá ----
 

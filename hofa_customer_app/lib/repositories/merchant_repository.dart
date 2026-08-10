@@ -11,6 +11,8 @@ class MerchantRepository {
     String? merchantType,
     int limit = 50,
     int offset = 0,
+    double? lat,
+    double? lng,
   }) async {
     final list =
         await _api.get(
@@ -20,6 +22,8 @@ class MerchantRepository {
                 'offset': offset,
                 if (q != null && q.isNotEmpty) 'q': q,
                 if (merchantType != null) 'merchant_type': merchantType,
+                if (lat != null && lng != null) 'lat': lat,
+                if (lat != null && lng != null) 'lng': lng,
               },
             )
             as List;
@@ -28,8 +32,14 @@ class MerchantRepository {
         .toList();
   }
 
-  Future<Merchant> merchant(String id) async => Merchant.fromJson(
-    await _api.get('/merchants/$id') as Map<String, dynamic>,
+  Future<Merchant> merchant(String id, {double? lat, double? lng}) async => Merchant.fromJson(
+    await _api.get(
+      '/merchants/$id',
+      query: {
+        if (lat != null && lng != null) 'lat': lat,
+        if (lat != null && lng != null) 'lng': lng,
+      },
+    ) as Map<String, dynamic>,
   );
 
   Future<List<Branch>> branches(String merchantId) async {

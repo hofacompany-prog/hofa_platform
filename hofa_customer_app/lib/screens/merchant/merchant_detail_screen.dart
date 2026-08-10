@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/geo.dart';
 import '../../models/category.dart';
 import '../../models/product.dart';
 import '../../providers/app_providers.dart';
@@ -176,6 +177,12 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
                             Icon(Icons.timer_outlined, size: 16, color: theme.colorScheme.outline),
                             const SizedBox(width: 4),
                             Text('${merchant.avgPrepMinutes} phút'),
+                            if (merchant.distanceKm != null) ...[
+                              const SizedBox(width: 16),
+                              Icon(Icons.place_outlined, size: 16, color: theme.colorScheme.outline),
+                              const SizedBox(width: 4),
+                              Text(formatDistanceKm(merchant.distanceKm!)),
+                            ],
                           ],
                         ),
                         if (merchant.minOrderAmount > 0)
