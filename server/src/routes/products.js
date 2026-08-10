@@ -231,6 +231,13 @@ router.post('/products/:productId/variants', asyncHandler(async (req, res) => {
   if (!product) throw new ApiError('NOT_FOUND', 'Không tìm thấy sản phẩm', 404);
   await requireMerchantAccess(req.ctx, product.merchant_id);
 
+  // Chỉ 1 biến thể mặc định / sản phẩm (idx_variants_one_default) — cùng xử lý với PATCH
+  // /variants/:id bên dưới. Cần cả ở đây vì biến thể bị xoá mềm (is_active=false) vẫn còn
+  // giữ is_default=true (xem DELETE /variants/:id), nếu không tắt trước thì insert biến thể
+  // mặc định mới sẽ đụng unique index với hàng đã xoá mềm đó.
+  if (req.body.is_default === true) {
+    await db.query('UPDATE product_variants SET is_default = false WHERE product_id = $1', [req.params.productId]);
+  }
   const data = pickFields(req.body, VARIANT_FIELDS);
   data.product_id = req.params.productId;
   const created = await db.insertRow('product_variants', data);
@@ -256,7 +263,10 @@ router.delete('/variants/:id', asyncHandler(async (req, res) => {
   if (!variant) throw new ApiError('NOT_FOUND', 'Không tìm thấy biến thể', 404);
   const product = await db.queryOne('SELECT merchant_id FROM products WHERE id = $1', [variant.product_id]);
   await requireMerchantAccess(req.ctx, product.merchant_id);
-  const updated = await db.updateById('product_variants', req.params.id, { is_active: false });
+  // Tắt luôn is_default — biến thể đã ẩn không còn là ứng viên mặc định, và giữ lại
+  // is_default=true trên hàng bị xoá mềm sẽ chặn insert biến thể mặc định mới sau này
+  // (idx_variants_one_default không phân biệt is_active).
+  const updated = await db.updateById('product_variants', req.params.id, { is_active: false, is_default: false });
   res.json({ ok: true, data: updated });
 }));
 
