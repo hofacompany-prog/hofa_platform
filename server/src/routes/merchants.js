@@ -317,10 +317,18 @@ router.get('/merchants/:merchantId/stats/today', asyncHandler(async (req, res) =
 }));
 
 /**
- * "Tài chính" (store app, tab Tóm tắt) — doanh thu ròng, hoa hồng, thuế GTGT/TNCN (áp thẳng
- * lên doanh thu ròng, không lồng thuế trong thuế — đúng cách Thông tư 40/2021 tính thuế
- * khoán) và thu nhập ròng cho 1 khoảng thời gian. period=today|yesterday|week|custom, custom
- * cần kèm from/to (YYYY-MM-DD). Mọi mốc ngày tính theo giờ Việt Nam, không dùng giờ server.
+ * "Tài chính" (store app, tab Tóm tắt) — doanh thu, hoa hồng, thuế GTGT/TNCN (áp thẳng lên
+ * doanh thu gộp, không lồng thuế trong thuế — đúng cách Thông tư 40/2021 tính thuế khoán) và
+ * thu nhập ròng cho 1 khoảng thời gian. period=today|yesterday|week|custom, custom cần kèm
+ * from/to (YYYY-MM-DD). Mọi mốc ngày tính theo giờ Việt Nam, không dùng giờ server.
+ *
+ * CHỈ tính đơn đã ở trạng thái 'delivered' — đọc từ sổ cái merchant_wallet_transactions
+ * (entry_type=order_payout, chỉ được insert lúc đơn chuyển sang delivered, xem
+ * update_order_status trong hofa-db/64_merchant_wallet_ledger.sql), không tính đơn đang chạy
+ * dù đã đặt/đang chuẩn bị — khác hẳn cách tính cũ (mọi đơn chưa huỷ, tính ngay từ lúc đặt).
+ * revenue/commission_amount lấy lại đúng số đã CHỐT trên từng đơn (orders.subtotal/
+ * commission_amount) thay vì suy từ commission_rate hiện tại — chính xác hơn nếu tỷ lệ hoa
+ * hồng cửa hàng từng đổi giữa chừng.
  */
 router.get('/merchants/:merchantId/finance/summary', asyncHandler(async (req, res) => {
   await requirePermission(req.ctx, req.params.merchantId, 'finance.view');
@@ -349,20 +357,23 @@ router.get('/merchants/:merchantId/finance/summary', asyncHandler(async (req, re
          END AS to_date
      )
      SELECT b.from_date, b.to_date,
-            COALESCE(SUM(o.total_amount) FILTER (WHERE o.status NOT IN ('cancelled', 'refunded')), 0)::bigint AS revenue,
-            COUNT(*) FILTER (WHERE o.status NOT IN ('cancelled', 'refunded'))::int AS order_count
+            COALESCE(SUM(o.subtotal), 0)::bigint AS revenue,
+            COALESCE(SUM(o.commission_amount), 0)::bigint AS commission_amount,
+            COUNT(o.id)::int AS order_count
        FROM bounds b
-       LEFT JOIN orders o ON o.merchant_id = $1
-         AND (o.created_at AT TIME ZONE 'Asia/Ho_Chi_Minh')::date BETWEEN b.from_date AND b.to_date
+       LEFT JOIN merchant_wallet_transactions t ON t.merchant_id = $1 AND t.entry_type = 'order_payout'
+         AND (t.created_at AT TIME ZONE 'Asia/Ho_Chi_Minh')::date BETWEEN b.from_date AND b.to_date
+       LEFT JOIN orders o ON o.id = t.order_id
       GROUP BY b.from_date, b.to_date`,
     [req.params.merchantId, period, req.query.from || null, req.query.to || null]
   );
 
   const revenue = Number(row.revenue);
-  const commissionAmount = Math.round((revenue * Number(merchant.commission_rate)) / 100);
+  const commissionAmount = Number(row.commission_amount);
+  const netRevenue = revenue - commissionAmount; // = merchant_payout đã cộng vào sổ cái
   const vatAmount = Math.round((revenue * Number(merchant.vat_rate)) / 100);
   const pitAmount = Math.round((revenue * Number(merchant.pit_rate)) / 100);
-  const netIncome = revenue - commissionAmount - vatAmount - pitAmount;
+  const netIncome = netRevenue - vatAmount - pitAmount;
 
   res.json({
     ok: true,

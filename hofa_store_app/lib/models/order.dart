@@ -66,6 +66,7 @@ class Order {
   final String paymentStatus;
   final DateTime createdAt;
   final DateTime? confirmedAt;
+  final DateTime? deliveredAt;
   final String? customerNote;
   final int? estimatedPrepMinutes;
   final int? lateMinutes;
@@ -99,6 +100,7 @@ class Order {
     required this.paymentStatus,
     required this.createdAt,
     this.confirmedAt,
+    this.deliveredAt,
     this.customerNote,
     this.estimatedPrepMinutes,
     this.lateMinutes,
@@ -132,6 +134,9 @@ class Order {
         DateTime.now(),
     confirmedAt: json['confirmed_at'] != null
         ? DateTime.tryParse(json['confirmed_at'].toString())
+        : null,
+    deliveredAt: json['delivered_at'] != null
+        ? DateTime.tryParse(json['delivered_at'].toString())
         : null,
     customerNote: json['customer_note'] as String?,
     estimatedPrepMinutes: (json['estimated_prep_minutes'] as num?)?.toInt(),

@@ -188,15 +188,23 @@ router.get('/merchants/:merchantId/orders', asyncHandler(async (req, res) => {
   const params = [req.params.merchantId];
   if (req.query.status) { params.push(req.query.status); clauses.push(`status = $${params.length}`); }
   if (req.query.branch_id) { params.push(req.query.branch_id); clauses.push(`branch_id = $${params.length}`); }
+  // payout_only=true — tab "Giao dịch" ở màn Tài chính (store app): chỉ đơn ĐÃ GIAO
+  // (delivered_at khác NULL, đã được cộng sổ cái merchant_wallet_transactions, xem
+  // hofa-db/64_merchant_wallet_ledger.sql) mới tính là 1 giao dịch thật — đơn còn đang chạy dù
+  // chưa huỷ KHÔNG được tính. Đổi luôn cột dùng để lọc from/to sang delivered_at (ngày tiền
+  // thực sự về) thay vì created_at (ngày đặt), khớp with /merchants/:id/finance/summary.
+  const payoutOnly = req.query.payout_only === 'true';
+  const dateColumn = payoutOnly ? 'delivered_at' : 'created_at';
+  if (payoutOnly) clauses.push('delivered_at IS NOT NULL');
   // from/to: ngày dương lịch theo giờ Việt Nam (YYYY-MM-DD), dùng cho tab "Giao dịch" ở màn
   // Tài chính store app — cùng cách tính mốc ngày với /merchants/:id/finance/summary.
   if (req.query.from) {
     params.push(req.query.from);
-    clauses.push(`(created_at AT TIME ZONE 'Asia/Ho_Chi_Minh')::date >= $${params.length}::date`);
+    clauses.push(`(${dateColumn} AT TIME ZONE 'Asia/Ho_Chi_Minh')::date >= $${params.length}::date`);
   }
   if (req.query.to) {
     params.push(req.query.to);
-    clauses.push(`(created_at AT TIME ZONE 'Asia/Ho_Chi_Minh')::date <= $${params.length}::date`);
+    clauses.push(`(${dateColumn} AT TIME ZONE 'Asia/Ho_Chi_Minh')::date <= $${params.length}::date`);
   }
   params.push(limit, offset);
   const rows = await db.query(

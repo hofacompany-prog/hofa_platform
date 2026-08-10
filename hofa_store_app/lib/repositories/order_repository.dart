@@ -7,7 +7,8 @@ class OrderRepository {
 
   /// null nếu đơn chưa được gán tài xế (chưa tới lúc có mã lấy hàng).
   Future<Delivery?> delivery(String orderId) async {
-    final json = await _api.get('/orders/$orderId/delivery') as Map<String, dynamic>?;
+    final json =
+        await _api.get('/orders/$orderId/delivery') as Map<String, dynamic>?;
     return json == null ? null : Delivery.fromJson(json);
   }
 
@@ -16,29 +17,43 @@ class OrderRepository {
     String? status,
     String? from,
     String? to,
+    bool payoutOnly = false,
   }) async {
-    final list = await _api.get('/merchants/$merchantId/orders', query: {
-      'limit': 100,
-      if (status != null) 'status': status,
-      if (from != null) 'from': from,
-      if (to != null) 'to': to,
-    }) as List;
+    final list =
+        await _api.get(
+              '/merchants/$merchantId/orders',
+              query: {
+                'limit': 100,
+                if (status != null) 'status': status,
+                if (from != null) 'from': from,
+                if (to != null) 'to': to,
+                if (payoutOnly) 'payout_only': 'true',
+              },
+            )
+            as List;
     return list.map((e) => Order.fromJson(e as Map<String, dynamic>)).toList();
   }
 
-  Future<Order> get(String id) async => Order.fromJson(await _api.get('/orders/$id') as Map<String, dynamic>);
+  Future<Order> get(String id) async =>
+      Order.fromJson(await _api.get('/orders/$id') as Map<String, dynamic>);
 
   Future<Order> updateStatus(
     String id,
     String status, {
     String? note,
     int? estimatedPrepMinutes,
-  }) async =>
-      Order.fromJson(await _api.patch('/orders/$id/status', body: {
-        'status': status,
-        if (note != null && note.isNotEmpty) 'note': note,
-        if (estimatedPrepMinutes != null) 'estimated_prep_minutes': estimatedPrepMinutes,
-      }) as Map<String, dynamic>);
+  }) async => Order.fromJson(
+    await _api.patch(
+          '/orders/$id/status',
+          body: {
+            'status': status,
+            if (note != null && note.isNotEmpty) 'note': note,
+            if (estimatedPrepMinutes != null)
+              'estimated_prep_minutes': estimatedPrepMinutes,
+          },
+        )
+        as Map<String, dynamic>,
+  );
 
   /// Thử lại tìm tài xế online gần nhất — dùng khi đơn đã "Chờ tài xế lấy" nhưng
   /// lần tự động đầu (lúc chuyển trạng thái) không tìm thấy ai (chưa có tài xế online).
