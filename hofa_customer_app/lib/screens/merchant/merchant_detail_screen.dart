@@ -157,7 +157,7 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
                           children: [
                             InkWell(
                               borderRadius: BorderRadius.circular(6),
-                              onTap: () => context.go('/merchants/${merchant.id}/reviews'),
+                              onTap: () => context.push('/merchants/${merchant.id}/reviews'),
                               child: Row(
                                 children: [
                                   Icon(Icons.star, size: 16, color: Colors.amber.shade700),
