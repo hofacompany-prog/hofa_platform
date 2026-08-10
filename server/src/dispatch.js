@@ -19,11 +19,20 @@ async function currentDriverAcceptSettings() {
   return row || { auto_accept_sweep_seconds: 8, manual_accept_sweep_seconds: 25 };
 }
 
-async function findNearestOnlineDriver(pickupLat, pickupLng, excludeDriverIds) {
+/** [isCod] — đơn COD thì loại luôn tài xế đang giữ cod_balance vượt hạn mức đối soát
+ * (driver_finance_settings.cod_debt_limit, xem hofa-db/62_driver_wallet_ledger.sql) khỏi danh
+ * sách ứng viên, tránh gán thêm COD cho tài xế đã quá hạn nộp lại — đơn không COD không lọc gì
+ * thêm (giữ nguyên hành vi cũ). */
+async function findNearestOnlineDriver(pickupLat, pickupLng, excludeDriverIds, isCod = false) {
+  const codLimitClause = isCod
+    ? `AND COALESCE(w.cod_balance, 0) <= COALESCE((SELECT cod_debt_limit FROM driver_finance_settings ORDER BY updated_at DESC LIMIT 1), 2000000)`
+    : '';
   const drivers = await db.query(
-    `SELECT * FROM drivers
-      WHERE status = 'online' AND current_latitude IS NOT NULL AND current_longitude IS NOT NULL
-        AND id <> ALL($1::uuid[])`,
+    `SELECT d.* FROM drivers d
+       LEFT JOIN driver_wallet_balances w ON w.driver_id = d.id
+      WHERE d.status = 'online' AND d.current_latitude IS NOT NULL AND d.current_longitude IS NOT NULL
+        AND d.id <> ALL($1::uuid[])
+        ${codLimitClause}`,
     [excludeDriverIds]
   );
   if (!drivers.length) return null;
@@ -51,7 +60,9 @@ async function offerToNearestDriver(orderId, { excludeDriverIds = [] } = {}) {
   if (!order) return null;
   const branch = await db.queryOne('SELECT * FROM branches WHERE id = $1', [order.branch_id]);
 
-  const driver = await findNearestOnlineDriver(branch?.latitude ?? null, branch?.longitude ?? null, excludeDriverIds);
+  const driver = await findNearestOnlineDriver(
+    branch?.latitude ?? null, branch?.longitude ?? null, excludeDriverIds, order.payment_method === 'cod'
+  );
   if (!driver) return null;
 
   const distanceKm =

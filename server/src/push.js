@@ -240,6 +240,18 @@ const DRIVER_WALLET_MESSAGES = {
   withdrawal_rejected: (amount, reason) => ({
     title: 'Yêu cầu rút tiền bị từ chối',
     body: `Đã hoàn lại ${amount.toLocaleString('vi-VN')}đ vào ví.${reason ? ` Lý do: ${reason}` : ''}`
+  }),
+  cod_settlement_confirmed: (amount) => ({
+    title: 'Đã xác nhận nộp COD',
+    body: `Ví COD đã trừ ${amount.toLocaleString('vi-VN')}đ.`
+  }),
+  cod_settlement_rejected: (amount, reason) => ({
+    title: 'Yêu cầu nộp COD bị từ chối',
+    body: `Chưa trừ ${amount.toLocaleString('vi-VN')}đ khỏi ví COD.${reason ? ` Lý do: ${reason}` : ''}`
+  }),
+  admin_adjustment: (amount, reason) => ({
+    title: amount >= 0 ? 'Ví được cộng thêm' : 'Ví bị trừ',
+    body: `${amount >= 0 ? '+' : ''}${amount.toLocaleString('vi-VN')}đ.${reason ? ` Lý do: ${reason}` : ''}`
   })
 };
 

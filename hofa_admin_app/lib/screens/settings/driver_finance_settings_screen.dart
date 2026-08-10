@@ -1,0 +1,203 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../models/driver_finance_settings.dart';
+import '../../providers/admin_providers.dart';
+
+/// % HOFA cắt trên phí giao (driver_fee) + hạn mức COD toàn sàn — xem
+/// hofa-db/62_driver_wallet_ledger.sql. driver_fee_commission_rate mặc định 0 (an toàn, không
+/// tự động giảm thu nhập tài xế cho tới khi admin chủ động đặt tỷ lệ khác 0).
+class DriverFinanceSettingsScreen extends ConsumerStatefulWidget {
+  const DriverFinanceSettingsScreen({super.key});
+
+  @override
+  ConsumerState<DriverFinanceSettingsScreen> createState() =>
+      _DriverFinanceSettingsScreenState();
+}
+
+class _DriverFinanceSettingsScreenState
+    extends ConsumerState<DriverFinanceSettingsScreen> {
+  final _rateCtrl = TextEditingController();
+  final _limitCtrl = TextEditingController();
+  bool _initialized = false;
+  bool _saving = false;
+
+  @override
+  void dispose() {
+    _rateCtrl.dispose();
+    _limitCtrl.dispose();
+    super.dispose();
+  }
+
+  void _fillFrom(DriverFinanceSettings s) {
+    _rateCtrl.text = _trimZero(s.driverFeeCommissionRate);
+    _limitCtrl.text = s.codDebtLimit.toString();
+  }
+
+  String _trimZero(double v) =>
+      v == v.roundToDouble() ? v.toInt().toString() : v.toString();
+
+  Future<void> _save(String? id) async {
+    final rate = double.tryParse(_rateCtrl.text.trim());
+    final limit = int.tryParse(_limitCtrl.text.trim());
+    if (rate == null || rate < 0 || rate > 100) {
+      _showError('Tỷ lệ % phải từ 0 đến 100');
+      return;
+    }
+    if (limit == null || limit <= 0) {
+      _showError('Hạn mức COD phải lớn hơn 0');
+      return;
+    }
+    setState(() => _saving = true);
+    try {
+      final saved = await ref
+          .read(adminRepoProvider)
+          .updateDriverFinanceSettings(
+            DriverFinanceSettings(
+              id: id,
+              driverFeeCommissionRate: rate,
+              codDebtLimit: limit,
+            ),
+          );
+      ref.invalidate(driverFinanceSettingsProvider);
+      if (mounted) {
+        _fillFrom(saved);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Đã lưu cấu hình tài chính tài xế')),
+        );
+      }
+    } catch (e) {
+      _showError('Lỗi: $e');
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final settingsAsync = ref.watch(driverFinanceSettingsProvider);
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('Tài chính tài xế')),
+      body: settingsAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => Center(child: Text('Lỗi: $e')),
+        data: (settings) {
+          if (!_initialized) {
+            _fillFrom(settings);
+            _initialized = true;
+          }
+          return ListView(
+            padding: const EdgeInsets.all(24),
+            children: [
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 640),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Áp dụng cho toàn sàn — ảnh hưởng tới mọi chuyến giao mới tính từ lúc lưu, '
+                      'không tính lại các chuyến đã giao trước đó.',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.outline,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    Card(
+                      elevation: 0,
+                      color: theme.colorScheme.surfaceContainerLow,
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '% HOFA cắt trên phí giao',
+                              style: theme.textTheme.titleSmall,
+                            ),
+                            const SizedBox(height: 8),
+                            TextField(
+                              controller: _rateCtrl,
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                    decimal: true,
+                                  ),
+                              decoration: const InputDecoration(
+                                suffixText: '%',
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Mặc định 0% — tài xế nhận nguyên phí giao. Đặt khác 0 thì tài xế '
+                              'chỉ nhận phần còn lại sau khi trừ % này.',
+                              style: theme.textTheme.bodySmall,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Card(
+                      elevation: 0,
+                      color: theme.colorScheme.surfaceContainerLow,
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Hạn mức COD được giữ',
+                              style: theme.textTheme.titleSmall,
+                            ),
+                            const SizedBox(height: 8),
+                            TextField(
+                              controller: _limitCtrl,
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(
+                                suffixText: 'đ',
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Tài xế giữ COD vượt mức này sẽ bị khoá rút tiền ví thu nhập VÀ '
+                              'không được gán thêm đơn COD mới cho tới khi nộp lại.',
+                              style: theme.textTheme.bodySmall,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        onPressed: _saving ? null : () => _save(settings.id),
+                        child: _saving
+                            ? const SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Text('Lưu cấu hình'),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}

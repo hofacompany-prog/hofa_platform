@@ -116,15 +116,31 @@ router.get('/drivers/available', asyncHandler(async (req, res) => {
   res.json({ ok: true, data: drivers.slice(0, limit) });
 }));
 
+/** cod_balance/earning_balance tính động từ driver_wallet_transactions (xem
+ * hofa-db/62_driver_wallet_ledger.sql) — KHÔNG còn đọc drivers.wallet_balance (đã deprecated). */
 router.get('/drivers/me/earnings', asyncHandler(async (req, res) => {
   requireRole(req.ctx, ['driver']);
   const driver = await db.queryOne(
-    'SELECT wallet_balance, total_deliveries, rating_avg, rating_count, id FROM drivers WHERE user_id = $1',
+    `SELECT d.id, d.total_deliveries, d.rating_avg, d.rating_count,
+            COALESCE(w.cod_balance, 0) AS cod_balance, COALESCE(w.earning_balance, 0) AS earning_balance
+       FROM drivers d
+       LEFT JOIN driver_wallet_balances w ON w.driver_id = d.id
+      WHERE d.user_id = $1`,
     [req.ctx.userId]
   );
   const { limit } = pagination(req.query);
   const recent = await db.query(
-    `SELECT driver_fee, delivered_at FROM deliveries WHERE driver_id = $1 AND status = 'delivered' ORDER BY delivered_at DESC LIMIT $2`,
+    `SELECT d.driver_fee, d.delivered_at, o.order_code, o.payment_method,
+            (o.payment_method = 'cod') AS is_cod, o.total_amount,
+            EXISTS (
+              SELECT 1 FROM driver_cod_settlement_items i
+                JOIN driver_cod_settlements s ON s.id = i.settlement_id
+               WHERE i.order_id = o.id AND s.status IN ('pending','confirmed')
+            ) AS cod_settled_or_pending
+       FROM deliveries d
+       JOIN orders o ON o.id = d.order_id
+      WHERE d.driver_id = $1 AND d.status = 'delivered'
+      ORDER BY d.delivered_at DESC LIMIT $2`,
     [driver.id, limit]
   );
   res.json({ ok: true, data: { summary: driver, recent_deliveries: recent } });
@@ -146,9 +162,10 @@ router.post('/drivers/me/wallet/deposits', asyncHandler(async (req, res) => {
   res.status(201).json({ ok: true, data: created });
 }));
 
-/** Yêu cầu rút tiền — trừ wallet_balance NGAY (atomic, guard luôn trong cùng câu UPDATE để
- * chặn 2 yêu cầu chạy song song cùng vượt số dư thật) thay vì đợi admin duyệt, tránh tài xế
- * tạo nhiều yêu cầu rút vượt số dư trước khi admin kịp xử lý. Admin từ chối thì hoàn lại tiền
+/** Yêu cầu rút tiền — trừ NGAY (atomic, xem RPC request_driver_withdrawal:
+ * hofa-db/62_driver_wallet_ledger.sql) thay vì đợi admin duyệt, tránh tài xế tạo nhiều yêu cầu
+ * rút vượt số dư thật trước khi admin kịp xử lý. Kiểm cả cod_balance chưa vượt hạn mức đối soát
+ * (driver_finance_settings.cod_debt_limit) — vượt thì khoá rút. Admin từ chối thì hoàn lại tiền
  * (xem POST /admin/wallet-withdrawals/:id/reject). Bắt buộc đã có thông tin ngân hàng vì admin
  * cần đó để chuyển khoản trả lại. */
 router.post('/drivers/me/wallet/withdrawals', asyncHandler(async (req, res) => {
@@ -161,32 +178,27 @@ router.post('/drivers/me/wallet/withdrawals', asyncHandler(async (req, res) => {
   if (!driver.bank_bin || !driver.bank_account_number) {
     throw new ApiError('BANK_INFO_REQUIRED', 'Cần cập nhật thông tin ngân hàng trước khi rút tiền', 400);
   }
-  const settings = await db.queryOne('SELECT min_withdrawal_balance FROM bank_account_settings ORDER BY updated_at DESC LIMIT 1');
-  const minBalance = settings?.min_withdrawal_balance ?? 0;
-
-  const debited = await db.queryOne(
-    `UPDATE drivers SET wallet_balance = wallet_balance - $1
-      WHERE id = $2 AND wallet_balance - $1 >= $3
-      RETURNING wallet_balance`,
-    [amount, driver.id, minBalance]
-  );
-  if (!debited) {
-    throw new ApiError('INSUFFICIENT_BALANCE', 'Số dư không đủ để rút số tiền này', 409);
-  }
-  const created = await db.insertRow('driver_wallet_withdrawals', { driver_id: driver.id, amount });
+  const created = await db.callRpc('request_driver_withdrawal', { p_driver_id: driver.id, p_amount: amount });
   res.status(201).json({ ok: true, data: created });
 }));
 
+/** Kèm cod_balance/earning_balance mỗi tài xế trong 1 lần gọi (LEFT JOIN driver_wallet_balances,
+ * xem hofa-db/62_driver_wallet_ledger.sql) — DriversScreen (admin app) cần cả 2 số để hiện badge
+ * COD đang giữ, không phải gọi thêm round-trip riêng. */
 router.get('/admin/drivers', asyncHandler(async (req, res) => {
   requireRole(req.ctx, ['admin']);
   const { limit, offset } = pagination(req.query);
   const clauses = [];
   const params = [];
-  if (req.query.status) { params.push(req.query.status); clauses.push(`status = $${params.length}`); }
+  if (req.query.status) { params.push(req.query.status); clauses.push(`d.status = $${params.length}`); }
   const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
   params.push(limit, offset);
   const rows = await db.query(
-    `SELECT * FROM drivers ${where} ORDER BY created_at DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
+    `SELECT d.*, COALESCE(w.cod_balance, 0) AS cod_balance, COALESCE(w.earning_balance, 0) AS earning_balance
+       FROM drivers d
+       LEFT JOIN driver_wallet_balances w ON w.driver_id = d.id
+      ${where}
+      ORDER BY d.created_at DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
     params
   );
   res.json({ ok: true, data: rows });
@@ -304,7 +316,9 @@ router.post('/admin/wallet-withdrawals/:id/confirm', asyncHandler(async (req, re
   res.json({ ok: true, data: updated });
 }));
 
-/** Từ chối yêu cầu rút — hoàn lại đúng số tiền đã trừ tạm lúc tài xế tạo yêu cầu. */
+/** Từ chối yêu cầu rút — hoàn lại đúng số tiền đã trừ tạm lúc tài xế tạo yêu cầu, bằng 1 dòng
+ * sổ cái entry_type=withdrawal_rejected (không UPDATE trực tiếp — xem
+ * hofa-db/62_driver_wallet_ledger.sql). */
 router.post('/admin/wallet-withdrawals/:id/reject', asyncHandler(async (req, res) => {
   requireRole(req.ctx, ['admin']);
   const withdrawal = await db.queryOne(`SELECT * FROM driver_wallet_withdrawals WHERE id = $1 AND status = 'pending'`, [req.params.id]);
@@ -316,7 +330,14 @@ router.post('/admin/wallet-withdrawals/:id/reject', asyncHandler(async (req, res
     confirmed_at: new Date().toISOString(),
     confirmed_by: req.ctx.userId
   });
-  await db.query('UPDATE drivers SET wallet_balance = wallet_balance + $1 WHERE id = $2', [withdrawal.amount, withdrawal.driver_id]);
+  await db.insertRow('driver_wallet_transactions', {
+    driver_id: withdrawal.driver_id,
+    wallet: 'earning',
+    entry_type: 'withdrawal_rejected',
+    amount: withdrawal.amount,
+    withdrawal_id: withdrawal.id,
+    created_by: req.ctx.userId
+  });
   push.notifyDriverWallet(withdrawal.driver_id, 'withdrawal_rejected', withdrawal.amount, req.body.reason).catch(() => {});
   res.json({ ok: true, data: updated });
 }));

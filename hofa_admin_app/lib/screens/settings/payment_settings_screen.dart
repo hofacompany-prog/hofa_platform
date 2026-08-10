@@ -6,14 +6,18 @@ import '../../core/vietqr.dart';
 import '../../models/bank.dart';
 import '../../models/bank_account_settings.dart';
 import '../../models/driver_wallet_request.dart';
+import '../../models/cod_settlement_request.dart';
 import '../../models/order.dart';
 import '../../providers/admin_providers.dart';
 import '../../core/responsive.dart';
 
 /// 5 tab dưới 1 màn "Thanh toán" — tách nhỏ để mỗi tab không bị quá tải:
 /// Cấu hình (tài khoản ngân hàng của sàn), Đơn hàng (chờ xác nhận thanh toán chuyển khoản),
-/// Tài xế nạp tiền / Tài xế rút tiền (duyệt ví tài xế), Ngân hàng (danh sách cho dropdown ở
-/// app tài xế lúc đăng ký/sửa hồ sơ).
+/// Đối soát COD / Tài xế rút tiền (duyệt ví tài xế), Ngân hàng (danh sách cho dropdown ở
+/// app tài xế lúc đăng ký/sửa hồ sơ). Tab "Tài xế nạp tiền" cũ đã được thay bằng "Đối soát COD"
+/// — nộp theo từng đơn thay vì 1 cục không rõ ứng với đơn nào (xem
+/// hofa-db/62_driver_wallet_ledger.sql), route/bảng driver_wallet_deposits cũ vẫn còn nhưng
+/// không còn entry point từ đây nữa.
 class PaymentSettingsScreen extends StatelessWidget {
   const PaymentSettingsScreen({super.key});
 
@@ -29,7 +33,7 @@ class PaymentSettingsScreen extends StatelessWidget {
             tabs: [
               Tab(text: 'Cấu hình'),
               Tab(text: 'Đơn hàng'),
-              Tab(text: 'Tài xế nạp tiền'),
+              Tab(text: 'Đối soát COD'),
               Tab(text: 'Tài xế rút tiền'),
               Tab(text: 'Ngân hàng'),
             ],
@@ -39,7 +43,7 @@ class PaymentSettingsScreen extends StatelessWidget {
           children: [
             _ConfigTab(),
             _PendingOrdersTab(),
-            _WalletDepositsTab(),
+            _CodSettlementsTab(),
             _WalletWithdrawalsTab(),
             _BanksTab(),
           ],
@@ -403,20 +407,20 @@ class _PendingOrdersTab extends ConsumerWidget {
   }
 }
 
-class _WalletDepositsTab extends ConsumerWidget {
-  const _WalletDepositsTab();
+class _CodSettlementsTab extends ConsumerWidget {
+  const _CodSettlementsTab();
 
   Future<void> _confirm(
     BuildContext context,
     WidgetRef ref,
-    DriverWalletRequest r,
+    CodSettlementRequest r,
   ) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Xác nhận đã nhận tiền?'),
         content: Text(
-          'Xác nhận đã nhận được ${formatVnd(r.amount)} nạp ví từ tài xế ${r.driverName}.',
+          'Xác nhận đã nhận được ${formatVnd(r.totalAmount)} nộp COD (${r.orderCount} đơn) từ tài xế ${r.driverName}.',
         ),
         actions: [
           TextButton(
@@ -432,11 +436,77 @@ class _WalletDepositsTab extends ConsumerWidget {
     );
     if (ok != true) return;
     try {
-      await ref.read(adminRepoProvider).confirmWalletDeposit(r.id);
-      ref.invalidate(pendingWalletDepositsProvider);
+      await ref.read(adminRepoProvider).confirmCodSettlement(r.id);
+      ref.invalidate(codSettlementsProvider);
       if (context.mounted)
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Đã cộng tiền vào ví tài xế')),
+          const SnackBar(content: Text('Đã trừ ví COD của tài xế')),
+        );
+    } catch (e) {
+      if (context.mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+    }
+  }
+
+  Future<void> _reject(
+    BuildContext context,
+    WidgetRef ref,
+    CodSettlementRequest r,
+  ) async {
+    final reasonCtrl = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Từ chối yêu cầu nộp COD?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${r.orderCount} đơn của tài xế ${r.driverName} sẽ trở lại "chưa nộp".',
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: reasonCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Lý do (không bắt buộc)',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Huỷ'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Từ chối'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await ref
+          .read(adminRepoProvider)
+          .rejectCodSettlement(
+            r.id,
+            reason: reasonCtrl.text.trim().isEmpty
+                ? null
+                : reasonCtrl.text.trim(),
+          );
+      ref.invalidate(codSettlementsProvider);
+      if (context.mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Đã từ chối, tài xế chọn nộp lại được ngay'),
+          ),
         );
     } catch (e) {
       if (context.mounted)
@@ -449,7 +519,7 @@ class _WalletDepositsTab extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
-    final depositsAsync = ref.watch(pendingWalletDepositsProvider);
+    final settlementsAsync = ref.watch(codSettlementsProvider);
 
     return ListView(
       padding: const EdgeInsets.all(24),
@@ -460,18 +530,18 @@ class _WalletDepositsTab extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                'Tài xế đang chờ nạp tiền',
+                'Tài xế đang chờ nộp COD',
                 style: theme.textTheme.titleMedium,
               ),
               const SizedBox(height: 4),
               Text(
-                'Tài xế đã tạo yêu cầu nạp và chuyển khoản vào tài khoản của sàn — bấm "Xác nhận" ngay khi thấy tiền về.',
+                'Tài xế đã chọn đơn muốn nộp và chuyển khoản vào tài khoản của sàn — bấm "Xác nhận" ngay khi thấy tiền về.',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.outline,
                 ),
               ),
               const SizedBox(height: 12),
-              depositsAsync.when(
+              settlementsAsync.when(
                 loading: () => const Center(
                   child: Padding(
                     padding: EdgeInsets.all(24),
@@ -484,7 +554,7 @@ class _WalletDepositsTab extends ConsumerWidget {
                     return Padding(
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       child: Text(
-                        'Không có yêu cầu nạp tiền nào đang chờ.',
+                        'Không có yêu cầu nộp COD nào đang chờ.',
                         style: theme.textTheme.bodyMedium,
                       ),
                     );
@@ -497,10 +567,7 @@ class _WalletDepositsTab extends ConsumerWidget {
                             color: theme.colorScheme.surfaceContainerLow,
                             margin: const EdgeInsets.only(bottom: 8),
                             child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 12,
-                              ),
+                              padding: const EdgeInsets.all(16),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -513,28 +580,58 @@ class _WalletDepositsTab extends ConsumerWidget {
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                   Text(
-                                    '${r.driverPhone ?? ""} — ${formatDateTime(r.createdAt)}',
+                                    '${r.driverPhone ?? ""} — ${r.orderCount} đơn — ${formatDateTime(r.createdAt)}',
                                     maxLines: 2,
                                     overflow: TextOverflow.ellipsis,
                                   ),
-                                  const SizedBox(height: 8),
-                                  Wrap(
-                                    alignment: WrapAlignment.end,
-                                    crossAxisAlignment:
-                                        WrapCrossAlignment.center,
-                                    spacing: 12,
-                                    runSpacing: 4,
+                                  if (r.proofImageUrl != null) ...[
+                                    const SizedBox(height: 8),
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: Image.network(
+                                        r.proofImageUrl!,
+                                        height: 160,
+                                        fit: BoxFit.contain,
+                                        errorBuilder:
+                                            (context, error, stackTrace) =>
+                                                const SizedBox(
+                                                  height: 160,
+                                                  child: Center(
+                                                    child: Text('Lỗi tải ảnh'),
+                                                  ),
+                                                ),
+                                      ),
+                                    ),
+                                  ],
+                                  const SizedBox(height: 12),
+                                  Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
                                     children: [
                                       Text(
-                                        formatVnd(r.amount),
+                                        formatVnd(r.totalAmount),
                                         style: const TextStyle(
                                           fontWeight: FontWeight.w600,
                                         ),
                                       ),
-                                      FilledButton(
-                                        onPressed: () =>
-                                            _confirm(context, ref, r),
-                                        child: const Text('Xác nhận'),
+                                      Row(
+                                        children: [
+                                          OutlinedButton(
+                                            style: OutlinedButton.styleFrom(
+                                              foregroundColor:
+                                                  theme.colorScheme.error,
+                                            ),
+                                            onPressed: () =>
+                                                _reject(context, ref, r),
+                                            child: const Text('Từ chối'),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          FilledButton(
+                                            onPressed: () =>
+                                                _confirm(context, ref, r),
+                                            child: const Text('Xác nhận'),
+                                          ),
+                                        ],
                                       ),
                                     ],
                                   ),

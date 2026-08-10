@@ -31,16 +31,16 @@ class DriverRepository {
     required String bankAccountHolder,
     List<String> documentUrls = const [],
   }) => {
-        'national_id': nationalId,
-        'license_no': licenseNo,
-        'vehicle_type': vehicleType,
-        'vehicle_plate': vehiclePlate,
-        'bank_name': bankName,
-        'bank_bin': bankBin,
-        'bank_account_number': bankAccountNumber,
-        'bank_account_holder': bankAccountHolder,
-        if (documentUrls.isNotEmpty) 'document_urls': documentUrls,
-      };
+    'national_id': nationalId,
+    'license_no': licenseNo,
+    'vehicle_type': vehicleType,
+    'vehicle_plate': vehiclePlate,
+    'bank_name': bankName,
+    'bank_bin': bankBin,
+    'bank_account_number': bankAccountNumber,
+    'bank_account_holder': bankAccountHolder,
+    if (documentUrls.isNotEmpty) 'document_urls': documentUrls,
+  };
 
   Future<Driver> register({
     required String nationalId,
@@ -52,21 +52,23 @@ class DriverRepository {
     required String bankAccountNumber,
     required String bankAccountHolder,
     List<String> documentUrls = const [],
-  }) async =>
-      Driver.fromJson(await _api.post(
-        '/drivers/register',
-        body: _profileBody(
-          nationalId: nationalId,
-          licenseNo: licenseNo,
-          vehicleType: vehicleType,
-          vehiclePlate: vehiclePlate,
-          bankName: bankName,
-          bankBin: bankBin,
-          bankAccountNumber: bankAccountNumber,
-          bankAccountHolder: bankAccountHolder,
-          documentUrls: documentUrls,
-        ),
-      ) as Map<String, dynamic>);
+  }) async => Driver.fromJson(
+    await _api.post(
+          '/drivers/register',
+          body: _profileBody(
+            nationalId: nationalId,
+            licenseNo: licenseNo,
+            vehicleType: vehicleType,
+            vehiclePlate: vehiclePlate,
+            bankName: bankName,
+            bankBin: bankBin,
+            bankAccountNumber: bankAccountNumber,
+            bankAccountHolder: bankAccountHolder,
+            documentUrls: documentUrls,
+          ),
+        )
+        as Map<String, dynamic>,
+  );
 
   /// Sửa/nộp lại hồ sơ — dùng cả cho hồ sơ bị admin từ chối (server tự xoá rejected_at khi gọi
   /// thành công, đưa hồ sơ về lại "đang chờ xét duyệt").
@@ -80,36 +82,46 @@ class DriverRepository {
     required String bankAccountNumber,
     required String bankAccountHolder,
     List<String> documentUrls = const [],
-  }) async =>
-      Driver.fromJson(await _api.patch(
-        '/drivers/me',
-        body: _profileBody(
-          nationalId: nationalId,
-          licenseNo: licenseNo,
-          vehicleType: vehicleType,
-          vehiclePlate: vehiclePlate,
-          bankName: bankName,
-          bankBin: bankBin,
-          bankAccountNumber: bankAccountNumber,
-          bankAccountHolder: bankAccountHolder,
-          documentUrls: documentUrls,
-        ),
-      ) as Map<String, dynamic>);
+  }) async => Driver.fromJson(
+    await _api.patch(
+          '/drivers/me',
+          body: _profileBody(
+            nationalId: nationalId,
+            licenseNo: licenseNo,
+            vehicleType: vehicleType,
+            vehiclePlate: vehiclePlate,
+            bankName: bankName,
+            bankBin: bankBin,
+            bankAccountNumber: bankAccountNumber,
+            bankAccountHolder: bankAccountHolder,
+            documentUrls: documentUrls,
+          ),
+        )
+        as Map<String, dynamic>,
+  );
 
   Future<void> setStatus(String status) async {
     await _api.patch('/drivers/me/status', body: {'status': status});
   }
 
   Future<void> setAutoAccept(bool autoAccept) async {
-    await _api.patch('/drivers/me/auto-accept', body: {'auto_accept': autoAccept});
+    await _api.patch(
+      '/drivers/me/auto-accept',
+      body: {'auto_accept': autoAccept},
+    );
   }
 
   Future<void> updateLocation(double latitude, double longitude) async {
-    await _api.patch('/drivers/me/location', body: {'latitude': latitude, 'longitude': longitude});
+    await _api.patch(
+      '/drivers/me/location',
+      body: {'latitude': latitude, 'longitude': longitude},
+    );
   }
 
-  Future<Earnings> earnings({int limit = 50}) async =>
-      Earnings.fromJson(await _api.get('/drivers/me/earnings', query: {'limit': limit}) as Map<String, dynamic>);
+  Future<Earnings> earnings({int limit = 50}) async => Earnings.fromJson(
+    await _api.get('/drivers/me/earnings', query: {'limit': limit})
+        as Map<String, dynamic>,
+  );
 
   /// Danh sách ngân hàng admin quản lý — dropdown lúc đăng ký/sửa hồ sơ.
   Future<List<Bank>> banks() async {
@@ -128,11 +140,50 @@ class DriverRepository {
   /// Trả về id của yêu cầu vừa tạo — dùng làm nội dung chuyển khoản trên QR (NAP-xxxxxxxx) để
   /// admin đối chiếu đúng yêu cầu khi xác nhận.
   Future<String> createDeposit(int amount) async {
-    final data = await _api.post('/drivers/me/wallet/deposits', body: {'amount': amount}) as Map<String, dynamic>;
+    final data =
+        await _api.post('/drivers/me/wallet/deposits', body: {'amount': amount})
+            as Map<String, dynamic>;
     return data['id'] as String;
   }
 
   Future<void> createWithdrawal(int amount) async {
     await _api.post('/drivers/me/wallet/withdrawals', body: {'amount': amount});
+  }
+
+  /// Đơn COD đã giao, chưa nộp lần nào (hoặc lần trước bị từ chối) — màn "Nộp COD" tick chọn.
+  Future<List<CodPendingOrder>> codPendingOrders() async {
+    final list =
+        await _api.get('/drivers/me/wallet/cod-pending-orders') as List;
+    return list
+        .map((e) => CodPendingOrder.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<void> submitCodSettlement({
+    required List<String> orderIds,
+    String? proofImageUrl,
+  }) async {
+    await _api.post(
+      '/drivers/me/wallet/cod-settlements',
+      body: {
+        'order_ids': orderIds,
+        if (proofImageUrl != null) 'proof_image_url': proofImageUrl,
+      },
+    );
+  }
+
+  Future<List<WalletTransaction>> walletTransactions({
+    int limit = 50,
+    int offset = 0,
+  }) async {
+    final list =
+        await _api.get(
+              '/drivers/me/wallet/transactions',
+              query: {'limit': limit, 'offset': offset},
+            )
+            as List;
+    return list
+        .map((e) => WalletTransaction.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 }

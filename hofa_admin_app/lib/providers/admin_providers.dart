@@ -25,6 +25,9 @@ import '../models/admin_notification.dart';
 import '../models/notification_settings.dart';
 import '../models/nav_tab_icon.dart';
 import '../models/icon_library.dart';
+import '../models/cod_settlement_request.dart';
+import '../models/driver_finance_settings.dart';
+import '../models/driver_wallet_summary.dart';
 import '../repositories/admin_repository.dart';
 import '../repositories/user_repository.dart';
 
@@ -160,6 +163,29 @@ final pendingWalletWithdrawalsProvider =
 final shippingFeeSettingsProvider =
     FutureProvider.autoDispose<ShippingFeeSettings>(
       (ref) => ref.watch(adminRepoProvider).shippingFeeSettings(),
+    );
+
+// ---- Ví tài xế ----
+
+final driverWalletSummaryProvider =
+    FutureProvider.autoDispose<DriverWalletSummary>(
+      (ref) => ref.watch(adminRepoProvider).driverWalletSummary(),
+    );
+
+/// null = mọi trạng thái, 'pending' = tab mặc định màn Đối soát COD.
+final codSettlementStatusFilterProvider = StateProvider.autoDispose<String?>(
+  (ref) => 'pending',
+);
+
+final codSettlementsProvider =
+    FutureProvider.autoDispose<List<CodSettlementRequest>>((ref) {
+      final status = ref.watch(codSettlementStatusFilterProvider);
+      return ref.watch(adminRepoProvider).codSettlements(status: status);
+    });
+
+final driverFinanceSettingsProvider =
+    FutureProvider.autoDispose<DriverFinanceSettings>(
+      (ref) => ref.watch(adminRepoProvider).driverFinanceSettings(),
     );
 
 final deliveryRadiusSettingsProvider =

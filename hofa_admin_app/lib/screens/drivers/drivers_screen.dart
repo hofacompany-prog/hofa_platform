@@ -441,8 +441,7 @@ class _DriversScreenState extends ConsumerState<DriversScreen> {
                   separatorBuilder: (_, _) => const SizedBox(height: 8),
                   itemBuilder: (context, i) {
                     final d = list[i];
-                    // Ví âm nghĩa là tài xế đang giữ tiền COD chưa nộp về (xem HUONG_DAN.md)
-                    final owing = d.walletBalance < 0;
+                    final owing = d.codBalance > 0;
                     final verification = driverVerificationState(d);
                     final (statusIcon, statusColor) = switch (verification) {
                       DriverVerificationState.verified => (
@@ -504,7 +503,7 @@ class _DriversScreenState extends ConsumerState<DriversScreen> {
                                       ),
                                       Text(
                                         '${d.totalDeliveries} chuyến · ${d.ratingAvg}★'
-                                        '${owing ? ' · Đang giữ ${formatVnd(-d.walletBalance)} tiền COD' : ''}'
+                                        '${owing ? ' · Đang giữ ${formatVnd(d.codBalance)} tiền COD' : ''}'
                                         '${verification == DriverVerificationState.rejected ? ' · Bị từ chối: ${d.rejectionReason ?? ""}' : ''}',
                                         style: TextStyle(
                                           color:

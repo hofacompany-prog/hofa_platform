@@ -25,6 +25,9 @@ import '../models/notification_inbox_item.dart';
 import '../models/notification_settings.dart';
 import '../models/nav_tab_icon.dart';
 import '../models/icon_library.dart';
+import '../models/cod_settlement_request.dart';
+import '../models/driver_finance_settings.dart';
+import '../models/driver_wallet_summary.dart';
 
 /// Gom mọi lời gọi API mà web admin cần. Tất cả endpoint ở đây đều yêu cầu
 /// role = 'admin' ở phía server (server/src/utils.js requireRole).
@@ -520,6 +523,66 @@ class AdminRepository {
       body: {if (reason != null) 'reason': reason},
     );
   }
+
+  // ---- Ví tài xế: tổng quan + đối soát COD + điều chỉnh tay ----
+
+  Future<DriverWalletSummary> driverWalletSummary() async =>
+      DriverWalletSummary.fromJson(
+        await _api.get('/admin/driver-wallets/summary') as Map<String, dynamic>,
+      );
+
+  Future<List<CodSettlementRequest>> codSettlements({String? status}) async {
+    final list =
+        await _api.get(
+              '/admin/driver-cod-settlements',
+              query: {'limit': 100, if (status != null) 'status': status},
+            )
+            as List;
+    return list
+        .map((e) => CodSettlementRequest.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<void> confirmCodSettlement(String id) async {
+    await _api.post('/admin/driver-cod-settlements/$id/confirm');
+  }
+
+  Future<void> rejectCodSettlement(String id, {String? reason}) async {
+    await _api.post(
+      '/admin/driver-cod-settlements/$id/reject',
+      body: {if (reason != null) 'reason': reason},
+    );
+  }
+
+  /// wallet: 'cod' | 'earning' — amount có dấu (+/-), reason bắt buộc (server yêu cầu, xem
+  /// CHECK driver_wallet_tx_adjustment_needs_note).
+  Future<void> adjustDriverWallet(
+    String driverId, {
+    required String wallet,
+    required int amount,
+    required String reason,
+  }) async {
+    await _api.post(
+      '/admin/drivers/$driverId/wallet-adjustment',
+      body: {'wallet': wallet, 'amount': amount, 'reason': reason},
+    );
+  }
+
+  // ---- Cấu hình tài chính tài xế ----
+
+  Future<DriverFinanceSettings> driverFinanceSettings() async {
+    final data = await _api.get('/driver-finance-settings');
+    return data == null
+        ? DriverFinanceSettings.fallback()
+        : DriverFinanceSettings.fromJson(data as Map<String, dynamic>);
+  }
+
+  Future<DriverFinanceSettings> updateDriverFinanceSettings(
+    DriverFinanceSettings settings,
+  ) async => DriverFinanceSettings.fromJson(
+    await _api.patch('/driver-finance-settings', body: settings.toJson())
+        as Map<String, dynamic>,
+  );
 
   // ---- Phí ship ----
 
