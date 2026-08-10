@@ -25,6 +25,7 @@ import 'screens/profile/profile_screen.dart';
 import 'screens/categories/all_categories_screen.dart';
 import 'screens/categories/category_detail_screen.dart';
 import 'screens/categories/category_products_screen.dart';
+import 'screens/favorites/favorite_merchants_screen.dart';
 import 'main.dart' show navigatorKey;
 
 final routerProvider = Provider<GoRouter>((ref) {
@@ -46,7 +47,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       // (appinstalled, xem PwaInstallService.wasInstalledPreviously) mà vẫn đang mở bằng trình
       // duyệt thường (chưa mở từ icon màn hình chính) thì cũng vào màn này — InstallPwaScreen
       // tự đổi sang thông báo "mở app ngoài màn hình" thay vì hỏi cài lại.
-      final needsInstall = !PwaInstallService.isStandalone() &&
+      final needsInstall =
+          !PwaInstallService.isStandalone() &&
           (PwaInstallService.wasInstalledPreviously() ||
               PwaInstallService.hasDeferredPrompt() ||
               PwaInstallService.isIOS());
@@ -74,7 +76,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
-      GoRoute(path: '/install-pwa', builder: (context, state) => const InstallPwaScreen()),
+      GoRoute(
+        path: '/install-pwa',
+        builder: (context, state) => const InstallPwaScreen(),
+      ),
       GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
       GoRoute(
         path: '/complete-profile',
@@ -129,7 +134,8 @@ final routerProvider = Provider<GoRouter>((ref) {
             // dùng để tự bật popup mời đánh giá, không hiện lúc khách tự bấm vào xem đơn.
             builder: (context, state) => OrderDetailScreen(
               orderId: state.pathParameters['id']!,
-              autoPromptReview: state.uri.queryParameters['status'] == 'delivered',
+              autoPromptReview:
+                  state.uri.queryParameters['status'] == 'delivered',
             ),
           ),
           GoRoute(
@@ -139,6 +145,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/notifications',
             builder: (context, state) => const NotificationsScreen(),
+          ),
+          GoRoute(
+            path: '/favorites',
+            builder: (context, state) => const FavoriteMerchantsScreen(),
           ),
           GoRoute(
             path: '/categories',

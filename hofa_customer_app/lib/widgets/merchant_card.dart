@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../core/geo.dart';
 import '../models/merchant.dart';
 import 'buy_on_behalf_badge.dart';
+import 'merchant_favorite_button.dart';
 import 'network_image_box.dart';
 
 class MerchantCard extends StatelessWidget {
@@ -140,6 +141,7 @@ class MerchantCard extends StatelessWidget {
                     ],
                   ),
                 ),
+                MerchantFavoriteButton(merchantId: merchant.id),
                 const Icon(Icons.chevron_right),
               ],
             ),

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/format.dart';
 import '../../models/product.dart';
 import '../../providers/app_providers.dart';
+import '../../widgets/favorites_icon.dart';
 import '../../widgets/notification_bell.dart';
 import '../../widgets/category_grid.dart';
 import '../../widgets/merchant_card.dart';
@@ -60,7 +61,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
     _debounce = Timer(const Duration(milliseconds: 350), () async {
       setState(() => _suggesting = true);
-      final results = await ref.read(productRepoProvider).products(q: q, limit: 6);
+      final results = await ref
+          .read(productRepoProvider)
+          .products(q: q, limit: 6);
       if (!mounted) return;
       setState(() {
         _suggestions = results;
@@ -105,7 +108,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ],
         ),
         centerTitle: false,
-        actions: const [NotificationBell()],
+        actions: const [FavoritesIcon(), NotificationBell()],
       ),
       body: RefreshIndicator(
         onRefresh: () async => ref.invalidate(merchantsPagedProvider),
@@ -119,9 +122,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 hintText: 'Tìm sản phẩm...',
                 prefixIcon: const Icon(Icons.search),
                 suffixIcon: (isSearching || _searchCtrl.text.isNotEmpty)
-                    ? IconButton(icon: const Icon(Icons.close), onPressed: _clearSearch)
+                    ? IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: _clearSearch,
+                      )
                     : null,
-                border: const OutlineInputBorder(borderRadius: BorderRadius.all(Radius.circular(12))),
+                border: const OutlineInputBorder(
+                  borderRadius: BorderRadius.all(Radius.circular(12)),
+                ),
                 isDense: true,
               ),
               onChanged: _onSearchChanged,
@@ -133,33 +141,51 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               Container(
                 margin: const EdgeInsets.only(top: 4),
                 decoration: BoxDecoration(
-                  border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+                  border: Border.all(
+                    color: Theme.of(context).colorScheme.outlineVariant,
+                  ),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: _suggesting
                     ? const Padding(
                         padding: EdgeInsets.all(16),
-                        child: Center(child: SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))),
+                        child: Center(
+                          child: SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        ),
                       )
                     : Column(
                         mainAxisSize: MainAxisSize.min,
                         children: _suggestions
-                            .map((p) => ListTile(
-                                  dense: true,
-                                  leading: NetworkImageBox(
-                                    url: p.images.isNotEmpty ? p.images.first : null,
-                                    width: 40,
-                                    height: 40,
-                                    borderRadius: BorderRadius.circular(8),
-                                    fallbackIcon: Icons.shopping_bag_outlined,
-                                  ),
-                                  title: Text(p.name, maxLines: 1, overflow: TextOverflow.ellipsis),
-                                  subtitle: p.defaultVariant != null ? Text(formatVnd(p.defaultVariant!.price)) : null,
-                                  onTap: () {
-                                    _searchCtrl.text = p.name;
-                                    _runFullSearch(p.name);
-                                  },
-                                ))
+                            .map(
+                              (p) => ListTile(
+                                dense: true,
+                                leading: NetworkImageBox(
+                                  url: p.images.isNotEmpty
+                                      ? p.images.first
+                                      : null,
+                                  width: 40,
+                                  height: 40,
+                                  borderRadius: BorderRadius.circular(8),
+                                  fallbackIcon: Icons.shopping_bag_outlined,
+                                ),
+                                title: Text(
+                                  p.name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                subtitle: p.defaultVariant != null
+                                    ? Text(formatVnd(p.defaultVariant!.price))
+                                    : null,
+                                onTap: () {
+                                  _searchCtrl.text = p.name;
+                                  _runFullSearch(p.name);
+                                },
+                              ),
+                            )
                             .toList(),
                       ),
               ),
@@ -183,13 +209,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       padding: EdgeInsets.only(top: 40),
                       child: Center(child: CircularProgressIndicator()),
                     ),
-                    error: (e, _) =>
-                        Padding(padding: const EdgeInsets.only(top: 40), child: Center(child: Text('Lỗi: $e'))),
+                    error: (e, _) => Padding(
+                      padding: const EdgeInsets.only(top: 40),
+                      child: Center(child: Text('Lỗi: $e')),
+                    ),
                     data: (products) {
                       if (products.isEmpty && merchants.isEmpty) {
                         return const Padding(
                           padding: EdgeInsets.only(top: 40),
-                          child: Center(child: Text('Không tìm thấy cửa hàng hay sản phẩm nào')),
+                          child: Center(
+                            child: Text(
+                              'Không tìm thấy cửa hàng hay sản phẩm nào',
+                            ),
+                          ),
                         );
                       }
                       return Column(
@@ -198,32 +230,47 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           // Cửa hàng khớp tên tìm kiếm — hiện cả cửa hàng đang tạm đóng (khác
                           // danh sách duyệt mặc định phía dưới, MerchantCard tự xám nó lại).
                           if (merchants.isNotEmpty) ...[
-                            Text('Cửa hàng', style: Theme.of(context).textTheme.titleMedium),
+                            Text(
+                              'Cửa hàng',
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
                             const SizedBox(height: 8),
                             ...merchants.map(
                               (m) => Padding(
                                 padding: const EdgeInsets.only(bottom: 8),
-                                child: MerchantCard(merchant: m, onTap: () => context.push('/merchants/${m.id}')),
+                                child: MerchantCard(
+                                  merchant: m,
+                                  onTap: () =>
+                                      context.push('/merchants/${m.id}'),
+                                ),
                               ),
                             ),
                             const SizedBox(height: 12),
                           ],
                           if (products.isNotEmpty) ...[
-                            Text('Sản phẩm', style: Theme.of(context).textTheme.titleMedium),
+                            Text(
+                              'Sản phẩm',
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
                             const SizedBox(height: 8),
                             GridView.builder(
                               shrinkWrap: true,
                               physics: const NeverScrollableScrollPhysics(),
                               itemCount: products.length,
-                              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                                maxCrossAxisExtent: 220,
-                                mainAxisSpacing: 12,
-                                crossAxisSpacing: 12,
-                                childAspectRatio: 0.62,
-                              ),
+                              gridDelegate:
+                                  const SliverGridDelegateWithMaxCrossAxisExtent(
+                                    maxCrossAxisExtent: 220,
+                                    mainAxisSpacing: 12,
+                                    crossAxisSpacing: 12,
+                                    childAspectRatio: 0.62,
+                                  ),
                               itemBuilder: (context, i) {
                                 final p = products[i];
-                                return ProductCard(product: p, onTap: () => context.push('/products/${p.id}'));
+                                return ProductCard(
+                                  product: p,
+                                  onTap: () =>
+                                      context.push('/products/${p.id}'),
+                                );
                               },
                             ),
                           ],
@@ -238,8 +285,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 loading: () => const SizedBox(),
                 error: (_, _) => const SizedBox(),
                 data: (categories) => CategoryGrid(
-                  categories: categories.where((c) => c.parentId == null).toList(),
-                  onTapCategory: (c) => context.push('/categories/${c.id}', extra: c.name),
+                  categories: categories
+                      .where((c) => c.parentId == null)
+                      .toList(),
+                  onTapCategory: (c) =>
+                      context.push('/categories/${c.id}', extra: c.name),
                   onTapViewAll: () => context.push('/categories'),
                 ),
               ),
@@ -249,7 +299,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   padding: EdgeInsets.only(top: 40),
                   child: Center(child: CircularProgressIndicator()),
                 )
-              else if (merchantsState.error != null && merchantsState.items.isEmpty)
+              else if (merchantsState.error != null &&
+                  merchantsState.items.isEmpty)
                 Padding(
                   padding: const EdgeInsets.only(top: 40),
                   child: Center(child: Text('Lỗi: ${merchantsState.error}')),
@@ -260,23 +311,34 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     // Cửa hàng tạm đóng (không còn chi nhánh nào mở) chỉ hiện lại khi khách chủ
                     // động tìm kiếm (xem MerchantCard vẫn xám nó ở đó) — ở đây là danh sách
                     // duyệt mặc định của trang chủ nên ẩn hẳn, đỡ dẫn khách bấm vào rồi thất vọng.
-                    final merchants = merchantsState.items.where((m) => m.hasOpenBranch).toList();
+                    final merchants = merchantsState.items
+                        .where((m) => m.hasOpenBranch)
+                        .toList();
                     if (merchants.isEmpty) {
                       return const Padding(
                         padding: EdgeInsets.only(top: 40),
-                        child: Center(child: Text('Không tìm thấy cửa hàng nào')),
+                        child: Center(
+                          child: Text('Không tìm thấy cửa hàng nào'),
+                        ),
                       );
                     }
                     return Column(
                       children: [
-                        ...merchants.map((m) => Padding(
-                              padding: const EdgeInsets.only(bottom: 8),
-                              child: MerchantCard(merchant: m, onTap: () => context.push('/merchants/${m.id}')),
-                            )),
+                        ...merchants.map(
+                          (m) => Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: MerchantCard(
+                              merchant: m,
+                              onTap: () => context.push('/merchants/${m.id}'),
+                            ),
+                          ),
+                        ),
                         if (merchantsState.hasMore)
                           const Padding(
                             padding: EdgeInsets.symmetric(vertical: 12),
-                            child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                            child: Center(
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
                           ),
                       ],
                     );

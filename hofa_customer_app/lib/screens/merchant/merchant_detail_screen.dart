@@ -8,6 +8,7 @@ import '../../providers/app_providers.dart';
 import '../../widgets/buy_on_behalf_badge.dart';
 import '../../widgets/buy_on_behalf_fee_notice.dart';
 import '../../widgets/full_screen_gallery_viewer.dart';
+import '../../widgets/merchant_favorite_button.dart';
 import '../../widgets/network_image_box.dart';
 import '../../widgets/product_card.dart';
 
@@ -63,11 +64,7 @@ class _MerchantPhotoStrip extends StatelessWidget {
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: const Center(
-                  child: Icon(
-                    Icons.more_horiz,
-                    color: Colors.white,
-                    size: 18,
-                  ),
+                  child: Icon(Icons.more_horiz, color: Colors.white, size: 18),
                 ),
               ),
             ),
@@ -82,7 +79,8 @@ class MerchantDetailScreen extends ConsumerStatefulWidget {
   const MerchantDetailScreen({super.key, required this.merchantId});
 
   @override
-  ConsumerState<MerchantDetailScreen> createState() => _MerchantDetailScreenState();
+  ConsumerState<MerchantDetailScreen> createState() =>
+      _MerchantDetailScreenState();
 }
 
 class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
@@ -104,7 +102,9 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
   void _onScroll() {
     if (_scrollController.position.pixels >=
         _scrollController.position.maxScrollExtent - 300) {
-      ref.read(merchantProductsPagedProvider(widget.merchantId).notifier).loadMore();
+      ref
+          .read(merchantProductsPagedProvider(widget.merchantId).notifier)
+          .loadMore();
     }
   }
 
@@ -118,8 +118,15 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => context.go('/')),
-        title: merchantAsync.maybeWhen(data: (m) => Text(m.name), orElse: () => const Text('Cửa hàng')),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => context.go('/'),
+        ),
+        title: merchantAsync.maybeWhen(
+          data: (m) => Text(m.name),
+          orElse: () => const Text('Cửa hàng'),
+        ),
+        actions: [MerchantFavoriteButton(merchantId: merchantId)],
       ),
       body: merchantAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
@@ -132,7 +139,12 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  NetworkImageBox(url: merchant.logoUrl, width: 72, height: 72, fallbackIcon: Icons.storefront_outlined),
+                  NetworkImageBox(
+                    url: merchant.logoUrl,
+                    width: 72,
+                    height: 72,
+                    fallbackIcon: Icons.storefront_outlined,
+                  ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
@@ -140,41 +152,65 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
                       children: [
                         Row(
                           children: [
-                            Expanded(child: Text(merchant.name, style: theme.textTheme.titleLarge)),
-                            if (merchant.isStandard) Icon(Icons.verified, color: theme.colorScheme.primary),
+                            Expanded(
+                              child: Text(
+                                merchant.name,
+                                style: theme.textTheme.titleLarge,
+                              ),
+                            ),
+                            if (merchant.isStandard)
+                              Icon(
+                                Icons.verified,
+                                color: theme.colorScheme.primary,
+                              ),
                           ],
                         ),
                         if (merchant.isBuyOnBehalf) ...[
                           const SizedBox(height: 4),
                           const BuyOnBehalfBadge(),
                         ],
-                        if (merchant.description != null && merchant.description!.isNotEmpty)
+                        if (merchant.description != null &&
+                            merchant.description!.isNotEmpty)
                           Padding(
                             padding: const EdgeInsets.only(top: 4),
-                            child: Text(merchant.description!, style: theme.textTheme.bodyMedium),
+                            child: Text(
+                              merchant.description!,
+                              style: theme.textTheme.bodyMedium,
+                            ),
                           ),
                         const SizedBox(height: 6),
                         Row(
                           children: [
                             InkWell(
                               borderRadius: BorderRadius.circular(6),
-                              onTap: () => context.push('/merchants/${merchant.id}/reviews'),
+                              onTap: () => context.push(
+                                '/merchants/${merchant.id}/reviews',
+                              ),
                               child: Row(
                                 children: [
-                                  Icon(Icons.star, size: 16, color: Colors.amber.shade700),
+                                  Icon(
+                                    Icons.star,
+                                    size: 16,
+                                    color: Colors.amber.shade700,
+                                  ),
                                   const SizedBox(width: 4),
                                   Text(
                                     '${merchant.ratingAvg.toStringAsFixed(1)} (${merchant.ratingCount} đánh giá)',
                                     style: TextStyle(
                                       decoration: TextDecoration.underline,
-                                      decorationColor: theme.colorScheme.outline,
+                                      decorationColor:
+                                          theme.colorScheme.outline,
                                     ),
                                   ),
                                 ],
                               ),
                             ),
                             const SizedBox(width: 16),
-                            Icon(Icons.timer_outlined, size: 16, color: theme.colorScheme.outline),
+                            Icon(
+                              Icons.timer_outlined,
+                              size: 16,
+                              color: theme.colorScheme.outline,
+                            ),
                             const SizedBox(width: 4),
                             Text('${merchant.avgPrepMinutes} phút'),
                           ],
@@ -184,7 +220,11 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
                             padding: const EdgeInsets.only(top: 4),
                             child: Row(
                               children: [
-                                Icon(Icons.place_outlined, size: 16, color: theme.colorScheme.outline),
+                                Icon(
+                                  Icons.place_outlined,
+                                  size: 16,
+                                  color: theme.colorScheme.outline,
+                                ),
                                 const SizedBox(width: 4),
                                 Text(formatDistanceKm(merchant.distanceKm!)),
                               ],
@@ -193,7 +233,10 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
                         if (merchant.minOrderAmount > 0)
                           Padding(
                             padding: const EdgeInsets.only(top: 4),
-                            child: Text('Đơn tối thiểu: ${merchant.minOrderAmount}đ', style: theme.textTheme.bodySmall),
+                            child: Text(
+                              'Đơn tối thiểu: ${merchant.minOrderAmount}đ',
+                              style: theme.textTheme.bodySmall,
+                            ),
                           ),
                       ],
                     ),
@@ -204,7 +247,8 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
                   ],
                 ],
               ),
-              if (merchant.isBuyOnBehalf) BuyOnBehalfFeeNotice(merchant: merchant),
+              if (merchant.isBuyOnBehalf)
+                BuyOnBehalfFeeNotice(merchant: merchant),
               if (!merchant.hasOpenBranch) ...[
                 const SizedBox(height: 12),
                 Container(
@@ -215,12 +259,18 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
                   ),
                   child: Row(
                     children: [
-                      Icon(Icons.storefront_outlined, size: 18, color: theme.colorScheme.onErrorContainer),
+                      Icon(
+                        Icons.storefront_outlined,
+                        size: 18,
+                        color: theme.colorScheme.onErrorContainer,
+                      ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           'Cửa hàng đang tạm đóng cửa — bạn vẫn xem được sản phẩm nhưng chưa đặt hàng được lúc này.',
-                          style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.onErrorContainer),
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.onErrorContainer,
+                          ),
                         ),
                       ),
                     ],
@@ -237,7 +287,8 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
                   padding: EdgeInsets.only(top: 24),
                   child: Center(child: CircularProgressIndicator()),
                 )
-              else if (productsState.error != null && productsState.items.isEmpty)
+              else if (productsState.error != null &&
+                  productsState.items.isEmpty)
                 Center(child: Text('Lỗi: ${productsState.error}'))
               else ...[
                 _ProductGrid(
@@ -250,7 +301,9 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
                 if (productsState.hasMore)
                   const Padding(
                     padding: EdgeInsets.symmetric(vertical: 12),
-                    child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                    child: Center(
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
                   ),
               ],
             ],
@@ -277,35 +330,42 @@ class _ProductGridState extends State<_ProductGrid> {
   String? _categoryFilter;
 
   Widget _grid(List<Product> items) => GridView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        itemCount: items.length,
-        gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-          maxCrossAxisExtent: 220,
-          mainAxisSpacing: 12,
-          crossAxisSpacing: 12,
-          childAspectRatio: 0.68,
-        ),
-        itemBuilder: (context, i) {
-          final p = items[i];
-          return ProductCard(
-            product: p,
-            onTap: () => GoRouter.of(context).push('/products/${p.id}'),
-            showDistance: false,
-          );
-        },
+    shrinkWrap: true,
+    physics: const NeverScrollableScrollPhysics(),
+    itemCount: items.length,
+    gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+      maxCrossAxisExtent: 220,
+      mainAxisSpacing: 12,
+      crossAxisSpacing: 12,
+      childAspectRatio: 0.68,
+    ),
+    itemBuilder: (context, i) {
+      final p = items[i];
+      return ProductCard(
+        product: p,
+        onTap: () => GoRouter.of(context).push('/products/${p.id}'),
+        showDistance: false,
       );
+    },
+  );
 
   @override
   Widget build(BuildContext context) {
     final hasInstant = widget.products.any((p) => p.salesModel == 'instant');
-    final hasWholesale = widget.products.any((p) => p.salesModel == 'scheduled');
+    final hasWholesale = widget.products.any(
+      (p) => p.salesModel == 'scheduled',
+    );
     final showFilter = hasInstant && hasWholesale;
 
-    final visible = _filter == 'all' ? widget.products : widget.products.where((p) => p.salesModel == _filter).toList();
+    final visible = _filter == 'all'
+        ? widget.products
+        : widget.products.where((p) => p.salesModel == _filter).toList();
 
     if (widget.products.isEmpty) {
-      return const Padding(padding: EdgeInsets.only(top: 24), child: Center(child: Text('Cửa hàng chưa có sản phẩm')));
+      return const Padding(
+        padding: EdgeInsets.only(top: 24),
+        child: Center(child: Text('Cửa hàng chưa có sản phẩm')),
+      );
     }
 
     final categoryDropdown = widget.categories.isEmpty
@@ -320,8 +380,13 @@ class _ProductGridState extends State<_ProductGrid> {
                 isDense: true,
               ),
               items: [
-                const DropdownMenuItem(value: null, child: Text('Tất cả danh mục')),
-                ...widget.categories.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))),
+                const DropdownMenuItem(
+                  value: null,
+                  child: Text('Tất cả danh mục'),
+                ),
+                ...widget.categories.map(
+                  (c) => DropdownMenuItem(value: c.id, child: Text(c.name)),
+                ),
               ],
               onChanged: (v) => setState(() => _categoryFilter = v),
             ),
@@ -333,13 +398,21 @@ class _ProductGridState extends State<_ProductGrid> {
             child: Wrap(
               spacing: 8,
               children: [
-                ChoiceChip(label: const Text('Tất cả'), selected: _filter == 'all', onSelected: (_) => setState(() => _filter = 'all')),
                 ChoiceChip(
-                    label: const Text('Giao ngay'), selected: _filter == 'instant', onSelected: (_) => setState(() => _filter = 'instant')),
+                  label: const Text('Tất cả'),
+                  selected: _filter == 'all',
+                  onSelected: (_) => setState(() => _filter = 'all'),
+                ),
                 ChoiceChip(
-                    label: const Text('Bán sỉ / Đặt trước'),
-                    selected: _filter == 'scheduled',
-                    onSelected: (_) => setState(() => _filter = 'scheduled')),
+                  label: const Text('Giao ngay'),
+                  selected: _filter == 'instant',
+                  onSelected: (_) => setState(() => _filter = 'instant'),
+                ),
+                ChoiceChip(
+                  label: const Text('Bán sỉ / Đặt trước'),
+                  selected: _filter == 'scheduled',
+                  onSelected: (_) => setState(() => _filter = 'scheduled'),
+                ),
               ],
             ),
           )
@@ -350,7 +423,9 @@ class _ProductGridState extends State<_ProductGrid> {
     if (widget.categories.isEmpty || _categoryFilter != null) {
       final filtered = _categoryFilter == null
           ? visible
-          : visible.where((p) => p.merchantCategoryId == _categoryFilter).toList();
+          : visible
+                .where((p) => p.merchantCategoryId == _categoryFilter)
+                .toList();
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -359,7 +434,9 @@ class _ProductGridState extends State<_ProductGrid> {
           if (filtered.isEmpty)
             const Padding(
               padding: EdgeInsets.only(top: 12, bottom: 12),
-              child: Center(child: Text('Không có sản phẩm nào trong danh mục này')),
+              child: Center(
+                child: Text('Không có sản phẩm nào trong danh mục này'),
+              ),
             )
           else
             _grid(filtered),
