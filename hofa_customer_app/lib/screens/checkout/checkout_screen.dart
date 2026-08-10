@@ -985,9 +985,28 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       children: [
                         Text(i.productName),
                         Text(
-                          '${i.variantName} · ${i.quantity} x ${formatVnd(i.unitPrice + i.toppingsTotal)}',
+                          '${i.variantName} · ${i.quantity} x '
+                          // Có topping thì tách rõ giá món + giá topping (khách biết đang
+                          // cộng gì vào), không có topping thì chỉ hiện đơn giá món.
+                          '${i.toppingsTotal > 0 ? '(${formatVnd(i.unitPrice)} + ${formatVnd(i.toppingsTotal)} topping)' : formatVnd(i.unitPrice)}',
                           style: theme.textTheme.bodySmall,
                         ),
+                        if (i.toppings.isNotEmpty)
+                          Text(
+                            i.toppings
+                                .map((t) => t.name)
+                                .join(', '),
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.secondary,
+                            ),
+                          ),
+                        if (i.note != null && i.note!.isNotEmpty)
+                          Text(
+                            'Ghi chú: ${i.note}',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
                       ],
                     ),
                   ),
