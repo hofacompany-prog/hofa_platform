@@ -128,12 +128,21 @@ class MerchantCard extends StatelessWidget {
                             Icon(
                               Icons.place_outlined,
                               size: 14,
-                              color: theme.colorScheme.outline,
+                              color: merchant.beyondOwnRadius
+                                  ? theme.colorScheme.secondary
+                                  : theme.colorScheme.outline,
                             ),
                             const SizedBox(width: 2),
                             Text(
                               formatDistanceKm(merchant.distanceKm!),
-                              style: theme.textTheme.bodySmall,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: merchant.beyondOwnRadius
+                                    ? theme.colorScheme.secondary
+                                    : null,
+                                fontWeight: merchant.beyondOwnRadius
+                                    ? FontWeight.w600
+                                    : null,
+                              ),
                             ),
                           ],
                         ],

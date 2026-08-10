@@ -28,6 +28,7 @@ class _CreateStoreScreenState extends ConsumerState<CreateStoreScreen> {
   final _branchNameCtrl = TextEditingController();
   final _line1Ctrl = TextEditingController();
   final _provinceCtrl = TextEditingController();
+  final _radiusCtrl = TextEditingController(text: '5');
 
   bool _loading = false;
   String? _error;
@@ -45,6 +46,7 @@ class _CreateStoreScreenState extends ConsumerState<CreateStoreScreen> {
     _branchNameCtrl.dispose();
     _line1Ctrl.dispose();
     _provinceCtrl.dispose();
+    _radiusCtrl.dispose();
     super.dispose();
   }
 
@@ -86,6 +88,9 @@ class _CreateStoreScreenState extends ConsumerState<CreateStoreScreen> {
       setState(() => _error = 'Vui lòng chọn vị trí chi nhánh trên bản đồ');
       return;
     }
+    // _formKey.validate() ở trên đã đảm bảo giá trị hợp lệ (0, 100] — xem validator của
+    // _radiusCtrl.
+    final radiusKm = num.parse(_radiusCtrl.text.trim());
     setState(() {
       _loading = true;
       _error = null;
@@ -117,6 +122,7 @@ class _CreateStoreScreenState extends ConsumerState<CreateStoreScreen> {
         latitude: _pickedLat!,
         longitude: _pickedLng!,
         phone: _phoneCtrl.text.trim(),
+        deliveryRadiusKm: radiusKm.toDouble(),
       );
       ref.read(pendingSignupProvider.notifier).state = null;
       ref.invalidate(userProfileProvider);
@@ -223,8 +229,7 @@ class _CreateStoreScreenState extends ConsumerState<CreateStoreScreen> {
                       MultiImageUploadField(
                         label: 'Ảnh khác của cửa hàng (không bắt buộc)',
                         folder: 'merchants',
-                        onChanged: (urls) =>
-                            setState(() => _photoUrls = urls),
+                        onChanged: (urls) => setState(() => _photoUrls = urls),
                       ),
                       const SizedBox(height: 24),
                       Text(
@@ -290,6 +295,25 @@ class _CreateStoreScreenState extends ConsumerState<CreateStoreScreen> {
                         validator: (v) => (v == null || v.trim().isEmpty)
                             ? 'Nhập tỉnh/thành'
                             : null,
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _radiusCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Bán kính giao hàng (km)',
+                          helperText:
+                              'Khách ngoài bán kính này (và ngoài mức mặc định toàn sàn) sẽ không thấy cửa hàng',
+                        ),
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        validator: (v) {
+                          final n = num.tryParse((v ?? '').trim());
+                          if (n == null || n <= 0 || n > 100) {
+                            return 'Từ 0 tới 100km';
+                          }
+                          return null;
+                        },
                       ),
                       if (_error != null) ...[
                         const SizedBox(height: 16),

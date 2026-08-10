@@ -117,6 +117,17 @@ async function requireOrderAccess(ctx, orderId) {
   return order;
 }
 
+/** Công thức haversine tính km bằng SQL — dùng chung cho GET /merchants, /merchants/:id,
+ * /products (xem merchants.js, products.js). latParam/lngParam là vị trí tham số ($n) trong
+ * mảng params truyền vào, branchAlias là alias bảng branches trong câu SQL đang viết (mặc định
+ * 'b') — LEAST/GREATEST kẹp trong [-1,1] để tránh acos() lỗi domain vì sai số dấu phẩy động. */
+function haversineKmSql(latParam, lngParam, branchAlias = 'b') {
+  return `6371 * acos(LEAST(1, GREATEST(-1,
+    cos(radians($${latParam})) * cos(radians(${branchAlias}.latitude)) * cos(radians(${branchAlias}.longitude) - radians($${lngParam}))
+    + sin(radians($${latParam})) * sin(radians(${branchAlias}.latitude))
+  )))`;
+}
+
 function haversineKm(lat1, lon1, lat2, lon2) {
   const R = 6371;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -142,5 +153,5 @@ module.exports = {
   pickFields, requireFields, pagination,
   requireAuth, requireRole, requireOwnRow, requireMerchantAccess,
   requirePermission, requireOwnerAccess,
-  orderCanView, requireOrderAccess, haversineKm, parseLatLng
+  orderCanView, requireOrderAccess, haversineKm, haversineKmSql, parseLatLng
 };

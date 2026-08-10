@@ -442,6 +442,18 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
     );
     if (ok != true) return;
 
+    final radiusKm = num.tryParse(radiusCtrl.text.trim());
+    if (radiusKm == null || radiusKm <= 0 || radiusKm > 100) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Bán kính giao hàng phải lớn hơn 0 và tối đa 100km'),
+          ),
+        );
+      }
+      return;
+    }
+
     await _run(
       () => ref.read(adminRepoProvider).updateBranch(b.id, {
         'name': nameCtrl.text.trim(),
@@ -454,8 +466,7 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
         'province': provinceCtrl.text.trim(),
         'latitude': double.tryParse(latCtrl.text.trim()) ?? b.latitude,
         'longitude': double.tryParse(lngCtrl.text.trim()) ?? b.longitude,
-        'delivery_radius_km':
-            num.tryParse(radiusCtrl.text.trim()) ?? b.deliveryRadiusKm,
+        'delivery_radius_km': radiusKm,
       }),
     );
   }

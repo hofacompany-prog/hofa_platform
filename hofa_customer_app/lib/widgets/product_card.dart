@@ -181,12 +181,21 @@ class _ProductCardState extends ConsumerState<ProductCard> {
                               Icon(
                                 Icons.place_outlined,
                                 size: 12,
-                                color: theme.colorScheme.outline,
+                                color: product.beyondOwnRadius
+                                    ? theme.colorScheme.secondary
+                                    : theme.colorScheme.outline,
                               ),
                               const SizedBox(width: 2),
                               Text(
                                 formatDistanceKm(product.distanceKm!),
-                                style: theme.textTheme.bodySmall,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: product.beyondOwnRadius
+                                      ? theme.colorScheme.secondary
+                                      : null,
+                                  fontWeight: product.beyondOwnRadius
+                                      ? FontWeight.w600
+                                      : null,
+                                ),
                               ),
                             ],
                           ),

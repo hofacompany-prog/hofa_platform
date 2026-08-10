@@ -18,6 +18,10 @@ class Merchant {
   // không nhận được lat/lng (khách chưa lưu địa chỉ nào) hoặc cửa hàng chưa có chi nhánh nào
   // có toạ độ. Xem GET /merchants, GET /merchants/:id (server/src/routes/merchants.js).
   final double? distanceKm;
+  // true nếu distanceKm vượt bán kính giao hàng RIÊNG của chi nhánh gần nhất (nhưng vẫn trong
+  // mức mặc định toàn sàn, nếu không cửa hàng đã bị ẩn hẳn khỏi danh sách) — dùng tô cam
+  // distanceKm khi hiển thị, xem hofa-db/61_delivery_radius_settings.sql.
+  final bool beyondOwnRadius;
   // 'quantity' hoặc 'value' — chỉ có ý nghĩa khi merchantType == 'buy_on_behalf', quyết
   // định bảng phí mua hộ (merchant_fee_tiers) tính ngưỡng theo gì.
   final String? buyOnBehalfFeeBasis;
@@ -45,36 +49,38 @@ class Merchant {
     this.buyOnBehalfFeeBasis,
     this.hasOpenBranch = true,
     this.distanceKm,
+    this.beyondOwnRadius = false,
   });
 
   bool get isStandard => standardCertifiedAt != null;
   bool get isBuyOnBehalf => merchantType == 'buy_on_behalf';
 
   factory Merchant.fromJson(Map<String, dynamic> json) => Merchant(
-        id: json['id'] as String,
-        name: json['name'] as String? ?? '',
-        slug: json['slug'] as String? ?? '',
-        description: json['description'] as String?,
-        merchantType: json['merchant_type'] as String? ?? 'regular',
-        status: json['status'] as String? ?? 'active',
-        logoUrl: json['logo_url'] as String?,
-        coverUrl: json['cover_url'] as String?,
-        photoUrls: (json['photo_urls'] as List?)
-                ?.map((e) => e.toString())
-                .toList() ??
-            const [],
-        phone: json['phone'] as String?,
-        minOrderAmount: (json['min_order_amount'] as num?)?.toInt() ?? 0,
-        avgPrepMinutes: (json['avg_prep_minutes'] as num?)?.toInt() ?? 15,
-        // NUMERIC ở Postgres về qua node-postgres là String, không phải num.
-        ratingAvg: (num.tryParse('${json['rating_avg']}') ?? 0).toDouble(),
-        ratingCount: (json['rating_count'] as num?)?.toInt() ?? 0,
-        standardCertifiedAt:
-            json['standard_certified_at'] != null ? DateTime.tryParse(json['standard_certified_at'] as String) : null,
-        buyOnBehalfFeeBasis: json['buy_on_behalf_fee_basis'] as String?,
-        hasOpenBranch: json['has_open_branch'] as bool? ?? true,
-        distanceKm: json['distance_km'] != null
-            ? num.tryParse('${json['distance_km']}')?.toDouble()
-            : null,
-      );
+    id: json['id'] as String,
+    name: json['name'] as String? ?? '',
+    slug: json['slug'] as String? ?? '',
+    description: json['description'] as String?,
+    merchantType: json['merchant_type'] as String? ?? 'regular',
+    status: json['status'] as String? ?? 'active',
+    logoUrl: json['logo_url'] as String?,
+    coverUrl: json['cover_url'] as String?,
+    photoUrls:
+        (json['photo_urls'] as List?)?.map((e) => e.toString()).toList() ??
+        const [],
+    phone: json['phone'] as String?,
+    minOrderAmount: (json['min_order_amount'] as num?)?.toInt() ?? 0,
+    avgPrepMinutes: (json['avg_prep_minutes'] as num?)?.toInt() ?? 15,
+    // NUMERIC ở Postgres về qua node-postgres là String, không phải num.
+    ratingAvg: (num.tryParse('${json['rating_avg']}') ?? 0).toDouble(),
+    ratingCount: (json['rating_count'] as num?)?.toInt() ?? 0,
+    standardCertifiedAt: json['standard_certified_at'] != null
+        ? DateTime.tryParse(json['standard_certified_at'] as String)
+        : null,
+    buyOnBehalfFeeBasis: json['buy_on_behalf_fee_basis'] as String?,
+    hasOpenBranch: json['has_open_branch'] as bool? ?? true,
+    distanceKm: json['distance_km'] != null
+        ? num.tryParse('${json['distance_km']}')?.toDouble()
+        : null,
+    beyondOwnRadius: json['beyond_own_radius'] as bool? ?? false,
+  );
 }

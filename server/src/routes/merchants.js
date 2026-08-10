@@ -2,7 +2,7 @@ const router = require('express').Router();
 const db = require('../db');
 const asyncHandler = require('../asyncHandler');
 const { ApiError } = require('../errors');
-const { pickFields, requireFields, pagination, requireAuth, requireRole, requireMerchantAccess, requirePermission, requireOwnerAccess, parseLatLng } = require('../utils');
+const { pickFields, requireFields, pagination, requireAuth, requireRole, requireMerchantAccess, requirePermission, requireOwnerAccess, parseLatLng, haversineKmSql } = require('../utils');
 const supabaseAdmin = require('../supabaseAdmin');
 const push = require('../push');
 
@@ -25,14 +25,12 @@ const FEE_TIER_FIELDS = [
 
 // ---- Cửa hàng ----
 
-/** Công thức haversine tính km — dùng cùng SQL cho cả GET /merchants (danh sách) lẫn
- * GET /merchants/:id (chi tiết), LEAST/GREATEST kẹp trong [-1,1] để tránh acos() lỗi domain vì
- * sai số dấu phẩy động. latParam/lngParam là vị trí tham số ($n) trong mảng params truyền vào. */
-function haversineKmSql(latParam, lngParam) {
-  return `6371 * acos(LEAST(1, GREATEST(-1,
-    cos(radians($${latParam})) * cos(radians(b.latitude)) * cos(radians(b.longitude) - radians($${lngParam}))
-    + sin(radians($${latParam})) * sin(radians(b.latitude))
-  )))`;
+/** Bán kính giao hàng mặc định toàn sàn hiện hành (hofa-db/61_delivery_radius_settings.sql) —
+ * dùng làm "trần" nới rộng thêm cho chi nhánh có bán kính riêng nhỏ hơn mức này, xem
+ * GET /merchants, /merchants/:id, /products (products.js). */
+async function currentDefaultRadiusKm() {
+  const row = await db.queryOne('SELECT default_radius_km FROM delivery_radius_settings ORDER BY updated_at DESC LIMIT 1');
+  return Number(row?.default_radius_km ?? 5);
 }
 
 router.get('/merchants', asyncHandler(async (req, res) => {
@@ -48,23 +46,31 @@ router.get('/merchants', asyncHandler(async (req, res) => {
   // Khoảng cách từ chi nhánh gần nhất (ưu tiên chi nhánh đang mở) tới toạ độ khách đang xem —
   // chỉ tính khi client gửi kèm lat/lng (địa chỉ mặc định của khách, xem
   // merchant_repository.dart phía app khách), bỏ qua (null) nếu khách chưa lưu địa chỉ nào.
-  let distanceSelect = 'NULL::numeric AS distance_km';
+  // Đồng thời ẩn hẳn cửa hàng nếu vượt CẢ bán kính riêng của chi nhánh gần nhất LẪN bán kính
+  // mặc định toàn sàn (delivery_radius_settings) — còn vượt riêng bán kính chi nhánh nhưng vẫn
+  // trong mức mặc định thì vẫn hiện, kèm cờ beyond_own_radius để app khách tô cam khoảng cách
+  // (xem hofa-db/61_delivery_radius_settings.sql).
+  let distanceSelect = 'NULL::numeric AS distance_km, false AS beyond_own_radius';
   let distanceJoin = '';
   const coords = parseLatLng(req.query);
   if (coords) {
     params.push(coords.lat, coords.lng);
     const latParam = params.length - 1;
     const lngParam = params.length;
-    distanceSelect = 'nearest_branch.distance_km';
+    const defaultRadiusKm = await currentDefaultRadiusKm();
+    params.push(defaultRadiusKm);
+    const defaultRadiusParam = params.length;
+    distanceSelect = 'nearest_branch.distance_km, COALESCE(nearest_branch.distance_km > nearest_branch.delivery_radius_km, false) AS beyond_own_radius';
     distanceJoin = `
       LEFT JOIN LATERAL (
-        SELECT (${haversineKmSql(latParam, lngParam)}) AS distance_km
+        SELECT (${haversineKmSql(latParam, lngParam)}) AS distance_km, b.delivery_radius_km
           FROM branches b
          WHERE b.merchant_id = m.id AND b.deleted_at IS NULL
            AND b.latitude IS NOT NULL AND b.longitude IS NOT NULL
          ORDER BY b.is_open DESC, distance_km ASC
          LIMIT 1
       ) nearest_branch ON true`;
+    clauses.push(`(nearest_branch.distance_km IS NULL OR nearest_branch.distance_km <= GREATEST(nearest_branch.delivery_radius_km, $${defaultRadiusParam}))`);
   }
 
   params.push(limit, offset);
@@ -120,11 +126,13 @@ router.get('/merchants/:id', asyncHandler(async (req, res) => {
   const row = await db.queryOne('SELECT * FROM merchants WHERE id = $1 AND deleted_at IS NULL', [req.params.id]);
   if (!row) throw new ApiError('NOT_FOUND', 'Không tìm thấy cửa hàng', 404);
 
-  // Cùng cách tính với GET /merchants (danh sách) — xem haversineKmSql.
+  // Cùng cách tính với GET /merchants (danh sách) — xem haversineKmSql. Khác GET /merchants:
+  // KHÔNG ẩn/404 dù vượt cả 2 mức bán kính — khách có thể vào thẳng trang này từ mục yêu thích/
+  // lịch sử đơn dù nay đã ngoài phạm vi, chỉ cần cờ beyond_own_radius để tô cam khoảng cách.
   const coords = parseLatLng(req.query);
   if (coords) {
     const nearest = await db.queryOne(
-      `SELECT (${haversineKmSql(1, 2)}) AS distance_km
+      `SELECT (${haversineKmSql(1, 2)}) AS distance_km, b.delivery_radius_km
          FROM branches b
         WHERE b.merchant_id = $3 AND b.deleted_at IS NULL
           AND b.latitude IS NOT NULL AND b.longitude IS NOT NULL
@@ -133,6 +141,7 @@ router.get('/merchants/:id', asyncHandler(async (req, res) => {
       [coords.lat, coords.lng, req.params.id]
     );
     row.distance_km = nearest?.distance_km ?? null;
+    row.beyond_own_radius = nearest ? nearest.distance_km > nearest.delivery_radius_km : false;
   }
 
   const isPrivileged = req.ctx.authenticated && (req.ctx.role === 'admin' || row.owner_id === req.ctx.userId);

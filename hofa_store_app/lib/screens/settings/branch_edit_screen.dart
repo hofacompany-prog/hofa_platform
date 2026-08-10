@@ -75,6 +75,13 @@ class _BranchEditScreenState extends ConsumerState<BranchEditScreen> {
   }
 
   Future<void> _save() async {
+    final radiusKm = num.tryParse(_radiusCtrl.text.trim());
+    if (radiusKm == null || radiusKm <= 0 || radiusKm > 100) {
+      setState(
+        () => _error = 'Bán kính giao hàng phải lớn hơn 0 và tối đa 100km',
+      );
+      return;
+    }
     setState(() {
       _loading = true;
       _error = null;
@@ -91,9 +98,7 @@ class _BranchEditScreenState extends ConsumerState<BranchEditScreen> {
         'province': _provinceCtrl.text.trim(),
         'latitude': _lat,
         'longitude': _lng,
-        'delivery_radius_km':
-            num.tryParse(_radiusCtrl.text.trim()) ??
-            widget.branch.deliveryRadiusKm,
+        'delivery_radius_km': radiusKm,
       });
       ref.invalidate(myMerchantProvider);
       if (mounted) context.pop();
@@ -194,6 +199,8 @@ class _BranchEditScreenState extends ConsumerState<BranchEditScreen> {
                   controller: _radiusCtrl,
                   decoration: const InputDecoration(
                     labelText: 'Bán kính giao hàng (km)',
+                    helperText:
+                        'Khách ngoài bán kính này (và ngoài mức mặc định toàn sàn) sẽ không thấy cửa hàng',
                     border: OutlineInputBorder(),
                   ),
                   keyboardType: const TextInputType.numberWithOptions(

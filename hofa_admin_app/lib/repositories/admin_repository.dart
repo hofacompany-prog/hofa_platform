@@ -13,6 +13,7 @@ import '../models/admin_delivery.dart';
 import '../models/order.dart';
 import '../models/category.dart';
 import '../models/shipping_fee_settings.dart';
+import '../models/delivery_radius_settings.dart';
 import '../models/voucher.dart';
 import '../models/voucher_amount_tier.dart';
 import '../models/order_settings.dart';
@@ -250,19 +251,25 @@ class AdminRepository {
     await _api.post('/admin/drivers/$id/verify') as Map<String, dynamic>,
   );
 
-  Future<Driver> rejectDriver(String id, String reason) async => Driver.fromJson(
-    await _api.post('/admin/drivers/$id/reject', body: {'reason': reason}) as Map<String, dynamic>,
-  );
+  Future<Driver> rejectDriver(String id, String reason) async =>
+      Driver.fromJson(
+        await _api.post('/admin/drivers/$id/reject', body: {'reason': reason})
+            as Map<String, dynamic>,
+      );
 
   /// Admin sửa trực tiếp hồ sơ tài xế (CCCD, GPLX, xe, ngân hàng) — không đổi trạng thái duyệt.
-  Future<Driver> updateDriver(String id, Map<String, dynamic> data) async => Driver.fromJson(
-        await _api.patch('/admin/drivers/$id', body: data) as Map<String, dynamic>,
+  Future<Driver> updateDriver(String id, Map<String, dynamic> data) async =>
+      Driver.fromJson(
+        await _api.patch('/admin/drivers/$id', body: data)
+            as Map<String, dynamic>,
       );
 
   /// Gỡ tài xế bị kẹt trạng thái (thường là 'busy' không tự về 'online' được) — không đụng gì
   /// tới deliveries, chỉ đổi đúng cột status của drivers.
-  Future<Driver> forceDriverStatus(String id, String status) async => Driver.fromJson(
-        await _api.patch('/admin/drivers/$id/status', body: {'status': status}) as Map<String, dynamic>,
+  Future<Driver> forceDriverStatus(String id, String status) async =>
+      Driver.fromJson(
+        await _api.patch('/admin/drivers/$id/status', body: {'status': status})
+            as Map<String, dynamic>,
       );
 
   // ---- Đơn hàng ----
@@ -314,17 +321,22 @@ class AdminRepository {
   /// status=null lấy các chuyến đang hoạt động (mặc định phía server), 'all' bỏ lọc, hoặc 1
   /// giá trị delivery_status cụ thể.
   Future<List<AdminDelivery>> deliveries({String? status}) async {
-    final list = await _api.get('/admin/deliveries', query: {
-      'limit': 200,
-      if (status != null) 'status': status,
-    }) as List;
-    return list.map((e) => AdminDelivery.fromJson(e as Map<String, dynamic>)).toList();
+    final list =
+        await _api.get(
+              '/admin/deliveries',
+              query: {'limit': 200, if (status != null) 'status': status},
+            )
+            as List;
+    return list
+        .map((e) => AdminDelivery.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   /// Chi tiết 1 chuyến — kèm đầy đủ điểm lấy hàng (branch*) + điểm giao hàng (ship*) mà bản
   /// danh sách (deliveries()) không có, dùng cho màn chi tiết chuyến giao.
-  Future<AdminDelivery> delivery(String id) async =>
-      AdminDelivery.fromJson(await _api.get('/admin/deliveries/$id') as Map<String, dynamic>);
+  Future<AdminDelivery> delivery(String id) async => AdminDelivery.fromJson(
+    await _api.get('/admin/deliveries/$id') as Map<String, dynamic>,
+  );
 
   /// Đổi tay trạng thái 1 chuyến — không đi qua RPC nghiệp vụ (không đụng tồn kho/ví tài xế),
   /// xem comment PATCH /admin/deliveries/:id/status phía server.
@@ -334,7 +346,10 @@ class AdminRepository {
 
   /// Sửa điểm GIAO hàng của đơn (ship_*) — điểm LẤY hàng sửa qua updateBranch() ở trên vì đó là
   /// dữ liệu của chi nhánh, không phải của riêng đơn/chuyến này.
-  Future<void> updateOrderShipping(String orderId, Map<String, dynamic> data) async {
+  Future<void> updateOrderShipping(
+    String orderId,
+    Map<String, dynamic> data,
+  ) async {
     await _api.patch('/admin/orders/$orderId/shipping', body: data);
   }
 
@@ -344,12 +359,22 @@ class AdminRepository {
 
   /// Xoá hàng loạt — truyền đúng 1 trong 3: [ids], [statusIn] (khớp đúng bộ lọc đang xem, dùng
   /// cho nút "Xoá tất cả"), hoặc [all] (xoá toàn bộ bảng, không lọc gì).
-  Future<int> deleteDeliveries({List<String>? ids, List<String>? statusIn, bool all = false}) async {
-    final data = await _api.post('/admin/deliveries/delete', body: {
-      if (ids != null && ids.isNotEmpty) 'ids': ids,
-      if (statusIn != null && statusIn.isNotEmpty) 'status_in': statusIn,
-      if (all) 'all': true,
-    }) as Map<String, dynamic>;
+  Future<int> deleteDeliveries({
+    List<String>? ids,
+    List<String>? statusIn,
+    bool all = false,
+  }) async {
+    final data =
+        await _api.post(
+              '/admin/deliveries/delete',
+              body: {
+                if (ids != null && ids.isNotEmpty) 'ids': ids,
+                if (statusIn != null && statusIn.isNotEmpty)
+                  'status_in': statusIn,
+                if (all) 'all': true,
+              },
+            )
+            as Map<String, dynamic>;
     return (data['deleted'] as num?)?.toInt() ?? 0;
   }
 
@@ -399,16 +424,26 @@ class AdminRepository {
     return list.map((e) => Bank.fromJson(e as Map<String, dynamic>)).toList();
   }
 
-  Future<Bank> createBank({required String name, required String bin, int? sortOrder}) async => Bank.fromJson(
-        await _api.post('/banks', body: {
-          'name': name,
-          'bin': bin,
-          if (sortOrder != null) 'sort_order': sortOrder,
-        }) as Map<String, dynamic>,
-      );
+  Future<Bank> createBank({
+    required String name,
+    required String bin,
+    int? sortOrder,
+  }) async => Bank.fromJson(
+    await _api.post(
+          '/banks',
+          body: {
+            'name': name,
+            'bin': bin,
+            if (sortOrder != null) 'sort_order': sortOrder,
+          },
+        )
+        as Map<String, dynamic>,
+  );
 
   Future<Bank> updateBank(String id, Map<String, dynamic> data) async =>
-      Bank.fromJson(await _api.patch('/banks/$id', body: data) as Map<String, dynamic>);
+      Bank.fromJson(
+        await _api.patch('/banks/$id', body: data) as Map<String, dynamic>,
+      );
 
   Future<void> deleteBank(String id) async {
     await _api.delete('/banks/$id');
@@ -418,7 +453,9 @@ class AdminRepository {
 
   Future<List<NavTabIcon>> navIcons() async {
     final list = await _api.get('/nav-icons') as List;
-    return list.map((e) => NavTabIcon.fromJson(e as Map<String, dynamic>)).toList();
+    return list
+        .map((e) => NavTabIcon.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   /// [iconUrl] = null thì xoá icon tuỳ chỉnh, tab quay lại dùng icon Material mặc định.
@@ -430,7 +467,9 @@ class AdminRepository {
 
   Future<List<IconLibrary>> iconLibraries() async {
     final list = await _api.get('/icon-libraries') as List;
-    return list.map((e) => IconLibrary.fromJson(e as Map<String, dynamic>)).toList();
+    return list
+        .map((e) => IconLibrary.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   Future<void> enableIconLibrary(String prefix, String name) async {
@@ -444,11 +483,15 @@ class AdminRepository {
   // ---- Ví tài xế: duyệt nạp/rút tiền ----
 
   Future<List<DriverWalletRequest>> walletDeposits({String? status}) async {
-    final list = await _api.get('/admin/wallet-deposits', query: {
-      'limit': 100,
-      if (status != null) 'status': status,
-    }) as List;
-    return list.map((e) => DriverWalletRequest.fromJson(e as Map<String, dynamic>)).toList();
+    final list =
+        await _api.get(
+              '/admin/wallet-deposits',
+              query: {'limit': 100, if (status != null) 'status': status},
+            )
+            as List;
+    return list
+        .map((e) => DriverWalletRequest.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   Future<void> confirmWalletDeposit(String id) async {
@@ -456,11 +499,15 @@ class AdminRepository {
   }
 
   Future<List<DriverWalletRequest>> walletWithdrawals({String? status}) async {
-    final list = await _api.get('/admin/wallet-withdrawals', query: {
-      'limit': 100,
-      if (status != null) 'status': status,
-    }) as List;
-    return list.map((e) => DriverWalletRequest.fromJson(e as Map<String, dynamic>)).toList();
+    final list =
+        await _api.get(
+              '/admin/wallet-withdrawals',
+              query: {'limit': 100, if (status != null) 'status': status},
+            )
+            as List;
+    return list
+        .map((e) => DriverWalletRequest.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   Future<void> confirmWalletWithdrawal(String id) async {
@@ -468,7 +515,10 @@ class AdminRepository {
   }
 
   Future<void> rejectWalletWithdrawal(String id, {String? reason}) async {
-    await _api.post('/admin/wallet-withdrawals/$id/reject', body: {if (reason != null) 'reason': reason});
+    await _api.post(
+      '/admin/wallet-withdrawals/$id/reject',
+      body: {if (reason != null) 'reason': reason},
+    );
   }
 
   // ---- Phí ship ----
@@ -484,6 +534,22 @@ class AdminRepository {
     ShippingFeeSettings settings,
   ) async => ShippingFeeSettings.fromJson(
     await _api.patch('/shipping-fee-settings', body: settings.toJson())
+        as Map<String, dynamic>,
+  );
+
+  // ---- Bán kính giao hàng mặc định ----
+
+  Future<DeliveryRadiusSettings> deliveryRadiusSettings() async {
+    final data = await _api.get('/delivery-radius-settings');
+    return data == null
+        ? DeliveryRadiusSettings.fallback()
+        : DeliveryRadiusSettings.fromJson(data as Map<String, dynamic>);
+  }
+
+  Future<DeliveryRadiusSettings> updateDeliveryRadiusSettings(
+    DeliveryRadiusSettings settings,
+  ) async => DeliveryRadiusSettings.fromJson(
+    await _api.patch('/delivery-radius-settings', body: settings.toJson())
         as Map<String, dynamic>,
   );
 
@@ -511,11 +577,12 @@ class AdminRepository {
         : AutoAcceptSettings.fromJson(data as Map<String, dynamic>);
   }
 
-  Future<AutoAcceptSettings> updateAutoAcceptSettings(AutoAcceptSettings settings) async =>
-      AutoAcceptSettings.fromJson(
-        await _api.patch('/auto-accept-settings', body: settings.toJson())
-            as Map<String, dynamic>,
-      );
+  Future<AutoAcceptSettings> updateAutoAcceptSettings(
+    AutoAcceptSettings settings,
+  ) async => AutoAcceptSettings.fromJson(
+    await _api.patch('/auto-accept-settings', body: settings.toJson())
+        as Map<String, dynamic>,
+  );
 
   // ---- Thông số "Nhận đơn" tài xế ----
 
@@ -526,11 +593,12 @@ class AdminRepository {
         : DriverAcceptSettings.fromJson(data as Map<String, dynamic>);
   }
 
-  Future<DriverAcceptSettings> updateDriverAcceptSettings(DriverAcceptSettings settings) async =>
-      DriverAcceptSettings.fromJson(
-        await _api.patch('/driver-accept-settings', body: settings.toJson())
-            as Map<String, dynamic>,
-      );
+  Future<DriverAcceptSettings> updateDriverAcceptSettings(
+    DriverAcceptSettings settings,
+  ) async => DriverAcceptSettings.fromJson(
+    await _api.patch('/driver-accept-settings', body: settings.toJson())
+        as Map<String, dynamic>,
+  );
 
   // ---- Thông tin tài khoản ngân hàng (VietQR) ----
 
@@ -541,22 +609,22 @@ class AdminRepository {
         : BankAccountSettings.fromJson(data as Map<String, dynamic>);
   }
 
-  Future<BankAccountSettings> updateBankAccountSettings(BankAccountSettings settings) async =>
-      BankAccountSettings.fromJson(
-        await _api.patch('/bank-account-settings', body: settings.toJson())
-            as Map<String, dynamic>,
-      );
+  Future<BankAccountSettings> updateBankAccountSettings(
+    BankAccountSettings settings,
+  ) async => BankAccountSettings.fromJson(
+    await _api.patch('/bank-account-settings', body: settings.toJson())
+        as Map<String, dynamic>,
+  );
 
   /// Xác nhận đã nhận chuyển khoản cho 1 đơn pending_payment — gọi ĐÚNG POST /payments (không
   /// phải PATCH /orders/:id/status) vì đây là hàm duy nhất vừa ghi lại giao dịch (bảng payments)
   /// vừa tự chuyển đơn sang 'placed' (record_payment RPC) và kích hoạt dispatch tự động cho đơn
   /// mua hộ (orderOffer.dispatchBuyOnBehalfOrder, gọi từ routes/payments.js).
   Future<void> confirmPayment(String orderId, int amount) async {
-    await _api.post('/payments', body: {
-      'order_id': orderId,
-      'method': 'bank_transfer',
-      'amount': amount,
-    });
+    await _api.post(
+      '/payments',
+      body: {'order_id': orderId, 'method': 'bank_transfer', 'amount': amount},
+    );
   }
 
   // ---- Thông báo đẩy ----
@@ -626,16 +694,20 @@ class AdminRepository {
     int limit = 200,
     int offset = 0,
   }) async {
-    final list = await _api.get(
-      '/admin/notifications/inbox',
-      query: {
-        'audience_type': audienceType,
-        if (merchantIds != null && merchantIds.isNotEmpty) 'merchant_ids': merchantIds.join(','),
-        if (userIds != null && userIds.isNotEmpty) 'user_ids': userIds.join(','),
-        'limit': limit,
-        'offset': offset,
-      },
-    ) as List;
+    final list =
+        await _api.get(
+              '/admin/notifications/inbox',
+              query: {
+                'audience_type': audienceType,
+                if (merchantIds != null && merchantIds.isNotEmpty)
+                  'merchant_ids': merchantIds.join(','),
+                if (userIds != null && userIds.isNotEmpty)
+                  'user_ids': userIds.join(','),
+                'limit': limit,
+                'offset': offset,
+              },
+            )
+            as List;
     return list
         .map((e) => NotificationInboxItem.fromJson(e as Map<String, dynamic>))
         .toList();
@@ -652,24 +724,34 @@ class AdminRepository {
     List<String>? userIds,
     bool all = false,
   }) async {
-    final data = await _api.post(
-      '/admin/notifications/inbox/delete',
-      body: {
-        if (ids != null && ids.isNotEmpty) 'ids': ids,
-        if (audienceType != null) 'audience_type': audienceType,
-        if (merchantIds != null && merchantIds.isNotEmpty) 'merchant_ids': merchantIds,
-        if (userIds != null && userIds.isNotEmpty) 'user_ids': userIds,
-        if (all) 'all': true,
-      },
-    ) as Map<String, dynamic>;
+    final data =
+        await _api.post(
+              '/admin/notifications/inbox/delete',
+              body: {
+                if (ids != null && ids.isNotEmpty) 'ids': ids,
+                if (audienceType != null) 'audience_type': audienceType,
+                if (merchantIds != null && merchantIds.isNotEmpty)
+                  'merchant_ids': merchantIds,
+                if (userIds != null && userIds.isNotEmpty) 'user_ids': userIds,
+                if (all) 'all': true,
+              },
+            )
+            as Map<String, dynamic>;
     return (data['deleted'] as num?)?.toInt() ?? 0;
   }
 
   Future<NotificationSettings> notificationSettings() async =>
-      NotificationSettings.fromJson(await _api.get('/notification-settings') as Map<String, dynamic>?);
+      NotificationSettings.fromJson(
+        await _api.get('/notification-settings') as Map<String, dynamic>?,
+      );
 
-  Future<NotificationSettings> updateNotificationTtl(int? ttlHours) async => NotificationSettings.fromJson(
-        await _api.patch('/notification-settings', body: {'ttl_hours': ttlHours}) as Map<String, dynamic>?,
+  Future<NotificationSettings> updateNotificationTtl(int? ttlHours) async =>
+      NotificationSettings.fromJson(
+        await _api.patch(
+              '/notification-settings',
+              body: {'ttl_hours': ttlHours},
+            )
+            as Map<String, dynamic>?,
       );
 
   // ---- Voucher ----
@@ -728,20 +810,26 @@ class AdminRepository {
 
   Future<List<VoucherAmountTier>> voucherAmountTiers(String voucherId) async {
     final list = await _api.get('/vouchers/$voucherId/amount-tiers') as List;
-    return list.map((e) => VoucherAmountTier.fromJson(e as Map<String, dynamic>)).toList();
+    return list
+        .map((e) => VoucherAmountTier.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   Future<VoucherAmountTier> createVoucherAmountTier(
     String voucherId,
     Map<String, dynamic> data,
   ) async => VoucherAmountTier.fromJson(
-        await _api.post('/vouchers/$voucherId/amount-tiers', body: data) as Map<String, dynamic>,
-      );
+    await _api.post('/vouchers/$voucherId/amount-tiers', body: data)
+        as Map<String, dynamic>,
+  );
 
-  Future<VoucherAmountTier> updateVoucherAmountTier(String id, Map<String, dynamic> data) async =>
-      VoucherAmountTier.fromJson(
-        await _api.patch('/voucher-amount-tiers/$id', body: data) as Map<String, dynamic>,
-      );
+  Future<VoucherAmountTier> updateVoucherAmountTier(
+    String id,
+    Map<String, dynamic> data,
+  ) async => VoucherAmountTier.fromJson(
+    await _api.patch('/voucher-amount-tiers/$id', body: data)
+        as Map<String, dynamic>,
+  );
 
   Future<void> deleteVoucherAmountTier(String id) async {
     await _api.delete('/voucher-amount-tiers/$id');

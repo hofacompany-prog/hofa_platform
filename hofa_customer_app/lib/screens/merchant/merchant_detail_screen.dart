@@ -223,10 +223,20 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
                                 Icon(
                                   Icons.place_outlined,
                                   size: 16,
-                                  color: theme.colorScheme.outline,
+                                  color: merchant.beyondOwnRadius
+                                      ? theme.colorScheme.secondary
+                                      : theme.colorScheme.outline,
                                 ),
                                 const SizedBox(width: 4),
-                                Text(formatDistanceKm(merchant.distanceKm!)),
+                                Text(
+                                  formatDistanceKm(merchant.distanceKm!),
+                                  style: merchant.beyondOwnRadius
+                                      ? theme.textTheme.bodyMedium?.copyWith(
+                                          color: theme.colorScheme.secondary,
+                                          fontWeight: FontWeight.w600,
+                                        )
+                                      : null,
+                                ),
                               ],
                             ),
                           ),

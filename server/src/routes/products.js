@@ -2,7 +2,7 @@ const router = require('express').Router();
 const db = require('../db');
 const asyncHandler = require('../asyncHandler');
 const { ApiError } = require('../errors');
-const { pickFields, requireFields, pagination, requireRole, requireMerchantAccess, requirePermission, haversineKm, parseLatLng } = require('../utils');
+const { pickFields, requireFields, pagination, requireRole, requireMerchantAccess, requirePermission, haversineKm, haversineKmSql, parseLatLng } = require('../utils');
 
 const PRODUCT_FIELDS = [
   'name', 'slug', 'description', 'sales_model', 'status', 'brand', 'unit', 'variant_group_name',
@@ -124,7 +124,7 @@ async function attachDistance(products, query) {
   if (!coords || !products.length) return;
   const merchantIds = [...new Set(products.map((p) => p.merchant_id))];
   const branches = await db.query(
-    `SELECT merchant_id, latitude, longitude, is_open
+    `SELECT merchant_id, latitude, longitude, is_open, delivery_radius_km
        FROM branches
       WHERE merchant_id = ANY($1::uuid[]) AND deleted_at IS NULL
         AND latitude IS NOT NULL AND longitude IS NOT NULL`,
@@ -136,10 +136,17 @@ async function attachDistance(products, query) {
     const cur = nearestByMerchant[b.merchant_id];
     // Ưu tiên chi nhánh đang mở — trong cùng nhóm mở/đóng thì lấy gần nhất.
     if (!cur || (b.is_open && !cur.isOpen) || (b.is_open === cur.isOpen && km < cur.km)) {
-      nearestByMerchant[b.merchant_id] = { km, isOpen: b.is_open };
+      nearestByMerchant[b.merchant_id] = { km, isOpen: b.is_open, radiusKm: Number(b.delivery_radius_km) };
     }
   }
-  products.forEach((p) => { p.distance_km = nearestByMerchant[p.merchant_id]?.km ?? null; });
+  // beyond_own_radius: vượt bán kính riêng của chi nhánh gần nhất nhưng vẫn lọt qua bộ lọc SQL
+  // ở GET /products (còn trong mức mặc định toàn sàn) — dùng để app khách tô cam khoảng cách,
+  // xem hofa-db/61_delivery_radius_settings.sql.
+  products.forEach((p) => {
+    const nearest = nearestByMerchant[p.merchant_id];
+    p.distance_km = nearest?.km ?? null;
+    p.beyond_own_radius = nearest ? nearest.km > nearest.radiusKm : false;
+  });
 }
 
 router.get('/products', asyncHandler(async (req, res) => {
@@ -180,6 +187,33 @@ router.get('/products', asyncHandler(async (req, res) => {
   if (req.query.is_featured !== undefined) {
     params.push(req.query.is_featured === 'true');
     clauses.push(`is_featured = $${params.length}`);
+  }
+
+  // Ẩn hẳn sản phẩm nếu cửa hàng bán nó vượt CẢ bán kính riêng của chi nhánh gần nhất LẪN bán
+  // kính mặc định toàn sàn — lọc ngay trong SQL (trước LIMIT/OFFSET) để không làm hụt trang kết
+  // quả, khác với attachDistance bên dưới (chỉ tính lại distance_km/beyond_own_radius để HIỂN
+  // THỊ, không lọc). "IS NOT FALSE" coi cửa hàng chưa có chi nhánh nào định vị được (subquery
+  // rỗng → NULL) là vẫn hiện, khớp hành vi cũ khi chưa có bộ lọc này — xem
+  // hofa-db/61_delivery_radius_settings.sql.
+  const coords = parseLatLng(req.query);
+  if (coords) {
+    params.push(coords.lat, coords.lng);
+    const latParam = params.length - 1;
+    const lngParam = params.length;
+    const radiusSettings = await db.queryOne('SELECT default_radius_km FROM delivery_radius_settings ORDER BY updated_at DESC LIMIT 1');
+    params.push(Number(radiusSettings?.default_radius_km ?? 5));
+    const defaultRadiusParam = params.length;
+    clauses.push(`(
+      SELECT nb.distance_km <= GREATEST(nb.delivery_radius_km, $${defaultRadiusParam})
+        FROM (
+          SELECT (${haversineKmSql(latParam, lngParam, 'b')}) AS distance_km, b.delivery_radius_km
+            FROM branches b
+           WHERE b.merchant_id = products.merchant_id AND b.deleted_at IS NULL
+             AND b.latitude IS NOT NULL AND b.longitude IS NOT NULL
+           ORDER BY b.is_open DESC, distance_km ASC
+           LIMIT 1
+        ) nb
+    ) IS NOT FALSE`);
   }
 
   params.push(limit, offset);

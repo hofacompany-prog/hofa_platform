@@ -14,6 +14,7 @@ import '../models/admin_delivery.dart';
 import '../models/order.dart';
 import '../models/category.dart';
 import '../models/shipping_fee_settings.dart';
+import '../models/delivery_radius_settings.dart';
 import '../models/voucher.dart';
 import '../models/voucher_amount_tier.dart';
 import '../models/order_settings.dart';
@@ -113,16 +114,21 @@ final orderDetailProvider = FutureProvider.autoDispose.family<Order, String>(
 );
 
 /// null = đang hoạt động (mặc định phía server), 'all' = mọi trạng thái, hoặc 1 giá trị cụ thể.
-final deliveryStatusFilterProvider = StateProvider.autoDispose<String?>((ref) => null);
+final deliveryStatusFilterProvider = StateProvider.autoDispose<String?>(
+  (ref) => null,
+);
 
-final deliveriesProvider = FutureProvider.autoDispose<List<AdminDelivery>>((ref) {
+final deliveriesProvider = FutureProvider.autoDispose<List<AdminDelivery>>((
+  ref,
+) {
   final status = ref.watch(deliveryStatusFilterProvider);
   return ref.watch(adminRepoProvider).deliveries(status: status);
 });
 
-final deliveryDetailProvider = FutureProvider.autoDispose.family<AdminDelivery, String>(
-  (ref, id) => ref.watch(adminRepoProvider).delivery(id),
-);
+final deliveryDetailProvider = FutureProvider.autoDispose
+    .family<AdminDelivery, String>(
+      (ref, id) => ref.watch(adminRepoProvider).delivery(id),
+    );
 
 final categoriesProvider = FutureProvider.autoDispose<List<Category>>(
   (ref) => ref.watch(adminRepoProvider).categories(),
@@ -140,17 +146,25 @@ final iconLibrariesProvider = FutureProvider.autoDispose<List<IconLibrary>>(
   (ref) => ref.watch(adminRepoProvider).iconLibraries(),
 );
 
-final pendingWalletDepositsProvider = FutureProvider.autoDispose<List<DriverWalletRequest>>(
-  (ref) => ref.watch(adminRepoProvider).walletDeposits(status: 'pending'),
-);
+final pendingWalletDepositsProvider =
+    FutureProvider.autoDispose<List<DriverWalletRequest>>(
+      (ref) => ref.watch(adminRepoProvider).walletDeposits(status: 'pending'),
+    );
 
-final pendingWalletWithdrawalsProvider = FutureProvider.autoDispose<List<DriverWalletRequest>>(
-  (ref) => ref.watch(adminRepoProvider).walletWithdrawals(status: 'pending'),
-);
+final pendingWalletWithdrawalsProvider =
+    FutureProvider.autoDispose<List<DriverWalletRequest>>(
+      (ref) =>
+          ref.watch(adminRepoProvider).walletWithdrawals(status: 'pending'),
+    );
 
 final shippingFeeSettingsProvider =
     FutureProvider.autoDispose<ShippingFeeSettings>(
       (ref) => ref.watch(adminRepoProvider).shippingFeeSettings(),
+    );
+
+final deliveryRadiusSettingsProvider =
+    FutureProvider.autoDispose<DeliveryRadiusSettings>(
+      (ref) => ref.watch(adminRepoProvider).deliveryRadiusSettings(),
     );
 
 final vouchersProvider = FutureProvider.autoDispose<List<Voucher>>(
@@ -163,24 +177,28 @@ final voucherMaxCountProvider = FutureProvider.autoDispose<int>(
 
 final voucherAmountTiersProvider = FutureProvider.autoDispose
     .family<List<VoucherAmountTier>, String>(
-      (ref, voucherId) => ref.watch(adminRepoProvider).voucherAmountTiers(voucherId),
+      (ref, voucherId) =>
+          ref.watch(adminRepoProvider).voucherAmountTiers(voucherId),
     );
 
 final orderSettingsProvider = FutureProvider.autoDispose<OrderSettings>(
   (ref) => ref.watch(adminRepoProvider).orderSettings(),
 );
 
-final autoAcceptSettingsProvider = FutureProvider.autoDispose<AutoAcceptSettings>(
-  (ref) => ref.watch(adminRepoProvider).autoAcceptSettings(),
-);
+final autoAcceptSettingsProvider =
+    FutureProvider.autoDispose<AutoAcceptSettings>(
+      (ref) => ref.watch(adminRepoProvider).autoAcceptSettings(),
+    );
 
-final driverAcceptSettingsProvider = FutureProvider.autoDispose<DriverAcceptSettings>(
-  (ref) => ref.watch(adminRepoProvider).driverAcceptSettings(),
-);
+final driverAcceptSettingsProvider =
+    FutureProvider.autoDispose<DriverAcceptSettings>(
+      (ref) => ref.watch(adminRepoProvider).driverAcceptSettings(),
+    );
 
-final bankAccountSettingsProvider = FutureProvider.autoDispose<BankAccountSettings>(
-  (ref) => ref.watch(adminRepoProvider).bankAccountSettings(),
-);
+final bankAccountSettingsProvider =
+    FutureProvider.autoDispose<BankAccountSettings>(
+      (ref) => ref.watch(adminRepoProvider).bankAccountSettings(),
+    );
 
 final pendingPaymentOrdersProvider = FutureProvider.autoDispose<List<Order>>(
   (ref) => ref.watch(adminRepoProvider).orders(status: 'pending_payment'),
@@ -195,6 +213,7 @@ final notificationsProvider =
 // lựa chọn quá phức tạp để làm key cho .family gọn gàng, _InboxTab tự fetch + setState cục
 // bộ (giống _UserPickerDialog/_MerchantPickerDialog cùng file screens/notifications).
 
-final notificationSettingsProvider = FutureProvider.autoDispose<NotificationSettings>(
-  (ref) => ref.watch(adminRepoProvider).notificationSettings(),
-);
+final notificationSettingsProvider =
+    FutureProvider.autoDispose<NotificationSettings>(
+      (ref) => ref.watch(adminRepoProvider).notificationSettings(),
+    );
