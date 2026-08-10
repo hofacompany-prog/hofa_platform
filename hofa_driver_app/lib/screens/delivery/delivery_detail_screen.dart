@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/format.dart';
+import '../../core/maps_launcher.dart';
 import '../../models/branch.dart';
 import '../../models/order.dart' as model;
 import '../../providers/delivery_providers.dart';
@@ -11,7 +12,13 @@ import '../../repositories/order_repository.dart';
 import '../../repositories/pickup_repository.dart';
 import '../../widgets/image_upload_field.dart';
 
-const _stageOrder = ['accepted', 'arrived_store', 'picked_up', 'delivering', 'delivered'];
+const _stageOrder = [
+  'accepted',
+  'arrived_store',
+  'picked_up',
+  'delivering',
+  'delivered',
+];
 
 /// Nhãn ngắn riêng cho stepper — không dùng chung deliveryStatusLabels vì hầu hết bắt đầu bằng
 /// "Đã" (Đã nhận đơn, Đã đến quán, Đã lấy hàng...), lấy từ đầu sẽ ra toàn chữ "Đã".
@@ -28,7 +35,8 @@ class DeliveryDetailScreen extends ConsumerStatefulWidget {
   const DeliveryDetailScreen({super.key, required this.deliveryId});
 
   @override
-  ConsumerState<DeliveryDetailScreen> createState() => _DeliveryDetailScreenState();
+  ConsumerState<DeliveryDetailScreen> createState() =>
+      _DeliveryDetailScreenState();
 }
 
 class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
@@ -57,7 +65,13 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
     }
   }
 
-  Future<void> _advance(String nextStatus, {String? otp, String? recipientName, List<String>? proofPhotoUrls, String? failureReason}) async {
+  Future<void> _advance(
+    String nextStatus, {
+    String? otp,
+    String? recipientName,
+    List<String>? proofPhotoUrls,
+    String? failureReason,
+  }) async {
     setState(() => _busy = true);
     try {
       await _repo.updateStatus(
@@ -71,7 +85,10 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
       ref.invalidate(deliveryProvider(widget.deliveryId));
       ref.invalidate(activeDeliveryProvider);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -90,8 +107,14 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
           autofocus: true,
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Huỷ')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Xác nhận')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Huỷ'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Xác nhận'),
+          ),
         ],
       ),
     );
@@ -113,13 +136,17 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
             children: [
               TextField(
                 controller: otpCtrl,
-                decoration: const InputDecoration(labelText: 'Mã OTP khách đọc cho bạn'),
+                decoration: const InputDecoration(
+                  labelText: 'Mã OTP khách đọc cho bạn',
+                ),
                 keyboardType: TextInputType.number,
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: nameCtrl,
-                decoration: const InputDecoration(labelText: 'Người nhận (không bắt buộc)'),
+                decoration: const InputDecoration(
+                  labelText: 'Người nhận (không bắt buộc)',
+                ),
               ),
               const SizedBox(height: 16),
               ImageUploadField(
@@ -131,8 +158,14 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Huỷ')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Xác nhận')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Huỷ'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Xác nhận'),
+          ),
         ],
       ),
     );
@@ -162,7 +195,9 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Đơn mua hộ — không cần OTP, chỉ cần chụp ảnh hoá đơn hoặc hàng đã mua làm bằng chứng.'),
+                const Text(
+                  'Đơn mua hộ — không cần OTP, chỉ cần chụp ảnh hoá đơn hoặc hàng đã mua làm bằng chứng.',
+                ),
                 const SizedBox(height: 12),
                 ImageUploadField(
                   label: 'Ảnh hoá đơn/hàng đã mua (bắt buộc)',
@@ -174,13 +209,21 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
                 ),
                 if (error != null) ...[
                   const SizedBox(height: 8),
-                  Text(error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                  Text(
+                    error!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
                 ],
               ],
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Huỷ')),
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Huỷ'),
+            ),
             FilledButton(
               onPressed: () {
                 if (photoUrl == null) {
@@ -211,9 +254,14 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
           maxLines: 3,
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Huỷ')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Huỷ'),
+          ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
             onPressed: () => Navigator.pop(context, true),
             child: const Text('Xác nhận'),
           ),
@@ -229,11 +277,6 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
     if (await canLaunchUrl(uri)) await launchUrl(uri);
   }
 
-  Future<void> _navigate(double lat, double lng) async {
-    final uri = Uri.parse('https://www.google.com/maps/dir/?api=1&destination=$lat,$lng');
-    if (await canLaunchUrl(uri)) await launchUrl(uri, mode: LaunchMode.externalApplication);
-  }
-
   @override
   Widget build(BuildContext context) {
     final deliveryAsync = ref.watch(deliveryProvider(widget.deliveryId));
@@ -241,12 +284,15 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Chuyến giao hàng'),
+        title: Text(
+          _order != null ? 'Đơn ${_order!.orderCode}' : 'Chuyến giao hàng',
+        ),
         actions: [
           IconButton(
             tooltip: 'Bản đồ',
             icon: const Icon(Icons.map_outlined),
-            onPressed: () => context.push('/deliveries/${widget.deliveryId}/map'),
+            onPressed: () =>
+                context.push('/deliveries/${widget.deliveryId}/map'),
           ),
         ],
       ),
@@ -265,8 +311,10 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
               const SizedBox(height: 8),
               _StageStepper(status: delivery.status),
               const SizedBox(height: 16),
-              if (delivery.isBuyOnBehalf && order != null) _BuyOnBehalfShoppingCard(order: order),
-              if (delivery.isBuyOnBehalf && order != null) const SizedBox(height: 12),
+              if (delivery.isBuyOnBehalf && order != null)
+                _BuyOnBehalfShoppingCard(order: order),
+              if (delivery.isBuyOnBehalf && order != null)
+                const SizedBox(height: 12),
               Card(
                 elevation: 0,
                 color: theme.colorScheme.surfaceContainerLow,
@@ -277,16 +325,37 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
                     children: [
                       Row(
                         children: [
-                          Icon(Icons.storefront, color: theme.colorScheme.primary),
+                          Icon(
+                            Icons.storefront,
+                            color: theme.colorScheme.primary,
+                          ),
                           const SizedBox(width: 8),
-                          Expanded(child: Text(branch?.displayName ?? 'Đang tải...', style: theme.textTheme.titleSmall)),
+                          Expanded(
+                            child: Text(
+                              branch?.displayName ?? 'Đang tải...',
+                              style: theme.textTheme.titleSmall,
+                            ),
+                          ),
                           if (branch != null)
-                            IconButton(icon: const Icon(Icons.directions), onPressed: () => _navigate(branch.latitude, branch.longitude)),
+                            IconButton(
+                              icon: const Icon(Icons.directions),
+                              onPressed: () => launchDirections(
+                                branch.latitude,
+                                branch.longitude,
+                              ),
+                            ),
                           if (branch?.phone != null)
-                            IconButton(icon: const Icon(Icons.call_outlined), onPressed: () => _call(branch!.phone!)),
+                            IconButton(
+                              icon: const Icon(Icons.call_outlined),
+                              onPressed: () => _call(branch!.phone!),
+                            ),
                         ],
                       ),
-                      if (branch != null) Padding(padding: const EdgeInsets.only(left: 32), child: Text(branch.fullLine)),
+                      if (branch != null)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 32),
+                          child: Text(branch.fullLine),
+                        ),
                     ],
                   ),
                 ),
@@ -304,24 +373,60 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
                         children: [
                           Icon(Icons.flag, color: theme.colorScheme.secondary),
                           const SizedBox(width: 8),
-                          Expanded(child: Text(order?.shipRecipientName ?? 'Đang tải...', style: theme.textTheme.titleSmall)),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Khách hàng',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.outline,
+                                  ),
+                                ),
+                                Text(
+                                  order?.shipRecipientName ?? 'Đang tải...',
+                                  style: theme.textTheme.titleSmall,
+                                ),
+                              ],
+                            ),
+                          ),
                           if (order != null && order.shipLatitude != null)
                             IconButton(
-                                icon: const Icon(Icons.directions),
-                                onPressed: () => _navigate(order.shipLatitude!, order.shipLongitude!)),
-                          if (order != null) IconButton(icon: const Icon(Icons.call_outlined), onPressed: () => _call(order.shipRecipientPhone)),
+                              icon: const Icon(Icons.directions),
+                              onPressed: () => launchDirections(
+                                order.shipLatitude!,
+                                order.shipLongitude!,
+                              ),
+                            ),
+                          if (order != null)
+                            IconButton(
+                              icon: const Icon(Icons.call_outlined),
+                              onPressed: () => _call(order.shipRecipientPhone),
+                            ),
                         ],
                       ),
-                      if (order != null) Padding(padding: const EdgeInsets.only(left: 32), child: Text(order.shipFullAddress)),
-                      if (order?.shipNote != null && order!.shipNote!.isNotEmpty)
+                      if (order != null)
+                        Padding(
+                          padding: const EdgeInsets.only(left: 32),
+                          child: Text(order.shipFullAddress),
+                        ),
+                      if (order?.shipNote != null &&
+                          order!.shipNote!.isNotEmpty)
                         Padding(
                           padding: const EdgeInsets.only(left: 32, top: 4),
-                          child: Text('Ghi chú: ${order.shipNote}', style: theme.textTheme.bodySmall),
+                          child: Text(
+                            'Ghi chú: ${order.shipNote}',
+                            style: theme.textTheme.bodySmall,
+                          ),
                         ),
                     ],
                   ),
                 ),
               ),
+              if (!delivery.isBuyOnBehalf && order != null) ...[
+                const SizedBox(height: 12),
+                _OrderItemsCard(order: order),
+              ],
               const SizedBox(height: 12),
               Card(
                 elevation: 0,
@@ -332,7 +437,12 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text('Bạn nhận được', style: theme.textTheme.bodyMedium),
-                      Text(formatVnd(delivery.driverFee), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                      Text(
+                        formatVnd(delivery.driverFee),
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -340,8 +450,13 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
               if (order != null && order.paymentMethod == 'cod')
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
-                  child: Text('Thu hộ khách: ${formatVnd(order.totalAmount)} (COD)',
-                      style: TextStyle(color: theme.colorScheme.error, fontWeight: FontWeight.w600)),
+                  child: Text(
+                    'Thu hộ khách: ${formatVnd(order.totalAmount)} (COD)',
+                    style: TextStyle(
+                      color: theme.colorScheme.error,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
               const SizedBox(height: 24),
               _ActionArea(
@@ -350,7 +465,10 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
                 busy: _busy,
                 isBuyOnBehalf: delivery.isBuyOnBehalf,
                 onArrivedStore: () => _advance('arrived_store'),
-                onPickedUp: () => _promptOtp('Nhập mã OTP lấy hàng (cửa hàng đọc cho bạn)', 'picked_up'),
+                onPickedUp: () => _promptOtp(
+                  'Nhập mã OTP lấy hàng (cửa hàng đọc cho bạn)',
+                  'picked_up',
+                ),
                 onBuyOnBehalfPickup: _promptBuyOnBehalfPickup,
                 onStartDelivering: () => _advance('delivering'),
                 onDelivered: _promptDelivered,
@@ -373,7 +491,9 @@ class _StageStepper extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final failed = status == 'failed' || status == 'returned';
-    final currentIndex = failed ? _stageOrder.length : _stageOrder.indexOf(status);
+    final currentIndex = failed
+        ? _stageOrder.length
+        : _stageOrder.indexOf(status);
 
     return Row(
       children: [
@@ -384,20 +504,31 @@ class _StageStepper extends StatelessWidget {
                 CircleAvatar(
                   radius: 12,
                   backgroundColor: i <= currentIndex
-                      ? (failed ? theme.colorScheme.error : theme.colorScheme.primary)
+                      ? (failed
+                            ? theme.colorScheme.error
+                            : theme.colorScheme.primary)
                       : theme.colorScheme.surfaceContainerHighest,
                   child: i < currentIndex || (i == currentIndex && !failed)
                       ? const Icon(Icons.check, size: 14, color: Colors.white)
                       : null,
                 ),
                 const SizedBox(height: 4),
-                Text(_stageShortLabels[_stageOrder[i]]!, style: theme.textTheme.labelSmall, textAlign: TextAlign.center),
+                Text(
+                  _stageShortLabels[_stageOrder[i]]!,
+                  style: theme.textTheme.labelSmall,
+                  textAlign: TextAlign.center,
+                ),
               ],
             ),
           ),
           if (i != _stageOrder.length - 1)
             Expanded(
-              child: Container(height: 2, color: i < currentIndex ? theme.colorScheme.primary : theme.colorScheme.surfaceContainerHighest),
+              child: Container(
+                height: 2,
+                color: i < currentIndex
+                    ? theme.colorScheme.primary
+                    : theme.colorScheme.surfaceContainerHighest,
+              ),
             ),
         ],
       ],
@@ -444,7 +575,9 @@ class _ActionArea extends StatelessWidget {
         );
       case 'arrived_store':
         return FilledButton.icon(
-          onPressed: busy ? null : (isBuyOnBehalf ? onBuyOnBehalfPickup : onPickedUp),
+          onPressed: busy
+              ? null
+              : (isBuyOnBehalf ? onBuyOnBehalfPickup : onPickedUp),
           icon: const Icon(Icons.inventory_2_outlined),
           label: Text(isBuyOnBehalf ? 'Đã mua xong hàng' : 'Đã lấy hàng'),
         );
@@ -465,7 +598,9 @@ class _ActionArea extends StatelessWidget {
             const SizedBox(height: 8),
             OutlinedButton.icon(
               onPressed: busy ? null : onFailed,
-              style: OutlinedButton.styleFrom(foregroundColor: theme.colorScheme.error),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: theme.colorScheme.error,
+              ),
               icon: const Icon(Icons.error_outline),
               label: const Text('Báo giao thất bại'),
             ),
@@ -474,7 +609,11 @@ class _ActionArea extends StatelessWidget {
       case 'delivered':
         return Column(
           children: [
-            Icon(Icons.check_circle, color: theme.colorScheme.primary, size: 48),
+            Icon(
+              Icons.check_circle,
+              color: theme.colorScheme.primary,
+              size: 48,
+            ),
             const SizedBox(height: 8),
             Text('Đã giao hàng thành công', style: theme.textTheme.titleMedium),
             const SizedBox(height: 16),
@@ -484,9 +623,16 @@ class _ActionArea extends StatelessWidget {
       case 'failed':
         return Column(
           children: [
-            Icon(Icons.cancel_outlined, color: theme.colorScheme.error, size: 48),
+            Icon(
+              Icons.cancel_outlined,
+              color: theme.colorScheme.error,
+              size: 48,
+            ),
             const SizedBox(height: 8),
-            Text('Giao thất bại${failureReason != null ? ': $failureReason' : ''}', textAlign: TextAlign.center),
+            Text(
+              'Giao thất bại${failureReason != null ? ': $failureReason' : ''}',
+              textAlign: TextAlign.center,
+            ),
             const SizedBox(height: 16),
             FilledButton(onPressed: onDone, child: const Text('Về trang chủ')),
           ],
@@ -494,6 +640,76 @@ class _ActionArea extends StatelessWidget {
       default:
         return const SizedBox();
     }
+  }
+}
+
+/// Mã đơn + danh sách món + tổng tiền — cho đơn thường (khác đơn mua hộ, đã có
+/// _BuyOnBehalfShoppingCard riêng với ý nghĩa khác: tiền tài xế cần ứng mua giúp). Giúp tài xế
+/// đối chiếu đúng đơn/đúng món khi giao mà không cần hỏi lại cửa hàng hay mở app khác.
+class _OrderItemsCard extends StatelessWidget {
+  final model.Order order;
+  const _OrderItemsCard({required this.order});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+      elevation: 0,
+      color: theme.colorScheme.surfaceContainerLow,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.receipt_long_outlined,
+                  color: theme.colorScheme.primary,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Đơn ${order.orderCode}',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            for (final item in order.items)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '${item.quantity}x ${item.productName}${item.variantName != null ? ' (${item.variantName})' : ''}',
+                      ),
+                    ),
+                    Text(formatVnd(item.lineTotal)),
+                  ],
+                ),
+              ),
+            const Divider(height: 20),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text('Tổng tiền đơn', style: theme.textTheme.bodyMedium),
+                Text(
+                  formatVnd(order.totalAmount),
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -516,10 +732,18 @@ class _BuyOnBehalfShoppingCard extends StatelessWidget {
           children: [
             Row(
               children: [
-                Icon(Icons.shopping_bag_outlined, color: theme.colorScheme.secondary),
+                Icon(
+                  Icons.shopping_bag_outlined,
+                  color: theme.colorScheme.secondary,
+                ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text('Cần mua giúp khách', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
+                  child: Text(
+                    'Cần mua giúp khách',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
                 ),
               ],
             ),
@@ -542,14 +766,24 @@ class _BuyOnBehalfShoppingCard extends StatelessWidget {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text('Tổng tiền hàng cần ứng', style: theme.textTheme.bodyMedium),
-                Text(formatVnd(order.subtotal), style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold)),
+                Text(
+                  'Tổng tiền hàng cần ứng',
+                  style: theme.textTheme.bodyMedium,
+                ),
+                Text(
+                  formatVnd(order.subtotal),
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 4),
             Text(
               'Bạn ứng tiền mua tại quán, hoàn ngay vào ví khi bấm "Đã mua xong hàng" (kèm ảnh hoá đơn).',
-              style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.outline,
+              ),
             ),
           ],
         ),
