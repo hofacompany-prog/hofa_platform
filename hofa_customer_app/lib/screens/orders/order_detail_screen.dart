@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
 import '../../core/file_download.dart';
 import '../../core/format.dart';
 import '../../core/vietqr.dart';
@@ -14,11 +15,16 @@ import 'orders_list_screen.dart' show orderStatusColor;
 
 class OrderDetailScreen extends ConsumerStatefulWidget {
   final String orderId;
+
   /// true khi mở màn này do khách bấm đúng thông báo "Giao hàng thành công" (xem
   /// push_service.dart#handleData) — tự bật popup mời đánh giá 1 lần, không hiện lúc khách tự
   /// vào xem đơn bình thường.
   final bool autoPromptReview;
-  const OrderDetailScreen({super.key, required this.orderId, this.autoPromptReview = false});
+  const OrderDetailScreen({
+    super.key,
+    required this.orderId,
+    this.autoPromptReview = false,
+  });
 
   @override
   ConsumerState<OrderDetailScreen> createState() => _OrderDetailScreenState();
@@ -38,14 +44,24 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('Đơn hàng đã giao thành công!'),
-          content: Text('Đơn ${o.orderCode} đã giao xong — đánh giá món ăn, cửa hàng và tài xế ngay nhé.'),
+          content: Text(
+            'Đơn ${o.orderCode} đã giao xong — đánh giá món ăn, cửa hàng và tài xế ngay nhé.',
+          ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Để sau')),
-            FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Đánh giá ngay')),
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Để sau'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Đánh giá ngay'),
+            ),
           ],
         ),
       );
-      if (goReview == true && _reviewSectionKey.currentContext != null && mounted) {
+      if (goReview == true &&
+          _reviewSectionKey.currentContext != null &&
+          mounted) {
         await Scrollable.ensureVisible(
           _reviewSectionKey.currentContext!,
           duration: const Duration(milliseconds: 300),
@@ -79,7 +95,9 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
     try {
       await ref.read(orderRepoProvider).cancelOrder(o.id, note: 'Khách tự huỷ');
       ref.invalidate(orderDetailProvider(widget.orderId));
-      ref.invalidate(myOrdersPagedProvider(ref.read(orderStatusFilterProvider)));
+      ref.invalidate(
+        myOrdersPagedProvider(ref.read(orderStatusFilterProvider)),
+      );
     } catch (e) {
       if (mounted)
         ScaffoldMessenger.of(
@@ -90,12 +108,37 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
     }
   }
 
+  /// Đơn đặt trước/giá sỉ khách không tự huỷ được (xem Order.canContactMerchantToCancel) —
+  /// thay bằng gọi thẳng cho cửa hàng để nhờ huỷ/hỏi hộ, không mở popup xác nhận huỷ nào cả.
+  Future<void> _contactMerchant(String? phone) async {
+    if (phone == null || phone.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Cửa hàng chưa cập nhật số điện thoại liên hệ'),
+        ),
+      );
+      return;
+    }
+    final uri = Uri(scheme: 'tel', path: phone);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    } else if (mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Không gọi được tới $phone')));
+    }
+  }
+
   /// Đơn mua hộ cần khách chọn (hoặc chọn lại, sau khi tài xế trước từ chối/hết hạn) tài xế —
   /// xem Order.needsDriverPick. Dùng chung màn chọn với checkout_screen.dart.
   Future<void> _pickDriver(Order o) async {
     final branch = await ref.read(branchDetailProvider(o.branchId).future);
     if (branch.latitude == null || branch.longitude == null || !mounted) return;
-    final picked = await showDriverPickerDialog(context, lat: branch.latitude!, lng: branch.longitude!);
+    final picked = await showDriverPickerDialog(
+      context,
+      lat: branch.latitude!,
+      lng: branch.longitude!,
+    );
     if (picked == null) return;
 
     setState(() => _busy = true);
@@ -103,7 +146,10 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
       await ref.read(orderRepoProvider).selectDriver(o.id, picked.id);
       ref.invalidate(orderDetailProvider(widget.orderId));
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -180,7 +226,9 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                   const SizedBox(height: 12),
                   Card(
                     elevation: 0,
-                    color: theme.colorScheme.primaryContainer.withValues(alpha: 0.5),
+                    color: theme.colorScheme.primaryContainer.withValues(
+                      alpha: 0.5,
+                    ),
                     child: Padding(
                       padding: const EdgeInsets.all(16),
                       child: Column(
@@ -188,7 +236,10 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                         children: [
                           Row(
                             children: [
-                              Icon(Icons.person_search, color: theme.colorScheme.primary),
+                              Icon(
+                                Icons.person_search,
+                                color: theme.colorScheme.primary,
+                              ),
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Text(
@@ -269,7 +320,8 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                     ),
                   ),
                 ),
-                if (o.paymentMethod == 'bank_transfer' && o.status == 'pending_payment') ...[
+                if (o.paymentMethod == 'bank_transfer' &&
+                    o.status == 'pending_payment') ...[
                   const SizedBox(height: 12),
                   _BankTransferQrCard(order: o),
                 ],
@@ -376,12 +428,30 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                     icon: const Icon(Icons.cancel_outlined),
                     label: const Text('Huỷ đơn hàng'),
                   ),
+                // Đơn đặt trước/giá sỉ — khách không tự huỷ được nữa (xem
+                // Order.canContactMerchantToCancel), chỉ còn lối gọi cho cửa hàng nhờ xử lý.
+                if (o.canContactMerchantToCancel)
+                  Consumer(
+                    builder: (context, ref, _) {
+                      final merchant = ref
+                          .watch(merchantDetailProvider(o.merchantId))
+                          .valueOrNull;
+                      return OutlinedButton.icon(
+                        onPressed: () => _contactMerchant(merchant?.phone),
+                        icon: const Icon(Icons.phone_outlined),
+                        label: const Text('Liên hệ cửa hàng để huỷ đơn'),
+                      );
+                    },
+                  ),
                 if (o.canReview) ...[
                   const SizedBox(height: 12),
                   _ReviewSection(
                     key: _reviewSectionKey,
                     order: o,
-                    driver: deliveryAsync.maybeWhen(data: (d) => d, orElse: () => null),
+                    driver: deliveryAsync.maybeWhen(
+                      data: (d) => d,
+                      orElse: () => null,
+                    ),
                   ),
                 ],
               ],
@@ -414,7 +484,11 @@ class _ReviewTarget {
   final String targetType;
   final String targetId;
   final String label;
-  const _ReviewTarget({required this.targetType, required this.targetId, required this.label});
+  const _ReviewTarget({
+    required this.targetType,
+    required this.targetId,
+    required this.label,
+  });
 }
 
 /// Đánh giá món ăn (từng sản phẩm khác nhau trong đơn) + cửa hàng + tài xế, gộp trong 1 khối —
@@ -432,13 +506,25 @@ class _ReviewSection extends ConsumerWidget {
     final productTargets = <_ReviewTarget>[
       for (final item in order.items)
         if (item.productId != null && seenProductIds.add(item.productId!))
-          _ReviewTarget(targetType: 'product', targetId: item.productId!, label: item.productName),
+          _ReviewTarget(
+            targetType: 'product',
+            targetId: item.productId!,
+            label: item.productName,
+          ),
     ];
     final targets = [
       ...productTargets,
-      _ReviewTarget(targetType: 'merchant', targetId: order.merchantId, label: order.merchantName ?? 'Cửa hàng'),
+      _ReviewTarget(
+        targetType: 'merchant',
+        targetId: order.merchantId,
+        label: order.merchantName ?? 'Cửa hàng',
+      ),
       if (driver?.driverId != null)
-        _ReviewTarget(targetType: 'driver', targetId: driver!.driverId!, label: driver!.driverName ?? 'Tài xế'),
+        _ReviewTarget(
+          targetType: 'driver',
+          targetId: driver!.driverId!,
+          label: driver!.driverName ?? 'Tài xế',
+        ),
     ];
 
     return Card(
@@ -453,7 +539,9 @@ class _ReviewSection extends ConsumerWidget {
             const SizedBox(height: 4),
             Text(
               'Đánh giá món ăn, cửa hàng và tài xế — chỉ đánh giá được trong vòng 3 ngày kể từ lúc giao hàng.',
-              style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.outline,
+              ),
             ),
             const SizedBox(height: 12),
             Consumer(
@@ -468,7 +556,9 @@ class _ReviewSection extends ConsumerWidget {
                   data: (existing) {
                     Review? findExisting(_ReviewTarget t) {
                       for (final r in existing) {
-                        if (r.targetType == t.targetType && r.targetId == t.targetId) return r;
+                        if (r.targetType == t.targetType &&
+                            r.targetId == t.targetId)
+                          return r;
                       }
                       return null;
                     }
@@ -500,7 +590,11 @@ class _ReviewTargetTile extends ConsumerStatefulWidget {
   final String orderId;
   final _ReviewTarget target;
   final Review? existing;
-  const _ReviewTargetTile({required this.orderId, required this.target, this.existing});
+  const _ReviewTargetTile({
+    required this.orderId,
+    required this.target,
+    this.existing,
+  });
 
   @override
   ConsumerState<_ReviewTargetTile> createState() => _ReviewTargetTileState();
@@ -511,7 +605,11 @@ class _ReviewTargetTileState extends ConsumerState<_ReviewTargetTile> {
   final _commentCtrl = TextEditingController();
   bool _submitting = false;
 
-  static const _typeLabels = {'merchant': 'Cửa hàng', 'driver': 'Tài xế', 'product': 'Món'};
+  static const _typeLabels = {
+    'merchant': 'Cửa hàng',
+    'driver': 'Tài xế',
+    'product': 'Món',
+  };
 
   @override
   void dispose() {
@@ -522,7 +620,9 @@ class _ReviewTargetTileState extends ConsumerState<_ReviewTargetTile> {
   Future<void> _submit() async {
     setState(() => _submitting = true);
     try {
-      await ref.read(reviewRepoProvider).create(
+      await ref
+          .read(reviewRepoProvider)
+          .create(
             orderId: widget.orderId,
             targetType: widget.target.targetType,
             targetId: widget.target.targetId,
@@ -531,11 +631,15 @@ class _ReviewTargetTileState extends ConsumerState<_ReviewTargetTile> {
           );
       ref.invalidate(orderReviewsProvider(widget.orderId));
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('Cảm ơn bạn đã đánh giá!')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Cảm ơn bạn đã đánh giá!')),
+        );
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -551,7 +655,9 @@ class _ReviewTargetTileState extends ConsumerState<_ReviewTargetTile> {
       children: [
         Text(
           '${_typeLabels[widget.target.targetType] ?? ''}: ${widget.target.label}',
-          style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+          style: theme.textTheme.bodyMedium?.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
         ),
         Row(
           children: List.generate(
@@ -563,17 +669,27 @@ class _ReviewTargetTileState extends ConsumerState<_ReviewTargetTile> {
                 i < shownRating ? Icons.star : Icons.star_border,
                 color: Colors.amber.shade700,
               ),
-              onPressed: existing != null ? null : () => setState(() => _rating = i + 1),
+              onPressed: existing != null
+                  ? null
+                  : () => setState(() => _rating = i + 1),
             ),
           ),
         ),
         if (existing != null) ...[
-          if (existing.comment != null && existing.comment!.isNotEmpty) Text(existing.comment!),
-          Text('Đã gửi đánh giá', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline)),
+          if (existing.comment != null && existing.comment!.isNotEmpty)
+            Text(existing.comment!),
+          Text(
+            'Đã gửi đánh giá',
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.outline,
+            ),
+          ),
         ] else ...[
           TextField(
             controller: _commentCtrl,
-            decoration: const InputDecoration(labelText: 'Nhận xét (không bắt buộc)'),
+            decoration: const InputDecoration(
+              labelText: 'Nhận xét (không bắt buộc)',
+            ),
             maxLines: 2,
           ),
           const SizedBox(height: 8),
@@ -604,7 +720,8 @@ class _BankTransferQrCard extends ConsumerStatefulWidget {
   const _BankTransferQrCard({required this.order});
 
   @override
-  ConsumerState<_BankTransferQrCard> createState() => _BankTransferQrCardState();
+  ConsumerState<_BankTransferQrCard> createState() =>
+      _BankTransferQrCardState();
 }
 
 class _BankTransferQrCardState extends ConsumerState<_BankTransferQrCard> {
@@ -617,7 +734,10 @@ class _BankTransferQrCardState extends ConsumerState<_BankTransferQrCard> {
       if (res.statusCode != 200) throw Exception('Không tải được ảnh QR');
       await FileDownloadService.downloadBytes(res.bodyBytes, filename);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
     } finally {
       if (mounted) setState(() => _downloading = false);
     }
@@ -634,7 +754,12 @@ class _BankTransferQrCardState extends ConsumerState<_BankTransferQrCard> {
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: settingsAsync.when(
-          loading: () => const Center(child: Padding(padding: EdgeInsets.all(12), child: CircularProgressIndicator())),
+          loading: () => const Center(
+            child: Padding(
+              padding: EdgeInsets.all(12),
+              child: CircularProgressIndicator(),
+            ),
+          ),
           error: (e, _) => Text('Lỗi: $e'),
           data: (settings) {
             if (!settings.isConfigured) {
@@ -653,7 +778,10 @@ class _BankTransferQrCardState extends ConsumerState<_BankTransferQrCard> {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                Text('Quét mã để chuyển khoản', style: theme.textTheme.titleSmall),
+                Text(
+                  'Quét mã để chuyển khoản',
+                  style: theme.textTheme.titleSmall,
+                ),
                 const SizedBox(height: 12),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(8),
@@ -662,27 +790,46 @@ class _BankTransferQrCardState extends ConsumerState<_BankTransferQrCard> {
                     width: 240,
                     height: 240,
                     fit: BoxFit.contain,
-                    errorBuilder: (context, error, stackTrace) => const SizedBox(
-                      width: 240,
-                      height: 240,
-                      child: Center(child: Text('Không tải được ảnh QR')),
-                    ),
+                    errorBuilder: (context, error, stackTrace) =>
+                        const SizedBox(
+                          width: 240,
+                          height: 240,
+                          child: Center(child: Text('Không tải được ảnh QR')),
+                        ),
                   ),
                 ),
                 const SizedBox(height: 12),
-                Text('${settings.bankName ?? ''} · ${settings.accountNumber}', style: theme.textTheme.bodyMedium),
-                if (settings.accountHolderName != null) Text(settings.accountHolderName!, style: theme.textTheme.bodySmall),
+                Text(
+                  '${settings.bankName ?? ''} · ${settings.accountNumber}',
+                  style: theme.textTheme.bodyMedium,
+                ),
+                if (settings.accountHolderName != null)
+                  Text(
+                    settings.accountHolderName!,
+                    style: theme.textTheme.bodySmall,
+                  ),
                 const SizedBox(height: 4),
                 Text(
                   'Số tiền: ${formatVnd(widget.order.totalAmount)} · Nội dung: ${widget.order.orderCode}',
-                  style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.outline,
+                  ),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 12),
                 OutlinedButton.icon(
-                  onPressed: _downloading ? null : () => _download(qrUrl, 'vietqr_${widget.order.orderCode}.png'),
+                  onPressed: _downloading
+                      ? null
+                      : () => _download(
+                          qrUrl,
+                          'vietqr_${widget.order.orderCode}.png',
+                        ),
                   icon: _downloading
-                      ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                      ? const SizedBox(
+                          height: 16,
+                          width: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
                       : const Icon(Icons.download_outlined),
                   label: const Text('Tải QR về máy'),
                 ),

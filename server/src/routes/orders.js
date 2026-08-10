@@ -286,6 +286,16 @@ router.patch('/orders/:id/status', asyncHandler(async (req, res) => {
     if (req.body.status === 'cancelled' && req.ctx.role === 'customer' && order.customer_id !== req.ctx.userId) {
       throw new ApiError('FORBIDDEN', 'Không phải đơn của bạn', 403);
     }
+    // Đơn đặt trước/giá sỉ (sales_model 'scheduled') — cửa hàng đã chuẩn bị/giữ chỗ nguyên
+    // liệu theo lịch, khách không tự huỷ được nữa, chỉ liên hệ cửa hàng nhờ huỷ hộ (chặn thật
+    // ở đây, không chỉ ẩn nút ở app khách — xem Order.canCancel phía Flutter).
+    if (req.body.status === 'cancelled' && req.ctx.role === 'customer' && order.sales_model === 'scheduled') {
+      throw new ApiError(
+        'FORBIDDEN',
+        'Đơn đặt trước/giá sỉ không tự huỷ được — vui lòng liên hệ trực tiếp cửa hàng',
+        403
+      );
+    }
     // Nhân viên đổi trạng thái đơn (khác 'cancelled' của khách ở trên) cần đúng quyền
     // orders.manage — chủ cửa hàng/admin đã qua ORDER_STATUS_ROLES ở trên là đủ.
     if (req.ctx.role === 'merchant_staff') {

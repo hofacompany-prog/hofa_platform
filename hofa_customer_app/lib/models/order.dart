@@ -56,19 +56,21 @@ class OrderStatusEvent {
 
   OrderStatusEvent({required this.status, this.note, required this.createdAt});
 
-  factory OrderStatusEvent.fromJson(Map<String, dynamic> json) =>
-      OrderStatusEvent(
-        // Cột thật trong order_status_history là to_status — status/new_status chỉ giữ lại
-        // để tương thích ngược nếu API từng trả tên khác trước đây.
-        status: json['to_status'] as String? ??
-            json['status'] as String? ??
-            json['new_status'] as String? ??
-            '',
-        note: json['note'] as String?,
-        createdAt:
-            DateTime.tryParse(json['created_at']?.toString() ?? '') ??
-            DateTime.now(),
-      );
+  factory OrderStatusEvent.fromJson(
+    Map<String, dynamic> json,
+  ) => OrderStatusEvent(
+    // Cột thật trong order_status_history là to_status — status/new_status chỉ giữ lại
+    // để tương thích ngược nếu API từng trả tên khác trước đây.
+    status:
+        json['to_status'] as String? ??
+        json['status'] as String? ??
+        json['new_status'] as String? ??
+        '',
+    note: json['note'] as String?,
+    createdAt:
+        DateTime.tryParse(json['created_at']?.toString() ?? '') ??
+        DateTime.now(),
+  );
 }
 
 class Order {
@@ -77,6 +79,7 @@ class Order {
   final String merchantId;
   final String branchId;
   final String status;
+  final String salesModel;
   final String shipRecipientName;
   final String shipRecipientPhone;
   final String shipLine1;
@@ -103,6 +106,7 @@ class Order {
     required this.merchantId,
     required this.branchId,
     required this.status,
+    required this.salesModel,
     required this.shipRecipientName,
     required this.shipRecipientPhone,
     required this.shipLine1,
@@ -124,16 +128,30 @@ class Order {
     this.selectedDriverId,
   });
 
+  /// Đơn "đặt trước"/"giá sỉ" (salesModel 'scheduled', khác 'instant' giao ngay) khách KHÔNG
+  /// tự huỷ được nữa — cửa hàng đã chuẩn bị/giữ chỗ nguyên liệu theo lịch từ trước, chỉ cửa
+  /// hàng mới được huỷ (xem canContactMerchantToCancel bên dưới cho lối thay thế phía khách).
   bool get canCancel =>
+      salesModel != 'scheduled' &&
       ['pending_payment', 'placed', 'confirmed'].contains(status);
+
+  /// Đơn "đặt trước"/"giá sỉ" còn ở giai đoạn lẽ ra huỷ được (nếu là đơn giao ngay) — khách
+  /// không tự huỷ được nhưng vẫn cần 1 lối liên hệ cửa hàng để nhờ huỷ hộ.
+  bool get canContactMerchantToCancel =>
+      salesModel == 'scheduled' &&
+      ['pending_payment', 'placed', 'confirmed'].contains(status);
+
   /// Đủ điều kiện đánh giá — đơn đã giao VÀ còn trong 3 ngày kể từ lúc giao, quá hạn thì
   /// ẩn hẳn phần đánh giá (khớp yêu cầu "sẽ bị ẩn sau 3 ngày và không đánh giá được nữa").
   bool get canReview =>
       ['delivered', 'completed'].contains(status) &&
-      (deliveredAt == null || DateTime.now().difference(deliveredAt!).inDays < 3);
+      (deliveredAt == null ||
+          DateTime.now().difference(deliveredAt!).inDays < 3);
   bool get isBuyOnBehalf => merchantType == 'buy_on_behalf';
+
   /// Đơn mua hộ đang chờ khách chọn tài xế (chưa từng chọn, hoặc tài xế trước đã từ chối).
-  bool get needsDriverPick => isBuyOnBehalf && status == 'ready_for_pickup' && selectedDriverId == null;
+  bool get needsDriverPick =>
+      isBuyOnBehalf && status == 'ready_for_pickup' && selectedDriverId == null;
 
   factory Order.fromJson(Map<String, dynamic> json) => Order(
     id: json['id'] as String,
@@ -141,6 +159,7 @@ class Order {
     merchantId: json['merchant_id'] as String,
     branchId: json['branch_id'] as String,
     status: json['status'] as String,
+    salesModel: json['sales_model'] as String? ?? 'instant',
     shipRecipientName: json['ship_recipient_name'] as String? ?? '',
     shipRecipientPhone: json['ship_recipient_phone'] as String? ?? '',
     shipLine1: json['ship_line1'] as String? ?? '',
