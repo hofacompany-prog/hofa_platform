@@ -18,7 +18,8 @@ class RegisterDriverScreen extends ConsumerStatefulWidget {
   const RegisterDriverScreen({super.key, this.existing});
 
   @override
-  ConsumerState<RegisterDriverScreen> createState() => _RegisterDriverScreenState();
+  ConsumerState<RegisterDriverScreen> createState() =>
+      _RegisterDriverScreenState();
 }
 
 class _RegisterDriverScreenState extends ConsumerState<RegisterDriverScreen> {
@@ -102,11 +103,38 @@ class _RegisterDriverScreenState extends ConsumerState<RegisterDriverScreen> {
       }
       ref.invalidate(userProfileProvider);
       ref.invalidate(myDriverProvider);
-      if (_isEditing && mounted) {
+      if (!mounted) return;
+      if (_isEditing) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Đã nộp lại hồ sơ — chờ HOFA xét duyệt tiếp nhé!')),
+          const SnackBar(
+            content: Text('Đã nộp lại hồ sơ — chờ HOFA xét duyệt tiếp nhé!'),
+          ),
         );
         context.pop();
+      } else {
+        // Đăng ký lần đầu — invalidate ở trên chỉ xoá cache của myDriverProvider, KHÔNG tự
+        // kích hoạt lại redirect của GoRouter (refreshListenable chỉ theo dõi trạng thái đăng
+        // nhập Supabase, không biết gì về Riverpod), nên phải tự điều hướng sau khi khách bấm
+        // "Vào trang chủ" — nếu không màn này đứng yên dù đăng ký đã thành công.
+        await showDialog<void>(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => AlertDialog(
+            icon: const Icon(Icons.celebration_outlined, size: 40),
+            title: const Text('Chúc mừng bạn đã đăng ký thành công!'),
+            content: const Text(
+              'Hồ sơ của bạn đã được gửi tới HOFA. Vui lòng chờ xét duyệt — bạn sẽ nhận được '
+              'thông báo ngay khi hồ sơ được duyệt.',
+            ),
+            actions: [
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('Vào trang chủ'),
+              ),
+            ],
+          ),
+        );
+        if (mounted) context.go('/');
       }
     } on ApiException catch (e) {
       setState(() => _error = e.message);
@@ -163,32 +191,45 @@ class _RegisterDriverScreenState extends ConsumerState<RegisterDriverScreen> {
                         : 'Vài thông tin để bắt đầu chạy đơn trên HOFA',
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
-                  if (_isEditing && widget.existing?.rejectionReason != null) ...[
+                  if (_isEditing &&
+                      widget.existing?.rejectionReason != null) ...[
                     const SizedBox(height: 8),
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.errorContainer.withValues(alpha: 0.5),
+                        color: Theme.of(
+                          context,
+                        ).colorScheme.errorContainer.withValues(alpha: 0.5),
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Text(
                         'Lý do bị từ chối: ${widget.existing!.rejectionReason}',
-                        style: TextStyle(color: Theme.of(context).colorScheme.error),
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                        ),
                       ),
                     ),
                   ],
                   const SizedBox(height: 24),
                   TextFormField(
                     controller: _nationalIdCtrl,
-                    decoration: const InputDecoration(labelText: 'Số CCCD/CMND'),
-                    validator: (v) => (v == null || v.trim().isEmpty) ? 'Nhập số CCCD/CMND' : null,
+                    decoration: const InputDecoration(
+                      labelText: 'Số CCCD/CMND',
+                    ),
+                    validator: (v) => (v == null || v.trim().isEmpty)
+                        ? 'Nhập số CCCD/CMND'
+                        : null,
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: _licenseNoCtrl,
-                    decoration: const InputDecoration(labelText: 'Số giấy phép lái xe'),
-                    validator: (v) => (v == null || v.trim().isEmpty) ? 'Nhập số giấy phép lái xe' : null,
+                    decoration: const InputDecoration(
+                      labelText: 'Số giấy phép lái xe',
+                    ),
+                    validator: (v) => (v == null || v.trim().isEmpty)
+                        ? 'Nhập số giấy phép lái xe'
+                        : null,
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
@@ -196,19 +237,31 @@ class _RegisterDriverScreenState extends ConsumerState<RegisterDriverScreen> {
                     decoration: const InputDecoration(labelText: 'Loại xe'),
                     items: const [
                       DropdownMenuItem(value: 'xe máy', child: Text('Xe máy')),
-                      DropdownMenuItem(value: 'xe tải 500kg', child: Text('Xe tải nhỏ (≤500kg)')),
-                      DropdownMenuItem(value: 'xe tải 1000kg', child: Text('Xe tải (≤1 tấn)')),
+                      DropdownMenuItem(
+                        value: 'xe tải 500kg',
+                        child: Text('Xe tải nhỏ (≤500kg)'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'xe tải 1000kg',
+                        child: Text('Xe tải (≤1 tấn)'),
+                      ),
                     ],
-                    onChanged: (v) => setState(() => _vehicleType = v ?? _vehicleType),
+                    onChanged: (v) =>
+                        setState(() => _vehicleType = v ?? _vehicleType),
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: _plateCtrl,
                     decoration: const InputDecoration(labelText: 'Biển số xe'),
-                    validator: (v) => (v == null || v.trim().isEmpty) ? 'Nhập biển số xe' : null,
+                    validator: (v) => (v == null || v.trim().isEmpty)
+                        ? 'Nhập biển số xe'
+                        : null,
                   ),
                   const SizedBox(height: 20),
-                  Text('Tài khoản nhận tiền', style: Theme.of(context).textTheme.titleSmall),
+                  Text(
+                    'Tài khoản nhận tiền',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
                   const SizedBox(height: 4),
                   Text(
                     'Dùng để HOFA chuyển tiền khi bạn rút ví.',
@@ -216,31 +269,51 @@ class _RegisterDriverScreenState extends ConsumerState<RegisterDriverScreen> {
                   ),
                   const SizedBox(height: 12),
                   banksAsync.when(
-                    loading: () => const Center(child: Padding(padding: EdgeInsets.all(8), child: CircularProgressIndicator())),
-                    error: (e, _) => Text('Không tải được danh sách ngân hàng: $e'),
+                    loading: () => const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(8),
+                        child: CircularProgressIndicator(),
+                      ),
+                    ),
+                    error: (e, _) =>
+                        Text('Không tải được danh sách ngân hàng: $e'),
                     data: (banks) => DropdownButtonFormField<Bank>(
                       initialValue: _selectedBank,
                       decoration: const InputDecoration(labelText: 'Ngân hàng'),
-                      items: banks.map((b) => DropdownMenuItem(value: b, child: Text(b.name))).toList(),
+                      items: banks
+                          .map(
+                            (b) =>
+                                DropdownMenuItem(value: b, child: Text(b.name)),
+                          )
+                          .toList(),
                       onChanged: (v) => setState(() => _selectedBank = v),
                     ),
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: _accountNumberCtrl,
-                    decoration: const InputDecoration(labelText: 'Số tài khoản'),
+                    decoration: const InputDecoration(
+                      labelText: 'Số tài khoản',
+                    ),
                     keyboardType: TextInputType.number,
-                    validator: (v) => (v == null || v.trim().isEmpty) ? 'Nhập số tài khoản' : null,
+                    validator: (v) => (v == null || v.trim().isEmpty)
+                        ? 'Nhập số tài khoản'
+                        : null,
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
                     controller: _accountHolderCtrl,
-                    decoration: const InputDecoration(labelText: 'Tên chủ tài khoản'),
-                    validator: (v) => (v == null || v.trim().isEmpty) ? 'Nhập tên chủ tài khoản' : null,
+                    decoration: const InputDecoration(
+                      labelText: 'Tên chủ tài khoản',
+                    ),
+                    validator: (v) => (v == null || v.trim().isEmpty)
+                        ? 'Nhập tên chủ tài khoản'
+                        : null,
                   ),
                   const SizedBox(height: 16),
                   MultiImageUploadField(
-                    label: 'Ảnh CCCD, giấy phép lái xe, đăng ký xe (không bắt buộc)',
+                    label:
+                        'Ảnh CCCD, giấy phép lái xe, đăng ký xe (không bắt buộc)',
                     folder: 'drivers',
                     initialUrls: _documentUrls,
                     onChanged: (urls) => _documentUrls = urls,
@@ -254,14 +327,25 @@ class _RegisterDriverScreenState extends ConsumerState<RegisterDriverScreen> {
                   ),
                   if (_error != null) ...[
                     const SizedBox(height: 16),
-                    Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                    Text(
+                      _error!,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
                   ],
                   const SizedBox(height: 24),
                   FilledButton(
                     onPressed: _loading ? null : _submit,
                     child: _loading
-                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                        : Text(_isEditing ? 'Cập nhật hồ sơ' : 'Hoàn tất đăng ký'),
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Text(
+                            _isEditing ? 'Cập nhật hồ sơ' : 'Hoàn tất đăng ký',
+                          ),
                   ),
                 ],
               ),
