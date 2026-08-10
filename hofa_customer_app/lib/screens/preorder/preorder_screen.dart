@@ -1258,51 +1258,30 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
                 ),
         ),
         const Divider(height: 1),
-        // Bọc trong chiều cao tối đa theo tỷ lệ màn hình (tự cuộn riêng nếu cần) — nhường
-        // nhiều khoảng trống hơn cho danh sách sản phẩm ở trên (Expanded), thay vì để khối
-        // này chiếm bao nhiêu tuỳ nội dung.
-        ConstrainedBox(
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.sizeOf(context).height * 0.24,
-          ),
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Ngày giao', style: theme.textTheme.labelMedium),
-                      const SizedBox(height: 4),
-                      _compactOutlinedButton(
-                        icon: Icons.calendar_today_outlined,
-                        label: _wholesaleDate == null
-                            ? 'Chọn ngày giao'
-                            : _shortDate(_wholesaleDate!),
-                        onPressed: _pickWholesaleDate,
-                      ),
-                    ],
-                  ),
+        // Icon trên nút đã đủ nói rõ đây là ngày/giờ giao — bỏ hẳn tiêu đề riêng phía trên để
+        // gọn hết mức, nhường khoảng trống cho danh sách sản phẩm ở trên (Expanded).
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+          child: Row(
+            children: [
+              Expanded(
+                child: _compactOutlinedButton(
+                  icon: Icons.calendar_today_outlined,
+                  label: _wholesaleDate == null
+                      ? 'Chọn ngày'
+                      : _shortDate(_wholesaleDate!),
+                  onPressed: _pickWholesaleDate,
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Giờ giao', style: theme.textTheme.labelMedium),
-                      const SizedBox(height: 4),
-                      _compactOutlinedButton(
-                        icon: Icons.access_time_outlined,
-                        label: _wholesaleTime.format(context),
-                        onPressed: _pickWholesaleTime,
-                      ),
-                    ],
-                  ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _compactOutlinedButton(
+                  icon: Icons.access_time_outlined,
+                  label: _wholesaleTime.format(context),
+                  onPressed: _pickWholesaleTime,
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
         _footer(
@@ -1404,20 +1383,19 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
                 ),
         ),
         const Divider(height: 1),
-        // Cùng cách bọc với _wholesaleTab — cố định chiều cao tối đa theo tỷ lệ màn hình,
-        // tự cuộn riêng khi "Giao nhiều lần" hiện thêm hàng, để danh sách sản phẩm/lịch ngày
-        // ở trên (Expanded) luôn có nhiều khoảng trống nhất có thể.
+        // Bỏ hết tiêu đề riêng dòng — icon đồng hồ + nhãn "Giao:"/"Tính:" ngắn gọn đặt NGANG
+        // hàng với nút/chip thay vì xếp trên-dưới, để khối này thấp hết mức có thể. Vẫn bọc
+        // chiều cao tối đa theo tỷ lệ màn hình + tự cuộn riêng phòng lúc "Giao nhiều lần"
+        // hiện thêm hàng, nhường khoảng trống cho danh sách sản phẩm/lịch ngày ở trên.
         ConstrainedBox(
           constraints: BoxConstraints(
-            maxHeight: MediaQuery.sizeOf(context).height * 0.32,
+            maxHeight: MediaQuery.sizeOf(context).height * 0.22,
           ),
           child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+            padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Giờ giao', style: theme.textTheme.labelMedium),
-                const SizedBox(height: 4),
                 _compactOutlinedButton(
                   icon: Icons.access_time_outlined,
                   label: _time.format(context),
@@ -1426,22 +1404,22 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
                     setState(() => _recurringConfirmed = false);
                   },
                 ),
-                const SizedBox(height: 10),
-                Text('Hình thức giao', style: theme.textTheme.labelMedium),
-                const SizedBox(height: 4),
-                Wrap(
-                  spacing: 6,
+                const SizedBox(height: 6),
+                Row(
                   children: [
+                    Text('Giao:', style: theme.textTheme.labelMedium),
+                    const SizedBox(width: 6),
                     _compactChoiceChip(
-                      label: 'Giao 1 lần',
+                      label: '1 lần',
                       selected: _mode == 'once',
                       onSelected: () => setState(() {
                         _mode = 'once';
                         _recurringConfirmed = false;
                       }),
                     ),
+                    const SizedBox(width: 6),
                     _compactChoiceChip(
-                      label: 'Giao nhiều lần',
+                      label: 'Nhiều lần',
                       selected: _mode == 'recurring',
                       onSelected: () => setState(() {
                         _mode = 'recurring';
@@ -1451,10 +1429,10 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
                   ],
                 ),
                 if (_mode == 'recurring') ...[
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
                   Row(
                     children: [
-                      Text('Số tuần lặp lại', style: theme.textTheme.bodySmall),
+                      Text('Số tuần:', style: theme.textTheme.labelMedium),
                       const Spacer(),
                       IconButton(
                         visualDensity: VisualDensity.compact,
@@ -1489,25 +1467,23 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
                     icon: _recurringConfirmed
                         ? Icons.check_circle
                         : Icons.event_available,
-                    label: _recurringConfirmed
-                        ? 'Đã xác nhận'
-                        : 'Xác nhận lịch giao',
+                    label: _recurringConfirmed ? 'Đã xác nhận' : 'Xác nhận',
                     onPressed: () => _confirmRecurring(items),
                   ),
                 ],
-                const SizedBox(height: 10),
-                Text('Cách tính tổng tiền', style: theme.textTheme.labelMedium),
-                const SizedBox(height: 4),
-                Wrap(
-                  spacing: 6,
+                const SizedBox(height: 6),
+                Row(
                   children: [
+                    Text('Tính:', style: theme.textTheme.labelMedium),
+                    const SizedBox(width: 6),
                     _compactChoiceChip(
-                      label: 'Tính theo ngày',
+                      label: 'Theo ngày',
                       selected: _totalBasis == 'day',
                       onSelected: () => setState(() => _totalBasis = 'day'),
                     ),
+                    const SizedBox(width: 6),
                     _compactChoiceChip(
-                      label: 'Tính theo tuần',
+                      label: 'Theo tuần',
                       selected: _totalBasis == 'week',
                       onSelected: () => setState(() => _totalBasis = 'week'),
                     ),
