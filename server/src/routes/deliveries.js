@@ -37,7 +37,15 @@ async function needsCustomerRepick(orderId) {
 
 router.get('/orders/:orderId/delivery', asyncHandler(async (req, res) => {
   await requireOrderAccess(req.ctx, req.params.orderId);
-  const row = await db.queryOne('SELECT * FROM deliveries WHERE order_id = $1', [req.params.orderId]);
+  // Kèm tên + rating tài xế — màn "Đánh giá tài xế" phía khách cần hiện tên, không chỉ driver_id.
+  const row = await db.queryOne(
+    `SELECT d.*, u.full_name AS driver_name, dr.rating_avg AS driver_rating_avg
+       FROM deliveries d
+       LEFT JOIN drivers dr ON dr.id = d.driver_id
+       LEFT JOIN users u ON u.id = dr.user_id
+      WHERE d.order_id = $1`,
+    [req.params.orderId]
+  );
   res.json({ ok: true, data: row });
 }));
 

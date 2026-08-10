@@ -213,7 +213,15 @@ router.get('/merchants/:merchantId/orders', asyncHandler(async (req, res) => {
 
 router.get('/orders/:id', asyncHandler(async (req, res) => {
   const order = await requireOrderAccess(req.ctx, req.params.id);
-  const items = await db.query('SELECT * FROM order_items WHERE order_id = $1', [req.params.id]);
+  // Kèm product_id (qua product_variants) — cần để màn "Đánh giá món ăn" biết đánh giá đúng
+  // sản phẩm nào, order_items chỉ lưu variant_id chứ không có product_id trực tiếp.
+  const items = await db.query(
+    `SELECT oi.*, pv.product_id
+       FROM order_items oi
+       LEFT JOIN product_variants pv ON pv.id = oi.variant_id
+      WHERE oi.order_id = $1`,
+    [req.params.id]
+  );
   if (items.length) {
     const toppings = await db.query(
       'SELECT * FROM order_item_toppings WHERE order_item_id = ANY($1::uuid[]) ORDER BY created_at ASC',

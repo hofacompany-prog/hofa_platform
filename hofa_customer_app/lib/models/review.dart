@@ -6,6 +6,7 @@ class Review {
   final int rating;
   final String? comment;
   final String? merchantReply;
+  final String? customerName;
   final DateTime createdAt;
 
   Review({
@@ -16,6 +17,7 @@ class Review {
     required this.rating,
     this.comment,
     this.merchantReply,
+    this.customerName,
     required this.createdAt,
   });
 
@@ -27,6 +29,7 @@ class Review {
         rating: (json['rating'] as num?)?.toInt() ?? 0,
         comment: json['comment'] as String?,
         merchantReply: json['merchant_reply'] as String?,
+        customerName: json['customer_name'] as String?,
         createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ?? DateTime.now(),
       );
 }

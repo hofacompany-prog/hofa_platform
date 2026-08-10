@@ -155,9 +155,23 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
                         const SizedBox(height: 6),
                         Row(
                           children: [
-                            Icon(Icons.star, size: 16, color: Colors.amber.shade700),
-                            const SizedBox(width: 4),
-                            Text('${merchant.ratingAvg.toStringAsFixed(1)} (${merchant.ratingCount} đánh giá)'),
+                            InkWell(
+                              borderRadius: BorderRadius.circular(6),
+                              onTap: () => context.go('/merchants/${merchant.id}/reviews'),
+                              child: Row(
+                                children: [
+                                  Icon(Icons.star, size: 16, color: Colors.amber.shade700),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    '${merchant.ratingAvg.toStringAsFixed(1)} (${merchant.ratingCount} đánh giá)',
+                                    style: TextStyle(
+                                      decoration: TextDecoration.underline,
+                                      decorationColor: theme.colorScheme.outline,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                             const SizedBox(width: 16),
                             Icon(Icons.timer_outlined, size: 16, color: theme.colorScheme.outline),
                             const SizedBox(width: 4),

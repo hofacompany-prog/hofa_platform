@@ -17,6 +17,9 @@ class Delivery {
   final String? deliveryOtp;
   final num? distanceKm;
   final int? etaMinutes;
+  final String? driverId;
+  final String? driverName;
+  final num? driverRatingAvg;
 
   Delivery({
     required this.id,
@@ -25,6 +28,9 @@ class Delivery {
     this.deliveryOtp,
     this.distanceKm,
     this.etaMinutes,
+    this.driverId,
+    this.driverName,
+    this.driverRatingAvg,
   });
 
   factory Delivery.fromJson(Map<String, dynamic> json) => Delivery(
@@ -34,5 +40,10 @@ class Delivery {
         deliveryOtp: json['delivery_otp'] as String?,
         distanceKm: json['distance_km'] != null ? num.tryParse('${json['distance_km']}') : null,
         etaMinutes: (json['eta_minutes'] as num?)?.toInt(),
+        driverId: json['driver_id'] as String?,
+        driverName: json['driver_name'] as String?,
+        driverRatingAvg: json['driver_rating_avg'] != null
+            ? num.tryParse('${json['driver_rating_avg']}')
+            : null,
       );
 }

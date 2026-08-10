@@ -11,6 +11,7 @@ import 'screens/auth/complete_profile_screen.dart';
 import 'screens/shell/customer_shell.dart';
 import 'screens/home/home_screen.dart';
 import 'screens/merchant/merchant_detail_screen.dart';
+import 'screens/merchant/merchant_reviews_screen.dart';
 import 'screens/product/product_detail_screen.dart';
 import 'screens/cart/cart_screen.dart';
 import 'screens/preorder/preorder_screen.dart';
@@ -87,6 +88,11 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: '/merchants/:id',
             builder: (context, state) =>
                 MerchantDetailScreen(merchantId: state.pathParameters['id']!),
+          ),
+          GoRoute(
+            path: '/merchants/:id/reviews',
+            builder: (context, state) =>
+                MerchantReviewsScreen(merchantId: state.pathParameters['id']!),
           ),
           GoRoute(
             path: '/products/:id',

@@ -13,6 +13,7 @@ class OrderItemTopping {
 
 class OrderItem {
   final String id;
+  final String? productId;
   final String productName;
   final String? variantName;
   final int unitPrice;
@@ -23,6 +24,7 @@ class OrderItem {
 
   OrderItem({
     required this.id,
+    this.productId,
     required this.productName,
     this.variantName,
     required this.unitPrice,
@@ -34,6 +36,7 @@ class OrderItem {
 
   factory OrderItem.fromJson(Map<String, dynamic> json) => OrderItem(
     id: json['id'] as String,
+    productId: json['product_id'] as String?,
     productName: json['product_name'] as String? ?? '',
     variantName: json['variant_name'] as String?,
     unitPrice: (json['unit_price'] as num?)?.toInt() ?? 0,
@@ -88,6 +91,7 @@ class Order {
   final DateTime? scheduledFor;
   final String? customerNote;
   final DateTime createdAt;
+  final DateTime? deliveredAt;
   final List<OrderItem> items;
   final String? merchantName;
   final String? merchantType;
@@ -113,6 +117,7 @@ class Order {
     this.scheduledFor,
     this.customerNote,
     required this.createdAt,
+    this.deliveredAt,
     required this.items,
     this.merchantName,
     this.merchantType,
@@ -121,7 +126,11 @@ class Order {
 
   bool get canCancel =>
       ['pending_payment', 'placed', 'confirmed'].contains(status);
-  bool get canReview => ['delivered', 'completed'].contains(status);
+  /// Đủ điều kiện đánh giá — đơn đã giao VÀ còn trong 3 ngày kể từ lúc giao, quá hạn thì
+  /// ẩn hẳn phần đánh giá (khớp yêu cầu "sẽ bị ẩn sau 3 ngày và không đánh giá được nữa").
+  bool get canReview =>
+      ['delivered', 'completed'].contains(status) &&
+      (deliveredAt == null || DateTime.now().difference(deliveredAt!).inDays < 3);
   bool get isBuyOnBehalf => merchantType == 'buy_on_behalf';
   /// Đơn mua hộ đang chờ khách chọn tài xế (chưa từng chọn, hoặc tài xế trước đã từ chối).
   bool get needsDriverPick => isBuyOnBehalf && status == 'ready_for_pickup' && selectedDriverId == null;
@@ -150,6 +159,9 @@ class Order {
     createdAt:
         DateTime.tryParse(json['created_at']?.toString() ?? '') ??
         DateTime.now(),
+    deliveredAt: json['delivered_at'] != null
+        ? DateTime.tryParse(json['delivered_at'].toString())
+        : null,
     items:
         (json['items'] as List?)
             ?.map((e) => OrderItem.fromJson(e as Map<String, dynamic>))

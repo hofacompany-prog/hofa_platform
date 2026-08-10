@@ -231,3 +231,25 @@ final productReviewsProvider = FutureProvider.autoDispose
           .watch(reviewRepoProvider)
           .list(targetType: 'product', targetId: productId),
     );
+
+/// Đánh giá cửa hàng — key gồm rating lọc (null = tất cả) để đổi bộ lọc tự tạo trang mới,
+/// khớp cách merchantProductsPagedProvider dùng family cho mỗi merchantId.
+final merchantReviewsPagedProvider = StateNotifierProvider.autoDispose
+    .family<PaginatedListNotifier<Review>, PaginatedState<Review>, (String, int?)>(
+      (ref, key) => PaginatedListNotifier<Review>(
+        (limit, offset) => ref.read(reviewRepoProvider).list(
+              targetType: 'merchant',
+              targetId: key.$1,
+              rating: key.$2,
+              limit: limit,
+              offset: offset,
+            ),
+      ),
+    );
+
+/// Mọi đánh giá (mọi target_type) của 1 đơn — màn chi tiết đơn dùng để biết đã đánh giá
+/// món/cửa hàng/tài xế nào rồi.
+final orderReviewsProvider = FutureProvider.autoDispose
+    .family<List<Review>, String>(
+      (ref, orderId) => ref.watch(reviewRepoProvider).listByOrder(orderId),
+    );

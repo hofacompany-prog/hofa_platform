@@ -5,7 +5,9 @@ import 'package:http/http.dart' as http;
 import '../../core/file_download.dart';
 import '../../core/format.dart';
 import '../../core/vietqr.dart';
+import '../../models/delivery.dart';
 import '../../models/order.dart';
+import '../../models/review.dart';
 import '../../providers/app_providers.dart';
 import '../../widgets/driver_picker_dialog.dart';
 import 'orders_list_screen.dart' show orderStatusColor;
@@ -47,82 +49,6 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
       await ref.read(orderRepoProvider).cancelOrder(o.id, note: 'Khách tự huỷ');
       ref.invalidate(orderDetailProvider(widget.orderId));
       ref.invalidate(myOrdersPagedProvider(ref.read(orderStatusFilterProvider)));
-    } catch (e) {
-      if (mounted)
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
-  Future<void> _review(Order o) async {
-    var rating = 5;
-    final commentCtrl = TextEditingController();
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setInner) => AlertDialog(
-          title: const Text('Đánh giá cửa hàng'),
-          content: SizedBox(
-            width: 320,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: List.generate(
-                    5,
-                    (i) => IconButton(
-                      icon: Icon(
-                        i < rating ? Icons.star : Icons.star_border,
-                        color: Colors.amber.shade700,
-                      ),
-                      onPressed: () => setInner(() => rating = i + 1),
-                    ),
-                  ),
-                ),
-                TextField(
-                  controller: commentCtrl,
-                  decoration: const InputDecoration(
-                    labelText: 'Nhận xét (không bắt buộc)',
-                  ),
-                  maxLines: 3,
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Huỷ'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('Gửi'),
-            ),
-          ],
-        ),
-      ),
-    );
-    if (ok != true) return;
-
-    setState(() => _busy = true);
-    try {
-      await ref
-          .read(reviewRepoProvider)
-          .create(
-            orderId: o.id,
-            targetType: 'merchant',
-            targetId: o.merchantId,
-            rating: rating,
-            comment: commentCtrl.text.trim(),
-          );
-      if (mounted)
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Cảm ơn bạn đã đánh giá!')),
-        );
     } catch (e) {
       if (mounted)
         ScaffoldMessenger.of(
@@ -418,15 +344,13 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                     icon: const Icon(Icons.cancel_outlined),
                     label: const Text('Huỷ đơn hàng'),
                   ),
-                if (o.canReview)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: FilledButton.icon(
-                      onPressed: _busy ? null : () => _review(o),
-                      icon: const Icon(Icons.star_border),
-                      label: const Text('Đánh giá cửa hàng'),
-                    ),
+                if (o.canReview) ...[
+                  const SizedBox(height: 12),
+                  _ReviewSection(
+                    order: o,
+                    driver: deliveryAsync.maybeWhen(data: (d) => d, orElse: () => null),
                   ),
+                ],
               ],
             ),
           );
@@ -451,6 +375,192 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
       ],
     ),
   );
+}
+
+class _ReviewTarget {
+  final String targetType;
+  final String targetId;
+  final String label;
+  const _ReviewTarget({required this.targetType, required this.targetId, required this.label});
+}
+
+/// Đánh giá món ăn (từng sản phẩm khác nhau trong đơn) + cửa hàng + tài xế, gộp trong 1 khối —
+/// chỉ hiện khi Order.canReview (đã giao và còn trong 3 ngày, xem models/order.dart). Tài xế chỉ
+/// hiện nếu đơn đã có delivery.driverId (đơn chưa từng có tài xế thì không có gì để đánh giá).
+class _ReviewSection extends ConsumerWidget {
+  final Order order;
+  final Delivery? driver;
+  const _ReviewSection({required this.order, this.driver});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final seenProductIds = <String>{};
+    final productTargets = <_ReviewTarget>[
+      for (final item in order.items)
+        if (item.productId != null && seenProductIds.add(item.productId!))
+          _ReviewTarget(targetType: 'product', targetId: item.productId!, label: item.productName),
+    ];
+    final targets = [
+      ...productTargets,
+      _ReviewTarget(targetType: 'merchant', targetId: order.merchantId, label: order.merchantName ?? 'Cửa hàng'),
+      if (driver?.driverId != null)
+        _ReviewTarget(targetType: 'driver', targetId: driver!.driverId!, label: driver!.driverName ?? 'Tài xế'),
+    ];
+
+    return Card(
+      elevation: 0,
+      color: theme.colorScheme.surfaceContainerLow,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Đánh giá đơn hàng', style: theme.textTheme.titleSmall),
+            const SizedBox(height: 4),
+            Text(
+              'Đánh giá món ăn, cửa hàng và tài xế — chỉ đánh giá được trong vòng 3 ngày kể từ lúc giao hàng.',
+              style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline),
+            ),
+            const SizedBox(height: 12),
+            Consumer(
+              builder: (context, ref, _) {
+                final existingAsync = ref.watch(orderReviewsProvider(order.id));
+                return existingAsync.when(
+                  loading: () => const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 8),
+                    child: Center(child: CircularProgressIndicator()),
+                  ),
+                  error: (e, _) => Text('Lỗi: $e'),
+                  data: (existing) {
+                    Review? findExisting(_ReviewTarget t) {
+                      for (final r in existing) {
+                        if (r.targetType == t.targetType && r.targetId == t.targetId) return r;
+                      }
+                      return null;
+                    }
+
+                    return Column(
+                      children: [
+                        for (var i = 0; i < targets.length; i++) ...[
+                          if (i > 0) const Divider(height: 24),
+                          _ReviewTargetTile(
+                            orderId: order.id,
+                            target: targets[i],
+                            existing: findExisting(targets[i]),
+                          ),
+                        ],
+                      ],
+                    );
+                  },
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ReviewTargetTile extends ConsumerStatefulWidget {
+  final String orderId;
+  final _ReviewTarget target;
+  final Review? existing;
+  const _ReviewTargetTile({required this.orderId, required this.target, this.existing});
+
+  @override
+  ConsumerState<_ReviewTargetTile> createState() => _ReviewTargetTileState();
+}
+
+class _ReviewTargetTileState extends ConsumerState<_ReviewTargetTile> {
+  late int _rating = widget.existing?.rating ?? 5;
+  final _commentCtrl = TextEditingController();
+  bool _submitting = false;
+
+  static const _typeLabels = {'merchant': 'Cửa hàng', 'driver': 'Tài xế', 'product': 'Món'};
+
+  @override
+  void dispose() {
+    _commentCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    setState(() => _submitting = true);
+    try {
+      await ref.read(reviewRepoProvider).create(
+            orderId: widget.orderId,
+            targetType: widget.target.targetType,
+            targetId: widget.target.targetId,
+            rating: _rating,
+            comment: _commentCtrl.text.trim(),
+          );
+      ref.invalidate(orderReviewsProvider(widget.orderId));
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('Cảm ơn bạn đã đánh giá!')));
+      }
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final existing = widget.existing;
+    final shownRating = existing?.rating ?? _rating;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '${_typeLabels[widget.target.targetType] ?? ''}: ${widget.target.label}',
+          style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
+        ),
+        Row(
+          children: List.generate(
+            5,
+            (i) => IconButton(
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              icon: Icon(
+                i < shownRating ? Icons.star : Icons.star_border,
+                color: Colors.amber.shade700,
+              ),
+              onPressed: existing != null ? null : () => setState(() => _rating = i + 1),
+            ),
+          ),
+        ),
+        if (existing != null) ...[
+          if (existing.comment != null && existing.comment!.isNotEmpty) Text(existing.comment!),
+          Text('Đã gửi đánh giá', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline)),
+        ] else ...[
+          TextField(
+            controller: _commentCtrl,
+            decoration: const InputDecoration(labelText: 'Nhận xét (không bắt buộc)'),
+            maxLines: 2,
+          ),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerRight,
+            child: FilledButton(
+              onPressed: _submitting ? null : _submit,
+              child: _submitting
+                  ? const SizedBox(
+                      height: 16,
+                      width: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Gửi đánh giá'),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
 }
 
 /// Mã VietQR để khách quét chuyển khoản — chỉ hiện cho đơn bank_transfer đang pending_payment.
