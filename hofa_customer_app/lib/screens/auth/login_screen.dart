@@ -132,6 +132,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
+      // Không cho Scaffold co lại theo bàn phím — nếu không Positioned(bottom:) của
+      // AppVersionText bên dưới tính theo mép dưới ĐÃ BỊ ĐẨY LÊN, làm chữ phiên bản trôi
+      // lên theo bàn phím và đè vào các ô nhập phía trên. SingleChildScrollView bên trong
+      // vẫn tự cuộn ô đang gõ lên trên bàn phím bình thường dù tắt cờ này.
+      resizeToAvoidBottomInset: false,
       body: Stack(
         children: [
           Center(
