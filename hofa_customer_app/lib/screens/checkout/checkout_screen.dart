@@ -176,6 +176,19 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                           : 'Đã chọn vị trí trên bản đồ ✓',
                     ),
                     onPressed: () async {
+                      // Bắt nhập tên + SĐT người nhận TRƯỚC khi cho chọn vị trí — tránh khách
+                      // chọn xong bản đồ rồi mới phát hiện thiếu, phải quay lại chọn lại từ đầu.
+                      if (nameCtrl.text.trim().isEmpty ||
+                          phoneCtrl.text.trim().isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Nhập tên và số điện thoại người nhận trước khi chọn vị trí trên bản đồ',
+                            ),
+                          ),
+                        );
+                        return;
+                      }
                       final picked = await Navigator.of(context)
                           .push<PickedAddress>(
                             MaterialPageRoute(
@@ -341,7 +354,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   /// Cửa hàng mua hộ bắt buộc chuyển khoản trước, không cho chọn COD — xem BuyOnBehalfFeeNotice
   /// (cảnh báo hiện sẵn ở màn cửa hàng/sản phẩm) và chặn lại lần nữa ở server (routes/orders.js).
   String _effectivePaymentMethod(CartState cart) {
-    final merchant = cart.merchantId == null ? null : ref.read(merchantDetailProvider(cart.merchantId!)).valueOrNull;
+    final merchant = cart.merchantId == null
+        ? null
+        : ref.read(merchantDetailProvider(cart.merchantId!)).valueOrNull;
     if (merchant?.isBuyOnBehalf == true) return 'bank_transfer';
     return _paymentMethod;
   }
@@ -375,8 +390,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             if (e.orderKind != null) 'order_kind': e.orderKind,
             // Tổng số ngày/tuần KHÁC NHAU của CẢ ĐƠN (gộp mọi sản phẩm, không phải riêng
             // món này) — backend dùng để so bậc "đặt trước" theo điều kiện số ngày.
-            if (e.deliverySlots.isNotEmpty)
-              'days_count': orderDaysCount,
+            if (e.deliverySlots.isNotEmpty) 'days_count': orderDaysCount,
             if (e.note != null) 'note': e.note,
             if (e.toppings.isNotEmpty)
               'topping_ids': e.toppings.map((t) => t.id).toList(),
@@ -392,7 +406,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     'ship_latitude': address.latitude,
     'ship_longitude': address.longitude,
     'payment_method': _effectivePaymentMethod(cart),
-    if (!_autoFindDriver && _selectedDriver != null) 'selected_driver_id': _selectedDriver!.id,
+    if (!_autoFindDriver && _selectedDriver != null)
+      'selected_driver_id': _selectedDriver!.id,
     'delivery_fee': deliveryFee,
     if (paymentGroupOrderId != null)
       'payment_group_order_id': paymentGroupOrderId,
@@ -522,9 +537,16 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     if (items.isEmpty) return;
     final orderDaysCount = _orderDaysCount(items);
 
-    final merchant = ref.read(merchantDetailProvider(cart.merchantId!)).valueOrNull;
-    if (merchant?.isBuyOnBehalf == true && !_autoFindDriver && _selectedDriver == null) {
-      setState(() => _driverPickError = 'Chọn 1 tài xế trước khi đặt hàng, hoặc chọn "Để hệ thống tự tìm"');
+    final merchant = ref
+        .read(merchantDetailProvider(cart.merchantId!))
+        .valueOrNull;
+    if (merchant?.isBuyOnBehalf == true &&
+        !_autoFindDriver &&
+        _selectedDriver == null) {
+      setState(
+        () => _driverPickError =
+            'Chọn 1 tài xế trước khi đặt hàng, hoặc chọn "Để hệ thống tự tìm"',
+      );
       return;
     }
     setState(() => _driverPickError = null);
@@ -692,7 +714,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         ? null
         : ref.watch(branchDetailProvider(cart.branchId!)).valueOrNull;
     final feeTiers = (merchant != null && merchant.isBuyOnBehalf)
-        ? ref.watch(merchantFeeTiersProvider(cart.merchantId!)).valueOrNull ?? const []
+        ? ref.watch(merchantFeeTiersProvider(cart.merchantId!)).valueOrNull ??
+              const []
         : const <MerchantFeeTier>[];
     final buyOnBehalfEstimate = merchant == null
         ? const BuyOnBehalfFeeEstimate(tier: null, fee: 0)
@@ -704,7 +727,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           );
     final buyOnBehalfFee = buyOnBehalfEstimate.fee;
 
-    final total = itemsSubtotal + totalShippingFee + buyOnBehalfFee - _voucherDiscount;
+    final total =
+        itemsSubtotal + totalShippingFee + buyOnBehalfFee - _voucherDiscount;
 
     return Scaffold(
       appBar: AppBar(
@@ -890,8 +914,12 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 color: theme.colorScheme.surfaceContainerLow,
                 child: ListTile(
                   leading: CircleAvatar(
-                    backgroundImage: _selectedDriver?.avatarUrl != null ? NetworkImage(_selectedDriver!.avatarUrl!) : null,
-                    child: _selectedDriver?.avatarUrl == null ? const Icon(Icons.person) : null,
+                    backgroundImage: _selectedDriver?.avatarUrl != null
+                        ? NetworkImage(_selectedDriver!.avatarUrl!)
+                        : null,
+                    child: _selectedDriver?.avatarUrl == null
+                        ? const Icon(Icons.person)
+                        : null,
                   ),
                   title: Text(_selectedDriver?.fullName ?? 'Chưa chọn tài xế'),
                   subtitle: _selectedDriver != null
@@ -899,20 +927,30 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                           '★ ${_selectedDriver!.ratingAvg.toStringAsFixed(1)}'
                           '${_selectedDriver!.vehicleType != null ? ' · ${_selectedDriver!.vehicleType}' : ''}',
                         )
-                      : const Text('Bấm để xem tài xế đang online gần cửa hàng'),
+                      : const Text(
+                          'Bấm để xem tài xế đang online gần cửa hàng',
+                        ),
                   trailing: const Icon(Icons.chevron_right),
                   onTap: (branch?.latitude == null || branch?.longitude == null)
                       ? null
                       : () async {
-                          final picked = await showDriverPickerDialog(context, lat: branch!.latitude!, lng: branch.longitude!);
-                          if (picked != null) setState(() => _selectedDriver = picked);
+                          final picked = await showDriverPickerDialog(
+                            context,
+                            lat: branch!.latitude!,
+                            lng: branch.longitude!,
+                          );
+                          if (picked != null)
+                            setState(() => _selectedDriver = picked);
                         },
                 ),
               ),
               if (_driverPickError != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 6),
-                  child: Text(_driverPickError!, style: TextStyle(color: theme.colorScheme.error)),
+                  child: Text(
+                    _driverPickError!,
+                    style: TextStyle(color: theme.colorScheme.error),
+                  ),
                 ),
             ],
             const Divider(height: 32),
@@ -1035,9 +1073,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                         ),
                         if (i.toppings.isNotEmpty)
                           Text(
-                            i.toppings
-                                .map((t) => t.name)
-                                .join(', '),
+                            i.toppings.map((t) => t.name).join(', '),
                             style: theme.textTheme.bodySmall?.copyWith(
                               color: theme.colorScheme.secondary,
                             ),

@@ -52,17 +52,32 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Họ tên')),
+              TextField(
+                controller: nameCtrl,
+                decoration: const InputDecoration(labelText: 'Họ tên'),
+              ),
               const SizedBox(height: 12),
-              TextField(controller: phoneCtrl, decoration: const InputDecoration(labelText: 'Số điện thoại')),
+              TextField(
+                controller: phoneCtrl,
+                decoration: const InputDecoration(labelText: 'Số điện thoại'),
+              ),
               const SizedBox(height: 12),
-              TextField(controller: emailCtrl, decoration: const InputDecoration(labelText: 'Email')),
+              TextField(
+                controller: emailCtrl,
+                decoration: const InputDecoration(labelText: 'Email'),
+              ),
             ],
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Huỷ')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Lưu')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Huỷ'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Lưu'),
+          ),
         ],
       ),
     );
@@ -76,7 +91,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       });
       ref.invalidate(userProfileProvider);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -103,17 +121,47 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Tên người nhận')),
+                  TextField(
+                    controller: nameCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Tên người nhận',
+                    ),
+                  ),
                   const SizedBox(height: 12),
-                  TextField(controller: phoneCtrl, decoration: const InputDecoration(labelText: 'SĐT người nhận')),
+                  TextField(
+                    controller: phoneCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'SĐT người nhận',
+                    ),
+                  ),
                   const SizedBox(height: 12),
                   OutlinedButton.icon(
                     icon: const Icon(Icons.map_outlined),
-                    label: Text(pickedLat == null ? 'Chọn vị trí trên bản đồ' : 'Đã chọn vị trí trên bản đồ ✓'),
+                    label: Text(
+                      pickedLat == null
+                          ? 'Chọn vị trí trên bản đồ'
+                          : 'Đã chọn vị trí trên bản đồ ✓',
+                    ),
                     onPressed: () async {
-                      final picked = await Navigator.of(context).push<PickedAddress>(
-                        MaterialPageRoute(builder: (_) => const AddressPickerScreen()),
-                      );
+                      // Bắt nhập tên + SĐT người nhận TRƯỚC khi cho chọn vị trí — tránh khách
+                      // chọn xong bản đồ rồi mới phát hiện thiếu, phải quay lại chọn lại từ đầu.
+                      if (nameCtrl.text.trim().isEmpty ||
+                          phoneCtrl.text.trim().isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Nhập tên và số điện thoại người nhận trước khi chọn vị trí trên bản đồ',
+                            ),
+                          ),
+                        );
+                        return;
+                      }
+                      final picked = await Navigator.of(context)
+                          .push<PickedAddress>(
+                            MaterialPageRoute(
+                              builder: (_) => const AddressPickerScreen(),
+                            ),
+                          );
                       if (picked == null) return;
                       line1Ctrl.text = picked.line1;
                       wardCtrl.text = picked.ward ?? '';
@@ -126,20 +174,42 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     },
                   ),
                   const SizedBox(height: 12),
-                  TextField(controller: line1Ctrl, decoration: const InputDecoration(labelText: 'Số nhà, tên đường')),
+                  TextField(
+                    controller: line1Ctrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Số nhà, tên đường',
+                    ),
+                  ),
                   const SizedBox(height: 12),
-                  TextField(controller: wardCtrl, decoration: const InputDecoration(labelText: 'Phường/Xã')),
+                  TextField(
+                    controller: wardCtrl,
+                    decoration: const InputDecoration(labelText: 'Phường/Xã'),
+                  ),
                   const SizedBox(height: 12),
-                  TextField(controller: districtCtrl, decoration: const InputDecoration(labelText: 'Quận/Huyện')),
+                  TextField(
+                    controller: districtCtrl,
+                    decoration: const InputDecoration(labelText: 'Quận/Huyện'),
+                  ),
                   const SizedBox(height: 12),
-                  TextField(controller: provinceCtrl, decoration: const InputDecoration(labelText: 'Tỉnh/Thành phố')),
+                  TextField(
+                    controller: provinceCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Tỉnh/Thành phố',
+                    ),
+                  ),
                 ],
               ),
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Huỷ')),
-            FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Lưu')),
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Huỷ'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Lưu'),
+            ),
           ],
         ),
       ),
@@ -151,7 +221,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       'recipient_phone': phoneCtrl.text.trim(),
       'line1': line1Ctrl.text.trim(),
       'ward': wardCtrl.text.trim().isEmpty ? null : wardCtrl.text.trim(),
-      'district': districtCtrl.text.trim().isEmpty ? null : districtCtrl.text.trim(),
+      'district': districtCtrl.text.trim().isEmpty
+          ? null
+          : districtCtrl.text.trim(),
       'province': provinceCtrl.text.trim(),
       if (pickedLat != null) 'latitude': pickedLat,
       if (pickedLng != null) 'longitude': pickedLng,
@@ -166,7 +238,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       }
       ref.invalidate(addressesProvider);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -178,7 +253,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       builder: (context) => AlertDialog(
         title: const Text('Xoá địa chỉ này?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Huỷ')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Huỷ'),
+          ),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () => Navigator.pop(context, true),
@@ -194,7 +272,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       await ref.read(userRepoProvider).deleteAddress(a.id);
       ref.invalidate(addressesProvider);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -229,21 +310,31 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         children: [
                           CircleAvatar(
                             radius: 28,
-                            backgroundColor: theme.colorScheme.primary.withValues(alpha: 0.12),
-                            child: Icon(Icons.person, color: theme.colorScheme.primary),
+                            backgroundColor: theme.colorScheme.primary
+                                .withValues(alpha: 0.12),
+                            child: Icon(
+                              Icons.person,
+                              color: theme.colorScheme.primary,
+                            ),
                           ),
                           const SizedBox(width: 16),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(profile.fullName, style: theme.textTheme.titleMedium),
+                                Text(
+                                  profile.fullName,
+                                  style: theme.textTheme.titleMedium,
+                                ),
                                 Text(profile.phone),
                                 if (profile.email != null) Text(profile.email!),
                               ],
                             ),
                           ),
-                          IconButton(icon: const Icon(Icons.edit_outlined), onPressed: _busy ? null : _editProfile),
+                          IconButton(
+                            icon: const Icon(Icons.edit_outlined),
+                            onPressed: _busy ? null : _editProfile,
+                          ),
                         ],
                       ),
                     ],
@@ -265,30 +356,44 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             ],
           ),
           addressesAsync.when(
-            loading: () => const Padding(padding: EdgeInsets.all(16), child: Center(child: CircularProgressIndicator())),
+            loading: () => const Padding(
+              padding: EdgeInsets.all(16),
+              child: Center(child: CircularProgressIndicator()),
+            ),
             error: (e, _) => Text('Lỗi: $e'),
             data: (addresses) {
-              if (addresses.isEmpty) return const Padding(padding: EdgeInsets.all(8), child: Text('Chưa có địa chỉ nào'));
+              if (addresses.isEmpty)
+                return const Padding(
+                  padding: EdgeInsets.all(8),
+                  child: Text('Chưa có địa chỉ nào'),
+                );
               return Column(
                 children: addresses
-                    .map((a) => Card(
-                          elevation: 0,
-                          color: theme.colorScheme.surfaceContainerLow,
-                          child: ListTile(
-                            title: Text('${a.recipientName} · ${a.recipientPhone}'),
-                            subtitle: Text(a.fullLine),
-                            trailing: PopupMenuButton<String>(
-                              onSelected: (v) {
-                                if (v == 'edit') _addOrEditAddress(existing: a);
-                                if (v == 'delete') _deleteAddress(a);
-                              },
-                              itemBuilder: (context) => const [
-                                PopupMenuItem(value: 'edit', child: Text('Sửa')),
-                                PopupMenuItem(value: 'delete', child: Text('Xoá')),
-                              ],
-                            ),
+                    .map(
+                      (a) => Card(
+                        elevation: 0,
+                        color: theme.colorScheme.surfaceContainerLow,
+                        child: ListTile(
+                          title: Text(
+                            '${a.recipientName} · ${a.recipientPhone}',
                           ),
-                        ))
+                          subtitle: Text(a.fullLine),
+                          trailing: PopupMenuButton<String>(
+                            onSelected: (v) {
+                              if (v == 'edit') _addOrEditAddress(existing: a);
+                              if (v == 'delete') _deleteAddress(a);
+                            },
+                            itemBuilder: (context) => const [
+                              PopupMenuItem(value: 'edit', child: Text('Sửa')),
+                              PopupMenuItem(
+                                value: 'delete',
+                                child: Text('Xoá'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    )
                     .toList(),
               );
             },
