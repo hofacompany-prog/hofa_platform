@@ -819,8 +819,8 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
                     ],
                   ),
                 ),
-                // Nút xoá + "Sửa topping" gộp chung 1 cột bên phải, không còn hàng riêng
-                // ngang hết bề rộng thẻ nữa — thẻ thấp hơn hẳn khi có topping.
+                // Nút xoá, "Sửa topping" và cộng/trừ số lượng gộp chung 1 cột sát bên phải,
+                // không còn hàng riêng ngang hết bề rộng thẻ nữa — thẻ thấp hơn hẳn.
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
@@ -843,31 +843,30 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
                         onPressed: () => _editToppings(item),
                         icon: const Icon(Icons.tune, size: 14),
                         label: Text(
-                          item.toppings.isEmpty
-                              ? 'Chọn topping'
-                              : 'Sửa topping',
+                          item.toppings.isEmpty ? 'Chọn topping' : 'Topping',
                           style: theme.textTheme.bodySmall,
                         ),
                       ),
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        IconButton(
+                          visualDensity: VisualDensity.compact,
+                          icon: const Icon(
+                            Icons.remove_circle_outline,
+                            size: 20,
+                          ),
+                          onPressed: () => changeQuantity(item.quantity - 1),
+                        ),
+                        Text('${item.quantity}'),
+                        IconButton(
+                          visualDensity: VisualDensity.compact,
+                          icon: const Icon(Icons.add_circle_outline, size: 20),
+                          onPressed: () => changeQuantity(item.quantity + 1),
+                        ),
+                      ],
+                    ),
                   ],
-                ),
-              ],
-            ),
-            const Divider(height: 12),
-            Row(
-              children: [
-                const Text('Số lượng'),
-                const Spacer(),
-                IconButton(
-                  visualDensity: VisualDensity.compact,
-                  icon: const Icon(Icons.remove_circle_outline, size: 20),
-                  onPressed: () => changeQuantity(item.quantity - 1),
-                ),
-                Text('${item.quantity}'),
-                IconButton(
-                  visualDensity: VisualDensity.compact,
-                  icon: const Icon(Icons.add_circle_outline, size: 20),
-                  onPressed: () => changeQuantity(item.quantity + 1),
                 ),
               ],
             ),
