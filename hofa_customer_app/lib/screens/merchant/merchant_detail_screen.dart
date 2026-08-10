@@ -177,14 +177,19 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
                             Icon(Icons.timer_outlined, size: 16, color: theme.colorScheme.outline),
                             const SizedBox(width: 4),
                             Text('${merchant.avgPrepMinutes} phút'),
-                            if (merchant.distanceKm != null) ...[
-                              const SizedBox(width: 16),
-                              Icon(Icons.place_outlined, size: 16, color: theme.colorScheme.outline),
-                              const SizedBox(width: 4),
-                              Text(formatDistanceKm(merchant.distanceKm!)),
-                            ],
                           ],
                         ),
+                        if (merchant.distanceKm != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Row(
+                              children: [
+                                Icon(Icons.place_outlined, size: 16, color: theme.colorScheme.outline),
+                                const SizedBox(width: 4),
+                                Text(formatDistanceKm(merchant.distanceKm!)),
+                              ],
+                            ),
+                          ),
                         if (merchant.minOrderAmount > 0)
                           Padding(
                             padding: const EdgeInsets.only(top: 4),
