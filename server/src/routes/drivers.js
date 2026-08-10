@@ -273,7 +273,13 @@ router.post('/admin/wallet-deposits/:id/confirm', asyncHandler(async (req, res) 
     confirmed_at: new Date().toISOString(),
     confirmed_by: req.ctx.userId
   });
-  await db.query('UPDATE drivers SET wallet_balance = wallet_balance + $1 WHERE id = $2', [deposit.amount, deposit.driver_id]);
+  await db.insertRow('driver_wallet_transactions', {
+    driver_id: deposit.driver_id,
+    wallet: 'earning',
+    entry_type: 'deposit',
+    amount: deposit.amount,
+    created_by: req.ctx.userId
+  });
   push.notifyDriverWallet(deposit.driver_id, 'deposit_confirmed', deposit.amount).catch(() => {});
   res.json({ ok: true, data: updated });
 }));

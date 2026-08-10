@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/format.dart';
+import '../../core/vietqr.dart';
 import '../../models/earnings.dart';
+import '../../providers/auth_provider.dart';
 import '../../repositories/driver_repository.dart';
 
 final earningsProvider = FutureProvider.autoDispose<Earnings>(
@@ -21,6 +23,110 @@ class EarningsScreen extends ConsumerStatefulWidget {
 }
 
 class _EarningsScreenState extends ConsumerState<EarningsScreen> {
+  /// Nạp thẳng vào ví thu nhập (khác "Nộp COD" — trả nợ COD cho HOFA). Cần cho tài xế mới/tài
+  /// xế thiếu tiền: hệ thống chỉ gán đơn khi earning_balance >= giá trị đơn (xem
+  /// server/src/dispatch.js), nên không đủ tiền là không nhận được đơn nào, kể cả đơn đầu tiên.
+  Future<void> _deposit() async {
+    final amountCtrl = TextEditingController();
+    final amount = await showDialog<int>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Nạp tiền vào ví thu nhập'),
+        content: TextField(
+          controller: amountCtrl,
+          autofocus: true,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(labelText: 'Số tiền muốn nạp (đ)'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Huỷ'),
+          ),
+          FilledButton(
+            onPressed: () =>
+                Navigator.pop(context, int.tryParse(amountCtrl.text.trim())),
+            child: const Text('Tiếp tục'),
+          ),
+        ],
+      ),
+    );
+    if (amount == null || amount <= 0 || !mounted) return;
+
+    try {
+      final depositId = await _driverRepo.createDeposit(amount);
+      final settings = await ref.read(bankAccountSettingsProvider.future);
+      if (!mounted) return;
+      if (!settings.isConfigured) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'HOFA chưa cấu hình tài khoản ngân hàng — liên hệ hỗ trợ để nạp tiền.',
+            ),
+          ),
+        );
+        return;
+      }
+      final qrUrl = buildVietQrUrl(
+        bankBin: settings.bankBin!,
+        accountNumber: settings.accountNumber!,
+        amount: amount,
+        addInfo: 'NAP-${depositId.substring(0, 8).toUpperCase()}',
+        accountName: settings.accountHolderName,
+      );
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Quét mã để nạp tiền'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.network(
+                    qrUrl,
+                    width: 240,
+                    height: 240,
+                    fit: BoxFit.contain,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Text('${settings.bankName ?? ''} · ${settings.accountNumber}'),
+                if (settings.accountHolderName != null)
+                  Text(settings.accountHolderName!),
+                const SizedBox(height: 8),
+                Text(
+                  'Số tiền: ${formatVnd(amount)}',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'HOFA sẽ cộng tiền vào ví thu nhập ngay sau khi xác nhận đã nhận được chuyển khoản.',
+                  textAlign: TextAlign.center,
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Đã hiểu'),
+            ),
+          ],
+        ),
+      );
+    } catch (e) {
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+    }
+  }
+
   Future<void> _withdraw(int earningBalance) async {
     final amountCtrl = TextEditingController();
     final ok = await showDialog<bool>(
@@ -165,17 +271,30 @@ class _EarningsScreenState extends ConsumerState<EarningsScreen> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Có thể rút về tài khoản ngân hàng',
+                        'Có thể rút về tài khoản ngân hàng. Cần đủ số dư ≥ giá trị đơn mới '
+                        'nhận được đơn mới — thiếu thì nạp thêm bên dưới.',
                         style: theme.textTheme.bodySmall,
                       ),
                       const SizedBox(height: 16),
-                      SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton.icon(
-                          onPressed: () => _withdraw(earnings.earningBalance),
-                          icon: const Icon(Icons.savings_outlined),
-                          label: const Text('Rút tiền'),
-                        ),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: _deposit,
+                              icon: const Icon(Icons.add_card_outlined),
+                              label: const Text('Nạp tiền'),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () =>
+                                  _withdraw(earnings.earningBalance),
+                              icon: const Icon(Icons.savings_outlined),
+                              label: const Text('Rút tiền'),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
