@@ -18,8 +18,8 @@ class _MerchantPhotoStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final shown = photoUrls.take(3).toList();
-    final remaining = photoUrls.length - shown.length;
+    final shown = photoUrls.take(2).toList();
+    final hasMore = photoUrls.length > shown.length;
     return SizedBox(
       width: 72,
       height: 72,
@@ -35,37 +35,39 @@ class _MerchantPhotoStrip extends StatelessWidget {
                 images: photoUrls,
                 initialIndex: i,
               ),
-              child: Stack(
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(6),
-                    child: Image.network(
-                      shown[i],
-                      width: 34,
-                      height: 34,
-                      fit: BoxFit.cover,
-                    ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: Image.network(
+                  shown[i],
+                  width: 34,
+                  height: 34,
+                  fit: BoxFit.cover,
+                ),
+              ),
+            ),
+          // Còn ảnh chưa hiện — bấm mới xem hết, không hiện đè lên ảnh như trước.
+          if (hasMore)
+            InkWell(
+              borderRadius: BorderRadius.circular(6),
+              onTap: () => FullScreenGalleryViewer.open(
+                context,
+                images: photoUrls,
+                initialIndex: 0,
+              ),
+              child: Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: Colors.black45,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Center(
+                  child: Icon(
+                    Icons.more_horiz,
+                    color: Colors.white,
+                    size: 18,
                   ),
-                  if (i == shown.length - 1 && remaining > 0)
-                    Positioned.fill(
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: Colors.black45,
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Center(
-                          child: Text(
-                            '+$remaining',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
+                ),
               ),
             ),
         ],
