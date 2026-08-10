@@ -804,6 +804,8 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: theme.colorScheme.secondary,
                           ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       Text(
                         '${formatVnd(displayPrice + item.toppingsTotal)}'
@@ -814,6 +816,8 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
                               : theme.colorScheme.primary,
                           fontWeight: discounted ? FontWeight.w700 : null,
                         ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ],
                   ),
@@ -1141,6 +1145,8 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
                                                 ? FontWeight.w600
                                                 : null,
                                           ),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
                                     );
                                   },
                                 ),
