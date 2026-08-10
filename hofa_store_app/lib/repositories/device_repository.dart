@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart'
     show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/api_client.dart';
+import '../core/device_name.dart';
 import '../core/device_session.dart';
 import '../models/user_device.dart';
 
@@ -46,7 +47,7 @@ class DeviceRepository {
       '/devices',
       body: {
         'device_id': deviceId,
-        'device_name': 'HOFA Store',
+        'device_name': await resolveDeviceName(),
         'platform': _currentPlatform(),
         'push_token': pushToken,
         if (forceReplaceOldest) 'force_replace_oldest': true,
@@ -95,8 +96,10 @@ class DeviceRegisterResult {
   DeviceRegisterResult.limitReached(Map<String, dynamic> json)
     : limitReached = true,
       maxDevices = (json['max_devices'] as num?)?.toInt(),
-      oldestDeviceName = (json['oldest_device'] as Map?)?['device_name'] as String?,
-      oldestDevicePlatform = (json['oldest_device'] as Map?)?['platform'] as String?,
+      oldestDeviceName =
+          (json['oldest_device'] as Map?)?['device_name'] as String?,
+      oldestDevicePlatform =
+          (json['oldest_device'] as Map?)?['platform'] as String?,
       oldestDeviceLastActive = DateTime.tryParse(
         '${(json['oldest_device'] as Map?)?['last_active_at']}',
       );
