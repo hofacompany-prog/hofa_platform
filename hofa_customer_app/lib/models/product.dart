@@ -17,6 +17,9 @@ class Product {
   final int ratingCount;
   final int soldCount;
   final List<ProductVariant> variants;
+  // Km từ chi nhánh gần nhất của cửa hàng bán sản phẩm này tới toạ độ khách đang xem — null nếu
+  // server không nhận được lat/lng. Xem GET /products (server/src/routes/products.js#attachDistance).
+  final double? distanceKm;
 
   Product({
     required this.id,
@@ -35,6 +38,7 @@ class Product {
     required this.ratingCount,
     required this.soldCount,
     required this.variants,
+    this.distanceKm,
   });
 
   ProductVariant? get defaultVariant {
@@ -66,5 +70,8 @@ class Product {
         soldCount: (json['sold_count'] as num?)?.toInt() ?? 0,
         variants:
             (json['variants'] as List? ?? []).map((e) => ProductVariant.fromJson(e as Map<String, dynamic>)).toList(),
+        distanceKm: json['distance_km'] != null
+            ? num.tryParse('${json['distance_km']}')?.toDouble()
+            : null,
       );
 }

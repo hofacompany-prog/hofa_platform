@@ -133,11 +133,18 @@ final categoriesProvider = FutureProvider.autoDispose<List<Category>>(
 /// Sản phẩm của 1 cửa hàng — tải dần theo trang.
 final merchantProductsPagedProvider = StateNotifierProvider.autoDispose
     .family<PaginatedListNotifier<Product>, PaginatedState<Product>, String>(
-      (ref, merchantId) => PaginatedListNotifier<Product>(
-        (limit, offset) => ref
-            .read(productRepoProvider)
-            .products(merchantId: merchantId, limit: limit, offset: offset),
-      ),
+      (ref, merchantId) {
+        final coords = ref.watch(customerCoordsProvider);
+        return PaginatedListNotifier<Product>(
+          (limit, offset) => ref.read(productRepoProvider).products(
+                merchantId: merchantId,
+                limit: limit,
+                offset: offset,
+                lat: coords?.$1,
+                lng: coords?.$2,
+              ),
+        );
+      },
     );
 
 final merchantCategoriesProvider = FutureProvider.autoDispose
@@ -152,11 +159,18 @@ final merchantCategoriesProvider = FutureProvider.autoDispose
 /// CategoryDetailScreen (danh mục cha, hiện ngay dưới lưới danh mục con).
 final categoryProductsPagedProvider = StateNotifierProvider.autoDispose
     .family<PaginatedListNotifier<Product>, PaginatedState<Product>, String>(
-      (ref, categoryId) => PaginatedListNotifier<Product>(
-        (limit, offset) => ref
-            .read(productRepoProvider)
-            .products(categoryId: categoryId, limit: limit, offset: offset),
-      ),
+      (ref, categoryId) {
+        final coords = ref.watch(customerCoordsProvider);
+        return PaginatedListNotifier<Product>(
+          (limit, offset) => ref.read(productRepoProvider).products(
+                categoryId: categoryId,
+                limit: limit,
+                offset: offset,
+                lat: coords?.$1,
+                lng: coords?.$2,
+              ),
+        );
+      },
     );
 
 final productSearchProvider = StateProvider.autoDispose<String>((ref) => '');
@@ -166,7 +180,8 @@ final searchedProductsProvider = FutureProvider.autoDispose<List<Product>>((
 ) {
   final q = ref.watch(productSearchProvider);
   if (q.isEmpty) return Future.value(<Product>[]);
-  return ref.watch(productRepoProvider).products(q: q);
+  final coords = ref.watch(customerCoordsProvider);
+  return ref.watch(productRepoProvider).products(q: q, lat: coords?.$1, lng: coords?.$2);
 });
 
 /// Dùng CHUNG ô tìm kiếm/state với searchedProductsProvider (productSearchProvider) — khách

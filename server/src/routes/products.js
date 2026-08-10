@@ -2,7 +2,7 @@ const router = require('express').Router();
 const db = require('../db');
 const asyncHandler = require('../asyncHandler');
 const { ApiError } = require('../errors');
-const { pickFields, requireFields, pagination, requireRole, requireMerchantAccess, requirePermission } = require('../utils');
+const { pickFields, requireFields, pagination, requireRole, requireMerchantAccess, requirePermission, haversineKm, parseLatLng } = require('../utils');
 
 const PRODUCT_FIELDS = [
   'name', 'slug', 'description', 'sales_model', 'status', 'brand', 'unit', 'variant_group_name',
@@ -111,6 +111,37 @@ async function attachVariants(products) {
   return products.map((p) => ({ ...p, variants: byProduct[p.id] || [] }));
 }
 
+/** Gắn distance_km (km từ chi nhánh gần nhất của cửa hàng bán sản phẩm đó tới khách) vào từng
+ * sản phẩm — mutate thẳng mảng products truyền vào. Chỉ chạy khi query có ?lat=&lng= (xem
+ * ProductCard bên app khách). Gom theo merchant_id thay vì tính riêng từng sản phẩm vì 1 cửa
+ * hàng thường có nhiều sản phẩm trong cùng trang kết quả — chỉ cần 1 query branches, tính
+ * bằng JS (utils.haversineKm, cùng công thức server dùng ghép tài xế gần nhất) thay vì lặp lại
+ * công thức haversine trong SQL như GET /merchants (xem merchants.js) vì ở đây khoảng cách cần
+ * theo TỪNG cửa hàng chứ không phải theo từng hàng — LATERAL JOIN sẽ tính lại nhiều lần thừa
+ * cho các sản phẩm cùng 1 cửa hàng. */
+async function attachDistance(products, query) {
+  const coords = parseLatLng(query);
+  if (!coords || !products.length) return;
+  const merchantIds = [...new Set(products.map((p) => p.merchant_id))];
+  const branches = await db.query(
+    `SELECT merchant_id, latitude, longitude, is_open
+       FROM branches
+      WHERE merchant_id = ANY($1::uuid[]) AND deleted_at IS NULL
+        AND latitude IS NOT NULL AND longitude IS NOT NULL`,
+    [merchantIds]
+  );
+  const nearestByMerchant = {};
+  for (const b of branches) {
+    const km = haversineKm(coords.lat, coords.lng, Number(b.latitude), Number(b.longitude));
+    const cur = nearestByMerchant[b.merchant_id];
+    // Ưu tiên chi nhánh đang mở — trong cùng nhóm mở/đóng thì lấy gần nhất.
+    if (!cur || (b.is_open && !cur.isOpen) || (b.is_open === cur.isOpen && km < cur.km)) {
+      nearestByMerchant[b.merchant_id] = { km, isOpen: b.is_open };
+    }
+  }
+  products.forEach((p) => { p.distance_km = nearestByMerchant[p.merchant_id]?.km ?? null; });
+}
+
 router.get('/products', asyncHandler(async (req, res) => {
   const { limit, offset } = pagination(req.query);
   const clauses = ['deleted_at IS NULL'];
@@ -159,7 +190,9 @@ router.get('/products', asyncHandler(async (req, res) => {
     `SELECT * FROM products WHERE ${clauses.join(' AND ')} ORDER BY created_at DESC, id DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
     params
   );
-  res.json({ ok: true, data: await attachVariants(rows), hasMore: rows.length === limit });
+  const products = await attachVariants(rows);
+  await attachDistance(products, req.query);
+  res.json({ ok: true, data: products, hasMore: rows.length === limit });
 }));
 
 router.get('/products/:id', asyncHandler(async (req, res) => {

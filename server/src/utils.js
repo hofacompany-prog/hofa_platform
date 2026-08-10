@@ -127,9 +127,20 @@ function haversineKm(lat1, lon1, lat2, lon2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+/** ?lat=&lng= tuỳ chọn — dùng ở GET /merchants, /merchants/:id, /products để tính khoảng cách
+ * tới khách (toạ độ địa chỉ mặc định, xem hofa_customer_app/lib/providers/app_providers.dart#
+ * customerCoordsProvider). Trả null nếu thiếu/không phải số — không phải lỗi, chỉ đơn giản là
+ * bỏ qua phần khoảng cách. */
+function parseLatLng(query) {
+  const lat = query.lat !== undefined ? Number(query.lat) : null;
+  const lng = query.lng !== undefined ? Number(query.lng) : null;
+  if (lat == null || lng == null || Number.isNaN(lat) || Number.isNaN(lng)) return null;
+  return { lat, lng };
+}
+
 module.exports = {
   pickFields, requireFields, pagination,
   requireAuth, requireRole, requireOwnRow, requireMerchantAccess,
   requirePermission, requireOwnerAccess,
-  orderCanView, requireOrderAccess, haversineKm
+  orderCanView, requireOrderAccess, haversineKm, parseLatLng
 };

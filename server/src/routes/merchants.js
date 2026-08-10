@@ -2,7 +2,7 @@ const router = require('express').Router();
 const db = require('../db');
 const asyncHandler = require('../asyncHandler');
 const { ApiError } = require('../errors');
-const { pickFields, requireFields, pagination, requireAuth, requireRole, requireMerchantAccess, requirePermission, requireOwnerAccess } = require('../utils');
+const { pickFields, requireFields, pagination, requireAuth, requireRole, requireMerchantAccess, requirePermission, requireOwnerAccess, parseLatLng } = require('../utils');
 const supabaseAdmin = require('../supabaseAdmin');
 const push = require('../push');
 
@@ -33,13 +33,6 @@ function haversineKmSql(latParam, lngParam) {
     cos(radians($${latParam})) * cos(radians(b.latitude)) * cos(radians(b.longitude) - radians($${lngParam}))
     + sin(radians($${latParam})) * sin(radians(b.latitude))
   )))`;
-}
-
-function parseLatLng(query) {
-  const lat = query.lat !== undefined ? Number(query.lat) : null;
-  const lng = query.lng !== undefined ? Number(query.lng) : null;
-  if (lat == null || lng == null || Number.isNaN(lat) || Number.isNaN(lng)) return null;
-  return { lat, lng };
 }
 
 router.get('/merchants', asyncHandler(async (req, res) => {

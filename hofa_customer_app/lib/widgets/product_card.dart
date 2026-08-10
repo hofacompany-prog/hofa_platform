@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/format.dart';
+import '../core/geo.dart';
 import '../models/product.dart';
 import 'network_image_box.dart';
 import 'quick_add_to_cart.dart';
@@ -72,6 +73,46 @@ class _ProductCardState extends ConsumerState<ProductCard> {
                             padding: EdgeInsets.zero,
                           ),
                         ),
+                      if (product.ratingCount > 0)
+                        Positioned(
+                          top: 8,
+                          right: 8,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(20),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.15),
+                                  blurRadius: 4,
+                                ),
+                              ],
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.star,
+                                  size: 12,
+                                  color: Colors.amber.shade700,
+                                ),
+                                const SizedBox(width: 2),
+                                Text(
+                                  product.ratingAvg.toStringAsFixed(1),
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.black87,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -121,6 +162,25 @@ class _ProductCardState extends ConsumerState<ProductCard> {
                           child: Text(
                             'Đã bán ${product.soldCount}',
                             style: theme.textTheme.bodySmall,
+                          ),
+                        ),
+                      if (product.distanceKm != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.place_outlined,
+                                size: 12,
+                                color: theme.colorScheme.outline,
+                              ),
+                              const SizedBox(width: 2),
+                              Text(
+                                formatDistanceKm(product.distanceKm!),
+                                style: theme.textTheme.bodySmall,
+                              ),
+                            ],
                           ),
                         ),
                     ],

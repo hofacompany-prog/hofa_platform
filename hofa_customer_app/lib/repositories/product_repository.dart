@@ -34,6 +34,8 @@ class ProductRepository {
     bool? isFeatured,
     int limit = 50,
     int offset = 0,
+    double? lat,
+    double? lng,
   }) async {
     final list =
         await _api.get(
@@ -46,6 +48,8 @@ class ProductRepository {
                 if (salesModel != null) 'sales_model': salesModel,
                 if (categoryId != null) 'category_id': categoryId,
                 if (isFeatured != null) 'is_featured': isFeatured,
+                if (lat != null && lng != null) 'lat': lat,
+                if (lat != null && lng != null) 'lng': lng,
               },
             )
             as List;
