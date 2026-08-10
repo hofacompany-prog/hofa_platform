@@ -76,11 +76,11 @@ final voucherMaxCountProvider = FutureProvider.autoDispose<int>(
 
 // ---- Cửa hàng ----
 
-/// Bộ lọc "Gần tôi"/"Lọc theo đánh giá" ở trang chủ (home_screen.dart) — null nghĩa là mặc
-/// định (đánh giá cao trước, không lọc rating). watch trong merchantsPagedProvider bên dưới nên
-/// đổi giá trị tự tạo lại danh sách từ trang đầu, không cần tự invalidate tay.
+/// Cách sắp xếp danh sách cửa hàng ở trang chủ (home_screen.dart) — 'distance' = "Gần tôi",
+/// null = mặc định "Đánh giá" (rating_avg cao xuống thấp, xem GET /merchants). watch trong
+/// merchantsPagedProvider bên dưới nên đổi giá trị tự tạo lại danh sách từ trang đầu, không cần
+/// tự invalidate tay.
 final homeSortProvider = StateProvider.autoDispose<String?>((ref) => null);
-final homeMinRatingProvider = StateProvider.autoDispose<double?>((ref) => null);
 
 /// Danh sách cửa hàng duyệt ở trang chủ — tải dần theo trang khi khách lướt xuống, không tải
 /// hết 1 lần (xem PaginatedListNotifier).
@@ -91,7 +91,6 @@ final merchantsPagedProvider =
     >((ref) {
       final coords = ref.watch(customerCoordsProvider);
       final sort = ref.watch(homeSortProvider);
-      final minRating = ref.watch(homeMinRatingProvider);
       return PaginatedListNotifier<Merchant>(
         (limit, offset) => ref
             .read(merchantRepoProvider)
@@ -101,7 +100,6 @@ final merchantsPagedProvider =
               lat: coords?.$1,
               lng: coords?.$2,
               sort: sort,
-              minRating: minRating,
             ),
       );
     });

@@ -102,7 +102,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final merchantsState = ref.watch(merchantsPagedProvider);
     final categoriesAsync = ref.watch(categoriesProvider);
     final homeSort = ref.watch(homeSortProvider);
-    final homeMinRating = ref.watch(homeMinRatingProvider);
     final hasCoords = ref.watch(customerCoordsProvider) != null;
     final searchQuery = ref.watch(productSearchProvider);
     final searchedProductsAsync = ref.watch(searchedProductsProvider);
@@ -321,25 +320,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           : null,
                     ),
                     const SizedBox(width: 8),
+                    // Đánh giá cao xuống thấp — mặc định server đã sắp xếp sẵn theo rating_avg
+                    // DESC (xem GET /merchants), chip này chỉ để quay lại đúng thứ tự đó sau
+                    // khi đã chọn "Gần tôi".
                     _filterChip(
-                      label: 'Tất cả',
-                      selected: homeMinRating == null,
+                      label: 'Đánh giá',
+                      selected: homeSort != 'distance',
                       onTap: () =>
-                          ref.read(homeMinRatingProvider.notifier).state = null,
-                    ),
-                    const SizedBox(width: 8),
-                    _filterChip(
-                      label: 'Từ 4 sao',
-                      selected: homeMinRating == 4,
-                      onTap: () =>
-                          ref.read(homeMinRatingProvider.notifier).state = 4,
-                    ),
-                    const SizedBox(width: 8),
-                    _filterChip(
-                      label: 'Từ 3 sao',
-                      selected: homeMinRating == 3,
-                      onTap: () =>
-                          ref.read(homeMinRatingProvider.notifier).state = 3,
+                          ref.read(homeSortProvider.notifier).state = null,
                     ),
                   ],
                 ),

@@ -42,12 +42,6 @@ router.get('/merchants', asyncHandler(async (req, res) => {
   if (!isPrivileged) clauses.push(`status = 'active'`);
   if (req.query.merchant_type) { params.push(req.query.merchant_type); clauses.push(`merchant_type = $${params.length}`); }
   if (req.query.q) { params.push(`%${req.query.q}%`); clauses.push(`name ILIKE $${params.length}`); }
-  // Lọc theo đánh giá tối thiểu (bộ lọc "Lọc theo đánh giá" ở trang chủ app khách) — bỏ qua
-  // nếu không parse được số, không phải lỗi.
-  if (req.query.min_rating !== undefined) {
-    const minRating = Number(req.query.min_rating);
-    if (Number.isFinite(minRating)) { params.push(minRating); clauses.push(`rating_avg >= $${params.length}`); }
-  }
 
   // Khoảng cách từ chi nhánh gần nhất (ưu tiên chi nhánh đang mở) tới toạ độ khách đang xem —
   // chỉ tính khi client gửi kèm lat/lng (địa chỉ mặc định của khách, xem

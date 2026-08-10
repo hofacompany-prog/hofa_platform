@@ -16,8 +16,6 @@ class MerchantRepository {
     // 'distance' = sắp xếp "Gần tôi" (chỉ có tác dụng khi có lat/lng), null/khác = mặc định
     // (đánh giá cao trước, xem GET /merchants).
     String? sort,
-    // Lọc "còn X sao trở lên" — vd 4 nghĩa là rating_avg >= 4.
-    double? minRating,
   }) async {
     final list =
         await _api.get(
@@ -30,7 +28,6 @@ class MerchantRepository {
                 if (lat != null && lng != null) 'lat': lat,
                 if (lat != null && lng != null) 'lng': lng,
                 if (sort != null) 'sort': sort,
-                if (minRating != null) 'min_rating': minRating,
               },
             )
             as List;
