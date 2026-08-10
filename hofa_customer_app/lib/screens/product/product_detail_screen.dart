@@ -54,26 +54,20 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
     return matched?.unitPrice ?? variant.price;
   }
 
-  /// Đổi số lượng qua nút +/- — nếu số lượng mới đạt 1 bậc giá sỉ RẺ HƠN bậc hiện tại thì
-  /// báo ngay bằng popup (khách dễ bỏ lỡ vì giá chỉ đổi âm thầm trên dòng giá phía trên).
+  /// Đổi số lượng qua nút +/- — nếu số lượng mới đạt 1 bậc giá RẺ HƠN bậc hiện tại (bậc giá
+  /// sỉ hay bậc đặt trước đều tính, chỉ cần đạt điều kiện số lượng — không cần biết khách có
+  /// đạt thêm điều kiện số ngày/tuần của bậc đặt trước hay không) thì báo ngay bằng popup
+  /// (khách dễ bỏ lỡ vì giá chỉ đổi âm thầm trên dòng giá phía trên).
   void _changeQuantity(
     int delta,
     Product product,
     ProductVariant variant,
-    List<WholesaleTier> wholesaleOnlyTiers,
+    List<WholesaleTier> tiers,
   ) {
     final newQuantity = _quantity + delta;
     if (newQuantity < 1) return;
-    final oldPrice = _unitPriceForQuantity(
-      _quantity,
-      variant,
-      wholesaleOnlyTiers,
-    );
-    final newPrice = _unitPriceForQuantity(
-      newQuantity,
-      variant,
-      wholesaleOnlyTiers,
-    );
+    final oldPrice = _unitPriceForQuantity(_quantity, variant, tiers);
+    final newPrice = _unitPriceForQuantity(newQuantity, variant, tiers);
     setState(() => _quantity = newQuantity);
     if (newPrice < oldPrice) {
       _showTierReachedDialog(product, newPrice);
@@ -339,12 +333,11 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
               : null;
           final tiers = tiersAsync?.valueOrNull ?? [];
           // Giá xem trước ở đây chưa gắn với tab Giá sỉ/Đặt trước nào (khách chưa chọn) —
-          // chỉ ước tính theo bậc giá sỉ (minDaysPerWeek = 0), không lẫn bậc đặt trước.
-          final wholesaleOnlyTiers = tiers
-              .where((t) => t.minDaysPerWeek == 0)
-              .toList();
+          // dùng unitPrice của MỌI bậc (cả giá sỉ lẫn đặt trước), vì unitPrice luôn là "giá
+          // khi chỉ đạt điều kiện số lượng" bất kể loại bậc — số ngày/tuần (chỉ áp dụng cho
+          // bậc đặt trước) chưa chọn được ở màn này nên không cần quan tâm lúc xem trước.
           final unitPrice = variant != null
-              ? _unitPriceFor(variant, wholesaleOnlyTiers)
+              ? _unitPriceFor(variant, tiers)
               : 0;
           final toppingGroups =
               ref.watch(toppingGroupsProvider(product.id)).valueOrNull ?? [];
@@ -488,7 +481,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                                         -1,
                                         product,
                                         variant,
-                                        wholesaleOnlyTiers,
+                                        tiers,
                                       )
                               : null,
                           icon: const Icon(Icons.remove),
@@ -509,7 +502,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                                   1,
                                   product,
                                   variant,
-                                  wholesaleOnlyTiers,
+                                  tiers,
                                 ),
                           icon: const Icon(Icons.add),
                         ),
