@@ -8,9 +8,12 @@ import '../../models/finance_summary.dart';
 import '../../models/merchant_today_stats.dart';
 import '../../providers/auth_provider.dart';
 import '../../repositories/merchant_repository.dart';
+import '../../repositories/order_repository.dart';
 import '../../widgets/notification_bell.dart';
 
-final _homeBranchesProvider = FutureProvider.autoDispose<List<Branch>>((ref) async {
+final _homeBranchesProvider = FutureProvider.autoDispose<List<Branch>>((
+  ref,
+) async {
   final merchant = await ref.watch(myMerchantProvider.future);
   if (merchant == null) return [];
   return MerchantRepository().branches(merchant.id);
@@ -37,7 +40,8 @@ class HomeScreen extends ConsumerWidget {
     final merchantAsync = ref.watch(myMerchantProvider);
     final statsAsync = ref.watch(merchantTodayStatsProvider);
     final todayFinanceAsync = ref.watch(financeSummaryProvider('today'));
-    final branches = ref.watch(_homeBranchesProvider).valueOrNull ?? const <Branch>[];
+    final branches =
+        ref.watch(_homeBranchesProvider).valueOrNull ?? const <Branch>[];
     final myPermissions = ref.watch(myPermissionsProvider).valueOrNull;
     final preparingCount = statsAsync.valueOrNull?.preparingCount ?? 0;
     final mainBranch = branches.isEmpty
@@ -58,14 +62,20 @@ class HomeScreen extends ConsumerWidget {
             children: [
               Row(
                 children: [
-                  Icon(Icons.location_on_outlined, color: theme.colorScheme.outline, size: 20),
+                  Icon(
+                    Icons.location_on_outlined,
+                    color: theme.colorScheme.outline,
+                    size: 20,
+                  ),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
                       merchantAsync.when(
                         data: (m) => m == null
                             ? ''
-                            : (mainBranch != null ? '${m.name} - ${mainBranch.name}' : m.name),
+                            : (mainBranch != null
+                                  ? '${m.name} - ${mainBranch.name}'
+                                  : m.name),
                         loading: () => '',
                         error: (_, _) => '',
                       ),
@@ -80,7 +90,9 @@ class HomeScreen extends ConsumerWidget {
               const SizedBox(height: 20),
               Text(
                 'Hiệu suất bán hàng',
-                style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+                style: theme.textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               const SizedBox(height: 12),
               IntrinsicHeight(
@@ -91,18 +103,26 @@ class HomeScreen extends ConsumerWidget {
                       child: _PreparingCard(
                         branch: mainBranch,
                         stats: statsAsync.valueOrNull,
-                        onToggleOpen: mainBranch == null ? null : () => _toggleOpen(ref, mainBranch),
+                        onToggleOpen: mainBranch == null
+                            ? null
+                            : () => _toggleOpen(ref, mainBranch),
                       ),
                     ),
                     const SizedBox(width: 12),
-                    Expanded(child: _RevenueCard(summary: todayFinanceAsync.valueOrNull)),
+                    Expanded(
+                      child: _RevenueCard(
+                        summary: todayFinanceAsync.valueOrNull,
+                      ),
+                    ),
                   ],
                 ),
               ),
               const SizedBox(height: 28),
               Text(
                 'Quản lý cửa hàng',
-                style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               const SizedBox(height: 12),
               GridView.count(
@@ -115,13 +135,19 @@ class HomeScreen extends ConsumerWidget {
                 children: [
                   ...kNavDestinations
                       .where((d) => d.path != '/home')
-                      .where((d) => d.permission == null || hasPermission(myPermissions, d.permission!))
-                      .map((d) => _ShortcutTile(
-                            icon: d.selected,
-                            label: d.label,
-                            path: d.path,
-                            badgeCount: d.path == '/orders' ? preparingCount : 0,
-                          )),
+                      .where(
+                        (d) =>
+                            d.permission == null ||
+                            hasPermission(myPermissions, d.permission!),
+                      )
+                      .map(
+                        (d) => _ShortcutTile(
+                          icon: d.selected,
+                          label: d.label,
+                          path: d.path,
+                          badgeCount: d.path == '/orders' ? preparingCount : 0,
+                        ),
+                      ),
                   // Danh mục và Kho hàng không còn nằm trong thanh điều hướng chính (đỡ chật,
                   // nhường chỗ cho Tài chính) nhưng vẫn cần dùng được — giữ lại làm lối tắt ở
                   // đây, giống Thiết bị. Ẩn với nhân viên không có quyền tương ứng, giống các
@@ -153,17 +179,62 @@ class HomeScreen extends ConsumerWidget {
   }
 }
 
-class _PreparingCard extends StatelessWidget {
+class _PreparingCard extends StatefulWidget {
   final Branch? branch;
   final MerchantTodayStats? stats;
   final VoidCallback? onToggleOpen;
 
-  const _PreparingCard({required this.branch, required this.stats, required this.onToggleOpen});
+  const _PreparingCard({
+    required this.branch,
+    required this.stats,
+    required this.onToggleOpen,
+  });
+
+  @override
+  State<_PreparingCard> createState() => _PreparingCardState();
+}
+
+class _PreparingCardState extends State<_PreparingCard> {
+  bool _checking = false;
+
+  /// Bấm vào thẻ (không phải công tắc mở/đóng cửa, tự bắt gesture riêng nên không đụng
+  /// nhau) — đúng 1 đơn đang chuẩn bị thì mở thẳng đơn đó, nhiều hơn 1 thì mở danh sách đơn
+  /// hàng (mặc định mở sẵn ở tab "Đang chuẩn bị", xem orders_list_screen.dart), không có đơn
+  /// nào thì không làm gì.
+  Future<void> _onTap() async {
+    final merchantId = widget.branch?.merchantId;
+    if (merchantId == null ||
+        (widget.stats?.preparingCount ?? 0) == 0 ||
+        _checking) {
+      return;
+    }
+    setState(() => _checking = true);
+    try {
+      final orders = await OrderRepository().listForMerchant(merchantId);
+      final preparing = orders
+          .where((o) => o.status == 'confirmed' || o.status == 'preparing')
+          .toList();
+      if (!mounted || preparing.isEmpty) return;
+      if (preparing.length == 1) {
+        context.push('/orders/${preparing.first.id}');
+      } else {
+        context.push('/orders');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _checking = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isOpen = branch?.isOpen ?? true;
+    final isOpen = widget.branch?.isOpen ?? true;
     // Tạm đóng: cửa hàng bị ẩn khỏi kết quả tìm kiếm/xám đi ở app khách, khách vẫn xem được
     // sản phẩm nhưng không đặt hàng được (xem GET /merchants has_open_branch và POST /orders
     // chặn tạo đơn khi chi nhánh đóng) — nền đỏ ở đây để chủ cửa hàng nhận ra ngay tình trạng
@@ -172,47 +243,68 @@ class _PreparingCard extends StatelessWidget {
       elevation: 0,
       color: isOpen ? theme.colorScheme.primary : theme.colorScheme.error,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    isOpen ? 'Đang mở cửa' : 'Tạm đóng cửa',
-                    style: theme.textTheme.labelLarge?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: _onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      isOpen ? 'Đang mở cửa' : 'Tạm đóng cửa',
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
-                ),
-                Switch(
-                  value: isOpen,
-                  onChanged: onToggleOpen == null ? null : (_) => onToggleOpen!(),
-                  activeThumbColor: Colors.white,
-                  activeTrackColor: Colors.white.withValues(alpha: 0.4),
-                  inactiveThumbColor: Colors.white,
-                  inactiveTrackColor: Colors.white.withValues(alpha: 0.4),
-                ),
-              ],
-            ),
-            const Spacer(),
-            Text(
-              '${stats?.preparingCount ?? 0}',
-              style: theme.textTheme.displaySmall?.copyWith(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
+                  Switch(
+                    value: isOpen,
+                    onChanged: widget.onToggleOpen == null
+                        ? null
+                        : (_) => widget.onToggleOpen!(),
+                    activeThumbColor: Colors.white,
+                    activeTrackColor: Colors.white.withValues(alpha: 0.4),
+                    inactiveThumbColor: Colors.white,
+                    inactiveTrackColor: Colors.white.withValues(alpha: 0.4),
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Đang chuẩn bị',
-              style: theme.textTheme.bodyMedium?.copyWith(color: Colors.white.withValues(alpha: 0.92)),
-            ),
-          ],
+              const Spacer(),
+              if (_checking)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 4),
+                  child: SizedBox(
+                    height: 20,
+                    width: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Colors.white,
+                    ),
+                  ),
+                )
+              else
+                Text(
+                  '${widget.stats?.preparingCount ?? 0}',
+                  style: theme.textTheme.displaySmall?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              const SizedBox(height: 4),
+              Text(
+                'Đang chuẩn bị',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: Colors.white.withValues(alpha: 0.92),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -247,8 +339,14 @@ class _RevenueCard extends StatelessWidget {
                 children: [
                   CircleAvatar(
                     radius: 16,
-                    backgroundColor: theme.colorScheme.secondary.withValues(alpha: 0.12),
-                    child: Icon(Icons.trending_up, size: 18, color: theme.colorScheme.secondary),
+                    backgroundColor: theme.colorScheme.secondary.withValues(
+                      alpha: 0.12,
+                    ),
+                    child: Icon(
+                      Icons.trending_up,
+                      size: 18,
+                      color: theme.colorScheme.secondary,
+                    ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
@@ -258,20 +356,28 @@ class _RevenueCard extends StatelessWidget {
                       maxLines: 2,
                     ),
                   ),
-                  Icon(Icons.chevron_right, size: 18, color: theme.colorScheme.outline),
+                  Icon(
+                    Icons.chevron_right,
+                    size: 18,
+                    color: theme.colorScheme.outline,
+                  ),
                 ],
               ),
               const Spacer(),
               Text(
                 formatVnd(summary?.netIncome ?? 0),
-                style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+                style: theme.textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
               const SizedBox(height: 4),
               Text(
                 '${summary?.orderCount ?? 0} đơn hàng',
-                style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.outline,
+                ),
               ),
             ],
           ),
