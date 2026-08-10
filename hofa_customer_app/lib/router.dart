@@ -124,8 +124,13 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/orders/:id',
-            builder: (context, state) =>
-                OrderDetailScreen(orderId: state.pathParameters['id']!),
+            // ?status=delivered — chỉ gắn khi khách mở màn này TỪ đúng thông báo "Giao hàng
+            // thành công" (xem push_service.dart#handleData + firebase-messaging-sw.js),
+            // dùng để tự bật popup mời đánh giá, không hiện lúc khách tự bấm vào xem đơn.
+            builder: (context, state) => OrderDetailScreen(
+              orderId: state.pathParameters['id']!,
+              autoPromptReview: state.uri.queryParameters['status'] == 'delivered',
+            ),
           ),
           GoRoute(
             path: '/profile',

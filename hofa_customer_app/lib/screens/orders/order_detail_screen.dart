@@ -14,7 +14,11 @@ import 'orders_list_screen.dart' show orderStatusColor;
 
 class OrderDetailScreen extends ConsumerStatefulWidget {
   final String orderId;
-  const OrderDetailScreen({super.key, required this.orderId});
+  /// true khi mở màn này do khách bấm đúng thông báo "Giao hàng thành công" (xem
+  /// push_service.dart#handleData) — tự bật popup mời đánh giá 1 lần, không hiện lúc khách tự
+  /// vào xem đơn bình thường.
+  final bool autoPromptReview;
+  const OrderDetailScreen({super.key, required this.orderId, this.autoPromptReview = false});
 
   @override
   ConsumerState<OrderDetailScreen> createState() => _OrderDetailScreenState();
@@ -22,6 +26,33 @@ class OrderDetailScreen extends ConsumerStatefulWidget {
 
 class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
   bool _busy = false;
+  bool _reviewPromptShown = false;
+  final _reviewSectionKey = GlobalKey();
+
+  void _maybeShowReviewPrompt(Order o) {
+    if (!widget.autoPromptReview || _reviewPromptShown || !o.canReview) return;
+    _reviewPromptShown = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      final goReview = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Đơn hàng đã giao thành công!'),
+          content: Text('Đơn ${o.orderCode} đã giao xong — đánh giá món ăn, cửa hàng và tài xế ngay nhé.'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Để sau')),
+            FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Đánh giá ngay')),
+          ],
+        ),
+      );
+      if (goReview == true && _reviewSectionKey.currentContext != null && mounted) {
+        await Scrollable.ensureVisible(
+          _reviewSectionKey.currentContext!,
+          duration: const Duration(milliseconds: 300),
+        );
+      }
+    });
+  }
 
   Future<void> _cancel(Order o) async {
     final ok = await showDialog<bool>(
@@ -97,6 +128,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Lỗi: $e')),
         data: (o) {
+          _maybeShowReviewPrompt(o);
           final color = orderStatusColor(o.status, theme.colorScheme);
           return SingleChildScrollView(
             padding: const EdgeInsets.all(16),
@@ -347,6 +379,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                 if (o.canReview) ...[
                   const SizedBox(height: 12),
                   _ReviewSection(
+                    key: _reviewSectionKey,
                     order: o,
                     driver: deliveryAsync.maybeWhen(data: (d) => d, orElse: () => null),
                   ),
@@ -390,7 +423,7 @@ class _ReviewTarget {
 class _ReviewSection extends ConsumerWidget {
   final Order order;
   final Delivery? driver;
-  const _ReviewSection({required this.order, this.driver});
+  const _ReviewSection({super.key, required this.order, this.driver});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {

@@ -146,7 +146,12 @@ class PushService {
     if (orderId == null) return;
     // buy_on_behalf_repick: tài xế khách chọn từ chối/hết hạn — mở lại chi tiết đơn, banner
     // "Chọn tài xế" tự hiện ở đó (xem Order.needsDriverPick, order_detail_screen.dart).
-    if (data['type'] == 'order_status_changed' || data['type'] == 'buy_on_behalf_repick')
-      context.push('/orders/$orderId');
+    if (data['type'] == 'order_status_changed' || data['type'] == 'buy_on_behalf_repick') {
+      // Kèm ?status= khi có — router.dart đọc lại để tự bật popup mời đánh giá đúng lúc bấm
+      // thông báo "Giao hàng thành công" (status == 'delivered'), không hiện lúc khách tự vào
+      // xem đơn bình thường.
+      final status = data['status'] as String?;
+      context.push('/orders/$orderId${status != null ? '?status=$status' : ''}');
+    }
   }
 }

@@ -148,7 +148,11 @@ messaging.onBackgroundMessage(async (payload) => {
  */
 function targetPathFor(data) {
   if (data.type === 'admin_broadcast' && data.screen) return data.screen;
-  if (data.order_id && data.type === 'order_status_changed') return '/orders/' + data.order_id;
+  if (data.order_id && data.type === 'order_status_changed') {
+    // ?status= — router.dart đọc lại để tự bật popup mời đánh giá khi status là 'delivered',
+    // khớp cách push_service.dart#handleData làm ở nhánh app đang mở (xem file đó).
+    return '/orders/' + data.order_id + (data.status ? '?status=' + data.status : '');
+  }
   return '/';
 }
 
