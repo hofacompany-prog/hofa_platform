@@ -344,10 +344,51 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
     return confirm == true;
   }
 
-  /// Báo khi đổi số lượng làm giá 1 món trong giỏ ĐẶT TRƯỚC đạt bậc rẻ hơn (tab Giá sỉ lẫn
-  /// tab Đặt trước đều gọi, xem changeQuantity() trong _itemCard) — không cần biết đạt qua
-  /// điều kiện số lượng hay số ngày/tuần, chỉ cần giá giảm là báo.
-  Future<void> _showTierReachedDialog(CartItem item, int newPrice) {
+  /// So giá của MỌI món trong [newItems] so với [oldItems] (2 danh sách cùng số dòng, chỉ
+  /// khác đúng 1 dòng vừa đổi số lượng hoặc ngày giao) — điều kiện bậc đặt trước tính theo
+  /// TỔNG số lượng/số ngày CẢ ĐƠN (gộp mọi món, xem _bestPreorderPriceFor), nên đổi 1 món
+  /// có thể kéo giá của NHỮNG món khác cùng đạt bậc rẻ hơn theo, không chỉ món vừa sửa. Trả
+  /// về danh sách (món, giá mới) cho mọi món có giá giảm, để báo popup gộp chung 1 lần.
+  List<(CartItem, int)> _priceDrops(
+    List<CartItem> oldItems,
+    List<CartItem> newItems,
+  ) {
+    final variantIds = {
+      ...oldItems.map((i) => i.variantId),
+      ...newItems.map((i) => i.variantId),
+    };
+    final tiersByVariant = <String, List<WholesaleTier>>{
+      for (final vid in variantIds)
+        vid:
+            ref.read(wholesaleTiersProvider(vid)).valueOrNull ??
+            const <WholesaleTier>[],
+    };
+    int priceFor(CartItem item, List<CartItem> items) {
+      final tiers = tiersByVariant[item.variantId] ?? const <WholesaleTier>[];
+      if (tiers.isEmpty) return item.basePrice;
+      return _bestPreorderPriceFor(item, items, tiers) ??
+          _bestWholesalePriceFor(item, items, tiers) ??
+          item.basePrice;
+    }
+
+    final drops = <(CartItem, int)>[];
+    for (final newItem in newItems) {
+      final oldItem = oldItems.firstWhere(
+        (i) => i.lineId == newItem.lineId,
+        orElse: () => newItem,
+      );
+      final oldPrice = priceFor(oldItem, oldItems);
+      final newPrice = priceFor(newItem, newItems);
+      if (newPrice < oldPrice) drops.add((newItem, newPrice));
+    }
+    return drops;
+  }
+
+  /// Báo khi đổi số lượng/ngày giao làm giá 1 hay nhiều món trong giỏ ĐẶT TRƯỚC đạt bậc rẻ
+  /// hơn (tab Giá sỉ lẫn tab Đặt trước đều gọi, xem changeQuantity()/toggleDay() trong
+  /// _itemCard/_editScheduleDialog) — không cần biết đạt qua điều kiện số lượng hay số
+  /// ngày/tuần, chỉ cần giá giảm là báo; liệt kê đủ mọi món bị ảnh hưởng trong 1 popup.
+  Future<void> _showTierReachedDialog(List<(CartItem, int)> drops) {
     final theme = Theme.of(context);
     return showDialog<void>(
       context: context,
@@ -356,29 +397,40 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
       barrierDismissible: false,
       builder: (context) => AlertDialog(
         title: const Text('🎉 Đã đạt bậc giá sỉ!'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(item.productName, style: theme.textTheme.titleMedium),
-            const SizedBox(height: 8),
-            Text.rich(
-              TextSpan(
-                style: theme.textTheme.bodyMedium,
-                children: [
-                  const TextSpan(text: 'Giá hiện tại: '),
-                  TextSpan(
-                    text: formatVnd(newPrice),
-                    style: TextStyle(
-                      color: theme.colorScheme.primary,
-                      fontWeight: FontWeight.bold,
+        content: SizedBox(
+          width: 320,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (var i = 0; i < drops.length; i++) ...[
+                  if (i > 0) const Divider(height: 20),
+                  Text(
+                    drops[i].$1.productName,
+                    style: theme.textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 4),
+                  Text.rich(
+                    TextSpan(
+                      style: theme.textTheme.bodyMedium,
+                      children: [
+                        const TextSpan(text: 'Giá hiện tại: '),
+                        TextSpan(
+                          text: formatVnd(drops[i].$2),
+                          style: TextStyle(
+                            color: theme.colorScheme.primary,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        TextSpan(text: ' / ${drops[i].$1.unit}'),
+                      ],
                     ),
                   ),
-                  TextSpan(text: ' / ${item.unit}'),
                 ],
-              ),
+              ],
             ),
-          ],
+          ),
         ),
         actions: [
           FilledButton(
@@ -420,20 +472,43 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
   /// Popup chọn ngày giao cho 1 sản phẩm — danh sách T2 đến CN, bấm vào ngày nào thì
   /// ngày đó sáng lên (chọn). Không chọn giờ ở đây, giờ giao chung cho cả đơn chọn riêng
   /// ở phần "Hình thức giao".
-  Future<void> _editScheduleDialog(CartItem item) async {
+  Future<void> _editScheduleDialog(
+    CartItem item, {
+    List<CartItem> allItems = const [],
+  }) async {
     var slots = [...item.deliverySlots];
     final theme = Theme.of(context);
+    // Snapshot "hiện tại" của cả đơn, cập nhật lại sau MỖI lần bấm chọn ngày (không chỉ lúc
+    // mở popup) — bấm 2-3 ngày liên tiếp trong cùng 1 lần mở popup vẫn phải so giá đúng với
+    // trạng thái vừa lưu ở lần bấm trước, không phải trạng thái lúc mới mở popup.
+    var currentAllItems = allItems;
 
-    void toggleDay(int iso, StateSetter setInner) {
+    Future<void> toggleDay(int iso, StateSetter setInner) async {
       if (slots.any((s) => s.weekday == iso)) {
         slots = slots.where((s) => s.weekday != iso).toList();
       } else {
         slots = [...slots, DeliverySlot(weekday: iso, time: _time)]
           ..sort(DeliverySlot.compare);
       }
-      ref.read(cartProvider.notifier).updateDeliverySlots(item.lineId, slots);
+      // So giá TRƯỚC/SAU khi đổi ngày giao để báo popup nếu đạt bậc rẻ hơn — giống hệt
+      // changeQuantity() trong _itemCard nhưng đổi deliverySlots thay vì quantity, vì bậc
+      // đặt trước còn phụ thuộc điều kiện số ngày/tuần (xem _bestPreorderPriceFor). So giá
+      // của MỌI món trong đơn (_priceDrops), không chỉ món đang sửa lịch giao.
+      final newItem = item.copyWith(deliverySlots: slots);
+      final newAllItems = currentAllItems
+          .map((i) => i.lineId == item.lineId ? newItem : i)
+          .toList();
+      final drops = _priceDrops(currentAllItems, newAllItems);
+      currentAllItems = newAllItems;
+
+      await ref
+          .read(cartProvider.notifier)
+          .updateDeliverySlots(item.lineId, slots);
       setState(() => _recurringConfirmed = false);
       setInner(() {});
+      if (drops.isNotEmpty) {
+        await _showTierReachedDialog(drops);
+      }
     }
 
     if (!mounted) return;
@@ -654,38 +729,17 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
         (sum, i) => sum + (i.lineId == item.lineId ? quantity : i.quantity),
       );
       // So giá TRƯỚC/SAU khi đổi số lượng để báo popup nếu đạt bậc rẻ hơn — đọc tiers bằng
-      // ref.read (không phải ref.watch) vì đang ở trong callback, không phải lúc build. Tính
-      // cho cả bậc giá sỉ lẫn bậc đặt trước (_bestWholesalePriceFor/_bestPreorderPriceFor tự
-      // biết áp dụng đúng loại theo item.orderKind), không cần biết khách đạt qua điều kiện
-      // số lượng hay số ngày/tuần.
-      int? oldPrice;
-      int? newPrice;
+      // ref.read (không phải ref.watch) vì đang ở trong callback, không phải lúc build. So
+      // giá của MỌI món trong đơn (_priceDrops), không chỉ món vừa đổi số lượng — điều kiện
+      // bậc đặt trước tính theo tổng cả đơn nên đổi món này có thể kéo giá món khác giảm
+      // theo, không cần biết khách đạt qua điều kiện số lượng hay số ngày/tuần.
+      var drops = const <(CartItem, int)>[];
       if (quantity > 0) {
-        final allTiers =
-            ref.read(wholesaleTiersProvider(item.variantId)).valueOrNull ??
-            const <WholesaleTier>[];
-        if (allTiers.isNotEmpty) {
-          final hypotheticalItem = item.copyWith(quantity: quantity);
-          final hypotheticalAllItems = allItems
-              .map((i) => i.lineId == item.lineId ? hypotheticalItem : i)
-              .toList();
-          oldPrice =
-              _bestPreorderPriceFor(item, allItems, allTiers) ??
-              _bestWholesalePriceFor(item, allItems, allTiers) ??
-              item.unitPrice;
-          newPrice =
-              _bestPreorderPriceFor(
-                hypotheticalItem,
-                hypotheticalAllItems,
-                allTiers,
-              ) ??
-              _bestWholesalePriceFor(
-                hypotheticalItem,
-                hypotheticalAllItems,
-                allTiers,
-              ) ??
-              item.basePrice;
-        }
+        final hypotheticalItem = item.copyWith(quantity: quantity);
+        final hypotheticalAllItems = allItems
+            .map((i) => i.lineId == item.lineId ? hypotheticalItem : i)
+            .toList();
+        drops = _priceDrops(allItems, hypotheticalAllItems);
       }
       await ref
           .read(cartProvider.notifier)
@@ -704,8 +758,8 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
                     wholesaleTiers,
                   ),
           );
-      if (oldPrice != null && newPrice != null && newPrice < oldPrice) {
-        await _showTierReachedDialog(item, newPrice);
+      if (drops.isNotEmpty) {
+        await _showTierReachedDialog(drops);
       }
     }
 
@@ -806,7 +860,7 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
             if (showSchedule) ...[
               const SizedBox(height: 4),
               InkWell(
-                onTap: () => _editScheduleDialog(item),
+                onTap: () => _editScheduleDialog(item, allItems: allItems),
                 child: Text(
                   sortedSlots.isEmpty
                       ? 'Chưa chọn ngày giao — bấm để chọn'
