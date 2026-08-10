@@ -202,7 +202,6 @@ class Product {
 class CopiedProduct {
   final String name;
   final String? description;
-  final String unit;
   final String? variantGroupName;
   final String salesModel;
   final String status;
@@ -217,7 +216,6 @@ class CopiedProduct {
   CopiedProduct({
     required this.name,
     this.description,
-    required this.unit,
     this.variantGroupName,
     required this.salesModel,
     required this.status,

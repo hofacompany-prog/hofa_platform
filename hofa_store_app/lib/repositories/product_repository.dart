@@ -87,7 +87,6 @@ class ProductRepository {
     String? merchantCategoryId,
     required String name,
     String? description,
-    required String unit,
     String? variantGroupName,
     required String salesModel,
     required String status,
@@ -111,7 +110,6 @@ class ProductRepository {
             'name': name,
             if (description != null && description.isNotEmpty)
               'description': description,
-            'unit': unit,
             if (variantGroupName != null && variantGroupName.isNotEmpty)
               'variant_group_name': variantGroupName,
             'sales_model': salesModel,

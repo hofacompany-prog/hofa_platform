@@ -114,7 +114,6 @@ Future<void> _copyProduct(
     ref.read(copiedProductProvider.notifier).state = CopiedProduct(
       name: full.name,
       description: full.description,
-      unit: full.unit,
       variantGroupName: full.variantGroupName,
       salesModel: full.salesModel,
       status: full.status,

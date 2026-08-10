@@ -34,7 +34,6 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
-  final _unitCtrl = TextEditingController(text: 'cái');
   final _variantGroupNameCtrl = TextEditingController();
   final _defaultVariantNameCtrl = TextEditingController();
   final _priceCtrl = TextEditingController();
@@ -94,7 +93,6 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   void dispose() {
     _nameCtrl.dispose();
     _descCtrl.dispose();
-    _unitCtrl.dispose();
     _variantGroupNameCtrl.dispose();
     _defaultVariantNameCtrl.dispose();
     _priceCtrl.dispose();
@@ -141,7 +139,6 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
         _product = p;
         _nameCtrl.text = p.name;
         _descCtrl.text = p.description ?? '';
-        _unitCtrl.text = p.unit;
         _variantGroupNameCtrl.text = p.variantGroupName ?? '';
         _salesModel = p.salesModel;
         _status = p.status;
@@ -733,7 +730,6 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     setState(() {
       _nameCtrl.text = c.name;
       _descCtrl.text = c.description ?? '';
-      _unitCtrl.text = c.unit;
       _variantGroupNameCtrl.text = c.variantGroupName ?? '';
       _defaultVariantNameCtrl.text = c.defaultVariantName;
       _priceCtrl.text = c.price.toString();
@@ -772,7 +768,6 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
         await _repo.update(widget.productId!, {
           'name': _nameCtrl.text.trim(),
           'description': _descCtrl.text.trim(),
-          'unit': _unitCtrl.text.trim(),
           'variant_group_name': _variantGroupNameCtrl.text.trim(),
           'sales_model': _salesModel,
           'status': _status,
@@ -797,7 +792,6 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
           merchantCategoryId: _merchantCategoryId,
           name: _nameCtrl.text.trim(),
           description: _descCtrl.text.trim(),
-          unit: _unitCtrl.text.trim(),
           variantGroupName: _variantGroupNameCtrl.text.trim(),
           salesModel: _salesModel,
           status: _status,
@@ -1281,7 +1275,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'Tên nhóm biến thể để gợi ý chung (VD: Trọng lượng, Kích cỡ), đơn vị hiển thị sau giá bán cho khách (VD: kg, hộp) — cả 2 đều không bắt buộc.',
+                            'Tên nhóm biến thể để gợi ý chung (VD: Trọng lượng, Kích cỡ) — không bắt buộc.',
                             style: Theme.of(context).textTheme.bodySmall,
                           ),
                           const SizedBox(height: 12),
@@ -1289,14 +1283,6 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                             controller: _variantGroupNameCtrl,
                             decoration: const InputDecoration(
                               labelText: 'Tên nhóm biến thể (không bắt buộc)',
-                              border: OutlineInputBorder(),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          TextFormField(
-                            controller: _unitCtrl,
-                            decoration: const InputDecoration(
-                              labelText: 'Đơn vị (kg, bó, hộp...)',
                               border: OutlineInputBorder(),
                             ),
                           ),
@@ -1390,7 +1376,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'Tên nhóm biến thể để gợi ý chung (VD: Trọng lượng, Kích cỡ), đơn vị hiển thị sau giá bán cho khách (VD: kg, hộp) — cả 2 đều không bắt buộc.',
+                            'Tên nhóm biến thể để gợi ý chung (VD: Trọng lượng, Kích cỡ) — không bắt buộc.',
                             style: Theme.of(context).textTheme.bodySmall,
                           ),
                           const SizedBox(height: 12),
@@ -1398,14 +1384,6 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                             controller: _variantGroupNameCtrl,
                             decoration: const InputDecoration(
                               labelText: 'Tên nhóm biến thể (không bắt buộc)',
-                              border: OutlineInputBorder(),
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          TextFormField(
-                            controller: _unitCtrl,
-                            decoration: const InputDecoration(
-                              labelText: 'Đơn vị (kg, bó, hộp...)',
                               border: OutlineInputBorder(),
                             ),
                           ),
