@@ -288,7 +288,11 @@ class _ProductGridState extends State<_ProductGrid> {
         ),
         itemBuilder: (context, i) {
           final p = items[i];
-          return ProductCard(product: p, onTap: () => GoRouter.of(context).push('/products/${p.id}'));
+          return ProductCard(
+            product: p,
+            onTap: () => GoRouter.of(context).push('/products/${p.id}'),
+            showDistance: false,
+          );
         },
       );
 

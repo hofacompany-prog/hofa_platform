@@ -9,8 +9,16 @@ import 'quick_add_to_cart.dart';
 class ProductCard extends ConsumerStatefulWidget {
   final Product product;
   final VoidCallback onTap;
+  // Màn chi tiết cửa hàng đã hiện khoảng cách ở đầu trang rồi — tắt ở lưới sản phẩm trong đó
+  // để khỏi lặp lại, các nơi khác (tìm kiếm, danh mục) vẫn hiện bình thường.
+  final bool showDistance;
 
-  const ProductCard({super.key, required this.product, required this.onTap});
+  const ProductCard({
+    super.key,
+    required this.product,
+    required this.onTap,
+    this.showDistance = true,
+  });
 
   @override
   ConsumerState<ProductCard> createState() => _ProductCardState();
@@ -164,7 +172,7 @@ class _ProductCardState extends ConsumerState<ProductCard> {
                             style: theme.textTheme.bodySmall,
                           ),
                         ),
-                      if (product.distanceKm != null)
+                      if (widget.showDistance && product.distanceKm != null)
                         Padding(
                           padding: const EdgeInsets.only(top: 2),
                           child: Row(
