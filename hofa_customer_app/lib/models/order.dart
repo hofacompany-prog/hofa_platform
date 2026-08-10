@@ -128,18 +128,21 @@ class Order {
     this.selectedDriverId,
   });
 
-  /// Đơn "đặt trước"/"giá sỉ" (salesModel 'scheduled', khác 'instant' giao ngay) khách KHÔNG
-  /// tự huỷ được nữa — cửa hàng đã chuẩn bị/giữ chỗ nguyên liệu theo lịch từ trước, chỉ cửa
-  /// hàng mới được huỷ (xem canContactMerchantToCancel bên dưới cho lối thay thế phía khách).
-  bool get canCancel =>
-      salesModel != 'scheduled' &&
-      ['pending_payment', 'placed', 'confirmed'].contains(status);
+  /// Đơn "đặt trước"/"giá sỉ" (salesModel 'scheduled', khác 'instant' giao ngay) khách chỉ tự
+  /// huỷ được TRƯỚC khi cửa hàng xác nhận (pending_payment/placed) — cửa hàng xác nhận sớm ngay
+  /// từ lúc đặt (xem hofa-db/60_preorder_manual_confirm.sql) đồng nghĩa đã bắt đầu giữ
+  /// chỗ/chuẩn bị nguyên liệu theo lịch, nên từ 'confirmed' trở đi chỉ cửa hàng mới được huỷ
+  /// (xem canContactMerchantToCancel bên dưới cho lối thay thế phía khách). Đơn giao ngay
+  /// (instant) giữ nguyên như cũ, huỷ được tới hết 'confirmed'.
+  bool get canCancel => salesModel == 'scheduled'
+      ? ['pending_payment', 'placed'].contains(status)
+      : ['pending_payment', 'placed', 'confirmed'].contains(status);
 
-  /// Đơn "đặt trước"/"giá sỉ" còn ở giai đoạn lẽ ra huỷ được (nếu là đơn giao ngay) — khách
-  /// không tự huỷ được nhưng vẫn cần 1 lối liên hệ cửa hàng để nhờ huỷ hộ.
+  /// Đơn "đặt trước"/"giá sỉ" đã qua giai đoạn tự huỷ được (cửa hàng đã xác nhận, đang giữ
+  /// chỗ/chuẩn bị) nhưng chưa bàn giao cho tài xế — khách không tự huỷ được nhưng vẫn cần 1 lối
+  /// liên hệ cửa hàng để nhờ huỷ hộ.
   bool get canContactMerchantToCancel =>
-      salesModel == 'scheduled' &&
-      ['pending_payment', 'placed', 'confirmed'].contains(status);
+      salesModel == 'scheduled' && ['confirmed', 'preparing'].contains(status);
 
   /// Đủ điều kiện đánh giá — đơn đã giao VÀ còn trong 3 ngày kể từ lúc giao, quá hạn thì
   /// ẩn hẳn phần đánh giá (khớp yêu cầu "sẽ bị ẩn sau 3 ngày và không đánh giá được nữa").

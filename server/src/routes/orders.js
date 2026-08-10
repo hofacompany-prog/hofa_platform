@@ -98,19 +98,14 @@ router.post('/orders', asyncHandler(async (req, res) => {
     }
   }
 
-  // Đơn đặt trước (sales_model=scheduled) đặt đủ sớm thì KHÔNG báo ngay — để "ngủ" tới lúc còn
-  // default_prep_minutes phút nữa là tới scheduled_for, sweepDuePreorders (index.js) sẽ kích
-  // hoạt + báo sau, xem hofa-db/49_preorder_gating.sql. Đặt gấp (đã trong ngưỡng đó ngay lúc
-  // tạo) thì coi như đơn tức thời, báo ngay như bình thường.
-  if (order.status === 'placed' && orderOffer.isPreorderDormant(order)) {
-    // để nguyên preorder_notified_at = NULL, không báo — sweep lo phần còn lại.
-  } else {
-    if (order.status === 'placed' && order.sales_model === 'scheduled') {
-      await db.updateById('orders', order.id, { preorder_notified_at: new Date().toISOString() });
-    }
-    // Báo ngay cho cửa hàng (push + màn xác nhận có đếm ngược), giống luồng offer bên
-    // tài xế — không tìm được cấu hình cửa hàng thì bỏ qua lặng lẽ, cửa hàng vẫn thấy
-    // đơn trong danh sách "Chờ xác nhận" như bình thường.
+  // Đơn đặt trước/giá sỉ (sales_model=scheduled) KHÔNG còn "ngủ" chờ tới gần giờ giao nữa —
+  // báo ngay cho cửa hàng xác nhận sớm như đơn tức thời (màn xác nhận phía store app LUÔN ép
+  // kiểu "tắt tự động nhận đơn" cho loại đơn này bất kể chi nhánh có bật auto-accept hay không,
+  // xem order_detail_screen.dart#_buildBody phía store app) — cửa hàng xác nhận xong thì khách
+  // hết quyền tự huỷ (Order.canCancel phía app khách). preorder_notified_at giờ đổi ý nghĩa:
+  // không còn đánh dấu "đã báo", mà đánh dấu "đã tự chuyển sang preparing đúng giờ" (xem
+  // orderOffer.sweepDuePreorders), nên để nguyên NULL ở đây.
+  if (order.status === 'placed') {
     orderOffer.offerOrderToMerchant(order.id).catch((err) => {
       console.error('[orderOffer] Không báo được cửa hàng cho đơn', order.id, err.message);
     });
@@ -276,7 +271,6 @@ router.patch('/orders/:id/status', asyncHandler(async (req, res) => {
   requireAuth(req.ctx);
   requireFields(req.body, ['status']);
   const order = await requireOrderAccess(req.ctx, req.params.id);
-  orderOffer.assertPreorderActive(order, req.ctx.role);
 
   if (req.ctx.role !== 'admin') {
     const allowedRoles = ORDER_STATUS_ROLES[req.body.status];
@@ -286,13 +280,20 @@ router.patch('/orders/:id/status', asyncHandler(async (req, res) => {
     if (req.body.status === 'cancelled' && req.ctx.role === 'customer' && order.customer_id !== req.ctx.userId) {
       throw new ApiError('FORBIDDEN', 'Không phải đơn của bạn', 403);
     }
-    // Đơn đặt trước/giá sỉ (sales_model 'scheduled') — cửa hàng đã chuẩn bị/giữ chỗ nguyên
-    // liệu theo lịch, khách không tự huỷ được nữa, chỉ liên hệ cửa hàng nhờ huỷ hộ (chặn thật
-    // ở đây, không chỉ ẩn nút ở app khách — xem Order.canCancel phía Flutter).
-    if (req.body.status === 'cancelled' && req.ctx.role === 'customer' && order.sales_model === 'scheduled') {
+    // Đơn đặt trước/giá sỉ (sales_model 'scheduled') — khách chỉ tự huỷ được TRƯỚC khi cửa
+    // hàng xác nhận (status 'pending_payment'/'placed'); cửa hàng xác nhận xong (status
+    // 'confirmed' trở đi, coi như đã bắt đầu giữ chỗ nguyên liệu theo lịch) thì khách hết
+    // quyền tự huỷ, chỉ liên hệ cửa hàng nhờ huỷ hộ — chặn thật ở đây, không chỉ ẩn nút ở app
+    // khách, xem Order.canCancel/canContactMerchantToCancel phía Flutter.
+    if (
+      req.body.status === 'cancelled' &&
+      req.ctx.role === 'customer' &&
+      order.sales_model === 'scheduled' &&
+      !['pending_payment', 'placed'].includes(order.status)
+    ) {
       throw new ApiError(
         'FORBIDDEN',
-        'Đơn đặt trước/giá sỉ không tự huỷ được — vui lòng liên hệ trực tiếp cửa hàng',
+        'Đơn đặt trước/giá sỉ đã được cửa hàng xác nhận, không tự huỷ được nữa — vui lòng liên hệ trực tiếp cửa hàng',
         403
       );
     }

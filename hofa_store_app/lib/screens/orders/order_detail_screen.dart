@@ -59,6 +59,10 @@ const _defaultManualSweepSeconds =
 ///   - TẮT: chạy manual_confirm_sweep_seconds giây (màu khác, mặc định dài hơn nhiều) — hết giờ
 ///     tự HUỶ đơn và tự đóng cửa chi nhánh (is_open = false), coi như cửa hàng không theo dõi
 ///     đơn. Trượt tay lúc nào cũng XÁC NHẬN ngay bất kể đang ở chế độ nào, chỉ là sớm hơn.
+/// Đơn đặt trước/giá sỉ (salesModel='scheduled') LUÔN coi như TẮT bất kể công tắc thật của chi
+/// nhánh (hofa-db/60_preorder_manual_confirm.sql) — nhưng hết giờ CHỈ tự huỷ đơn, KHÔNG đóng
+/// chi nhánh (xem _cancelDueToTimeout), vì lỡ hạn xác nhận sớm 1 đơn giao xa ngày không nên
+/// chặn luôn mọi đơn tức thời khác.
 /// Mốc hết giờ của thanh chạy màu (o.confirmSweepDeadline) đã được SERVER chốt sẵn ngay lúc
 /// tạo đơn (hofa-db/42_confirm_sweep_deadline.sql) — thoát app rồi mở lại đúng đơn này chỉ tính
 /// lại thời gian còn LẠI tới đúng mốc đó, không reset về đầu.
@@ -110,13 +114,18 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen>
   /// Hết giờ thanh chạy màu lúc chi nhánh TẮT "Tự động nhận đơn" — huỷ đơn + đóng cửa chi
   /// nhánh, coi như cửa hàng không theo dõi đơn. Dùng chung cờ _confirmResolved với
   /// _confirmPrepTime() để 2 nhánh (BẬT/TẮT) không bao giờ cùng chạy cho 1 đơn.
-  Future<void> _cancelDueToTimeout(Branch? branch) async {
+  /// Đơn đặt trước/giá sỉ (salesModel='scheduled') KHÔNG đóng chi nhánh khi hết giờ — lỡ hạn
+  /// xác nhận sớm 1 đơn giao xa ngày không nên chặn luôn mọi đơn tức thời khác của chi nhánh.
+  Future<void> _cancelDueToTimeout(
+    Branch? branch, {
+    required bool closeBranch,
+  }) async {
     if (_confirmResolved) return;
     _confirmResolved = true;
     setState(() => _updating = true);
     try {
       await OrderRepository().updateStatus(widget.orderId, 'cancelled');
-      if (branch != null) {
+      if (branch != null && closeBranch) {
         await MerchantRepository().toggleBranchOpen(branch.id, false);
       }
       ref.invalidate(_orderProvider(widget.orderId));
@@ -242,10 +251,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen>
     AsyncValue<Delivery?> deliveryAsync,
   ) {
     final theme = Theme.of(context);
-    // Đơn đặt trước còn "ngủ" (xem Order.isPreorderPending, hofa-db/49_preorder_gating.sql) vẫn
-    // status='placed' nhưng chưa tới lúc thao tác được — loại khỏi isPlaced để tự động tắt luôn
-    // thanh trượt xác nhận (block bên dưới), nút "Đã làm xong"/"Huỷ đơn" (canCancel).
-    final isPlaced = o.status == 'placed' && !o.isPreorderPending;
+    final isPlaced = o.status == 'placed';
     final isPrepPhase = o.status == 'confirmed' || o.status == 'preparing';
     final canCancel = isPlaced || isPrepPhase;
 
@@ -276,8 +282,13 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen>
       // confirm_sweep_seconds trước đây).
       if (!_sweepStarted && !branchAsync.isLoading && settingsReady) {
         // Mặc định coi như BẬT (an toàn hơn) nếu không tải được thông tin chi nhánh — tránh lỡ
-        // tự huỷ đơn + đóng cửa hàng chỉ vì lỗi mạng tạm thời.
-        final autoAccept = branchAsync.valueOrNull?.autoAcceptOrders ?? true;
+        // tự huỷ đơn + đóng cửa hàng chỉ vì lỗi mạng tạm thời. Đơn đặt trước/giá sỉ luôn ép về
+        // TẮT (thủ công) bất kể chi nhánh cấu hình gì — server cũng đã chốt confirm_sweep_deadline
+        // theo đúng nhánh này (hofa-db/60_preorder_manual_confirm.sql), ở đây chỉ cần khớp lại
+        // để chọn đúng callback khi hết giờ (_confirmPrepTime vs _cancelDueToTimeout).
+        final isScheduled = o.salesModel == 'scheduled';
+        final autoAccept =
+            !isScheduled && (branchAsync.valueOrNull?.autoAcceptOrders ?? true);
         final branch = branchAsync.valueOrNull;
 
         // QUAN TRỌNG: AnimationController.duration là tổng thời lượng CHO CẢ QUÃNG 0→1, không
@@ -321,7 +332,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen>
           if (autoAccept) {
             _confirmPrepTime();
           } else {
-            _cancelDueToTimeout(branch);
+            _cancelDueToTimeout(branch, closeBranch: !isScheduled);
           }
         });
         _sweepController!.forward(from: startValue);
@@ -331,7 +342,6 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen>
     return Column(
       children: [
         _buildHeader(context, o, canCancel),
-        if (o.isPreorderPending) _buildPreorderBanner(context, o),
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
           child: Row(
@@ -648,39 +658,6 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen>
         if (isPlaced) _buildPlacedBottom(context, o),
         if (isPrepPhase) _buildPrepPhaseBottom(context, o),
       ],
-    );
-  }
-
-  /// Đơn đặt trước còn "ngủ" — giải thích vì sao không thấy thanh xác nhận/nút thao tác nào,
-  /// tránh cửa hàng tưởng bị lỗi. Thời điểm kích hoạt = scheduled_for trừ default_prep_minutes,
-  /// đúng ngưỡng sweepDuePreorders phía server dùng.
-  Widget _buildPreorderBanner(BuildContext context, Order o) {
-    final theme = Theme.of(context);
-    final prepMinutes = o.defaultPrepMinutes ?? _fallbackPrepMinutes;
-    final activatesAt = o.scheduledFor?.subtract(
-      Duration(minutes: prepMinutes),
-    );
-    return Container(
-      margin: const EdgeInsets.fromLTRB(20, 8, 20, 0),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.primary.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.schedule, color: theme.colorScheme.primary, size: 20),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              activatesAt != null
-                  ? 'Đơn đặt trước — chỉ xem được món lúc này, sẽ xử lý được lúc ${formatDateTime(activatesAt)}'
-                  : 'Đơn đặt trước — chỉ xem được món lúc này, chưa thao tác được',
-              style: theme.textTheme.bodySmall,
-            ),
-          ),
-        ],
-      ),
     );
   }
 

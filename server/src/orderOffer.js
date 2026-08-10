@@ -1,7 +1,6 @@
 const db = require('./db');
 const push = require('./push');
 const dispatch = require('./dispatch');
-const { ApiError } = require('./errors');
 
 /** Tất cả user quản lý 1 cửa hàng (chủ + nhân viên) — để gửi push đơn mới cho tất cả, ai xem trước thì bấm trước. */
 async function getMerchantUserIds(merchantId) {
@@ -31,35 +30,32 @@ async function offerOrderToMerchant(orderId) {
   })));
 }
 
-/** Đơn đặt trước (sales_model='scheduled') "đang ngủ" — chưa được sweepDuePreorders kích hoạt
- * (preorder_notified_at còn NULL) — cửa hàng chỉ xem được món, chưa thao tác/nhận thông báo
- * được, xem hofa-db/49_preorder_gating.sql. */
-function isPreorderDormant(order) {
-  return order.sales_model === 'scheduled' && !order.preorder_notified_at;
-}
-
-/** Chặn CỬA HÀNG thao tác trên đơn đặt trước còn đang ngủ — chỉ chặn merchant_owner/
- * merchant_staff (đúng scope yêu cầu: "cửa hàng ... không làm được gì cả"), không chặn khách tự
- * huỷ đơn của họ, tài xế, hay admin (van an toàn can thiệp tay). */
-function assertPreorderActive(order, actorRole) {
-  if (actorRole !== 'merchant_owner' && actorRole !== 'merchant_staff') return;
-  if (isPreorderDormant(order)) {
-    throw new ApiError('PREORDER_NOT_ACTIVE', 'Đơn đặt trước chưa tới giờ xử lý', 409);
-  }
-}
-
-/** Quét định kỳ (xem index.js) các đơn đặt trước còn ngủ đã tới ngưỡng kích hoạt — còn đúng
- * default_prep_minutes phút nữa là tới scheduled_for — đánh dấu đã kích hoạt rồi báo cho cửa
- * hàng y hệt lúc 1 đơn tức thời vừa được tạo (offerOrderToMerchant). */
+/** Quét định kỳ (xem index.js) các đơn đặt trước ĐÃ được cửa hàng xác nhận sớm (status=
+ * 'confirmed', xem offerOrderToMerchant + POST /orders — không còn "ngủ" chờ tới gần giờ giao
+ * nữa, cửa hàng xác nhận ngay từ lúc đặt) và giờ đã tới ngưỡng bắt đầu chuẩn bị — còn đúng
+ * default_prep_minutes phút nữa là tới scheduled_for — tự chuyển sang 'preparing', không cần
+ * cửa hàng bấm "Đã làm xong" ở bước này (họ đã xác nhận từ trước, phần còn lại xử lý như đơn
+ * bình thường: bấm "Đã làm xong" khi bếp xong việc để chuyển tiếp sang ready_for_pickup).
+ * preorder_notified_at dùng làm cờ chống chạy trùng (đánh dấu NGAY sau khi sweep này xử lý). */
 async function sweepDuePreorders() {
   const due = await db.query(
     `SELECT id FROM orders
-      WHERE sales_model = 'scheduled' AND status = 'placed' AND preorder_notified_at IS NULL
+      WHERE sales_model = 'scheduled' AND status = 'confirmed' AND preorder_notified_at IS NULL
         AND scheduled_for - (COALESCE(default_prep_minutes, 15) || ' minutes')::interval <= now()`
   );
   for (const row of due) {
     await db.updateById('orders', row.id, { preorder_notified_at: new Date().toISOString() });
-    await offerOrderToMerchant(row.id);
+    await db.callRpc('update_order_status', {
+      p_order_id: row.id,
+      p_new_status: 'preparing',
+      p_changed_by: null,
+      p_actor_role: 'admin',
+      p_note: 'Tự động — tới giờ chuẩn bị đơn đặt trước',
+      p_force: true
+    });
+    push.notifyCustomerOrderStatus(row.id, 'preparing').catch((err) => {
+      console.error('[sweep-due-preorders] Không báo được cho khách', row.id, err.message);
+    });
   }
 }
 
@@ -121,7 +117,5 @@ module.exports = {
   offerOrderToMerchant,
   dispatchBuyOnBehalfOrder,
   dispatchToSelectedDriver,
-  isPreorderDormant,
-  assertPreorderActive,
   sweepDuePreorders
 };

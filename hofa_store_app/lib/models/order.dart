@@ -4,7 +4,8 @@ class OrderItemTopping {
 
   OrderItemTopping({required this.name, required this.price});
 
-  factory OrderItemTopping.fromJson(Map<String, dynamic> json) => OrderItemTopping(
+  factory OrderItemTopping.fromJson(Map<String, dynamic> json) =>
+      OrderItemTopping(
         name: json['name'] as String? ?? '',
         price: (json['price'] as num?)?.toInt() ?? 0,
       );
@@ -32,18 +33,19 @@ class OrderItem {
   });
 
   factory OrderItem.fromJson(Map<String, dynamic> json) => OrderItem(
-        id: json['id'] as String,
-        productName: json['product_name'] as String? ?? '',
-        variantName: json['variant_name'] as String?,
-        unitPrice: (json['unit_price'] as num?)?.toInt() ?? 0,
-        quantity: (json['quantity'] as num?)?.toInt() ?? 0,
-        lineTotal: (json['line_total'] as num?)?.toInt() ?? 0,
-        note: json['note'] as String?,
-        toppings: (json['toppings'] as List?)
-                ?.map((e) => OrderItemTopping.fromJson(e as Map<String, dynamic>))
-                .toList() ??
-            const [],
-      );
+    id: json['id'] as String,
+    productName: json['product_name'] as String? ?? '',
+    variantName: json['variant_name'] as String?,
+    unitPrice: (json['unit_price'] as num?)?.toInt() ?? 0,
+    quantity: (json['quantity'] as num?)?.toInt() ?? 0,
+    lineTotal: (json['line_total'] as num?)?.toInt() ?? 0,
+    note: json['note'] as String?,
+    toppings:
+        (json['toppings'] as List?)
+            ?.map((e) => OrderItemTopping.fromJson(e as Map<String, dynamic>))
+            .toList() ??
+        const [],
+  );
 }
 
 class Order {
@@ -72,15 +74,12 @@ class Order {
   final String salesModel;
   final DateTime? scheduledFor;
   final DateTime? preorderNotifiedAt;
+
   /// Đơn đầu tiên trong tuần mà đơn này gộp thanh toán chung (khách chọn "Thanh toán theo
   /// tuần" lúc đặt trước) — null nghĩa là đơn tự thanh toán riêng như bình thường. Chỉ là
   /// nhãn tham chiếu, KHÔNG tự đổi paymentStatus — vẫn phải tự xác nhận đã nhận tiền.
   final String? paymentGroupOrderId;
   final List<OrderItem> items;
-
-  /// Đơn đặt trước (salesModel='scheduled') chưa được sweep kích hoạt — cửa hàng chỉ xem được
-  /// món, chưa thao tác/nhận thông báo được, xem hofa-db/49_preorder_gating.sql.
-  bool get isPreorderPending => salesModel == 'scheduled' && preorderNotifiedAt == null;
 
   Order({
     required this.id,
@@ -113,36 +112,48 @@ class Order {
   });
 
   factory Order.fromJson(Map<String, dynamic> json) => Order(
-        id: json['id'] as String,
-        orderCode: json['order_code'] as String? ?? '',
-        merchantId: json['merchant_id'] as String,
-        branchId: json['branch_id'] as String,
-        status: json['status'] as String,
-        shipRecipientName: json['ship_recipient_name'] as String? ?? '',
-        shipRecipientPhone: json['ship_recipient_phone'] as String? ?? '',
-        shipLine1: json['ship_line1'] as String? ?? '',
-        shipProvince: json['ship_province'] as String? ?? '',
-        subtotal: (json['subtotal'] as num?)?.toInt() ?? 0,
-        deliveryFee: (json['delivery_fee'] as num?)?.toInt() ?? 0,
-        discountAmount: (json['discount_amount'] as num?)?.toInt() ?? 0,
-        totalAmount: (json['total_amount'] as num?)?.toInt() ?? 0,
-        paymentMethod: json['payment_method'] as String? ?? 'cod',
-        paymentStatus: json['payment_status'] as String? ?? 'pending',
-        createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ?? DateTime.now(),
-        confirmedAt: json['confirmed_at'] != null ? DateTime.tryParse(json['confirmed_at'].toString()) : null,
-        customerNote: json['customer_note'] as String?,
-        estimatedPrepMinutes: (json['estimated_prep_minutes'] as num?)?.toInt(),
-        lateMinutes: (json['late_minutes'] as num?)?.toInt(),
-        defaultPrepMinutes: (json['default_prep_minutes'] as num?)?.toInt(),
-        confirmSweepDeadline:
-            json['confirm_sweep_deadline'] != null ? DateTime.tryParse(json['confirm_sweep_deadline'].toString()) : null,
-        salesModel: json['sales_model'] as String? ?? 'instant',
-        scheduledFor: json['scheduled_for'] != null ? DateTime.tryParse(json['scheduled_for'].toString()) : null,
-        preorderNotifiedAt:
-            json['preorder_notified_at'] != null ? DateTime.tryParse(json['preorder_notified_at'].toString()) : null,
-        paymentGroupOrderId: json['payment_group_order_id'] as String?,
-        items: (json['items'] as List?)?.map((e) => OrderItem.fromJson(e as Map<String, dynamic>)).toList() ?? [],
-      );
+    id: json['id'] as String,
+    orderCode: json['order_code'] as String? ?? '',
+    merchantId: json['merchant_id'] as String,
+    branchId: json['branch_id'] as String,
+    status: json['status'] as String,
+    shipRecipientName: json['ship_recipient_name'] as String? ?? '',
+    shipRecipientPhone: json['ship_recipient_phone'] as String? ?? '',
+    shipLine1: json['ship_line1'] as String? ?? '',
+    shipProvince: json['ship_province'] as String? ?? '',
+    subtotal: (json['subtotal'] as num?)?.toInt() ?? 0,
+    deliveryFee: (json['delivery_fee'] as num?)?.toInt() ?? 0,
+    discountAmount: (json['discount_amount'] as num?)?.toInt() ?? 0,
+    totalAmount: (json['total_amount'] as num?)?.toInt() ?? 0,
+    paymentMethod: json['payment_method'] as String? ?? 'cod',
+    paymentStatus: json['payment_status'] as String? ?? 'pending',
+    createdAt:
+        DateTime.tryParse(json['created_at']?.toString() ?? '') ??
+        DateTime.now(),
+    confirmedAt: json['confirmed_at'] != null
+        ? DateTime.tryParse(json['confirmed_at'].toString())
+        : null,
+    customerNote: json['customer_note'] as String?,
+    estimatedPrepMinutes: (json['estimated_prep_minutes'] as num?)?.toInt(),
+    lateMinutes: (json['late_minutes'] as num?)?.toInt(),
+    defaultPrepMinutes: (json['default_prep_minutes'] as num?)?.toInt(),
+    confirmSweepDeadline: json['confirm_sweep_deadline'] != null
+        ? DateTime.tryParse(json['confirm_sweep_deadline'].toString())
+        : null,
+    salesModel: json['sales_model'] as String? ?? 'instant',
+    scheduledFor: json['scheduled_for'] != null
+        ? DateTime.tryParse(json['scheduled_for'].toString())
+        : null,
+    preorderNotifiedAt: json['preorder_notified_at'] != null
+        ? DateTime.tryParse(json['preorder_notified_at'].toString())
+        : null,
+    paymentGroupOrderId: json['payment_group_order_id'] as String?,
+    items:
+        (json['items'] as List?)
+            ?.map((e) => OrderItem.fromJson(e as Map<String, dynamic>))
+            .toList() ??
+        [],
+  );
 }
 
 /// Nhãn tiếng Việt + màu cho từng trạng thái — khớp enum order_status trong 01_schema.sql

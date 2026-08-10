@@ -177,6 +177,7 @@ async function sendToUserIds(userIds, { title, body, badge = false, screen = nul
  * sự cần biết (không báo 'preparing'/'assigned', khách không quan tâm mấy bước nội bộ đó). */
 const CUSTOMER_STATUS_MESSAGES = {
   confirmed: (code) => ({ title: 'Đơn hàng đã được xác nhận', body: `${code} · Cửa hàng đang chuẩn bị đơn cho bạn` }),
+  preparing: (code) => ({ title: 'Cửa hàng bắt đầu chuẩn bị đơn của bạn', body: `${code} · Đã tới giờ làm đơn đặt trước của bạn` }),
   ready_for_pickup: (code) => ({ title: 'Đơn hàng đã chuẩn bị xong', body: `${code} · Đang chờ tài xế đến lấy` }),
   picked_up: (code) => ({ title: 'Tài xế đã lấy đơn hàng', body: `${code} · Chuẩn bị lên đường giao đến bạn` }),
   delivering: (code) => ({ title: 'Tài xế đang trên đường giao đến bạn', body: `${code} · Sắp tới nơi rồi!` }),

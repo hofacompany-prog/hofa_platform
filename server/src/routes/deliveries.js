@@ -6,7 +6,6 @@ const { requireFields, pagination, requireRole, requireMerchantAccess, requireOr
 const dispatch = require('../dispatch');
 const config = require('../config');
 const push = require('../push');
-const orderOffer = require('../orderOffer');
 
 async function requireOwnDriverRow(ctx) {
   requireRole(ctx, ['driver']);
@@ -94,7 +93,6 @@ router.post('/orders/:orderId/assign-driver', asyncHandler(async (req, res) => {
   const order = await db.findById('orders', req.params.orderId);
   if (!order) throw new ApiError('NOT_FOUND', 'Không tìm thấy đơn hàng', 404);
   await requireMerchantAccess(req.ctx, order.merchant_id);
-  orderOffer.assertPreorderActive(order, req.ctx.role);
 
   const delivery = await db.callRpc('assign_driver', {
     p_order_id: req.params.orderId,
@@ -114,7 +112,6 @@ router.post('/orders/:orderId/find-driver', asyncHandler(async (req, res) => {
   const order = await db.findById('orders', req.params.orderId);
   if (!order) throw new ApiError('NOT_FOUND', 'Không tìm thấy đơn hàng', 404);
   await requireMerchantAccess(req.ctx, order.merchant_id);
-  orderOffer.assertPreorderActive(order, req.ctx.role);
 
   const existing = await db.queryOne('SELECT declined_driver_ids FROM deliveries WHERE order_id = $1', [req.params.orderId]);
   const result = await dispatch.offerToNearestDriver(req.params.orderId, {

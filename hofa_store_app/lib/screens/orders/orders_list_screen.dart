@@ -15,19 +15,30 @@ import '../../widgets/rolling_countdown.dart';
 /// giao (không còn là việc của bếp nữa), "Đã hoàn tất"/"Đã hủy" giữ nguyên ý nghĩa gốc.
 const _statusGroups = <String, List<String>>{
   'Đang chuẩn bị': ['confirmed', 'preparing'],
-  'Đã làm xong': ['ready_for_pickup', 'assigned', 'picked_up', 'delivering', 'delivered'],
+  'Đã làm xong': [
+    'ready_for_pickup',
+    'assigned',
+    'picked_up',
+    'delivering',
+    'delivered',
+  ],
   'Sắp tới': ['pending_payment', 'placed'],
   'Đã hoàn tất': ['completed'],
   'Đã hủy': ['cancelled', 'refunded'],
 };
 
-/// "Đặt trước" không phải nhóm theo status thuần (đơn đặt trước còn "ngủ" vẫn status='placed',
-/// xem Order.isPreorderPending) nên tách riêng khỏi _statusGroups — thứ tự tab hiển thị dùng
-/// list này thay vì _statusGroups.keys, giữ nguyên tab mặc định lúc mở màn ("Đang chuẩn bị").
-const _tabOrder = ['Đang chuẩn bị', 'Đã làm xong', 'Sắp tới', 'Đặt trước', 'Đã hoàn tất', 'Đã hủy'];
-const _preorderGroup = 'Đặt trước';
+/// Thứ tự tab hiển thị — giữ nguyên tab mặc định lúc mở màn ("Đang chuẩn bị").
+const _tabOrder = [
+  'Đang chuẩn bị',
+  'Đã làm xong',
+  'Sắp tới',
+  'Đã hoàn tất',
+  'Đã hủy',
+];
 
-final _selectedGroupProvider = StateProvider.autoDispose<String>((ref) => _tabOrder.first);
+final _selectedGroupProvider = StateProvider.autoDispose<String>(
+  (ref) => _tabOrder.first,
+);
 
 final _ordersProvider = FutureProvider.autoDispose<List<Order>>((ref) async {
   final merchant = await ref.watch(myMerchantProvider.future);
@@ -37,8 +48,12 @@ final _ordersProvider = FutureProvider.autoDispose<List<Order>>((ref) async {
 
 /// order_id của mọi thông báo danh mục "Đơn hàng" CHƯA ĐỌC — dùng để chấm đỏ đúng dòng đơn
 /// tương ứng trong danh sách, không phải cờ riêng trên bảng orders (không có cột nào như vậy).
-final _unreadOrderIdsProvider = FutureProvider.autoDispose<Set<String>>((ref) async {
-  final notifications = await ref.watch(notificationRepoProvider).list(category: 'order', limit: 100);
+final _unreadOrderIdsProvider = FutureProvider.autoDispose<Set<String>>((
+  ref,
+) async {
+  final notifications = await ref
+      .watch(notificationRepoProvider)
+      .list(category: 'order', limit: 100);
   return notifications
       .where((n) => !n.isRead)
       .map((n) => n.data['order_id'] as String?)
@@ -53,10 +68,14 @@ class OrdersListScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final ordersAsync = ref.watch(_ordersProvider);
     final selectedGroup = ref.watch(_selectedGroupProvider);
-    final unreadOrderIds = ref.watch(_unreadOrderIdsProvider).valueOrNull ?? const <String>{};
+    final unreadOrderIds =
+        ref.watch(_unreadOrderIdsProvider).valueOrNull ?? const <String>{};
 
     return Scaffold(
-      appBar: AppBar(leading: const NavBackButton(), title: const Text('Đơn hàng')),
+      appBar: AppBar(
+        leading: const NavBackButton(),
+        title: const Text('Đơn hàng'),
+      ),
       body: Column(
         children: [
           SizedBox(
@@ -65,14 +84,18 @@ class OrdersListScreen extends ConsumerWidget {
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
               children: _tabOrder
-                  .map((name) => Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                        child: ChoiceChip(
-                          label: Text(name),
-                          selected: selectedGroup == name,
-                          onSelected: (_) => ref.read(_selectedGroupProvider.notifier).state = name,
-                        ),
-                      ))
+                  .map(
+                    (name) => Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: ChoiceChip(
+                        label: Text(name),
+                        selected: selectedGroup == name,
+                        onSelected: (_) =>
+                            ref.read(_selectedGroupProvider.notifier).state =
+                                name,
+                      ),
+                    ),
+                  )
                   .toList(),
             ),
           ),
@@ -82,11 +105,11 @@ class OrdersListScreen extends ConsumerWidget {
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (e, _) => Center(child: Text('Lỗi tải đơn hàng: $e')),
               data: (allOrders) {
-                final orders = selectedGroup == _preorderGroup
-                    ? allOrders.where((o) => o.isPreorderPending).toList()
-                    : allOrders
-                        .where((o) => _statusGroups[selectedGroup]!.contains(o.status) && !o.isPreorderPending)
-                        .toList();
+                final orders = allOrders
+                    .where(
+                      (o) => _statusGroups[selectedGroup]!.contains(o.status),
+                    )
+                    .toList();
                 if (orders.isEmpty) {
                   return const Center(child: Text('Không có đơn nào'));
                 }
@@ -102,10 +125,15 @@ class OrdersListScreen extends ConsumerWidget {
 
                       Future<void> openOrder() async {
                         if (isUnread) {
-                          final notifications = await ref.read(notificationRepoProvider).list(category: 'order', limit: 100);
+                          final notifications = await ref
+                              .read(notificationRepoProvider)
+                              .list(category: 'order', limit: 100);
                           for (final n in notifications) {
                             if (!n.isRead && n.data['order_id'] == o.id) {
-                              ref.read(notificationRepoProvider).markRead(n.id).catchError((_) {});
+                              ref
+                                  .read(notificationRepoProvider)
+                                  .markRead(n.id)
+                                  .catchError((_) {});
                             }
                           }
                           ref.invalidate(_unreadOrderIdsProvider);
@@ -118,27 +146,52 @@ class OrdersListScreen extends ConsumerWidget {
                       // xong" hệt màn chi tiết đơn (RollingCountdown dùng chung), thay vì chỉ hiện
                       // 1 chip tĩnh — cửa hàng thấy ngay đơn nào sắp trễ mà không cần bấm vào xem.
                       if (o.status == 'confirmed' || o.status == 'preparing') {
-                        return _PreparingOrderCard(order: o, isUnread: isUnread, onTap: openOrder);
+                        return _PreparingOrderCard(
+                          order: o,
+                          isUnread: isUnread,
+                          onTap: openOrder,
+                        );
                       }
 
                       return Card(
                         child: ListTile(
                           onTap: openOrder,
                           leading: isUnread
-                              ? const CircleAvatar(radius: 5, backgroundColor: Colors.red)
+                              ? const CircleAvatar(
+                                  radius: 5,
+                                  backgroundColor: Colors.red,
+                                )
                               : const SizedBox(width: 10),
                           title: Text(
                             o.orderCode,
-                            style: TextStyle(fontWeight: isUnread ? FontWeight.bold : FontWeight.normal),
+                            style: TextStyle(
+                              fontWeight: isUnread
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                            ),
                           ),
-                          subtitle: Text('${formatVnd(o.totalAmount)} · ${formatDateTime(o.createdAt)}'),
+                          subtitle: Text(
+                            '${formatVnd(o.totalAmount)} · ${formatDateTime(o.createdAt)}',
+                          ),
                           trailing: (o.lateMinutes ?? 0) > 0
                               ? Chip(
-                                  label: Text('${orderStatusLabels[o.status] ?? o.status} · Trễ ${o.lateMinutes}p'),
-                                  backgroundColor: Theme.of(context).colorScheme.errorContainer,
-                                  labelStyle: TextStyle(color: Theme.of(context).colorScheme.onErrorContainer),
+                                  label: Text(
+                                    '${orderStatusLabels[o.status] ?? o.status} · Trễ ${o.lateMinutes}p',
+                                  ),
+                                  backgroundColor: Theme.of(
+                                    context,
+                                  ).colorScheme.errorContainer,
+                                  labelStyle: TextStyle(
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.onErrorContainer,
+                                  ),
                                 )
-                              : Chip(label: Text(orderStatusLabels[o.status] ?? o.status)),
+                              : Chip(
+                                  label: Text(
+                                    orderStatusLabels[o.status] ?? o.status,
+                                  ),
+                                ),
                         ),
                       );
                     },
@@ -160,10 +213,15 @@ class _PreparingOrderCard extends ConsumerStatefulWidget {
   final Order order;
   final bool isUnread;
   final Future<void> Function() onTap;
-  const _PreparingOrderCard({required this.order, required this.isUnread, required this.onTap});
+  const _PreparingOrderCard({
+    required this.order,
+    required this.isUnread,
+    required this.onTap,
+  });
 
   @override
-  ConsumerState<_PreparingOrderCard> createState() => _PreparingOrderCardState();
+  ConsumerState<_PreparingOrderCard> createState() =>
+      _PreparingOrderCardState();
 }
 
 class _PreparingOrderCardState extends ConsumerState<_PreparingOrderCard> {
@@ -179,7 +237,10 @@ class _PreparingOrderCardState extends ConsumerState<_PreparingOrderCard> {
       await OrderRepository().updateStatus(o.id, 'ready_for_pickup');
       ref.invalidate(_ordersProvider);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
     } finally {
       if (mounted) setState(() => _updating = false);
     }
@@ -198,9 +259,15 @@ class _PreparingOrderCardState extends ConsumerState<_PreparingOrderCard> {
                 : const SizedBox(width: 10),
             title: Text(
               o.orderCode,
-              style: TextStyle(fontWeight: widget.isUnread ? FontWeight.bold : FontWeight.normal),
+              style: TextStyle(
+                fontWeight: widget.isUnread
+                    ? FontWeight.bold
+                    : FontWeight.normal,
+              ),
             ),
-            subtitle: Text('${formatVnd(o.totalAmount)} · ${formatDateTime(o.createdAt)}'),
+            subtitle: Text(
+              '${formatVnd(o.totalAmount)} · ${formatDateTime(o.createdAt)}',
+            ),
           ),
           if (o.confirmedAt != null && o.estimatedPrepMinutes != null)
             Padding(
@@ -208,7 +275,11 @@ class _PreparingOrderCardState extends ConsumerState<_PreparingOrderCard> {
               child: Row(
                 children: [
                   Expanded(
-                    child: RollingCountdown(deadline: o.confirmedAt!.add(Duration(minutes: o.estimatedPrepMinutes!))),
+                    child: RollingCountdown(
+                      deadline: o.confirmedAt!.add(
+                        Duration(minutes: o.estimatedPrepMinutes!),
+                      ),
+                    ),
                   ),
                   const SizedBox(width: 12),
                   FilledButton.icon(
