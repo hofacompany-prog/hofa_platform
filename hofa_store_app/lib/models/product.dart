@@ -146,6 +146,52 @@ class ToppingGroup {
   );
 }
 
+/// Thư viện biến thể mẫu của 1 cửa hàng (xem hofa-db/55_variant_templates.sql) — tạo 1 lần,
+/// chọn từ đây lúc thêm biến thể cho 1 sản phẩm để COPY thành 1 [ProductVariant] +
+/// [WholesaleTier] riêng cho sản phẩm đó, không share 1 row như [ToppingGroup]. [wholesaleTiers]
+/// dùng lại model [WholesaleTier] cho gọn dù id/variantId chỉ là placeholder (không có ý
+/// nghĩa thật cho tới khi copy sang 1 sản phẩm).
+class VariantTemplate {
+  final String id;
+  final String merchantId;
+  final String name;
+  final int price;
+  final int? comparePrice;
+  final int? costPrice;
+  final int? wholesalePrice;
+  final int sortOrder;
+  final List<WholesaleTier> wholesaleTiers;
+
+  VariantTemplate({
+    required this.id,
+    required this.merchantId,
+    required this.name,
+    required this.price,
+    this.comparePrice,
+    this.costPrice,
+    this.wholesalePrice,
+    required this.sortOrder,
+    required this.wholesaleTiers,
+  });
+
+  factory VariantTemplate.fromJson(Map<String, dynamic> json) =>
+      VariantTemplate(
+        id: json['id'] as String,
+        merchantId: json['merchant_id'] as String? ?? '',
+        name: json['name'] as String? ?? '',
+        price: (json['price'] as num?)?.toInt() ?? 0,
+        comparePrice: (json['compare_price'] as num?)?.toInt(),
+        costPrice: (json['cost_price'] as num?)?.toInt(),
+        wholesalePrice: (json['wholesale_price'] as num?)?.toInt(),
+        sortOrder: (json['sort_order'] as num?)?.toInt() ?? 0,
+        wholesaleTiers:
+            (json['wholesale_tiers'] as List?)
+                ?.map((e) => WholesaleTier.fromJson(e as Map<String, dynamic>))
+                .toList() ??
+            [],
+      );
+}
+
 class Product {
   final String id;
   final String merchantId;

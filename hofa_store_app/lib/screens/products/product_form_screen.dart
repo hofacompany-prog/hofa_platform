@@ -843,6 +843,9 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     );
     var isActive = existing?.isActive ?? true;
     var isDefault = existing?.isDefault ?? false;
+    // Bậc giá của biến thể mẫu vừa chọn (nếu có) — copy sang wholesale_tiers thật cùng lúc
+    // lưu biến thể bên dưới, xem VariantTemplate.
+    var pickedTemplateTiers = <WholesaleTier>[];
 
     final ok = await showDialog<bool>(
       context: context,
@@ -855,6 +858,74 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
+                  if (existing == null) ...[
+                    OutlinedButton.icon(
+                      onPressed: () async {
+                        final merchant = await ref.read(
+                          myMerchantProvider.future,
+                        );
+                        if (merchant == null) return;
+                        List<VariantTemplate> templates;
+                        try {
+                          templates = await _repo.variantTemplates(
+                            merchant.id,
+                          );
+                        } catch (e) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text('Lỗi: $e')),
+                            );
+                          }
+                          return;
+                        }
+                        if (!context.mounted) return;
+                        if (templates.isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'Chưa có biến thể mẫu nào — tạo ở màn "Sản phẩm" > "Thêm biến thể mẫu"',
+                              ),
+                            ),
+                          );
+                          return;
+                        }
+                        final picked = await showDialog<VariantTemplate>(
+                          context: context,
+                          builder: (context) => SimpleDialog(
+                            title: const Text('Chọn biến thể mẫu'),
+                            children: templates
+                                .map(
+                                  (t) => SimpleDialogOption(
+                                    onPressed: () =>
+                                        Navigator.pop(context, t),
+                                    child: ListTile(
+                                      contentPadding: EdgeInsets.zero,
+                                      title: Text(t.name),
+                                      subtitle: Text(
+                                        '${formatVnd(t.price)} · ${t.wholesaleTiers.length} bậc giá',
+                                      ),
+                                    ),
+                                  ),
+                                )
+                                .toList(),
+                          ),
+                        );
+                        if (picked == null) return;
+                        setInner(() {
+                          nameCtrl.text = picked.name;
+                          priceCtrl.text = picked.price.toString();
+                          comparePriceCtrl.text =
+                              picked.comparePrice?.toString() ?? '';
+                          costPriceCtrl.text =
+                              picked.costPrice?.toString() ?? '';
+                          pickedTemplateTiers = picked.wholesaleTiers;
+                        });
+                      },
+                      icon: const Icon(Icons.library_add_outlined, size: 18),
+                      label: const Text('Chọn từ thư viện biến thể mẫu'),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
                   TextField(
                     controller: nameCtrl,
                     decoration: const InputDecoration(
@@ -957,12 +1028,13 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
       final comparePrice = int.tryParse(comparePriceCtrl.text.trim());
       final costPrice = int.tryParse(costPriceCtrl.text.trim());
       final sku = skuCtrl.text.trim().isEmpty ? null : skuCtrl.text.trim();
+      final newVariantId = 'local-${DateTime.now().microsecondsSinceEpoch}';
       setState(() {
         if (existing == null) {
           _pendingVariants = [
             ..._pendingVariants,
             ProductVariant(
-              id: 'local-${DateTime.now().microsecondsSinceEpoch}',
+              id: newVariantId,
               productId: '',
               sku: sku,
               name: nameCtrl.text.trim(),
@@ -973,6 +1045,25 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
               isActive: true,
             ),
           ];
+          if (pickedTemplateTiers.isNotEmpty) {
+            _tiersByVariant = {
+              ..._tiersByVariant,
+              newVariantId: [
+                for (final e in pickedTemplateTiers.asMap().entries)
+                  WholesaleTier(
+                    id: 'local-tier-${DateTime.now().microsecondsSinceEpoch}-${e.key}',
+                    variantId: newVariantId,
+                    minQuantity: e.value.minQuantity,
+                    maxQuantity: e.value.maxQuantity,
+                    unitPrice: e.value.unitPrice,
+                    minDaysPerWeek: e.value.minDaysPerWeek,
+                    unitPriceDays: e.value.unitPriceDays,
+                    unitPriceBoth: e.value.unitPriceBoth,
+                    minOrderQuantity: e.value.minOrderQuantity,
+                  ),
+              ],
+            };
+          }
         } else {
           _pendingVariants = _pendingVariants
               .map(
@@ -1007,6 +1098,18 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
           costPrice: int.tryParse(costPriceCtrl.text.trim()),
           isDefault: _product?.variants.isEmpty ?? true,
         );
+        for (final t in pickedTemplateTiers) {
+          await _repo.createWholesaleTier(
+            variantId: created.id,
+            minQuantity: t.minQuantity,
+            maxQuantity: t.maxQuantity,
+            unitPrice: t.unitPrice,
+            minDaysPerWeek: t.minDaysPerWeek,
+            unitPriceDays: t.unitPriceDays,
+            unitPriceBoth: t.unitPriceBoth,
+            minOrderQuantity: t.minOrderQuantity,
+          );
+        }
         final stock = int.tryParse(stockCtrl.text.trim());
         if (stock != null && stock > 0 && _branch != null) {
           await _inventoryRepo.adjust(
