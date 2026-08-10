@@ -142,6 +142,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final provinceCtrl = TextEditingController();
     double? pickedLat;
     double? pickedLng;
+    String? mapError;
 
     final ok = await showDialog<bool>(
       context: context,
@@ -178,17 +179,18 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     onPressed: () async {
                       // Bắt nhập tên + SĐT người nhận TRƯỚC khi cho chọn vị trí — tránh khách
                       // chọn xong bản đồ rồi mới phát hiện thiếu, phải quay lại chọn lại từ đầu.
+                      // Báo lỗi NGAY TRONG dialog (không dùng SnackBar) — SnackBar gắn vào
+                      // ScaffoldMessenger của màn phía SAU dialog, hiện ra bị lớp phủ mờ của
+                      // dialog che mất, trông như "ẩn ở dưới".
                       if (nameCtrl.text.trim().isEmpty ||
                           phoneCtrl.text.trim().isEmpty) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
+                        setDialogState(
+                          () => mapError =
                               'Nhập tên và số điện thoại người nhận trước khi chọn vị trí trên bản đồ',
-                            ),
-                          ),
                         );
                         return;
                       }
+                      setDialogState(() => mapError = null);
                       final picked = await Navigator.of(context)
                           .push<PickedAddress>(
                             MaterialPageRoute(
@@ -206,6 +208,17 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       });
                     },
                   ),
+                  if (mapError != null)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(
+                        mapError!,
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: line1Ctrl,
