@@ -7,8 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 /// (https://www.google.com/maps/...). Trước đây chỉ dùng link web: nếu máy không có app Maps
 /// nào được đặt làm trình xử lý https mặc định, Android/Chrome mở nó trong tab trình duyệt
 /// thường — bấm back sau đó không thoát hẳn app mà dừng lại ở 1 tab trống của Chrome ("Tìm hoặc
-/// nhập tên trang web"). Dùng intent riêng của app bản đồ tránh hẳn việc rơi vào trình duyệt.
-/// Web (kIsWeb) không có khái niệm app cài sẵn nên giữ nguyên link cũ.
+/// nhập tên trang web").
 Future<void> launchDirections(double lat, double lng) async {
   if (!kIsWeb) {
     if (defaultTargetPlatform == TargetPlatform.android) {
@@ -35,6 +34,16 @@ Future<void> launchDirections(double lat, double lng) async {
   final fallback = Uri.parse(
     'https://www.google.com/maps/dir/?api=1&destination=$lat,$lng',
   );
-  if (await canLaunchUrl(fallback))
+  if (kIsWeb) {
+    // Bản web (kể cả PWA đã "Thêm vào MH chính" trên iOS) — LaunchMode.externalApplication ứng
+    // với window.open mở TAB/CỬA SỔ MỚI, tách hẳn khỏi tab đang chạy app nên không có lịch sử gì
+    // để quay lại; bấm back kẹt ở đúng trang trống đó ("Tìm hoặc nhập tên trang web"). Điều
+    // hướng NGAY TRONG cùng tab (webOnlyWindowName: '_self') thay vì mở tab mới — bấm back lúc
+    // này quay lại đúng lịch sử duyệt web, tức là quay thẳng về app, không còn trang nào để kẹt.
+    await launchUrl(fallback, webOnlyWindowName: '_self');
+    return;
+  }
+  if (await canLaunchUrl(fallback)) {
     await launchUrl(fallback, mode: LaunchMode.externalApplication);
+  }
 }
