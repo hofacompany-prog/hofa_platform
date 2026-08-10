@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/format.dart';
 import '../../models/merchant.dart';
+import '../../models/bank.dart';
 import '../../models/branch_hours.dart';
 import '../../providers/admin_providers.dart';
 import '../../widgets/full_screen_gallery_viewer.dart';
@@ -67,7 +68,6 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
       text: m.minOrderAmount.toString(),
     );
     final prepCtrl = TextEditingController(text: m.avgPrepMinutes.toString());
-    final bankNameCtrl = TextEditingController(text: m.bankName ?? '');
     final bankAccNoCtrl = TextEditingController(text: m.bankAccountNo ?? '');
     final bankAccNameCtrl = TextEditingController(
       text: m.bankAccountName ?? '',
@@ -79,6 +79,24 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
     var coverUrl = m.coverUrl;
     var legalDocUrls = List.of(m.legalDocUrls);
     var photoUrls = List.of(m.photoUrls);
+
+    // Danh sách ngân hàng cho dropdown — nạp trước lúc mở dialog (banksProvider hiếm khi đổi,
+    // không cần watch() re-render trong dialog). Khớp lại theo bin (ổn định hơn tên nếu tên
+    // ngân hàng trong danh mục từng đổi), rơi về tên nếu cửa hàng chưa từng có bin (trước
+    // migration 66).
+    List<Bank> banks = [];
+    try {
+      banks = await ref.read(banksProvider.future);
+    } catch (_) {}
+    Bank? selectedBank;
+    for (final b in banks) {
+      if ((m.bankBin != null && b.bin == m.bankBin) ||
+          (m.bankBin == null && b.name == m.bankName)) {
+        selectedBank = b;
+        break;
+      }
+    }
+    if (!mounted) return;
 
     final ok = await showDialog<bool>(
       context: context,
@@ -236,11 +254,16 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  TextField(
-                    controller: bankNameCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Tên ngân hàng',
-                    ),
+                  DropdownButtonFormField<Bank>(
+                    initialValue: selectedBank,
+                    decoration: const InputDecoration(labelText: 'Ngân hàng'),
+                    items: banks
+                        .map(
+                          (b) =>
+                              DropdownMenuItem(value: b, child: Text(b.name)),
+                        )
+                        .toList(),
+                    onChanged: (v) => setInner(() => selectedBank = v),
                   ),
                   const SizedBox(height: 12),
                   TextField(
@@ -313,9 +336,8 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
             int.tryParse(minOrderCtrl.text.trim()) ?? m.minOrderAmount,
         'avg_prep_minutes':
             int.tryParse(prepCtrl.text.trim()) ?? m.avgPrepMinutes,
-        'bank_name': bankNameCtrl.text.trim().isEmpty
-            ? null
-            : bankNameCtrl.text.trim(),
+        'bank_name': selectedBank?.name,
+        'bank_bin': selectedBank?.bin,
         'bank_account_no': bankAccNoCtrl.text.trim().isEmpty
             ? null
             : bankAccNoCtrl.text.trim(),

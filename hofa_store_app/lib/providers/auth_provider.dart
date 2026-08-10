@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/api_exception.dart';
 import '../models/user_profile.dart';
+import '../models/bank.dart';
 import '../models/merchant.dart';
 import '../models/merchant_today_stats.dart';
 import '../models/finance_summary.dart';
@@ -89,6 +90,11 @@ final financeSummaryProvider = FutureProvider.autoDispose
       if (merchant == null) return null;
       return _merchantRepo.financeSummary(merchant.id, period: period);
     });
+
+/// Danh sách ngân hàng admin quản lý — dropdown lúc tạo/sửa hồ sơ cửa hàng.
+final banksProvider = FutureProvider.autoDispose<List<Bank>>(
+  (ref) => _merchantRepo.banks(),
+);
 
 /// Số dư ví thật (tab "Số tiền thu về" ở màn Tài chính) — null nếu chưa có cửa hàng.
 final merchantWalletBalanceProvider = FutureProvider.autoDispose<int?>((

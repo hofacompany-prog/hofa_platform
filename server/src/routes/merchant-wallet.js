@@ -80,7 +80,7 @@ router.get('/admin/merchant-wallet-withdrawals', asyncHandler(async (req, res) =
   const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
   params.push(limit, offset);
   const rows = await db.query(
-    `SELECT w.*, m.name AS merchant_name, m.bank_name, m.bank_account_no, m.bank_account_name
+    `SELECT w.*, m.name AS merchant_name, m.bank_name, m.bank_bin, m.bank_account_no, m.bank_account_name
        FROM merchant_wallet_withdrawals w
        JOIN merchants m ON m.id = w.merchant_id
       ${where}

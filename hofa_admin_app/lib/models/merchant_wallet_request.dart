@@ -1,6 +1,7 @@
 /// 1 yêu cầu rút ví cửa hàng — xem GET /admin/merchant-wallet-withdrawals,
-/// hofa-db/65_merchant_wallet_withdrawals.sql. Khác DriverWalletRequest: không có mã BIN ngân
-/// hàng (merchants chưa thu thập), admin tự chuyển khoản tay bằng thông tin chữ hiện ra.
+/// hofa-db/65_merchant_wallet_withdrawals.sql. bankBin thêm ở hofa-db/66_merchant_bank_bin.sql —
+/// null với cửa hàng đã có bank_name từ trước migration 66 (chưa vào sửa hồ sơ qua dropdown lần
+/// nào), khi đó không dựng được VietQR, chỉ hiện chữ.
 class MerchantWalletRequest {
   final String id;
   final String merchantId;
@@ -10,6 +11,7 @@ class MerchantWalletRequest {
   final DateTime createdAt;
   final String? rejectReason;
   final String? bankName;
+  final String? bankBin;
   final String? bankAccountNo;
   final String? bankAccountName;
 
@@ -22,6 +24,7 @@ class MerchantWalletRequest {
     required this.createdAt,
     this.rejectReason,
     this.bankName,
+    this.bankBin,
     this.bankAccountNo,
     this.bankAccountName,
   });
@@ -38,6 +41,7 @@ class MerchantWalletRequest {
             DateTime.now(),
         rejectReason: json['reject_reason'] as String?,
         bankName: json['bank_name'] as String?,
+        bankBin: json['bank_bin'] as String?,
         bankAccountNo: json['bank_account_no'] as String?,
         bankAccountName: json['bank_account_name'] as String?,
       );

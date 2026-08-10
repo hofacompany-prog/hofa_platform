@@ -1,4 +1,5 @@
 import '../core/api_client.dart';
+import '../models/bank.dart';
 import '../models/merchant.dart';
 import '../models/merchant_today_stats.dart';
 import '../models/finance_summary.dart';
@@ -23,6 +24,10 @@ class MerchantRepository {
     String? phone,
     String? logoUrl,
     List<String> photoUrls = const [],
+    String? bankName,
+    String? bankBin,
+    String? bankAccountNo,
+    String? bankAccountName,
   }) async => Merchant.fromJson(
     await _api.post(
           '/merchants',
@@ -32,10 +37,20 @@ class MerchantRepository {
             if (phone != null && phone.isNotEmpty) 'phone': phone,
             if (logoUrl != null) 'logo_url': logoUrl,
             if (photoUrls.isNotEmpty) 'photo_urls': photoUrls,
+            if (bankName != null) 'bank_name': bankName,
+            if (bankBin != null) 'bank_bin': bankBin,
+            if (bankAccountNo != null) 'bank_account_no': bankAccountNo,
+            if (bankAccountName != null) 'bank_account_name': bankAccountName,
           },
         )
         as Map<String, dynamic>,
   );
+
+  /// Danh sách ngân hàng admin quản lý — dropdown lúc tạo/sửa hồ sơ cửa hàng.
+  Future<List<Bank>> banks() async {
+    final list = await _api.get('/banks') as List;
+    return list.map((e) => Bank.fromJson(e as Map<String, dynamic>)).toList();
+  }
 
   Future<Merchant> updateMerchant(String id, Map<String, dynamic> data) async =>
       Merchant.fromJson(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/api_exception.dart';
+import '../../models/bank.dart';
 import '../../models/merchant.dart';
 import '../../providers/auth_provider.dart';
 import '../../repositories/merchant_repository.dart';
@@ -15,26 +16,46 @@ class StoreProfileEditScreen extends ConsumerStatefulWidget {
   const StoreProfileEditScreen({super.key, required this.merchant});
 
   @override
-  ConsumerState<StoreProfileEditScreen> createState() => _StoreProfileEditScreenState();
+  ConsumerState<StoreProfileEditScreen> createState() =>
+      _StoreProfileEditScreenState();
 }
 
-class _StoreProfileEditScreenState extends ConsumerState<StoreProfileEditScreen> {
+class _StoreProfileEditScreenState
+    extends ConsumerState<StoreProfileEditScreen> {
   final _repo = MerchantRepository();
 
-  late final _descCtrl = TextEditingController(text: widget.merchant.description ?? '');
-  late final _emailCtrl = TextEditingController(text: widget.merchant.email ?? '');
-  late final _minOrderCtrl = TextEditingController(text: widget.merchant.minOrderAmount.toString());
-  late final _prepCtrl = TextEditingController(text: widget.merchant.avgPrepMinutes.toString());
-  late final _bankNameCtrl = TextEditingController(text: widget.merchant.bankName ?? '');
-  late final _bankAccNoCtrl = TextEditingController(text: widget.merchant.bankAccountNo ?? '');
-  late final _bankAccNameCtrl = TextEditingController(text: widget.merchant.bankAccountName ?? '');
-  late final _taxCodeCtrl = TextEditingController(text: widget.merchant.taxCode ?? '');
-  late final _licenseCtrl = TextEditingController(text: widget.merchant.businessLicenseNo ?? '');
+  late final _descCtrl = TextEditingController(
+    text: widget.merchant.description ?? '',
+  );
+  late final _emailCtrl = TextEditingController(
+    text: widget.merchant.email ?? '',
+  );
+  late final _minOrderCtrl = TextEditingController(
+    text: widget.merchant.minOrderAmount.toString(),
+  );
+  late final _prepCtrl = TextEditingController(
+    text: widget.merchant.avgPrepMinutes.toString(),
+  );
+  late final _bankAccNoCtrl = TextEditingController(
+    text: widget.merchant.bankAccountNo ?? '',
+  );
+  late final _bankAccNameCtrl = TextEditingController(
+    text: widget.merchant.bankAccountName ?? '',
+  );
+  late final _taxCodeCtrl = TextEditingController(
+    text: widget.merchant.taxCode ?? '',
+  );
+  late final _licenseCtrl = TextEditingController(
+    text: widget.merchant.businessLicenseNo ?? '',
+  );
 
   late String? _logoUrl = widget.merchant.logoUrl;
   late String? _coverUrl = widget.merchant.coverUrl;
   late List<String> _legalDocUrls = List.of(widget.merchant.legalDocUrls);
   late List<String> _photoUrls = List.of(widget.merchant.photoUrls);
+
+  Bank? _selectedBank;
+  bool _bankPrefillAttempted = false;
 
   bool _loading = false;
   String? _error;
@@ -45,7 +66,6 @@ class _StoreProfileEditScreenState extends ConsumerState<StoreProfileEditScreen>
     _emailCtrl.dispose();
     _minOrderCtrl.dispose();
     _prepCtrl.dispose();
-    _bankNameCtrl.dispose();
     _bankAccNoCtrl.dispose();
     _bankAccNameCtrl.dispose();
     _taxCodeCtrl.dispose();
@@ -66,13 +86,26 @@ class _StoreProfileEditScreenState extends ConsumerState<StoreProfileEditScreen>
         if (_coverUrl != null) 'cover_url': _coverUrl,
         'legal_doc_urls': _legalDocUrls,
         'photo_urls': _photoUrls,
-        'min_order_amount': int.tryParse(_minOrderCtrl.text.trim()) ?? widget.merchant.minOrderAmount,
-        'avg_prep_minutes': int.tryParse(_prepCtrl.text.trim()) ?? widget.merchant.avgPrepMinutes,
-        'bank_name': _bankNameCtrl.text.trim().isEmpty ? null : _bankNameCtrl.text.trim(),
-        'bank_account_no': _bankAccNoCtrl.text.trim().isEmpty ? null : _bankAccNoCtrl.text.trim(),
-        'bank_account_name': _bankAccNameCtrl.text.trim().isEmpty ? null : _bankAccNameCtrl.text.trim(),
-        'tax_code': _taxCodeCtrl.text.trim().isEmpty ? null : _taxCodeCtrl.text.trim(),
-        'business_license_no': _licenseCtrl.text.trim().isEmpty ? null : _licenseCtrl.text.trim(),
+        'min_order_amount':
+            int.tryParse(_minOrderCtrl.text.trim()) ??
+            widget.merchant.minOrderAmount,
+        'avg_prep_minutes':
+            int.tryParse(_prepCtrl.text.trim()) ??
+            widget.merchant.avgPrepMinutes,
+        'bank_name': _selectedBank?.name,
+        'bank_bin': _selectedBank?.bin,
+        'bank_account_no': _bankAccNoCtrl.text.trim().isEmpty
+            ? null
+            : _bankAccNoCtrl.text.trim(),
+        'bank_account_name': _bankAccNameCtrl.text.trim().isEmpty
+            ? null
+            : _bankAccNameCtrl.text.trim(),
+        'tax_code': _taxCodeCtrl.text.trim().isEmpty
+            ? null
+            : _taxCodeCtrl.text.trim(),
+        'business_license_no': _licenseCtrl.text.trim().isEmpty
+            ? null
+            : _licenseCtrl.text.trim(),
       });
       ref.invalidate(myMerchantProvider);
       if (mounted) context.pop();
@@ -87,6 +120,28 @@ class _StoreProfileEditScreenState extends ConsumerState<StoreProfileEditScreen>
 
   @override
   Widget build(BuildContext context) {
+    final banksAsync = ref.watch(banksProvider);
+    // Khớp ngân hàng đã lưu (bank_bin) với danh sách vừa tải để chọn sẵn trong dropdown — chỉ
+    // thử 1 lần lúc danh sách vừa có dữ liệu (mirror register_driver_screen.dart), rơi về
+    // khớp theo tên nếu cửa hàng chưa từng có bin (trước hofa-db/66_merchant_bank_bin.sql).
+    if (!_bankPrefillAttempted) {
+      final banks = banksAsync.valueOrNull;
+      if (banks != null) {
+        _bankPrefillAttempted = true;
+        final bin = widget.merchant.bankBin;
+        final matches = banks.where(
+          (b) => bin != null && bin.isNotEmpty
+              ? b.bin == bin
+              : b.name == widget.merchant.bankName,
+        );
+        if (matches.isNotEmpty) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) setState(() => _selectedBank = matches.first);
+          });
+        }
+      }
+    }
+
     return Scaffold(
       appBar: AppBar(title: const Text('Sửa hồ sơ cửa hàng')),
       body: Center(
@@ -97,7 +152,10 @@ class _StoreProfileEditScreenState extends ConsumerState<StoreProfileEditScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text('Ảnh cửa hàng', style: Theme.of(context).textTheme.labelLarge),
+                Text(
+                  'Ảnh cửa hàng',
+                  style: Theme.of(context).textTheme.labelLarge,
+                ),
                 const SizedBox(height: 8),
                 Row(
                   children: [
@@ -126,13 +184,19 @@ class _StoreProfileEditScreenState extends ConsumerState<StoreProfileEditScreen>
                 const SizedBox(height: 24),
                 TextField(
                   controller: _descCtrl,
-                  decoration: const InputDecoration(labelText: 'Mô tả cửa hàng', border: OutlineInputBorder()),
+                  decoration: const InputDecoration(
+                    labelText: 'Mô tả cửa hàng',
+                    border: OutlineInputBorder(),
+                  ),
                   maxLines: 3,
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: _emailCtrl,
-                  decoration: const InputDecoration(labelText: 'Email liên hệ', border: OutlineInputBorder()),
+                  decoration: const InputDecoration(
+                    labelText: 'Email liên hệ',
+                    border: OutlineInputBorder(),
+                  ),
                   keyboardType: TextInputType.emailAddress,
                 ),
                 const SizedBox(height: 12),
@@ -141,7 +205,10 @@ class _StoreProfileEditScreenState extends ConsumerState<StoreProfileEditScreen>
                     Expanded(
                       child: TextField(
                         controller: _minOrderCtrl,
-                        decoration: const InputDecoration(labelText: 'Đơn tối thiểu (VNĐ)', border: OutlineInputBorder()),
+                        decoration: const InputDecoration(
+                          labelText: 'Đơn tối thiểu (VNĐ)',
+                          border: OutlineInputBorder(),
+                        ),
                         keyboardType: TextInputType.number,
                       ),
                     ),
@@ -149,23 +216,35 @@ class _StoreProfileEditScreenState extends ConsumerState<StoreProfileEditScreen>
                     Expanded(
                       child: TextField(
                         controller: _prepCtrl,
-                        decoration: const InputDecoration(labelText: 'TG chuẩn bị (phút)', border: OutlineInputBorder()),
+                        decoration: const InputDecoration(
+                          labelText: 'TG chuẩn bị (phút)',
+                          border: OutlineInputBorder(),
+                        ),
                         keyboardType: TextInputType.number,
                       ),
                     ),
                   ],
                 ),
                 const Divider(height: 32),
-                Text('Giấy tờ pháp lý', style: Theme.of(context).textTheme.labelLarge),
+                Text(
+                  'Giấy tờ pháp lý',
+                  style: Theme.of(context).textTheme.labelLarge,
+                ),
                 const SizedBox(height: 8),
                 TextField(
                   controller: _taxCodeCtrl,
-                  decoration: const InputDecoration(labelText: 'Mã số thuế', border: OutlineInputBorder()),
+                  decoration: const InputDecoration(
+                    labelText: 'Mã số thuế',
+                    border: OutlineInputBorder(),
+                  ),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: _licenseCtrl,
-                  decoration: const InputDecoration(labelText: 'Số giấy phép kinh doanh', border: OutlineInputBorder()),
+                  decoration: const InputDecoration(
+                    labelText: 'Số giấy phép kinh doanh',
+                    border: OutlineInputBorder(),
+                  ),
                 ),
                 const SizedBox(height: 16),
                 MultiImageUploadField(
@@ -175,31 +254,67 @@ class _StoreProfileEditScreenState extends ConsumerState<StoreProfileEditScreen>
                   onChanged: (urls) => _legalDocUrls = urls,
                 ),
                 const Divider(height: 32),
-                Text('Tài khoản nhận tiền', style: Theme.of(context).textTheme.labelLarge),
+                Text(
+                  'Tài khoản nhận tiền',
+                  style: Theme.of(context).textTheme.labelLarge,
+                ),
                 const SizedBox(height: 8),
-                TextField(
-                  controller: _bankNameCtrl,
-                  decoration: const InputDecoration(labelText: 'Tên ngân hàng', border: OutlineInputBorder()),
+                banksAsync.when(
+                  loading: () => const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 8),
+                    child: LinearProgressIndicator(),
+                  ),
+                  error: (e, _) =>
+                      Text('Không tải được danh sách ngân hàng: $e'),
+                  data: (banks) => DropdownButtonFormField<Bank>(
+                    initialValue: _selectedBank,
+                    decoration: const InputDecoration(
+                      labelText: 'Ngân hàng',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: banks
+                        .map(
+                          (b) =>
+                              DropdownMenuItem(value: b, child: Text(b.name)),
+                        )
+                        .toList(),
+                    onChanged: (v) => setState(() => _selectedBank = v),
+                  ),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: _bankAccNoCtrl,
-                  decoration: const InputDecoration(labelText: 'Số tài khoản', border: OutlineInputBorder()),
+                  decoration: const InputDecoration(
+                    labelText: 'Số tài khoản',
+                    border: OutlineInputBorder(),
+                  ),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: _bankAccNameCtrl,
-                  decoration: const InputDecoration(labelText: 'Tên chủ tài khoản', border: OutlineInputBorder()),
+                  decoration: const InputDecoration(
+                    labelText: 'Tên chủ tài khoản',
+                    border: OutlineInputBorder(),
+                  ),
                 ),
                 if (_error != null) ...[
                   const SizedBox(height: 16),
-                  Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                  Text(
+                    _error!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
                 ],
                 const SizedBox(height: 24),
                 FilledButton(
                   onPressed: _loading ? null : _save,
                   child: _loading
-                      ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
                       : const Text('Lưu'),
                 ),
               ],

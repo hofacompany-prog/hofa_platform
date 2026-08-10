@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/api_exception.dart';
+import '../../models/bank.dart';
 import '../../providers/auth_provider.dart';
 import '../../repositories/merchant_repository.dart';
 import '../../repositories/user_repository.dart';
@@ -29,6 +30,8 @@ class _CreateStoreScreenState extends ConsumerState<CreateStoreScreen> {
   final _line1Ctrl = TextEditingController();
   final _provinceCtrl = TextEditingController();
   final _radiusCtrl = TextEditingController(text: '5');
+  final _bankAccNoCtrl = TextEditingController();
+  final _bankAccNameCtrl = TextEditingController();
 
   bool _loading = false;
   String? _error;
@@ -37,6 +40,7 @@ class _CreateStoreScreenState extends ConsumerState<CreateStoreScreen> {
   double? _pickedLat;
   double? _pickedLng;
   bool _prefilled = false;
+  Bank? _selectedBank;
 
   @override
   void dispose() {
@@ -47,6 +51,8 @@ class _CreateStoreScreenState extends ConsumerState<CreateStoreScreen> {
     _line1Ctrl.dispose();
     _provinceCtrl.dispose();
     _radiusCtrl.dispose();
+    _bankAccNoCtrl.dispose();
+    _bankAccNameCtrl.dispose();
     super.dispose();
   }
 
@@ -113,6 +119,14 @@ class _CreateStoreScreenState extends ConsumerState<CreateStoreScreen> {
         phone: _phoneCtrl.text.trim(),
         logoUrl: _logoUrl,
         photoUrls: _photoUrls,
+        bankName: _selectedBank?.name,
+        bankBin: _selectedBank?.bin,
+        bankAccountNo: _bankAccNoCtrl.text.trim().isEmpty
+            ? null
+            : _bankAccNoCtrl.text.trim(),
+        bankAccountName: _bankAccNameCtrl.text.trim().isEmpty
+            ? null
+            : _bankAccNameCtrl.text.trim(),
       );
       await _merchantRepo.createBranch(
         merchantId: merchant.id,
@@ -230,6 +244,62 @@ class _CreateStoreScreenState extends ConsumerState<CreateStoreScreen> {
                         label: 'Ảnh khác của cửa hàng (không bắt buộc)',
                         folder: 'merchants',
                         onChanged: (urls) => setState(() => _photoUrls = urls),
+                      ),
+                      const SizedBox(height: 24),
+                      Text(
+                        'Tài khoản nhận tiền (không bắt buộc)',
+                        style: Theme.of(context).textTheme.labelLarge,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Có thể bổ sung sau ở Cài đặt → Hồ sơ cửa hàng — cần điền đủ để rút được tiền.',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.outline,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Consumer(
+                        builder: (context, ref, _) {
+                          final banksAsync = ref.watch(banksProvider);
+                          return banksAsync.when(
+                            loading: () => const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 8),
+                              child: LinearProgressIndicator(),
+                            ),
+                            error: (e, _) =>
+                                Text('Không tải được danh sách ngân hàng: $e'),
+                            data: (banks) => DropdownButtonFormField<Bank>(
+                              initialValue: _selectedBank,
+                              decoration: const InputDecoration(
+                                labelText: 'Ngân hàng',
+                              ),
+                              items: banks
+                                  .map(
+                                    (b) => DropdownMenuItem(
+                                      value: b,
+                                      child: Text(b.name),
+                                    ),
+                                  )
+                                  .toList(),
+                              onChanged: (v) =>
+                                  setState(() => _selectedBank = v),
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _bankAccNoCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Số tài khoản',
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _bankAccNameCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'Tên chủ tài khoản',
+                        ),
                       ),
                       const SizedBox(height: 24),
                       Text(

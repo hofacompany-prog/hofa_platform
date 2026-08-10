@@ -1260,6 +1260,8 @@ class _MerchantWithdrawalsTab extends ConsumerWidget {
                       final hasBankInfo =
                           (r.bankName?.isNotEmpty ?? false) &&
                           (r.bankAccountNo?.isNotEmpty ?? false);
+                      final hasQr =
+                          hasBankInfo && (r.bankBin?.isNotEmpty ?? false);
                       return Card(
                         elevation: 0,
                         color: theme.colorScheme.surfaceContainerLow,
@@ -1294,10 +1296,64 @@ class _MerchantWithdrawalsTab extends ConsumerWidget {
                                     color: theme.colorScheme.error,
                                   ),
                                 )
-                              else
+                              else if (!hasQr) ...[
                                 Text(
                                   '${r.bankName} · ${r.bankAccountNo}\n${r.bankAccountName ?? ""}',
                                   style: theme.textTheme.bodyMedium,
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Chưa chọn lại ngân hàng qua dropdown mới (thiếu mã BIN) nên chưa dựng được QR — cửa hàng vào Sửa hồ sơ chọn lại ngân hàng để có QR lần tới.',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.outline,
+                                  ),
+                                ),
+                              ] else
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(8),
+                                      child: Image.network(
+                                        buildVietQrUrl(
+                                          bankBin: r.bankBin!,
+                                          accountNumber: r.bankAccountNo!,
+                                          amount: r.amount,
+                                          addInfo:
+                                              'RUT-${r.id.substring(0, 8).toUpperCase()}',
+                                          accountName: r.bankAccountName,
+                                        ),
+                                        width: 160,
+                                        height: 160,
+                                        fit: BoxFit.contain,
+                                        errorBuilder:
+                                            (context, error, stackTrace) =>
+                                                const SizedBox(
+                                                  width: 160,
+                                                  height: 160,
+                                                  child: Center(
+                                                    child: Text('Lỗi tải QR'),
+                                                  ),
+                                                ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 16),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            '${r.bankName} · ${r.bankAccountNo}',
+                                          ),
+                                          Text(
+                                            r.bankAccountName ?? '',
+                                            style: theme.textTheme.bodySmall,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               const SizedBox(height: 12),
                               Row(
