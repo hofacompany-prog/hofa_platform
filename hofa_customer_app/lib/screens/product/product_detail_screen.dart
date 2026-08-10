@@ -84,6 +84,9 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
     final theme = Theme.of(context);
     return showDialog<void>(
       context: context,
+      // Cố ý không cho bấm ra ngoài để đóng — tránh khách bấm liên tục theo phản xạ mà
+      // không kịp đọc thông báo, phải bấm hẳn "Đã hiểu" mới đóng được.
+      barrierDismissible: false,
       builder: (context) => AlertDialog(
         title: const Text('🎉 Đã đạt bậc giá sỉ!'),
         content: Column(
