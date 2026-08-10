@@ -619,7 +619,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen>
                                         ?.copyWith(
                                           fontWeight: FontWeight.bold,
                                           letterSpacing: 4,
-                                          color: theme.colorScheme.primary,
+                                          color: theme.colorScheme.onSurface,
                                         ),
                                   ),
                                   const SizedBox(height: 4),
