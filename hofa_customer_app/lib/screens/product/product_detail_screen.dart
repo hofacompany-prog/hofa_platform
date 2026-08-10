@@ -34,17 +34,90 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
     _selectedVariant ??= product.defaultVariant;
   }
 
-  int _unitPriceFor(ProductVariant variant, List<WholesaleTier> tiers) {
+  int _unitPriceFor(ProductVariant variant, List<WholesaleTier> tiers) =>
+      _unitPriceForQuantity(_quantity, variant, tiers);
+
+  int _unitPriceForQuantity(
+    int quantity,
+    ProductVariant variant,
+    List<WholesaleTier> tiers,
+  ) {
     if (tiers.isEmpty) return variant.price;
     WholesaleTier? matched;
     for (final t in tiers) {
-      if (_quantity >= t.minQuantity &&
-          (t.maxQuantity == null || _quantity <= t.maxQuantity!)) {
+      if (quantity >= t.minQuantity &&
+          (t.maxQuantity == null || quantity <= t.maxQuantity!)) {
         matched = t;
         break;
       }
     }
     return matched?.unitPrice ?? variant.price;
+  }
+
+  /// Đổi số lượng qua nút +/- — nếu số lượng mới đạt 1 bậc giá sỉ RẺ HƠN bậc hiện tại thì
+  /// báo ngay bằng popup (khách dễ bỏ lỡ vì giá chỉ đổi âm thầm trên dòng giá phía trên).
+  void _changeQuantity(
+    int delta,
+    Product product,
+    ProductVariant variant,
+    List<WholesaleTier> wholesaleOnlyTiers,
+  ) {
+    final newQuantity = _quantity + delta;
+    if (newQuantity < 1) return;
+    final oldPrice = _unitPriceForQuantity(
+      _quantity,
+      variant,
+      wholesaleOnlyTiers,
+    );
+    final newPrice = _unitPriceForQuantity(
+      newQuantity,
+      variant,
+      wholesaleOnlyTiers,
+    );
+    setState(() => _quantity = newQuantity);
+    if (newPrice < oldPrice) {
+      _showTierReachedDialog(product, newPrice);
+    }
+  }
+
+  Future<void> _showTierReachedDialog(Product product, int newPrice) {
+    final theme = Theme.of(context);
+    return showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('🎉 Đã đạt bậc giá sỉ!'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(product.name, style: theme.textTheme.titleMedium),
+            const SizedBox(height: 8),
+            Text.rich(
+              TextSpan(
+                style: theme.textTheme.bodyMedium,
+                children: [
+                  const TextSpan(text: 'Giá hiện tại: '),
+                  TextSpan(
+                    text: formatVnd(newPrice),
+                    style: TextStyle(
+                      color: theme.colorScheme.primary,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  TextSpan(text: ' / ${product.unit}'),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Đã hiểu'),
+          ),
+        ],
+      ),
+    );
   }
 
   /// Sản phẩm bán sỉ/đặt trước phải chọn rõ thêm vào tab nào — Giá sỉ và Đặt trước xử lý
@@ -406,7 +479,14 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                       children: [
                         IconButton.outlined(
                           onPressed: _quantity > 1
-                              ? () => setState(() => _quantity--)
+                              ? () => variant == null
+                                    ? setState(() => _quantity--)
+                                    : _changeQuantity(
+                                        -1,
+                                        product,
+                                        variant,
+                                        wholesaleOnlyTiers,
+                                      )
                               : null,
                           icon: const Icon(Icons.remove),
                         ),
@@ -420,7 +500,14 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                           ),
                         ),
                         IconButton.outlined(
-                          onPressed: () => setState(() => _quantity++),
+                          onPressed: () => variant == null
+                              ? setState(() => _quantity++)
+                              : _changeQuantity(
+                                  1,
+                                  product,
+                                  variant,
+                                  wholesaleOnlyTiers,
+                                ),
                           icon: const Icon(Icons.add),
                         ),
                       ],
