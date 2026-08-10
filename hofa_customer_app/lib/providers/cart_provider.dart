@@ -138,13 +138,28 @@ class CartNotifier extends StateNotifier<CartState> {
     List<ProductTopping> toppings, {
     String? note,
   }) async {
-    final items = state.items
-        .map(
-          (e) => e.lineId == lineId
-              ? e.copyWith(toppings: toppings, updateNote: true, note: note)
-              : e,
-        )
-        .toList();
+    final items = List<CartItem>.from(state.items);
+    final idx = items.indexWhere((e) => e.lineId == lineId);
+    if (idx < 0) return;
+    final updated = items[idx].copyWith(
+      toppings: toppings,
+      updateNote: true,
+      note: note,
+    );
+    // Sửa xong có thể trùng lineKey với 1 dòng KHÁC đã có sẵn trong giỏ (vd sửa topping/ghi
+    // chú cho đúng bằng 1 món khác đang có) — gộp số lượng vào dòng đó, xoá dòng vừa sửa,
+    // thay vì để 2 dòng y hệt nhau (sản phẩm/biến thể/topping/ghi chú giống) cùng tồn tại.
+    final dupIdx = items.indexWhere(
+      (e) => e.lineId != lineId && e.lineKey == updated.lineKey,
+    );
+    if (dupIdx >= 0) {
+      items[dupIdx] = items[dupIdx].copyWith(
+        quantity: items[dupIdx].quantity + updated.quantity,
+      );
+      items.removeWhere((e) => e.lineId == lineId);
+    } else {
+      items[idx] = updated;
+    }
     state = CartState(
       merchantId: state.merchantId,
       merchantName: state.merchantName,

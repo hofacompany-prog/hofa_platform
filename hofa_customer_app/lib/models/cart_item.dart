@@ -52,10 +52,12 @@ class CartItem {
   int get toppingsTotal => toppings.fold(0, (sum, t) => sum + t.price);
   int get lineTotal => (unitPrice + toppingsTotal) * quantity;
 
-  /// Cùng biến thể + cùng bộ topping + cùng orderKind thì gộp thành 1 dòng, khác thì
-  /// tách dòng riêng (Giá sỉ và Đặt trước không được gộp chung dù cùng biến thể).
+  /// Cùng biến thể + cùng bộ topping + cùng orderKind + cùng ghi chú thì gộp thành 1 dòng
+  /// (cộng dồn số lượng), khác 1 trong các điều kiện trên thì tách dòng riêng (Giá sỉ và
+  /// Đặt trước không được gộp chung dù cùng biến thể; ghi chú khác nhau cũng không gộp vì
+  /// mỗi dòng chỉ giữ được đúng 1 ghi chú).
   String get lineKey =>
-      '$variantId::${(toppings.map((t) => t.id).toList()..sort()).join(',')}::${orderKind ?? ''}';
+      '$variantId::${(toppings.map((t) => t.id).toList()..sort()).join(',')}::${orderKind ?? ''}::${note ?? ''}';
 
   /// [note] chỉ được áp dụng khi [updateNote] = true — note là String? nên không thể
   /// dùng kiểu "?? note cũ" như các field khác (null cũng là 1 giá trị hợp lệ, nghĩa là
