@@ -43,14 +43,16 @@ final navIconsProvider = FutureProvider.autoDispose<Map<String, String>>(
 );
 
 /// Hộp thư thông báo — tải dần theo trang (xem PaginatedListNotifier), autoDispose để mỗi lần
-/// vào lại màn Thông báo đều bắt đầu lại từ trang đầu.
-final notificationsPagedProvider = StateNotifierProvider.autoDispose<
-    PaginatedListNotifier<AppNotification>, PaginatedState<AppNotification>>(
-  (ref) => PaginatedListNotifier<AppNotification>(
-    (limit, offset) =>
-        ref.read(notificationRepoProvider).list(limit: limit, offset: offset),
-  ),
-);
+/// vào lại màn Thông báo đều bắt đầu lại từ trang đầu. key null = tab "Tất cả", khác null lọc
+/// đúng category đó (đổi tab tự tạo trang mới, tự về trang đầu).
+final notificationsPagedProvider = StateNotifierProvider.autoDispose
+    .family<PaginatedListNotifier<AppNotification>, PaginatedState<AppNotification>, String?>(
+      (ref, category) => PaginatedListNotifier<AppNotification>(
+        (limit, offset) => ref
+            .read(notificationRepoProvider)
+            .list(limit: limit, offset: offset, category: category),
+      ),
+    );
 
 /// Số chưa đọc — hiện badge trên icon chuông ở màn chủ.
 final unreadNotificationCountProvider = FutureProvider.autoDispose<int>(

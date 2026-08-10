@@ -19,6 +19,7 @@ class NotificationsScreen extends ConsumerStatefulWidget {
 
 class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   bool _markingAll = false;
+  String? _category;
   final _scrollController = ScrollController();
 
   @override
@@ -37,7 +38,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
   void _onScroll() {
     if (_scrollController.position.pixels >=
         _scrollController.position.maxScrollExtent - 300) {
-      ref.read(notificationsPagedProvider.notifier).loadMore();
+      ref.read(notificationsPagedProvider(_category).notifier).loadMore();
     }
   }
 
@@ -69,10 +70,22 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     PushService.instance.handleData(n.data);
   }
 
+  Widget _categoryChip(String label, String? value) {
+    final selected = _category == value;
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: ChoiceChip(
+        label: Text(label),
+        selected: selected,
+        onSelected: (_) => setState(() => _category = value),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final notificationsState = ref.watch(notificationsPagedProvider);
+    final notificationsState = ref.watch(notificationsPagedProvider(_category));
     final unreadAsync = ref.watch(unreadNotificationCountProvider);
     final hasUnread = (unreadAsync.valueOrNull ?? 0) > 0;
 
@@ -94,101 +107,135 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
           const SizedBox(width: 8),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: () async {
-          ref.invalidate(notificationsPagedProvider);
-          ref.invalidate(unreadNotificationCountProvider);
-        },
-        child: notificationsState.isInitialLoading
-            ? const Center(child: CircularProgressIndicator())
-            : notificationsState.error != null && notificationsState.items.isEmpty
-                ? ListView(
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Center(child: Text('Lỗi: ${notificationsState.error}')),
-                      ),
-                    ],
-                  )
-                : notificationsState.items.isEmpty
-                    ? ListView(
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 80),
-                            child: Column(
-                              children: [
-                                Icon(
-                                  Icons.notifications_none,
-                                  size: 56,
+      body: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: SizedBox(
+              height: 36,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                children: [
+                  _categoryChip('Tất cả', null),
+                  _categoryChip('Đơn hàng', 'order'),
+                  _categoryChip('Khuyến mãi', 'promotion'),
+                  _categoryChip('Quảng cáo', 'ad'),
+                  _categoryChip('Khác', 'system'),
+                ],
+              ),
+            ),
+          ),
+          Expanded(
+            child: RefreshIndicator(
+              onRefresh: () async {
+                ref.invalidate(notificationsPagedProvider);
+                ref.invalidate(unreadNotificationCountProvider);
+              },
+              child: notificationsState.isInitialLoading
+                  ? const Center(child: CircularProgressIndicator())
+                  : notificationsState.error != null &&
+                        notificationsState.items.isEmpty
+                  ? ListView(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Center(
+                            child: Text('Lỗi: ${notificationsState.error}'),
+                          ),
+                        ),
+                      ],
+                    )
+                  : notificationsState.items.isEmpty
+                  ? ListView(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 80),
+                          child: Column(
+                            children: [
+                              Icon(
+                                Icons.notifications_none,
+                                size: 56,
+                                color: theme.colorScheme.outline,
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                'Chưa có thông báo nào',
+                                style: theme.textTheme.bodyMedium?.copyWith(
                                   color: theme.colorScheme.outline,
                                 ),
-                                const SizedBox(height: 12),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    )
+                  : ListView.separated(
+                      controller: _scrollController,
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      itemCount:
+                          notificationsState.items.length +
+                          (notificationsState.hasMore ? 1 : 0),
+                      separatorBuilder: (_, _) => const Divider(height: 1),
+                      itemBuilder: (context, i) {
+                        if (i == notificationsState.items.length) {
+                          return const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 16),
+                            child: Center(
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          );
+                        }
+                        final n = notificationsState.items[i];
+                        return Material(
+                          color: n.isRead
+                              ? null
+                              : theme.colorScheme.primary.withValues(
+                                  alpha: 0.05,
+                                ),
+                          child: ListTile(
+                            onTap: () => _openNotification(n),
+                            leading: Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: CircleAvatar(
+                                radius: 5,
+                                backgroundColor: n.isRead
+                                    ? Colors.transparent
+                                    : theme.colorScheme.primary,
+                              ),
+                            ),
+                            title: Text(
+                              n.title,
+                              style: TextStyle(
+                                fontWeight: n.isRead
+                                    ? FontWeight.normal
+                                    : FontWeight.w700,
+                              ),
+                            ),
+                            subtitle: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
                                 Text(
-                                  'Chưa có thông báo nào',
-                                  style: theme.textTheme.bodyMedium?.copyWith(
+                                  n.body,
+                                  maxLines: 3,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  formatDateTime(n.createdAt),
+                                  style: theme.textTheme.bodySmall?.copyWith(
                                     color: theme.colorScheme.outline,
                                   ),
                                 ),
                               ],
                             ),
+                            isThreeLine: true,
                           ),
-                        ],
-                      )
-                    : ListView.separated(
-                        controller: _scrollController,
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                        itemCount: notificationsState.items.length +
-                            (notificationsState.hasMore ? 1 : 0),
-                        separatorBuilder: (_, _) => const Divider(height: 1),
-                        itemBuilder: (context, i) {
-                          if (i == notificationsState.items.length) {
-                            return const Padding(
-                              padding: EdgeInsets.symmetric(vertical: 16),
-                              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
-                            );
-                          }
-                          final n = notificationsState.items[i];
-                          return Material(
-                            color: n.isRead
-                                ? null
-                                : theme.colorScheme.primary.withValues(alpha: 0.05),
-                            child: ListTile(
-                              onTap: () => _openNotification(n),
-                              leading: Padding(
-                                padding: const EdgeInsets.only(top: 4),
-                                child: CircleAvatar(
-                                  radius: 5,
-                                  backgroundColor: n.isRead
-                                      ? Colors.transparent
-                                      : theme.colorScheme.primary,
-                                ),
-                              ),
-                              title: Text(
-                                n.title,
-                                style: TextStyle(
-                                  fontWeight: n.isRead
-                                      ? FontWeight.normal
-                                      : FontWeight.w700,
-                                ),
-                              ),
-                              subtitle: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(n.body, maxLines: 3, overflow: TextOverflow.ellipsis),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    formatDateTime(n.createdAt),
-                                    style: theme.textTheme.bodySmall?.copyWith(
-                                      color: theme.colorScheme.outline,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              isThreeLine: true,
-                            ),
-                          );
-                        },
-                      ),
+                        );
+                      },
+                    ),
+            ),
+          ),
+        ],
       ),
     );
   }

@@ -4,9 +4,12 @@ import '../models/app_notification.dart';
 class NotificationRepository {
   final _api = ApiClient.instance;
 
-  Future<List<AppNotification>> list({int limit = 50, int offset = 0}) async {
-    final list =
-        await _api.get('/notifications', query: {'limit': limit, 'offset': offset}) as List;
+  Future<List<AppNotification>> list({int limit = 50, int offset = 0, String? category}) async {
+    final list = await _api.get('/notifications', query: {
+      'limit': limit,
+      'offset': offset,
+      if (category != null) 'category': category,
+    }) as List;
     return list
         .map((e) => AppNotification.fromJson(e as Map<String, dynamic>))
         .toList();
