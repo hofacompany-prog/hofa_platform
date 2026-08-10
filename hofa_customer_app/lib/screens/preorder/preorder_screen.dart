@@ -798,7 +798,6 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                       ),
-                      Text(item.variantName, style: theme.textTheme.bodySmall),
                       if (item.toppings.isNotEmpty)
                         Text(
                           item.toppings.map((t) => t.name).join(', '),
