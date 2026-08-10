@@ -12,11 +12,14 @@ class DriverWalletSummary {
     required this.pendingSettlements,
   });
 
+  // SUM() trên cột INTEGER tự nâng kiểu lên BIGINT trong Postgres — node-postgres trả BIGINT
+  // dưới dạng String (tránh mất độ chính xác với số lớn hơn 2^53), không phải num, nên phải
+  // parse qua String thay vì ép kiểu num? trực tiếp (khác các cột INTEGER thường trả về num).
   factory DriverWalletSummary.fromJson(Map<String, dynamic> json) =>
       DriverWalletSummary(
-        codHeld: (json['cod_held'] as num?)?.toInt() ?? 0,
-        earningTotal: (json['earning_total'] as num?)?.toInt() ?? 0,
-        pendingWithdrawals: (json['pending_withdrawals'] as num?)?.toInt() ?? 0,
-        pendingSettlements: (json['pending_settlements'] as num?)?.toInt() ?? 0,
+        codHeld: int.tryParse('${json['cod_held']}') ?? 0,
+        earningTotal: int.tryParse('${json['earning_total']}') ?? 0,
+        pendingWithdrawals: int.tryParse('${json['pending_withdrawals']}') ?? 0,
+        pendingSettlements: int.tryParse('${json['pending_settlements']}') ?? 0,
       );
 }
