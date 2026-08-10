@@ -795,6 +795,8 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
                       Text(
                         item.productName,
                         style: const TextStyle(fontWeight: FontWeight.w500),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                       ),
                       Text(item.variantName, style: theme.textTheme.bodySmall),
                       if (item.toppings.isNotEmpty)
