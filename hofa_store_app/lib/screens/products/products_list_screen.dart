@@ -24,13 +24,6 @@ final _toppingGroupsProvider = FutureProvider.autoDispose<List<ToppingGroup>>((
   return ProductRepository().merchantToppingGroups(merchant.id);
 });
 
-final _variantTemplatesProvider =
-    FutureProvider.autoDispose<List<VariantTemplate>>((ref) async {
-      final merchant = await ref.watch(myMerchantProvider.future);
-      if (merchant == null) return [];
-      return ProductRepository().variantTemplates(merchant.id);
-    });
-
 const _statusLabels = {
   'draft': 'Nháp',
   'active': 'Đang bán',
@@ -196,51 +189,6 @@ Future<void> _confirmDeleteToppingGroup(
   }
 }
 
-Future<void> _confirmDeleteVariantTemplate(
-  BuildContext context,
-  WidgetRef ref,
-  VariantTemplate t,
-) async {
-  final confirmed = await showDialog<bool>(
-    context: context,
-    builder: (ctx) => AlertDialog(
-      title: const Text('Xoá biến thể mẫu?'),
-      content: Text(
-        'Xoá mẫu "${t.name}"? Sản phẩm đã copy từ mẫu này trước đó không bị ảnh hưởng.',
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(ctx, false),
-          child: const Text('Huỷ'),
-        ),
-        FilledButton(
-          style: FilledButton.styleFrom(
-            backgroundColor: Theme.of(ctx).colorScheme.error,
-          ),
-          onPressed: () => Navigator.pop(ctx, true),
-          child: const Text('Xoá'),
-        ),
-      ],
-    ),
-  );
-  if (confirmed != true || !context.mounted) return;
-  try {
-    await _repo.deleteVariantTemplate(t.id);
-    ref.invalidate(_variantTemplatesProvider);
-    if (context.mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Đã xoá "${t.name}"')));
-    }
-  } catch (e) {
-    if (context.mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
-    }
-  }
-}
-
 Future<void> _confirmDelete(
   BuildContext context,
   WidgetRef ref,
@@ -387,31 +335,10 @@ class ProductsListScreen extends ConsumerWidget {
     );
   }
 
-  Widget _variantTemplateCard(
-    BuildContext context,
-    WidgetRef ref,
-    VariantTemplate t,
-  ) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      child: ListTile(
-        onTap: () => context.push('/variant-templates/${t.id}/edit'),
-        title: Text(t.name),
-        subtitle: Text('${formatVnd(t.price)} · ${t.wholesaleTiers.length} bậc giá'),
-        trailing: IconButton(
-          tooltip: 'Xoá biến thể mẫu',
-          icon: const Icon(Icons.delete_outline),
-          onPressed: () => _confirmDeleteVariantTemplate(context, ref, t),
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final productsAsync = ref.watch(_productsProvider);
     final toppingGroupsAsync = ref.watch(_toppingGroupsProvider);
-    final variantTemplatesAsync = ref.watch(_variantTemplatesProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -423,12 +350,11 @@ class ProductsListScreen extends ConsumerWidget {
         onRefresh: () async {
           ref.invalidate(_productsProvider);
           ref.invalidate(_toppingGroupsProvider);
-          ref.invalidate(_variantTemplatesProvider);
         },
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            // Nút hành động chính — 4/5 bề ngang màn hình, chữ tự thu nhỏ (FittedBox) nếu
+            // 2 nút hành động chính — 4/5 bề ngang màn hình, chữ tự thu nhỏ (FittedBox) nếu
             // vẫn không đủ chỗ thay vì tràn/xuống dòng lệch.
             Center(
               child: FractionallySizedBox(
@@ -446,24 +372,6 @@ class ProductsListScreen extends ConsumerWidget {
                               Icon(Icons.add, size: 18),
                               SizedBox(width: 4),
                               Text('Thêm topping'),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () =>
-                            context.push('/variant-templates/new'),
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: const [
-                              Icon(Icons.add, size: 18),
-                              SizedBox(width: 4),
-                              Text('Thêm biến thể mẫu'),
                             ],
                           ),
                         ),
@@ -554,34 +462,6 @@ class ProductsListScreen extends ConsumerWidget {
                   : Column(
                       children: groups
                           .map((g) => _toppingGroupCard(context, ref, g))
-                          .toList(),
-                    ),
-            ),
-            const SizedBox(height: 24),
-            const Divider(),
-            const SizedBox(height: 8),
-            Text(
-              'Biến thể mẫu',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Tạo 1 lần rồi chọn khi thêm biến thể cho sản phẩm — mỗi lần chọn sẽ copy '
-              'thành 1 biến thể riêng, chỉnh giá lại theo từng sản phẩm nếu cần.',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-            const SizedBox(height: 8),
-            variantTemplatesAsync.when(
-              loading: () => const Padding(
-                padding: EdgeInsets.symmetric(vertical: 24),
-                child: Center(child: CircularProgressIndicator()),
-              ),
-              error: (e, _) => Text('Lỗi tải biến thể mẫu: $e'),
-              data: (templates) => templates.isEmpty
-                  ? const Text('Chưa có biến thể mẫu nào.')
-                  : Column(
-                      children: templates
-                          .map((t) => _variantTemplateCard(context, ref, t))
                           .toList(),
                     ),
             ),

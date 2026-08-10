@@ -14,7 +14,6 @@ import 'screens/finance/finance_screen.dart';
 import 'screens/products/products_list_screen.dart';
 import 'screens/products/product_form_screen.dart';
 import 'screens/toppings/topping_group_form_screen.dart';
-import 'screens/variant_templates/variant_template_form_screen.dart';
 import 'screens/orders/orders_list_screen.dart';
 import 'screens/orders/order_detail_screen.dart';
 import 'screens/inventory/inventory_screen.dart';
@@ -115,16 +114,6 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: '/topping-groups/:id/edit',
             builder: (context, state) =>
                 ToppingGroupFormScreen(groupId: state.pathParameters['id']),
-          ),
-          GoRoute(
-            path: '/variant-templates/new',
-            builder: (context, state) => const VariantTemplateFormScreen(),
-          ),
-          GoRoute(
-            path: '/variant-templates/:id/edit',
-            builder: (context, state) => VariantTemplateFormScreen(
-              templateId: state.pathParameters['id'],
-            ),
           ),
           GoRoute(
             path: '/orders',

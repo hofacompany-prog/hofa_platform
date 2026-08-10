@@ -19,7 +19,6 @@ const TIER_FIELDS = [
   'min_quantity', 'max_quantity', 'unit_price', 'min_days_per_week', 'unit_price_days', 'unit_price_both',
   'min_order_quantity', 'requires_deposit', 'deposit_percent',
 ];
-const VARIANT_TEMPLATE_FIELDS = ['name', 'price', 'compare_price', 'cost_price', 'wholesale_price', 'sort_order'];
 
 // ---- Danh mục ----
 
@@ -259,64 +258,6 @@ router.delete('/variants/:id', asyncHandler(async (req, res) => {
   await requireMerchantAccess(req.ctx, product.merchant_id);
   const updated = await db.updateById('product_variants', req.params.id, { is_active: false });
   res.json({ ok: true, data: updated });
-}));
-
-// ---- Biến thể mẫu (thư viện dùng chung của cửa hàng — tạo 1 lần, copy sang biến thể thật
-// khi thêm vào 1 sản phẩm, xem hofa-db/55_variant_templates.sql) ----
-
-async function attachTemplateTiers(templates) {
-  if (!templates.length) return templates;
-  const ids = templates.map((t) => t.id);
-  const tiers = await db.query(
-    'SELECT * FROM variant_template_tiers WHERE template_id = ANY($1::uuid[]) ORDER BY min_quantity ASC',
-    [ids]
-  );
-  const byTemplate = {};
-  tiers.forEach((t) => { (byTemplate[t.template_id] ||= []).push(t); });
-  return templates.map((t) => ({ ...t, wholesale_tiers: byTemplate[t.id] || [] }));
-}
-
-router.get('/merchants/:merchantId/variant-templates', asyncHandler(async (req, res) => {
-  await requireMerchantAccess(req.ctx, req.params.merchantId);
-  const rows = await db.query(
-    'SELECT * FROM variant_templates WHERE merchant_id = $1 ORDER BY sort_order ASC, created_at ASC',
-    [req.params.merchantId]
-  );
-  res.json({ ok: true, data: await attachTemplateTiers(rows) });
-}));
-
-router.post('/merchants/:merchantId/variant-templates', asyncHandler(async (req, res) => {
-  requireFields(req.body, ['name', 'price']);
-  await requireMerchantAccess(req.ctx, req.params.merchantId);
-  const data = pickFields(req.body, VARIANT_TEMPLATE_FIELDS);
-  data.merchant_id = req.params.merchantId;
-  const created = await db.insertRow('variant_templates', data);
-  res.status(201).json({ ok: true, data: { ...created, wholesale_tiers: [] } });
-}));
-
-router.get('/variant-templates/:id', asyncHandler(async (req, res) => {
-  const template = await db.queryOne('SELECT * FROM variant_templates WHERE id = $1', [req.params.id]);
-  if (!template) throw new ApiError('NOT_FOUND', 'Không tìm thấy biến thể mẫu', 404);
-  const [withTiers] = await attachTemplateTiers([template]);
-  res.json({ ok: true, data: withTiers });
-}));
-
-router.patch('/variant-templates/:id', asyncHandler(async (req, res) => {
-  const template = await db.queryOne('SELECT id, merchant_id FROM variant_templates WHERE id = $1', [req.params.id]);
-  if (!template) throw new ApiError('NOT_FOUND', 'Không tìm thấy biến thể mẫu', 404);
-  await requireMerchantAccess(req.ctx, template.merchant_id);
-  const updated = await db.updateById('variant_templates', req.params.id, pickFields(req.body, VARIANT_TEMPLATE_FIELDS));
-  res.json({ ok: true, data: updated });
-}));
-
-/** Xoá — CASCADE tự xoá luôn bậc giá của mẫu (variant_template_tiers). Không ảnh hưởng sản
- * phẩm đã copy từ mẫu trước đó (product_variants/wholesale_tiers là bản sao độc lập). */
-router.delete('/variant-templates/:id', asyncHandler(async (req, res) => {
-  const template = await db.queryOne('SELECT id, merchant_id FROM variant_templates WHERE id = $1', [req.params.id]);
-  if (!template) throw new ApiError('NOT_FOUND', 'Không tìm thấy biến thể mẫu', 404);
-  await requireMerchantAccess(req.ctx, template.merchant_id);
-  const deleted = await db.deleteById('variant_templates', req.params.id);
-  res.json({ ok: true, data: deleted });
 }));
 
 // ---- Nhóm topping (tuỳ chọn thêm: topping, size, độ ngọt...) ----
