@@ -134,28 +134,37 @@ class PushService {
 
     final context = _navigatorKey?.currentContext;
     if (context == null) return;
+    // Không có thiết bị nào của CHỦ để tự gỡ (server chỉ tự gỡ thiết bị chủ, không đụng tới
+    // thiết bị nhân viên đang làm việc — xem POST /devices) — báo rõ, không cho bấm "Gỡ và
+    // tiếp tục" vì bấm cũng sẽ bị server từ chối lại.
+    final canAutoReplace = result.oldestDeviceName != null;
     final confirmed = await showDialog<bool>(
       context: context,
       barrierDismissible: false,
       builder: (context) => AlertDialog(
         title: const Text('Đã đạt giới hạn thiết bị'),
         content: Text(
-          'Cửa hàng này chỉ được đăng nhập tối đa ${result.maxDevices} thiết bị nhận thông '
-          'báo cùng lúc. Gỡ thiết bị đăng nhập cũ nhất '
-          '("${result.oldestDeviceName?.isNotEmpty == true ? result.oldestDeviceName : 'Thiết bị không tên'}"'
-          '${result.oldestDevicePlatform != null ? ' · ${devicePlatformLabels[result.oldestDevicePlatform] ?? result.oldestDevicePlatform}' : ''}'
-          '${result.oldestDeviceLastActive != null ? ', hoạt động lần cuối ${formatDateTime(result.oldestDeviceLastActive!)}' : ''}'
-          ') để thiết bị này nhận thông báo thay?',
+          canAutoReplace
+              ? 'Cửa hàng này chỉ được đăng nhập tối đa ${result.maxDevices} thiết bị nhận '
+                    'thông báo cùng lúc. Gỡ thiết bị đăng nhập cũ nhất '
+                    '("${result.oldestDeviceName!.isNotEmpty ? result.oldestDeviceName : 'Thiết bị không tên'}"'
+                    '${result.oldestDevicePlatform != null ? ' · ${devicePlatformLabels[result.oldestDevicePlatform] ?? result.oldestDevicePlatform}' : ''}'
+                    '${result.oldestDeviceLastActive != null ? ', hoạt động lần cuối ${formatDateTime(result.oldestDeviceLastActive!)}' : ''}'
+                    ') để thiết bị này nhận thông báo thay?'
+              : 'Cửa hàng này chỉ được đăng nhập tối đa ${result.maxDevices} thiết bị nhận '
+                    'thông báo cùng lúc — toàn bộ thiết bị hiện tại đều của nhân viên nên '
+                    'không tự gỡ được. Vào màn "Thiết bị" để gỡ tay 1 máy trước.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Để sau'),
+            child: Text(canAutoReplace ? 'Để sau' : 'Đã hiểu'),
           ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Gỡ và tiếp tục'),
-          ),
+          if (canAutoReplace)
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Gỡ và tiếp tục'),
+            ),
         ],
       ),
     );

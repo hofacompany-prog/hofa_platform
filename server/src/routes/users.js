@@ -215,7 +215,7 @@ router.post('/devices', asyncHandler(async (req, res) => {
   // báo đơn hàng hoặc thiết bị test cũ chiếm chỗ mãi. Khách hàng/tài xế không bị giới hạn này.
   if (['merchant_owner', 'merchant_staff'].includes(req.ctx.role)) {
     const merchant = await db.queryOne(
-      `SELECT m.id, m.max_devices FROM merchants m
+      `SELECT m.id, m.owner_id, m.max_devices FROM merchants m
         LEFT JOIN merchant_staff ms ON ms.merchant_id = m.id AND ms.user_id = $1
        WHERE (m.owner_id = $1 OR ms.user_id = $1) AND m.deleted_at IS NULL
        LIMIT 1`,
@@ -228,20 +228,36 @@ router.post('/devices', asyncHandler(async (req, res) => {
         [merchantUserIds]
       );
       if (devices.length >= merchant.max_devices) {
+        // Chỉ tự động gỡ thiết bị của CHỦ cửa hàng để nhường chỗ — nhân viên đang làm việc
+        // không nên bị đăng xuất đột ngột chỉ vì chủ đăng nhập thêm máy mới (giới hạn
+        // max_devices vẫn tính chung chủ + nhân viên, chỉ riêng THIẾT BỊ BỊ GỠ TỰ ĐỘNG mới
+        // loại trừ nhân viên). Nếu mọi thiết bị hiện có đều của nhân viên thì không có gì tự
+        // gỡ được, chủ phải tự vào màn "Thiết bị" gỡ tay 1 máy.
+        const oldestOwnerDevice =
+          devices.find((d) => d.user_id === merchant.owner_id) || null;
         if (req.body.force_replace_oldest === true) {
-          await db.deleteById('user_devices', devices[0].id);
+          if (!oldestOwnerDevice) {
+            throw new ApiError(
+              'BAD_REQUEST',
+              'Không còn thiết bị nào của chủ cửa hàng để tự gỡ — vào màn Thiết bị để gỡ tay',
+              400
+            );
+          }
+          await db.deleteById('user_devices', oldestOwnerDevice.id);
         } else {
           return res.json({
             ok: true,
             data: {
               status: 'limit_reached',
               max_devices: merchant.max_devices,
-              oldest_device: {
-                id: devices[0].id,
-                device_name: devices[0].device_name,
-                platform: devices[0].platform,
-                last_active_at: devices[0].last_active_at
-              }
+              oldest_device: oldestOwnerDevice
+                ? {
+                    id: oldestOwnerDevice.id,
+                    device_name: oldestOwnerDevice.device_name,
+                    platform: oldestOwnerDevice.platform,
+                    last_active_at: oldestOwnerDevice.last_active_at
+                  }
+                : null
             }
           });
         }

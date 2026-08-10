@@ -1,6 +1,9 @@
 import 'dart:convert';
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../main.dart' show navigatorKey;
 import 'device_session.dart';
 import 'env.dart';
 import 'api_exception.dart';
@@ -10,6 +13,37 @@ import 'api_exception.dart';
 class ApiClient {
   ApiClient._();
   static final ApiClient instance = ApiClient._();
+
+  // Nhiều request cùng lúc có thể đều dính DEVICE_REVOKED (vd vài lời gọi API song song lúc
+  // mở màn hình) — chặn hiện popup chồng popup, chỉ 1 cái duy nhất mỗi lần bị gỡ.
+  bool _showingRevokedDialog = false;
+
+  void _showDeviceRevokedDialog() {
+    if (_showingRevokedDialog) return;
+    final context = navigatorKey.currentContext;
+    if (context == null || !context.mounted) return;
+    _showingRevokedDialog = true;
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('Thiết bị đã bị gỡ'),
+        content: const Text(
+          'Thiết bị này vừa bị gỡ khỏi danh sách thiết bị đăng nhập của tài khoản (do chủ '
+          'cửa hàng thực hiện). Hãy đăng nhập lại để tiếp tục sử dụng.',
+        ),
+        actions: [
+          FilledButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              GoRouter.of(context).go('/login');
+            },
+            child: const Text('Đăng nhập lại'),
+          ),
+        ],
+      ),
+    ).then((_) => _showingRevokedDialog = false);
+  }
 
   Uri _uri(String path, [Map<String, dynamic>? query]) {
     final clean = path.startsWith('/') ? path.substring(1) : path;
@@ -46,6 +80,7 @@ class ApiClient {
     if (code == 'DEVICE_REVOKED') {
       DeviceSession.clear();
       Supabase.instance.client.auth.signOut();
+      _showDeviceRevokedDialog();
     }
     throw ApiException(
       code: code,
