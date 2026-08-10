@@ -46,7 +46,11 @@ final navIconsProvider = FutureProvider.autoDispose<Map<String, String>>(
 /// vào lại màn Thông báo đều bắt đầu lại từ trang đầu. key null = tab "Tất cả", khác null lọc
 /// đúng category đó (đổi tab tự tạo trang mới, tự về trang đầu).
 final notificationsPagedProvider = StateNotifierProvider.autoDispose
-    .family<PaginatedListNotifier<AppNotification>, PaginatedState<AppNotification>, String?>(
+    .family<
+      PaginatedListNotifier<AppNotification>,
+      PaginatedState<AppNotification>,
+      String?
+    >(
       (ref, category) => PaginatedListNotifier<AppNotification>(
         (limit, offset) => ref
             .read(notificationRepoProvider)
@@ -72,30 +76,43 @@ final voucherMaxCountProvider = FutureProvider.autoDispose<int>(
 
 // ---- Cửa hàng ----
 
+/// Bộ lọc "Gần tôi"/"Lọc theo đánh giá" ở trang chủ (home_screen.dart) — null nghĩa là mặc
+/// định (đánh giá cao trước, không lọc rating). watch trong merchantsPagedProvider bên dưới nên
+/// đổi giá trị tự tạo lại danh sách từ trang đầu, không cần tự invalidate tay.
+final homeSortProvider = StateProvider.autoDispose<String?>((ref) => null);
+final homeMinRatingProvider = StateProvider.autoDispose<double?>((ref) => null);
+
 /// Danh sách cửa hàng duyệt ở trang chủ — tải dần theo trang khi khách lướt xuống, không tải
 /// hết 1 lần (xem PaginatedListNotifier).
-final merchantsPagedProvider = StateNotifierProvider.autoDispose<
-    PaginatedListNotifier<Merchant>, PaginatedState<Merchant>>(
-  (ref) {
-    final coords = ref.watch(customerCoordsProvider);
-    return PaginatedListNotifier<Merchant>(
-      (limit, offset) => ref.read(merchantRepoProvider).merchants(
-            limit: limit,
-            offset: offset,
-            lat: coords?.$1,
-            lng: coords?.$2,
-          ),
-    );
-  },
-);
+final merchantsPagedProvider =
+    StateNotifierProvider.autoDispose<
+      PaginatedListNotifier<Merchant>,
+      PaginatedState<Merchant>
+    >((ref) {
+      final coords = ref.watch(customerCoordsProvider);
+      final sort = ref.watch(homeSortProvider);
+      final minRating = ref.watch(homeMinRatingProvider);
+      return PaginatedListNotifier<Merchant>(
+        (limit, offset) => ref
+            .read(merchantRepoProvider)
+            .merchants(
+              limit: limit,
+              offset: offset,
+              lat: coords?.$1,
+              lng: coords?.$2,
+              sort: sort,
+              minRating: minRating,
+            ),
+      );
+    });
 
 final merchantDetailProvider = FutureProvider.autoDispose
-    .family<Merchant, String>(
-      (ref, id) {
-        final coords = ref.watch(customerCoordsProvider);
-        return ref.watch(merchantRepoProvider).merchant(id, lat: coords?.$1, lng: coords?.$2);
-      },
-    );
+    .family<Merchant, String>((ref, id) {
+      final coords = ref.watch(customerCoordsProvider);
+      return ref
+          .watch(merchantRepoProvider)
+          .merchant(id, lat: coords?.$1, lng: coords?.$2);
+    });
 
 final merchantBranchesProvider = FutureProvider.autoDispose
     .family<List<Branch>, String>(
@@ -120,9 +137,10 @@ final shippingFeeSettingsProvider =
 
 /// Thông tin tài khoản ngân hàng toàn sàn (chỉnh ở app admin) — dùng dựng QR VietQR ở màn chi
 /// tiết đơn cho đơn thanh toán chuyển khoản.
-final bankAccountSettingsProvider = FutureProvider.autoDispose<BankAccountSettings>(
-  (ref) => ref.watch(bankSettingsRepoProvider).get(),
-);
+final bankAccountSettingsProvider =
+    FutureProvider.autoDispose<BankAccountSettings>(
+      (ref) => ref.watch(bankSettingsRepoProvider).get(),
+    );
 
 // ---- Sản phẩm ----
 
@@ -132,20 +150,23 @@ final categoriesProvider = FutureProvider.autoDispose<List<Category>>(
 
 /// Sản phẩm của 1 cửa hàng — tải dần theo trang.
 final merchantProductsPagedProvider = StateNotifierProvider.autoDispose
-    .family<PaginatedListNotifier<Product>, PaginatedState<Product>, String>(
-      (ref, merchantId) {
-        final coords = ref.watch(customerCoordsProvider);
-        return PaginatedListNotifier<Product>(
-          (limit, offset) => ref.read(productRepoProvider).products(
-                merchantId: merchantId,
-                limit: limit,
-                offset: offset,
-                lat: coords?.$1,
-                lng: coords?.$2,
-              ),
-        );
-      },
-    );
+    .family<PaginatedListNotifier<Product>, PaginatedState<Product>, String>((
+      ref,
+      merchantId,
+    ) {
+      final coords = ref.watch(customerCoordsProvider);
+      return PaginatedListNotifier<Product>(
+        (limit, offset) => ref
+            .read(productRepoProvider)
+            .products(
+              merchantId: merchantId,
+              limit: limit,
+              offset: offset,
+              lat: coords?.$1,
+              lng: coords?.$2,
+            ),
+      );
+    });
 
 final merchantCategoriesProvider = FutureProvider.autoDispose
     .family<List<MerchantCategory>, String>(
@@ -158,20 +179,23 @@ final merchantCategoriesProvider = FutureProvider.autoDispose
 /// dần theo trang — dùng chung cho CategoryProductsScreen (danh mục con) lẫn
 /// CategoryDetailScreen (danh mục cha, hiện ngay dưới lưới danh mục con).
 final categoryProductsPagedProvider = StateNotifierProvider.autoDispose
-    .family<PaginatedListNotifier<Product>, PaginatedState<Product>, String>(
-      (ref, categoryId) {
-        final coords = ref.watch(customerCoordsProvider);
-        return PaginatedListNotifier<Product>(
-          (limit, offset) => ref.read(productRepoProvider).products(
-                categoryId: categoryId,
-                limit: limit,
-                offset: offset,
-                lat: coords?.$1,
-                lng: coords?.$2,
-              ),
-        );
-      },
-    );
+    .family<PaginatedListNotifier<Product>, PaginatedState<Product>, String>((
+      ref,
+      categoryId,
+    ) {
+      final coords = ref.watch(customerCoordsProvider);
+      return PaginatedListNotifier<Product>(
+        (limit, offset) => ref
+            .read(productRepoProvider)
+            .products(
+              categoryId: categoryId,
+              limit: limit,
+              offset: offset,
+              lat: coords?.$1,
+              lng: coords?.$2,
+            ),
+      );
+    });
 
 final productSearchProvider = StateProvider.autoDispose<String>((ref) => '');
 
@@ -181,7 +205,9 @@ final searchedProductsProvider = FutureProvider.autoDispose<List<Product>>((
   final q = ref.watch(productSearchProvider);
   if (q.isEmpty) return Future.value(<Product>[]);
   final coords = ref.watch(customerCoordsProvider);
-  return ref.watch(productRepoProvider).products(q: q, lat: coords?.$1, lng: coords?.$2);
+  return ref
+      .watch(productRepoProvider)
+      .products(q: q, lat: coords?.$1, lng: coords?.$2);
 });
 
 /// Dùng CHUNG ô tìm kiếm/state với searchedProductsProvider (productSearchProvider) — khách
@@ -194,7 +220,9 @@ final searchedMerchantsProvider = FutureProvider.autoDispose<List<Merchant>>((
   final q = ref.watch(productSearchProvider);
   if (q.isEmpty) return Future.value(<Merchant>[]);
   final coords = ref.watch(customerCoordsProvider);
-  return ref.watch(merchantRepoProvider).merchants(q: q, lat: coords?.$1, lng: coords?.$2);
+  return ref
+      .watch(merchantRepoProvider)
+      .merchants(q: q, lat: coords?.$1, lng: coords?.$2);
 });
 
 final productDetailProvider = FutureProvider.autoDispose
@@ -278,9 +306,15 @@ final productReviewsProvider = FutureProvider.autoDispose
 /// Đánh giá cửa hàng — key gồm rating lọc (null = tất cả) để đổi bộ lọc tự tạo trang mới,
 /// khớp cách merchantProductsPagedProvider dùng family cho mỗi merchantId.
 final merchantReviewsPagedProvider = StateNotifierProvider.autoDispose
-    .family<PaginatedListNotifier<Review>, PaginatedState<Review>, (String, int?)>(
+    .family<
+      PaginatedListNotifier<Review>,
+      PaginatedState<Review>,
+      (String, int?)
+    >(
       (ref, key) => PaginatedListNotifier<Review>(
-        (limit, offset) => ref.read(reviewRepoProvider).list(
+        (limit, offset) => ref
+            .read(reviewRepoProvider)
+            .list(
               targetType: 'merchant',
               targetId: key.$1,
               rating: key.$2,

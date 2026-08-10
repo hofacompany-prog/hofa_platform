@@ -42,6 +42,12 @@ router.get('/merchants', asyncHandler(async (req, res) => {
   if (!isPrivileged) clauses.push(`status = 'active'`);
   if (req.query.merchant_type) { params.push(req.query.merchant_type); clauses.push(`merchant_type = $${params.length}`); }
   if (req.query.q) { params.push(`%${req.query.q}%`); clauses.push(`name ILIKE $${params.length}`); }
+  // Lọc theo đánh giá tối thiểu (bộ lọc "Lọc theo đánh giá" ở trang chủ app khách) — bỏ qua
+  // nếu không parse được số, không phải lỗi.
+  if (req.query.min_rating !== undefined) {
+    const minRating = Number(req.query.min_rating);
+    if (Number.isFinite(minRating)) { params.push(minRating); clauses.push(`rating_avg >= $${params.length}`); }
+  }
 
   // Khoảng cách từ chi nhánh gần nhất (ưu tiên chi nhánh đang mở) tới toạ độ khách đang xem —
   // chỉ tính khi client gửi kèm lat/lng (địa chỉ mặc định của khách, xem
@@ -73,6 +79,14 @@ router.get('/merchants', asyncHandler(async (req, res) => {
     clauses.push(`(nearest_branch.distance_km IS NULL OR nearest_branch.distance_km <= GREATEST(nearest_branch.delivery_radius_km, $${defaultRadiusParam}))`);
   }
 
+  // Sắp xếp "Gần tôi" (sort=distance) — chỉ áp dụng được khi có toạ độ khách, ngược lại rơi về
+  // mặc định (đánh giá cao trước) như cũ, không báo lỗi (khách chưa lưu địa chỉ vẫn dùng được
+  // trang chủ bình thường). Cửa hàng chưa có chi nhánh nào định vị được (distance_km NULL) xếp
+  // xuống cuối thay vì lên đầu (Postgres mặc định NULL lớn nhất khi ASC).
+  const orderBy = req.query.sort === 'distance' && coords
+    ? 'nearest_branch.distance_km ASC NULLS LAST, m.rating_avg DESC, m.id DESC'
+    : 'm.rating_avg DESC, m.created_at DESC, m.id DESC';
+
   params.push(limit, offset);
   const rows = await db.query(
     `SELECT m.*,
@@ -84,7 +98,7 @@ router.get('/merchants', asyncHandler(async (req, res) => {
        FROM merchants m
        ${distanceJoin}
       WHERE ${clauses.join(' AND ')}
-      ORDER BY m.rating_avg DESC, m.created_at DESC, m.id DESC
+      ORDER BY ${orderBy}
       LIMIT $${params.length - 1} OFFSET $${params.length}`,
     params
   );

@@ -87,10 +87,23 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     ref.read(productSearchProvider.notifier).state = '';
   }
 
+  Widget _filterChip({
+    required String label,
+    required bool selected,
+    required VoidCallback? onTap,
+  }) => ChoiceChip(
+    label: Text(label),
+    selected: selected,
+    onSelected: onTap == null ? null : (_) => onTap(),
+  );
+
   @override
   Widget build(BuildContext context) {
     final merchantsState = ref.watch(merchantsPagedProvider);
     final categoriesAsync = ref.watch(categoriesProvider);
+    final homeSort = ref.watch(homeSortProvider);
+    final homeMinRating = ref.watch(homeMinRatingProvider);
+    final hasCoords = ref.watch(customerCoordsProvider) != null;
     final searchQuery = ref.watch(productSearchProvider);
     final searchedProductsAsync = ref.watch(searchedProductsProvider);
     final searchedMerchantsAsync = ref.watch(searchedMerchantsProvider);
@@ -293,7 +306,45 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   onTapViewAll: () => context.push('/categories'),
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
+              SizedBox(
+                height: 36,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  children: [
+                    _filterChip(
+                      label: 'Gần tôi',
+                      selected: homeSort == 'distance',
+                      onTap: hasCoords
+                          ? () => ref.read(homeSortProvider.notifier).state =
+                                homeSort == 'distance' ? null : 'distance'
+                          : null,
+                    ),
+                    const SizedBox(width: 8),
+                    _filterChip(
+                      label: 'Tất cả',
+                      selected: homeMinRating == null,
+                      onTap: () =>
+                          ref.read(homeMinRatingProvider.notifier).state = null,
+                    ),
+                    const SizedBox(width: 8),
+                    _filterChip(
+                      label: 'Từ 4 sao',
+                      selected: homeMinRating == 4,
+                      onTap: () =>
+                          ref.read(homeMinRatingProvider.notifier).state = 4,
+                    ),
+                    const SizedBox(width: 8),
+                    _filterChip(
+                      label: 'Từ 3 sao',
+                      selected: homeMinRating == 3,
+                      onTap: () =>
+                          ref.read(homeMinRatingProvider.notifier).state = 3,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
               if (merchantsState.isInitialLoading)
                 const Padding(
                   padding: EdgeInsets.only(top: 40),
