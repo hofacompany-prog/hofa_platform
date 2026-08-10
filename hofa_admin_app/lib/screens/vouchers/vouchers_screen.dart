@@ -7,6 +7,7 @@ import '../../models/voucher_amount_tier.dart';
 import '../../providers/admin_providers.dart';
 import '../../widgets/stat_card.dart';
 import '../merchants/merchant_detail_screen.dart' show merchantTypeLabels;
+import '../../core/responsive.dart';
 
 const _discountTypeLabels = {
   'percent': 'Phần trăm (%)',
@@ -72,7 +73,9 @@ class _VouchersScreenState extends ConsumerState<VouchersScreen> {
     var tiers = <VoucherAmountTier>[];
     if (existing != null) {
       try {
-        tiers = await ref.read(adminRepoProvider).voucherAmountTiers(existing.id);
+        tiers = await ref
+            .read(adminRepoProvider)
+            .voucherAmountTiers(existing.id);
       } catch (_) {
         // im lặng — mục "Bậc giảm giá" chỉ hiện rỗng, không chặn sửa voucher
       }
@@ -107,7 +110,9 @@ class _VouchersScreenState extends ConsumerState<VouchersScreen> {
           Future<void> reloadTiers() async {
             if (existing == null) return;
             try {
-              final fresh = await ref.read(adminRepoProvider).voucherAmountTiers(existing.id);
+              final fresh = await ref
+                  .read(adminRepoProvider)
+                  .voucherAmountTiers(existing.id);
               setInner(() => tiers = fresh);
             } catch (_) {}
           }
@@ -127,7 +132,7 @@ class _VouchersScreenState extends ConsumerState<VouchersScreen> {
               builder: (context) => AlertDialog(
                 title: Text(tier == null ? 'Thêm bậc' : 'Sửa bậc'),
                 content: SizedBox(
-                  width: 320,
+                  width: dialogWidth(context, 320),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -156,7 +161,8 @@ class _VouchersScreenState extends ConsumerState<VouchersScreen> {
                         controller: tierMaxCtrl,
                         keyboardType: TextInputType.number,
                         decoration: const InputDecoration(
-                          labelText: 'Giảm tối đa (VNĐ, để trống = không giới hạn)',
+                          labelText:
+                              'Giảm tối đa (VNĐ, để trống = không giới hạn)',
                           border: OutlineInputBorder(),
                         ),
                       ),
@@ -164,8 +170,14 @@ class _VouchersScreenState extends ConsumerState<VouchersScreen> {
                   ),
                 ),
                 actions: [
-                  TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Huỷ')),
-                  FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Lưu')),
+                  TextButton(
+                    onPressed: () => Navigator.pop(context, false),
+                    child: const Text('Huỷ'),
+                  ),
+                  FilledButton(
+                    onPressed: () => Navigator.pop(context, true),
+                    child: const Text('Lưu'),
+                  ),
                 ],
               ),
             );
@@ -177,25 +189,35 @@ class _VouchersScreenState extends ConsumerState<VouchersScreen> {
             };
             try {
               if (tier == null) {
-                await ref.read(adminRepoProvider).createVoucherAmountTier(existing.id, tierData);
+                await ref
+                    .read(adminRepoProvider)
+                    .createVoucherAmountTier(existing.id, tierData);
               } else {
-                await ref.read(adminRepoProvider).updateVoucherAmountTier(tier.id, tierData);
+                await ref
+                    .read(adminRepoProvider)
+                    .updateVoucherAmountTier(tier.id, tierData);
               }
               await reloadTiers();
             } catch (e) {
               if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
               }
             }
           }
 
           Future<void> deleteTier(VoucherAmountTier tier) async {
             try {
-              await ref.read(adminRepoProvider).deleteVoucherAmountTier(tier.id);
+              await ref
+                  .read(adminRepoProvider)
+                  .deleteVoucherAmountTier(tier.id);
               await reloadTiers();
             } catch (e) {
               if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
               }
             }
           }
@@ -203,7 +225,7 @@ class _VouchersScreenState extends ConsumerState<VouchersScreen> {
           return AlertDialog(
             title: Text(existing == null ? 'Tạo voucher' : 'Sửa voucher'),
             content: SizedBox(
-              width: 480,
+              width: dialogWidth(context, 480),
               child: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -322,7 +344,9 @@ class _VouchersScreenState extends ConsumerState<VouchersScreen> {
                               label: Text(e.value),
                               selected: orderKinds.contains(e.key),
                               onSelected: (v) => setInner(
-                                () => v ? orderKinds.add(e.key) : orderKinds.remove(e.key),
+                                () => v
+                                    ? orderKinds.add(e.key)
+                                    : orderKinds.remove(e.key),
                               ),
                             ),
                           )
@@ -343,7 +367,9 @@ class _VouchersScreenState extends ConsumerState<VouchersScreen> {
                               label: Text(e.value),
                               selected: merchantTypes.contains(e.key),
                               onSelected: (v) => setInner(
-                                () => v ? merchantTypes.add(e.key) : merchantTypes.remove(e.key),
+                                () => v
+                                    ? merchantTypes.add(e.key)
+                                    : merchantTypes.remove(e.key),
                               ),
                             ),
                           )
@@ -354,7 +380,8 @@ class _VouchersScreenState extends ConsumerState<VouchersScreen> {
                       controller: minConcurrentCtrl,
                       keyboardType: TextInputType.number,
                       decoration: const InputDecoration(
-                        labelText: 'Số đơn cùng lúc tối thiểu (để trống = không yêu cầu)',
+                        labelText:
+                            'Số đơn cùng lúc tối thiểu (để trống = không yêu cầu)',
                         helperText:
                             'Khách phải đang có ít nhất N đơn (tính cả đơn đang đặt) chưa tới lúc tài xế xác nhận đang giao mới dùng được mã.',
                         helperMaxLines: 2,
@@ -402,32 +429,42 @@ class _VouchersScreenState extends ConsumerState<VouchersScreen> {
                         ),
                       )
                     else
-                      ...(tiers..sort((a, b) => a.minOrderAmount.compareTo(b.minOrderAmount))).map(
-                        (t) => ListTile(
-                          dense: true,
-                          contentPadding: EdgeInsets.zero,
-                          title: Text('Từ ${formatVnd(t.minOrderAmount)}'),
-                          subtitle: Text(
-                            discountType == 'percent'
-                                ? 'Giảm ${t.discountValue}%'
-                                    '${t.maxDiscount != null ? ' (tối đa ${formatVnd(t.maxDiscount!)})' : ''}'
-                                : 'Giảm ${formatVnd(t.discountValue)}',
-                          ),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              IconButton(
-                                icon: const Icon(Icons.edit_outlined, size: 20),
-                                onPressed: () => tierDialog(tier: t),
+                      ...(tiers..sort(
+                            (a, b) =>
+                                a.minOrderAmount.compareTo(b.minOrderAmount),
+                          ))
+                          .map(
+                            (t) => ListTile(
+                              dense: true,
+                              contentPadding: EdgeInsets.zero,
+                              title: Text('Từ ${formatVnd(t.minOrderAmount)}'),
+                              subtitle: Text(
+                                discountType == 'percent'
+                                    ? 'Giảm ${t.discountValue}%'
+                                          '${t.maxDiscount != null ? ' (tối đa ${formatVnd(t.maxDiscount!)})' : ''}'
+                                    : 'Giảm ${formatVnd(t.discountValue)}',
                               ),
-                              IconButton(
-                                icon: const Icon(Icons.delete_outline, size: 20),
-                                onPressed: () => deleteTier(t),
+                              trailing: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(
+                                      Icons.edit_outlined,
+                                      size: 20,
+                                    ),
+                                    onPressed: () => tierDialog(tier: t),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(
+                                      Icons.delete_outline,
+                                      size: 20,
+                                    ),
+                                    onPressed: () => deleteTier(t),
+                                  ),
+                                ],
                               ),
-                            ],
+                            ),
                           ),
-                        ),
-                      ),
                     const SizedBox(height: 20),
                     Text(
                       'Giới hạn lượt dùng',
@@ -570,7 +607,9 @@ class _VouchersScreenState extends ConsumerState<VouchersScreen> {
       'is_public': isPublic,
       'is_active': isActive,
       'applicable_order_kinds': orderKinds.isEmpty ? null : orderKinds.toList(),
-      'applicable_merchant_types': merchantTypes.isEmpty ? null : merchantTypes.toList(),
+      'applicable_merchant_types': merchantTypes.isEmpty
+          ? null
+          : merchantTypes.toList(),
       'min_concurrent_orders': int.tryParse(minConcurrentCtrl.text.trim()),
     };
 
@@ -835,23 +874,34 @@ class _VouchersScreenState extends ConsumerState<VouchersScreen> {
                                       ),
                                     if (v.applicableOrderKinds != null)
                                       Chip(
-                                        label: Text(v.applicableOrderKinds!
-                                            .map((k) => _orderKindLabels[k] ?? k)
-                                            .join(', ')),
+                                        label: Text(
+                                          v.applicableOrderKinds!
+                                              .map(
+                                                (k) => _orderKindLabels[k] ?? k,
+                                              )
+                                              .join(', '),
+                                        ),
                                         visualDensity: VisualDensity.compact,
                                         side: BorderSide.none,
                                       ),
                                     if (v.applicableMerchantTypes != null)
                                       Chip(
-                                        label: Text(v.applicableMerchantTypes!
-                                            .map((t) => merchantTypeLabels[t] ?? t)
-                                            .join(', ')),
+                                        label: Text(
+                                          v.applicableMerchantTypes!
+                                              .map(
+                                                (t) =>
+                                                    merchantTypeLabels[t] ?? t,
+                                              )
+                                              .join(', '),
+                                        ),
                                         visualDensity: VisualDensity.compact,
                                         side: BorderSide.none,
                                       ),
                                     if (v.minConcurrentOrders != null)
                                       Chip(
-                                        label: Text('≥${v.minConcurrentOrders} đơn cùng lúc'),
+                                        label: Text(
+                                          '≥${v.minConcurrentOrders} đơn cùng lúc',
+                                        ),
                                         visualDensity: VisualDensity.compact,
                                         side: BorderSide.none,
                                       ),

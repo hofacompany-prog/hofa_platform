@@ -21,6 +21,8 @@ class CategoriesHubScreen extends StatelessWidget {
             Material(
               color: theme.colorScheme.surface,
               child: const TabBar(
+                isScrollable: true,
+                tabAlignment: TabAlignment.start,
                 tabs: [
                   Tab(text: 'Danh mục'),
                   Tab(text: 'Icon tabbar'),
@@ -29,10 +31,7 @@ class CategoriesHubScreen extends StatelessWidget {
             ),
             const Expanded(
               child: TabBarView(
-                children: [
-                  CategoriesScreen(),
-                  NavIconsScreen(),
-                ],
+                children: [CategoriesScreen(), NavIconsScreen()],
               ),
             ),
           ],

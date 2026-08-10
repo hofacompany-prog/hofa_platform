@@ -6,11 +6,11 @@ import '../../models/order.dart';
 import '../../providers/admin_providers.dart';
 
 Color statusColor(String status, ColorScheme scheme) => switch (status) {
-      'completed' || 'delivered' => Colors.green,
-      'cancelled' || 'refunded' => scheme.error,
-      'pending_payment' => Colors.orange,
-      _ => scheme.primary,
-    };
+  'completed' || 'delivered' => Colors.green,
+  'cancelled' || 'refunded' => scheme.error,
+  'pending_payment' => Colors.orange,
+  _ => scheme.primary,
+};
 
 class OrdersScreen extends ConsumerWidget {
   const OrdersScreen({super.key});
@@ -46,17 +46,23 @@ class OrdersScreen extends ConsumerWidget {
                   child: ChoiceChip(
                     label: const Text('Tất cả'),
                     selected: statusFilter == null,
-                    onSelected: (_) => ref.read(orderStatusFilterProvider.notifier).state = null,
+                    onSelected: (_) =>
+                        ref.read(orderStatusFilterProvider.notifier).state =
+                            null,
                   ),
                 ),
-                ...orderStatusLabels.entries.map((e) => Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: ChoiceChip(
-                        label: Text(e.value),
-                        selected: statusFilter == e.key,
-                        onSelected: (_) => ref.read(orderStatusFilterProvider.notifier).state = e.key,
-                      ),
-                    )),
+                ...orderStatusLabels.entries.map(
+                  (e) => Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: ChoiceChip(
+                      label: Text(e.value),
+                      selected: statusFilter == e.key,
+                      onSelected: (_) =>
+                          ref.read(orderStatusFilterProvider.notifier).state =
+                              e.key,
+                    ),
+                  ),
+                ),
               ],
             ),
           ),
@@ -65,7 +71,8 @@ class OrdersScreen extends ConsumerWidget {
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (e, _) => Center(child: Text('Lỗi: $e')),
               data: (orders) {
-                if (orders.isEmpty) return const Center(child: Text('Không có đơn nào'));
+                if (orders.isEmpty)
+                  return const Center(child: Text('Không có đơn nào'));
                 return ListView.separated(
                   padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
                   itemCount: orders.length,
@@ -76,27 +83,59 @@ class OrdersScreen extends ConsumerWidget {
                     return Card(
                       elevation: 0,
                       color: theme.colorScheme.surfaceContainerLow,
-                      child: ListTile(
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      child: InkWell(
                         onTap: () => context.go('/orders/${o.id}'),
-                        title: Text('${o.orderCode} · ${o.merchantName ?? ""}',
-                            style: const TextStyle(fontWeight: FontWeight.w500)),
-                        subtitle: Text(
-                            '${o.customerName ?? o.shipRecipientName} — ${formatDateTime(o.createdAt)}'),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(formatVnd(o.totalAmount),
-                                style: const TextStyle(fontWeight: FontWeight.w600)),
-                            const SizedBox(width: 12),
-                            Chip(
-                              label: Text(orderStatusLabels[o.status] ?? o.status),
-                              backgroundColor: color.withValues(alpha: 0.12),
-                              side: BorderSide(color: color.withValues(alpha: 0.4)),
-                              visualDensity: VisualDensity.compact,
-                            ),
-                            const Icon(Icons.chevron_right),
-                          ],
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '${o.orderCode} · ${o.merchantName ?? ""}',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w500,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              Text(
+                                '${o.customerName ?? o.shipRecipientName} — ${formatDateTime(o.createdAt)}',
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 8),
+                              Wrap(
+                                alignment: WrapAlignment.end,
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                spacing: 12,
+                                runSpacing: 4,
+                                children: [
+                                  Text(
+                                    formatVnd(o.totalAmount),
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  Chip(
+                                    label: Text(
+                                      orderStatusLabels[o.status] ?? o.status,
+                                    ),
+                                    backgroundColor: color.withValues(
+                                      alpha: 0.12,
+                                    ),
+                                    side: BorderSide(
+                                      color: color.withValues(alpha: 0.4),
+                                    ),
+                                    visualDensity: VisualDensity.compact,
+                                  ),
+                                  const Icon(Icons.chevron_right),
+                                ],
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     );

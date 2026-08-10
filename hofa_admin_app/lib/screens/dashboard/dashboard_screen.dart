@@ -34,8 +34,8 @@ class DashboardScreen extends ConsumerWidget {
             final columns = constraints.maxWidth > 1200
                 ? 4
                 : constraints.maxWidth > 800
-                    ? 3
-                    : 2;
+                ? 3
+                : 2;
             return SingleChildScrollView(
               padding: const EdgeInsets.all(24),
               child: Column(
@@ -52,27 +52,31 @@ class DashboardScreen extends ConsumerWidget {
                       StatCard(
                         label: 'Đơn hôm nay',
                         value: '${s.orders.today}',
-                        sub: 'Tổng ${s.orders.total} đơn · ${s.orders.inProgress} đang chạy',
+                        sub:
+                            'Tổng ${s.orders.total} đơn · ${s.orders.inProgress} đang chạy',
                         icon: Icons.receipt_long,
                       ),
                       StatCard(
                         label: 'Doanh thu đã giao',
                         value: formatVnd(s.revenue.gross),
-                        sub: 'HOFA thu hoa hồng ${formatVnd(s.revenue.commission)}',
+                        sub:
+                            'HOFA thu hoa hồng ${formatVnd(s.revenue.commission)}',
                         icon: Icons.payments,
                         accent: Colors.teal,
                       ),
                       StatCard(
                         label: 'Cửa hàng',
                         value: '${s.merchants.active}',
-                        sub: '${s.merchants.pendingReview} chờ duyệt · ${s.merchants.paused} tạm dừng',
+                        sub:
+                            '${s.merchants.pendingReview} chờ duyệt · ${s.merchants.paused} tạm dừng',
                         icon: Icons.storefront,
                         accent: Colors.indigo,
                       ),
                       StatCard(
                         label: 'Người dùng',
                         value: '${s.users.total}',
-                        sub: '${s.users.customers} khách · ${s.users.drivers} tài xế',
+                        sub:
+                            '${s.users.customers} khách · ${s.users.drivers} tài xế',
                         icon: Icons.people,
                         accent: Colors.orange,
                       ),
@@ -85,7 +89,9 @@ class DashboardScreen extends ConsumerWidget {
                       elevation: 0,
                       child: ListTile(
                         leading: const Icon(Icons.pending_actions),
-                        title: Text('${s.merchants.pendingReview} cửa hàng đang chờ bạn duyệt'),
+                        title: Text(
+                          '${s.merchants.pendingReview} cửa hàng đang chờ bạn duyệt',
+                        ),
                         trailing: FilledButton(
                           onPressed: () => context.go('/merchants'),
                           child: const Text('Xem ngay'),
@@ -106,23 +112,58 @@ class DashboardScreen extends ConsumerWidget {
                           )
                         : Column(
                             children: s.recentOrders
-                                .map((o) => ListTile(
-                                      onTap: () => context.go('/orders/${o.id}'),
-                                      title: Text('${o.orderCode} · ${o.merchantName}'),
-                                      subtitle: Text('${o.customerName} — ${formatDateTime(o.createdAt)}'),
-                                      trailing: Row(
-                                        mainAxisSize: MainAxisSize.min,
+                                .map(
+                                  (o) => InkWell(
+                                    onTap: () => context.go('/orders/${o.id}'),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                        vertical: 8,
+                                      ),
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
-                                          Text(formatVnd(o.totalAmount),
-                                              style: const TextStyle(fontWeight: FontWeight.w500)),
-                                          const SizedBox(width: 12),
-                                          Chip(
-                                            label: Text(orderStatusLabels[o.status] ?? o.status),
-                                            visualDensity: VisualDensity.compact,
+                                          Text(
+                                            '${o.orderCode} · ${o.merchantName}',
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          Text(
+                                            '${o.customerName} — ${formatDateTime(o.createdAt)}',
+                                            style: theme.textTheme.bodySmall,
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Wrap(
+                                            alignment: WrapAlignment.end,
+                                            crossAxisAlignment:
+                                                WrapCrossAlignment.center,
+                                            spacing: 12,
+                                            runSpacing: 4,
+                                            children: [
+                                              Text(
+                                                formatVnd(o.totalAmount),
+                                                style: const TextStyle(
+                                                  fontWeight: FontWeight.w500,
+                                                ),
+                                              ),
+                                              Chip(
+                                                label: Text(
+                                                  orderStatusLabels[o.status] ??
+                                                      o.status,
+                                                ),
+                                                visualDensity:
+                                                    VisualDensity.compact,
+                                              ),
+                                            ],
                                           ),
                                         ],
                                       ),
-                                    ))
+                                    ),
+                                  ),
+                                )
                                 .toList(),
                           ),
                   ),

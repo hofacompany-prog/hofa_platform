@@ -5,6 +5,7 @@ import '../../core/format.dart';
 import '../../models/merchant.dart';
 import '../../models/merchant_fee_tier.dart';
 import '../../providers/admin_providers.dart';
+import '../../core/responsive.dart';
 
 /// Cấu hình bậc phí mua hộ cho 1 cửa hàng merchant_type = 'buy_on_behalf' — admin tự thiết
 /// lập ở đây (khác wholesale_tiers, do chủ cửa hàng tự cấu hình theo biến thể sản phẩm).
@@ -29,9 +30,9 @@ class _MerchantFeeTiersCardState extends ConsumerState<MerchantFeeTiersCard> {
     if (basis == widget.merchant.buyOnBehalfFeeBasis || _savingBasis) return;
     setState(() => _savingBasis = true);
     try {
-      await ref
-          .read(adminRepoProvider)
-          .updateMerchant(_merchantId, {'buy_on_behalf_fee_basis': basis});
+      await ref.read(adminRepoProvider).updateMerchant(_merchantId, {
+        'buy_on_behalf_fee_basis': basis,
+      });
       ref.invalidate(merchantDetailProvider(_merchantId));
     } catch (e) {
       if (mounted) {
@@ -68,7 +69,7 @@ class _MerchantFeeTiersCardState extends ConsumerState<MerchantFeeTiersCard> {
         builder: (context, setInner) => AlertDialog(
           title: Text(existing == null ? 'Thêm bậc phí' : 'Sửa bậc phí'),
           content: SizedBox(
-            width: 420,
+            width: dialogWidth(context, 420),
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -120,7 +121,10 @@ class _MerchantFeeTiersCardState extends ConsumerState<MerchantFeeTiersCard> {
                     ],
                   ),
                   const SizedBox(height: 16),
-                  Text('Cách tính phí', style: Theme.of(context).textTheme.labelLarge),
+                  Text(
+                    'Cách tính phí',
+                    style: Theme.of(context).textTheme.labelLarge,
+                  ),
                   const SizedBox(height: 8),
                   Wrap(
                     spacing: 8,
@@ -168,7 +172,9 @@ class _MerchantFeeTiersCardState extends ConsumerState<MerchantFeeTiersCard> {
                     const SizedBox(height: 8),
                     Text(
                       errorText!,
-                      style: TextStyle(color: Theme.of(context).colorScheme.error),
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
                     ),
                   ],
                 ],
@@ -280,7 +286,9 @@ class _MerchantFeeTiersCardState extends ConsumerState<MerchantFeeTiersCard> {
 
   String _thresholdLabel(String basis, int min, int? max) {
     if (basis == 'quantity') {
-      return max == null ? 'Từ $min sản phẩm trở lên' : 'Từ $min đến $max sản phẩm';
+      return max == null
+          ? 'Từ $min sản phẩm trở lên'
+          : 'Từ $min đến $max sản phẩm';
     }
     return max == null
         ? 'Từ ${formatVnd(min)} trở lên'
@@ -353,7 +361,9 @@ class _MerchantFeeTiersCardState extends ConsumerState<MerchantFeeTiersCard> {
                     ),
                     const SizedBox(width: 8),
                     const Expanded(
-                      child: Text('Chọn cách tính ngưỡng bậc ở trên trước khi thêm bậc phí.'),
+                      child: Text(
+                        'Chọn cách tính ngưỡng bậc ở trên trước khi thêm bậc phí.',
+                      ),
                     ),
                   ],
                 ),
@@ -403,7 +413,9 @@ class _MerchantFeeTiersCardState extends ConsumerState<MerchantFeeTiersCard> {
                                     t.minThreshold,
                                     t.maxThreshold,
                                   ),
-                                  style: const TextStyle(fontWeight: FontWeight.w500),
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w500,
+                                  ),
                                 ),
                               ),
                               Chip(
@@ -423,12 +435,14 @@ class _MerchantFeeTiersCardState extends ConsumerState<MerchantFeeTiersCard> {
                               IconButton(
                                 visualDensity: VisualDensity.compact,
                                 icon: const Icon(Icons.edit_outlined, size: 18),
-                                onPressed: () =>
-                                    _openTierDialog(existing: t),
+                                onPressed: () => _openTierDialog(existing: t),
                               ),
                               IconButton(
                                 visualDensity: VisualDensity.compact,
-                                icon: const Icon(Icons.delete_outline, size: 18),
+                                icon: const Icon(
+                                  Icons.delete_outline,
+                                  size: 18,
+                                ),
                                 onPressed: () => _deleteTier(t),
                               ),
                             ],

@@ -24,6 +24,8 @@ class FinanceHubScreen extends StatelessWidget {
             Material(
               color: theme.colorScheme.surface,
               child: const TabBar(
+                isScrollable: true,
+                tabAlignment: TabAlignment.start,
                 tabs: [
                   Tab(text: 'Tài chính'),
                   Tab(text: 'Phí ship'),

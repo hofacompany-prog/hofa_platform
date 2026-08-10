@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/merchant.dart';
 import '../../providers/admin_providers.dart';
 import '../merchants/merchant_detail_screen.dart' show merchantTypeLabels;
+import '../../core/responsive.dart';
 
 /// Bảng hoa hồng + thuế suất của MỌI cửa hàng ở 1 chỗ — trước đây phải vào từng cửa hàng
 /// riêng lẻ (Cửa hàng > chi tiết > Sửa thông tin) mới sửa được commission_rate/vat_rate/
@@ -12,7 +13,8 @@ class FinanceSettingsScreen extends ConsumerStatefulWidget {
   const FinanceSettingsScreen({super.key});
 
   @override
-  ConsumerState<FinanceSettingsScreen> createState() => _FinanceSettingsScreenState();
+  ConsumerState<FinanceSettingsScreen> createState() =>
+      _FinanceSettingsScreenState();
 }
 
 class _FinanceSettingsScreenState extends ConsumerState<FinanceSettingsScreen> {
@@ -28,7 +30,9 @@ class _FinanceSettingsScreenState extends ConsumerState<FinanceSettingsScreen> {
   }
 
   Future<void> _editRates(Merchant m) async {
-    final commissionCtrl = TextEditingController(text: m.commissionRate.toString());
+    final commissionCtrl = TextEditingController(
+      text: m.commissionRate.toString(),
+    );
     final vatCtrl = TextEditingController(text: m.vatRate.toString());
     final pitCtrl = TextEditingController(text: m.pitRate.toString());
     String? error;
@@ -39,42 +43,67 @@ class _FinanceSettingsScreenState extends ConsumerState<FinanceSettingsScreen> {
         builder: (context, setInner) => AlertDialog(
           title: Text('Tài chính — ${m.name}'),
           content: SizedBox(
-            width: 360,
+            width: dialogWidth(context, 360),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 TextField(
                   controller: commissionCtrl,
-                  decoration: const InputDecoration(labelText: 'Hoa hồng (%)', border: OutlineInputBorder()),
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(
+                    labelText: 'Hoa hồng (%)',
+                    border: OutlineInputBorder(),
+                  ),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: vatCtrl,
-                  decoration: const InputDecoration(labelText: 'Thuế GTGT (%)', border: OutlineInputBorder()),
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(
+                    labelText: 'Thuế GTGT (%)',
+                    border: OutlineInputBorder(),
+                  ),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                 ),
                 const SizedBox(height: 12),
                 TextField(
                   controller: pitCtrl,
-                  decoration: const InputDecoration(labelText: 'Thuế TNCN (%)', border: OutlineInputBorder()),
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  decoration: const InputDecoration(
+                    labelText: 'Thuế TNCN (%)',
+                    border: OutlineInputBorder(),
+                  ),
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Text(
                   'Mặc định 3% GTGT / 1.5% TNCN theo hộ kinh doanh dịch vụ ăn uống (TT40/2021/TT-BTC) — chỉnh lại nếu cửa hàng đăng ký loại hình khác.',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.black54),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: Colors.black54),
                 ),
                 if (error != null) ...[
                   const SizedBox(height: 8),
-                  Text(error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                  Text(
+                    error!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
                 ],
               ],
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Huỷ')),
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Huỷ'),
+            ),
             FilledButton(
               onPressed: () {
                 final commission = num.tryParse(commissionCtrl.text.trim());
@@ -108,7 +137,9 @@ class _FinanceSettingsScreenState extends ConsumerState<FinanceSettingsScreen> {
       ref.invalidate(merchantsProvider);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -165,8 +196,14 @@ class _FinanceSettingsScreenState extends ConsumerState<FinanceSettingsScreen> {
                   value: _typeFilter,
                   onChanged: (v) => setState(() => _typeFilter = v ?? 'all'),
                   items: [
-                    const DropdownMenuItem(value: 'all', child: Text('Mọi loại cửa hàng')),
-                    ...merchantTypeLabels.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value))),
+                    const DropdownMenuItem(
+                      value: 'all',
+                      child: Text('Mọi loại cửa hàng'),
+                    ),
+                    ...merchantTypeLabels.entries.map(
+                      (e) =>
+                          DropdownMenuItem(value: e.key, child: Text(e.value)),
+                    ),
                   ],
                 ),
               ],
@@ -178,13 +215,26 @@ class _FinanceSettingsScreenState extends ConsumerState<FinanceSettingsScreen> {
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (e, _) => Center(child: Text('Lỗi: $e')),
               data: (all) {
-                final filtered = all
-                    .where((m) => _search.isEmpty || m.name.toLowerCase().contains(_search.toLowerCase()))
-                    .where((m) => _typeFilter == 'all' || m.merchantType == _typeFilter)
-                    .toList()
-                  ..sort((a, b) => a.name.compareTo(b.name));
+                final filtered =
+                    all
+                        .where(
+                          (m) =>
+                              _search.isEmpty ||
+                              m.name.toLowerCase().contains(
+                                _search.toLowerCase(),
+                              ),
+                        )
+                        .where(
+                          (m) =>
+                              _typeFilter == 'all' ||
+                              m.merchantType == _typeFilter,
+                        )
+                        .toList()
+                      ..sort((a, b) => a.name.compareTo(b.name));
                 if (filtered.isEmpty) {
-                  return const Center(child: Text('Không có cửa hàng nào khớp bộ lọc'));
+                  return const Center(
+                    child: Text('Không có cửa hàng nào khớp bộ lọc'),
+                  );
                 }
 
                 // Đã lọc đúng 1 loại hình rồi thì khỏi cần chia nhóm nữa, chỉ 1 bảng gọn.
@@ -202,7 +252,9 @@ class _FinanceSettingsScreenState extends ConsumerState<FinanceSettingsScreen> {
                 for (final m in filtered) {
                   (byType[m.merchantType] ??= []).add(m);
                 }
-                final orderedTypes = merchantTypeLabels.keys.where(byType.containsKey).toList();
+                final orderedTypes = merchantTypeLabels.keys
+                    .where(byType.containsKey)
+                    .toList();
 
                 return SingleChildScrollView(
                   padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
@@ -214,7 +266,9 @@ class _FinanceSettingsScreenState extends ConsumerState<FinanceSettingsScreen> {
                           padding: const EdgeInsets.only(bottom: 8, top: 8),
                           child: Text(
                             '${merchantTypeLabels[type]} (${byType[type]!.length})',
-                            style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
                         _buildTable(byType[type]!),
@@ -262,7 +316,11 @@ class _FinanceSettingsScreenState extends ConsumerState<FinanceSettingsScreen> {
                         ),
                       ),
                     ),
-                    DataCell(Text(merchantTypeLabels[m.merchantType] ?? m.merchantType)),
+                    DataCell(
+                      Text(
+                        merchantTypeLabels[m.merchantType] ?? m.merchantType,
+                      ),
+                    ),
                     DataCell(Text('${m.commissionRate}')),
                     DataCell(Text('${m.vatRate}')),
                     DataCell(Text('${m.pitRate}')),

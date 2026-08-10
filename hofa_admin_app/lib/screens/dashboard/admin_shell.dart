@@ -69,6 +69,12 @@ class AdminShell extends ConsumerWidget {
     ),
   ];
 
+  // Dưới ngưỡng này (điện thoại) NavigationRail luôn-hiện-sẵn chiếm mất quá nhiều bề rộng còn
+  // lại cho nội dung (8 mục — quá nhiều để nhét vừa 1 thanh tab dưới cùng kiểu app di động,
+  // khác các app kia chỉ 5-6 mục) — chuyển sang AppBar + Drawer để nội dung được toàn bộ bề
+  // rộng màn hình, khớp cách hofa_store_app/dashboard_shell.dart xử lý ngưỡng tương tự.
+  static const _kMobileBreakpoint = 700.0;
+
   int _indexFor(String location) {
     // '/' chỉ khớp khi đúng bằng '/', nếu không mọi route đều khớp tiền tố này
     if (location == '/') return 0;
@@ -88,12 +94,93 @@ class AdminShell extends ConsumerWidget {
     final theme = Theme.of(context);
     final location = GoRouterState.of(context).matchedLocation;
     final profile = ref.watch(userProfileProvider).valueOrNull;
+    final isMobile = MediaQuery.of(context).size.width < _kMobileBreakpoint;
     final wide = MediaQuery.of(context).size.width > 1100;
     final navIcons = ref.watch(navIconsProvider).valueOrNull ?? const [];
     final iconByTabKey = {
       for (final n in navIcons)
         if (n.app == 'admin') n.tabKey: n.iconUrl,
     };
+    final selectedIndex = _indexFor(location);
+
+    if (isMobile) {
+      return Scaffold(
+        appBar: AppBar(title: Text(_items[selectedIndex].label)),
+        drawer: Drawer(
+          child: SafeArea(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 20),
+                  child: Column(
+                    children: [
+                      Image.asset('assets/images/logo.png', height: 30),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'HOFA Admin',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      if (profile != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            profile.fullName,
+                            textAlign: TextAlign.center,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodySmall,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1),
+                Expanded(
+                  child: ListView(
+                    children: [
+                      for (var i = 0; i < _items.length; i++)
+                        ListTile(
+                          leading: TabIcon(
+                            url: iconByTabKey[_items[i].tabKey],
+                            fallback: i == selectedIndex
+                                ? _items[i].selected
+                                : _items[i].icon,
+                            color: i == selectedIndex
+                                ? theme.colorScheme.primary
+                                : theme.colorScheme.outline,
+                          ),
+                          title: Text(
+                            _items[i].label,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          selected: i == selectedIndex,
+                          onTap: () {
+                            Navigator.of(context).pop();
+                            context.go(_items[i].path);
+                          },
+                        ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1),
+                ListTile(
+                  leading: const Icon(Icons.logout),
+                  title: const Text('Đăng xuất'),
+                  onTap: () => Supabase.instance.client.auth.signOut(),
+                ),
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: AppVersionText(),
+                ),
+              ],
+            ),
+          ),
+        ),
+        body: child,
+      );
+    }
 
     return Scaffold(
       body: Row(
@@ -101,7 +188,7 @@ class AdminShell extends ConsumerWidget {
           NavigationRail(
             extended: wide,
             minExtendedWidth: 210,
-            selectedIndex: _indexFor(location),
+            selectedIndex: selectedIndex,
             onDestinationSelected: (i) => context.go(_items[i].path),
             leading: Padding(
               padding: const EdgeInsets.symmetric(vertical: 20),
@@ -156,8 +243,16 @@ class AdminShell extends ConsumerWidget {
             destinations: _items
                 .map(
                   (d) => NavigationRailDestination(
-                    icon: TabIcon(url: iconByTabKey[d.tabKey], fallback: d.icon, color: theme.colorScheme.outline),
-                    selectedIcon: TabIcon(url: iconByTabKey[d.tabKey], fallback: d.selected, color: theme.colorScheme.primary),
+                    icon: TabIcon(
+                      url: iconByTabKey[d.tabKey],
+                      fallback: d.icon,
+                      color: theme.colorScheme.outline,
+                    ),
+                    selectedIcon: TabIcon(
+                      url: iconByTabKey[d.tabKey],
+                      fallback: d.selected,
+                      color: theme.colorScheme.primary,
+                    ),
                     label: Text(d.label),
                   ),
                 )

@@ -5,6 +5,7 @@ import '../../core/format.dart';
 import '../../models/admin_delivery.dart';
 import '../../providers/admin_providers.dart';
 import '../merchants/location_picker_screen.dart';
+import '../../core/responsive.dart';
 
 /// Chi tiết 1 chuyến giao hàng — cho admin xem đầy đủ + SỬA điểm lấy hàng (dữ liệu của chi
 /// nhánh, qua updateBranch) và điểm giao hàng (dữ liệu riêng của đơn, qua
@@ -16,7 +17,8 @@ class DeliveryDetailScreen extends ConsumerStatefulWidget {
   const DeliveryDetailScreen({super.key, required this.deliveryId});
 
   @override
-  ConsumerState<DeliveryDetailScreen> createState() => _DeliveryDetailScreenState();
+  ConsumerState<DeliveryDetailScreen> createState() =>
+      _DeliveryDetailScreenState();
 }
 
 class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
@@ -26,7 +28,10 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
     if (d.branchId == null) return;
     final picked = await Navigator.of(context).push<PickedLocation>(
       MaterialPageRoute(
-        builder: (_) => LocationPickerScreen(initialLatitude: d.branchLatitude, initialLongitude: d.branchLongitude),
+        builder: (_) => LocationPickerScreen(
+          initialLatitude: d.branchLatitude,
+          initialLongitude: d.branchLongitude,
+        ),
       ),
     );
     if (picked == null) return;
@@ -42,9 +47,15 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
         'longitude': picked.longitude,
       });
       ref.invalidate(deliveryDetailProvider(widget.deliveryId));
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Đã lưu điểm lấy hàng')));
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Đã lưu điểm lấy hàng')));
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -53,7 +64,10 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
   Future<void> _editDropoff(AdminDelivery d) async {
     final picked = await Navigator.of(context).push<PickedLocation>(
       MaterialPageRoute(
-        builder: (_) => LocationPickerScreen(initialLatitude: d.shipLatitude, initialLongitude: d.shipLongitude),
+        builder: (_) => LocationPickerScreen(
+          initialLatitude: d.shipLatitude,
+          initialLongitude: d.shipLongitude,
+        ),
       ),
     );
     if (picked == null) return;
@@ -69,9 +83,15 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
         'ship_longitude': picked.longitude,
       });
       ref.invalidate(deliveryDetailProvider(widget.deliveryId));
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Đã lưu điểm giao hàng')));
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Đã lưu điểm giao hàng')));
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -85,18 +105,28 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
         builder: (context, setInner) => AlertDialog(
           title: const Text('Chuyển trạng thái chuyến giao hàng'),
           content: SizedBox(
-            width: 320,
+            width: dialogWidth(context, 320),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Chỉ đổi đúng cột trạng thái, không đụng tồn kho hay ví tài xế.'),
+                const Text(
+                  'Chỉ đổi đúng cột trạng thái, không đụng tồn kho hay ví tài xế.',
+                ),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
                   initialValue: selected,
-                  decoration: const InputDecoration(border: OutlineInputBorder(), isDense: true),
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
                   items: deliveryStatusLabels.entries
-                      .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))
+                      .map(
+                        (e) => DropdownMenuItem(
+                          value: e.key,
+                          child: Text(e.value),
+                        ),
+                      )
                       .toList(),
                   onChanged: (v) => setInner(() => selected = v ?? selected),
                 ),
@@ -104,8 +134,14 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Huỷ')),
-            FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Xác nhận')),
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Huỷ'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Xác nhận'),
+            ),
           ],
         ),
       ),
@@ -118,7 +154,10 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
       ref.invalidate(deliveryDetailProvider(widget.deliveryId));
       ref.invalidate(deliveriesProvider);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -129,9 +168,14 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Xoá chuyến giao hàng?'),
-        content: Text('Chuyến của đơn ${d.orderCode} sẽ bị xoá vĩnh viễn, không thể khôi phục.'),
+        content: Text(
+          'Chuyến của đơn ${d.orderCode} sẽ bị xoá vĩnh viễn, không thể khôi phục.',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Huỷ')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Huỷ'),
+          ),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () => Navigator.pop(context, true),
@@ -147,11 +191,16 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
       await ref.read(adminRepoProvider).deleteDelivery(d.id);
       ref.invalidate(deliveriesProvider);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Đã xoá chuyến của đơn ${d.orderCode}')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Đã xoá chuyến của đơn ${d.orderCode}')),
+        );
         context.go('/drivers?tab=1');
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
       if (mounted) setState(() => _busy = false);
     }
   }
@@ -174,13 +223,23 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (_busy) const Padding(padding: EdgeInsets.only(bottom: 16), child: LinearProgressIndicator()),
+                  if (_busy)
+                    const Padding(
+                      padding: EdgeInsets.only(bottom: 16),
+                      child: LinearProgressIndicator(),
+                    ),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text('${d.orderCode} · ${d.merchantName ?? ""}',
-                          style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold)),
-                      Chip(label: Text(deliveryStatusLabels[d.status] ?? d.status)),
+                      Text(
+                        '${d.orderCode} · ${d.merchantName ?? ""}',
+                        style: theme.textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Chip(
+                        label: Text(deliveryStatusLabels[d.status] ?? d.status),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 4),
@@ -221,8 +280,16 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          _infoRow('Khoảng cách', d.distanceKm != null ? '${d.distanceKm!.toStringAsFixed(1)} km' : '—'),
-                          _infoRow('Thời gian dự kiến', d.etaMinutes != null ? '${d.etaMinutes} phút' : '—'),
+                          _infoRow(
+                            'Khoảng cách',
+                            d.distanceKm != null
+                                ? '${d.distanceKm!.toStringAsFixed(1)} km'
+                                : '—',
+                          ),
+                          _infoRow(
+                            'Thời gian dự kiến',
+                            d.etaMinutes != null ? '${d.etaMinutes} phút' : '—',
+                          ),
                           _infoRow('Phí cho tài xế', formatVnd(d.driverFee)),
                         ],
                       ),
@@ -237,7 +304,9 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
                   const SizedBox(height: 12),
                   OutlinedButton.icon(
                     onPressed: _busy ? null : () => _delete(d),
-                    style: OutlinedButton.styleFrom(foregroundColor: Colors.red),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.red,
+                    ),
                     icon: const Icon(Icons.delete_outline),
                     label: const Text('Xoá chuyến giao hàng'),
                   ),
@@ -251,12 +320,24 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
   }
 
   Widget _infoRow(String label, String value) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 2),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [Text(label), Text(value, style: const TextStyle(fontWeight: FontWeight.w600))],
+    padding: const EdgeInsets.symmetric(vertical: 2),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(label),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            value,
+            textAlign: TextAlign.right,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
         ),
-      );
+      ],
+    ),
+  );
 }
 
 class _PointCard extends StatelessWidget {
@@ -298,7 +379,12 @@ class _PointCard extends StatelessWidget {
                 Icon(icon, color: iconColor),
                 const SizedBox(width: 8),
                 Expanded(child: Text(title, style: theme.textTheme.titleSmall)),
-                if (onEdit != null) TextButton.icon(onPressed: onEdit, icon: const Icon(Icons.edit, size: 16), label: const Text('Sửa')),
+                if (onEdit != null)
+                  TextButton.icon(
+                    onPressed: onEdit,
+                    icon: const Icon(Icons.edit, size: 16),
+                    label: const Text('Sửa'),
+                  ),
               ],
             ),
             Padding(
@@ -306,7 +392,10 @@ class _PointCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                  Text(
+                    name,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
                   if (phone != null && phone!.isNotEmpty) Text(phone!),
                   Text(address.isEmpty ? 'Chưa có địa chỉ' : address),
                   Text(
@@ -314,7 +403,9 @@ class _PointCard extends StatelessWidget {
                         ? 'Toạ độ: ${latitude!.toStringAsFixed(6)}, ${longitude!.toStringAsFixed(6)}'
                         : 'Chưa có toạ độ',
                     style: TextStyle(
-                      color: latitude == null ? theme.colorScheme.error : theme.colorScheme.outline,
+                      color: latitude == null
+                          ? theme.colorScheme.error
+                          : theme.colorScheme.outline,
                       fontSize: 12,
                     ),
                   ),

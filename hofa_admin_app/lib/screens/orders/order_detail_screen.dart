@@ -5,6 +5,7 @@ import '../../core/format.dart';
 import '../../models/order.dart';
 import '../../providers/admin_providers.dart';
 import 'orders_screen.dart' show statusColor;
+import '../../core/responsive.dart';
 
 class AdminOrderDetailScreen extends ConsumerStatefulWidget {
   final String orderId;
@@ -29,7 +30,7 @@ class _AdminOrderDetailScreenState
         builder: (context, setInner) => AlertDialog(
           title: const Text('Chuyển trạng thái đơn'),
           content: SizedBox(
-            width: 320,
+            width: dialogWidth(context, 320),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -146,9 +147,15 @@ class _AdminOrderDetailScreenState
           label,
           style: bold ? const TextStyle(fontWeight: FontWeight.bold) : null,
         ),
-        Text(
-          value,
-          style: bold ? const TextStyle(fontWeight: FontWeight.bold) : null,
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            value,
+            textAlign: TextAlign.right,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: bold ? const TextStyle(fontWeight: FontWeight.bold) : null,
+          ),
         ),
       ],
     ),
@@ -192,10 +199,15 @@ class _AdminOrderDetailScreenState
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Text(
-                                  o.orderCode,
-                                  style: theme.textTheme.headlineSmall,
+                                Expanded(
+                                  child: Text(
+                                    o.orderCode,
+                                    style: theme.textTheme.headlineSmall,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                                 ),
+                                const SizedBox(width: 8),
                                 Chip(
                                   label: Text(
                                     orderStatusLabels[o.status] ?? o.status,

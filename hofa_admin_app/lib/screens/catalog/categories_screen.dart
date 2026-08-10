@@ -6,6 +6,7 @@ import '../../models/category.dart';
 import '../../providers/admin_providers.dart';
 import '../../widgets/icon_picker_dialog.dart';
 import '../../widgets/icon_picker_field.dart';
+import '../../core/responsive.dart';
 
 /// Danh mục ngành hàng dùng chung cho cả sàn — tối đa 2 cấp (gốc và con), mỗi cấp đều
 /// chọn được icon. Chỉ admin được tạo/sửa — cửa hàng chỉ gắn sản phẩm vào danh mục có sẵn.
@@ -24,12 +25,16 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
 
   String _slugify(String name) {
     var s = name.toLowerCase().trim();
-    const from = 'áàảãạăắằẳẵặâấầẩẫậđéèẻẽẹêếềểễệíìỉĩịóòỏõọôốồổỗộơớờởỡợúùủũụưứừửữựýỳỷỹỵ';
-    const to = 'aaaaaaaaaaaaaaaaadeeeeeeeeeeeiiiiiooooooooooooooooouuuuuuuuuuuyyyyy';
+    const from =
+        'áàảãạăắằẳẵặâấầẩẫậđéèẻẽẹêếềểễệíìỉĩịóòỏõọôốồổỗộơớờởỡợúùủũụưứừửữựýỳỷỹỵ';
+    const to =
+        'aaaaaaaaaaaaaaaaadeeeeeeeeeeeiiiiiooooooooooooooooouuuuuuuuuuuyyyyy';
     for (var i = 0; i < from.length; i++) {
       s = s.replaceAll(from[i], to[i]);
     }
-    return s.replaceAll(RegExp(r'[^a-z0-9\s-]'), '').replaceAll(RegExp(r'\s+'), '-');
+    return s
+        .replaceAll(RegExp(r'[^a-z0-9\s-]'), '')
+        .replaceAll(RegExp(r'\s+'), '-');
   }
 
   /// Chỉ danh mục con được, không cho chọn tiếp danh mục con làm cha (giới hạn 2 cấp).
@@ -47,7 +52,7 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
         builder: (context, setInner) => AlertDialog(
           title: const Text('Thêm danh mục'),
           content: SizedBox(
-            width: 400,
+            width: dialogWidth(context, 400),
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -64,10 +69,19 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
                   const SizedBox(height: 16),
                   DropdownButtonFormField<String?>(
                     initialValue: selectedParent,
-                    decoration: const InputDecoration(labelText: 'Thuộc danh mục cha', border: OutlineInputBorder()),
+                    decoration: const InputDecoration(
+                      labelText: 'Thuộc danh mục cha',
+                      border: OutlineInputBorder(),
+                    ),
                     items: [
-                      const DropdownMenuItem(value: null, child: Text('— Danh mục gốc —')),
-                      ...roots.map((c) => DropdownMenuItem(value: c.id, child: Text(c.name))),
+                      const DropdownMenuItem(
+                        value: null,
+                        child: Text('— Danh mục gốc —'),
+                      ),
+                      ...roots.map(
+                        (c) =>
+                            DropdownMenuItem(value: c.id, child: Text(c.name)),
+                      ),
                     ],
                     onChanged: (v) => setInner(() => selectedParent = v),
                   ),
@@ -110,8 +124,14 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Huỷ')),
-            FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Thêm')),
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Huỷ'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Thêm'),
+            ),
           ],
         ),
       ),
@@ -124,12 +144,17 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
       // Danh mục mới luôn xếp ở cuối nhóm anh em của nó (cha giống nhau), không giành chỗ
       // của danh mục đã sắp xếp trước đó.
       final siblings = all.where((c) => c.parentId == selectedParent);
-      final nextSortOrder =
-          siblings.isEmpty ? 0 : siblings.map((c) => c.sortOrder).reduce((a, b) => a > b ? a : b) + 1;
-      await ref.read(adminRepoProvider).createCategory(
+      final nextSortOrder = siblings.isEmpty
+          ? 0
+          : siblings.map((c) => c.sortOrder).reduce((a, b) => a > b ? a : b) +
+                1;
+      await ref
+          .read(adminRepoProvider)
+          .createCategory(
             name: name,
             // slug phải là duy nhất toàn sàn, thêm hậu tố thời gian để không đụng tên trùng
-            slug: '${_slugify(name)}-${DateTime.now().millisecondsSinceEpoch % 10000}',
+            slug:
+                '${_slugify(name)}-${DateTime.now().millisecondsSinceEpoch % 10000}',
             parentId: selectedParent,
             iconName: iconName,
             iconUrl: iconUrl,
@@ -137,7 +162,10 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
           );
       ref.invalidate(categoriesProvider);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -155,7 +183,7 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
         builder: (context, setInner) => AlertDialog(
           title: const Text('Sửa danh mục'),
           content: SizedBox(
-            width: 400,
+            width: dialogWidth(context, 400),
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -163,7 +191,10 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
                   TextField(
                     controller: nameCtrl,
                     autofocus: true,
-                    decoration: const InputDecoration(labelText: 'Tên danh mục', border: OutlineInputBorder()),
+                    decoration: const InputDecoration(
+                      labelText: 'Tên danh mục',
+                      border: OutlineInputBorder(),
+                    ),
                   ),
                   const SizedBox(height: 16),
                   Align(
@@ -204,8 +235,14 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Huỷ')),
-            FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Lưu')),
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Huỷ'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Lưu'),
+            ),
           ],
         ),
       ),
@@ -221,7 +258,10 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
       });
       ref.invalidate(categoriesProvider);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -242,12 +282,17 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
     try {
       for (var i = 0; i < reordered.length; i++) {
         if (reordered[i].sortOrder != i) {
-          await ref.read(adminRepoProvider).updateCategory(reordered[i].id, {'sort_order': i});
+          await ref.read(adminRepoProvider).updateCategory(reordered[i].id, {
+            'sort_order': i,
+          });
         }
       }
       ref.invalidate(categoriesProvider);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -281,15 +326,21 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
         data: (all) {
           final roots = all.where((c) => c.parentId == null).toList()
             ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
-          if (all.isEmpty) return const Center(child: Text('Chưa có danh mục nào'));
+          if (all.isEmpty)
+            return const Center(child: Text('Chưa có danh mục nào'));
 
-          List<Category> childrenOf(String id) => all.where((c) => c.parentId == id).toList()
-            ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+          List<Category> childrenOf(String id) =>
+              all.where((c) => c.parentId == id).toList()
+                ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
 
           return ListView(
             padding: const EdgeInsets.all(24),
             children: [
-              if (_busy) const Padding(padding: EdgeInsets.only(bottom: 12), child: LinearProgressIndicator()),
+              if (_busy)
+                const Padding(
+                  padding: EdgeInsets.only(bottom: 12),
+                  child: LinearProgressIndicator(),
+                ),
               ...roots.asMap().entries.map((entry) {
                 final rootIndex = entry.key;
                 final root = entry.value;
@@ -300,26 +351,58 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
                   margin: const EdgeInsets.only(bottom: 8),
                   child: kids.isEmpty
                       ? ListTile(
-                          leading: _CategoryLeadingIcon(iconUrl: root.iconUrl, iconName: root.iconName),
-                          title: Text(root.name),
-                          subtitle: Text(root.slug, style: theme.textTheme.bodySmall),
+                          leading: _CategoryLeadingIcon(
+                            iconUrl: root.iconUrl,
+                            iconName: root.iconName,
+                          ),
+                          title: Text(
+                            root.name,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          subtitle: Text(
+                            root.slug,
+                            style: theme.textTheme.bodySmall,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                           trailing: _CategoryActions(
                             busy: _busy,
-                            onMoveUp: rootIndex > 0 ? () => _move(roots, rootIndex, -1) : null,
-                            onMoveDown: rootIndex < roots.length - 1 ? () => _move(roots, rootIndex, 1) : null,
-                            onAddChild: () => _addDialog(all, parentId: root.id),
+                            onMoveUp: rootIndex > 0
+                                ? () => _move(roots, rootIndex, -1)
+                                : null,
+                            onMoveDown: rootIndex < roots.length - 1
+                                ? () => _move(roots, rootIndex, 1)
+                                : null,
+                            onAddChild: () =>
+                                _addDialog(all, parentId: root.id),
                             onEdit: () => _editDialog(root),
                           ),
                         )
                       : ExpansionTile(
-                          leading: _CategoryLeadingIcon(iconUrl: root.iconUrl, iconName: root.iconName),
-                          title: Text(root.name),
-                          subtitle: Text('${kids.length} danh mục con', style: theme.textTheme.bodySmall),
+                          leading: _CategoryLeadingIcon(
+                            iconUrl: root.iconUrl,
+                            iconName: root.iconName,
+                          ),
+                          title: Text(
+                            root.name,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          subtitle: Text(
+                            '${kids.length} danh mục con',
+                            style: theme.textTheme.bodySmall,
+                          ),
                           trailing: _CategoryActions(
                             busy: _busy,
-                            onMoveUp: rootIndex > 0 ? () => _move(roots, rootIndex, -1) : null,
-                            onMoveDown: rootIndex < roots.length - 1 ? () => _move(roots, rootIndex, 1) : null,
-                            onAddChild: () => _addDialog(all, parentId: root.id),
+                            onMoveUp: rootIndex > 0
+                                ? () => _move(roots, rootIndex, -1)
+                                : null,
+                            onMoveDown: rootIndex < roots.length - 1
+                                ? () => _move(roots, rootIndex, 1)
+                                : null,
+                            onAddChild: () =>
+                                _addDialog(all, parentId: root.id),
                             onEdit: () => _editDialog(root),
                           ),
                           children: [
@@ -327,26 +410,44 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
                               final kidIndex = kidEntry.key;
                               final kid = kidEntry.value;
                               return Padding(
-                                  padding: const EdgeInsets.only(left: 16),
-                                  child: ListTile(
-                                    dense: true,
-                                    leading: _CategoryLeadingIcon(iconUrl: kid.iconUrl, iconName: kid.iconName, size: 22),
-                                    title: Text(kid.name),
-                                    trailing: _CategoryActions(
-                                      busy: _busy,
-                                      onMoveUp: kidIndex > 0 ? () => _move(kids, kidIndex, -1) : null,
-                                      onMoveDown: kidIndex < kids.length - 1 ? () => _move(kids, kidIndex, 1) : null,
-                                      onEdit: () => _editDialog(kid),
-                                    ),
+                                padding: const EdgeInsets.only(left: 16),
+                                child: ListTile(
+                                  dense: true,
+                                  leading: _CategoryLeadingIcon(
+                                    iconUrl: kid.iconUrl,
+                                    iconName: kid.iconName,
+                                    size: 22,
                                   ),
-                                );
+                                  title: Text(
+                                    kid.name,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  trailing: _CategoryActions(
+                                    busy: _busy,
+                                    onMoveUp: kidIndex > 0
+                                        ? () => _move(kids, kidIndex, -1)
+                                        : null,
+                                    onMoveDown: kidIndex < kids.length - 1
+                                        ? () => _move(kids, kidIndex, 1)
+                                        : null,
+                                    onEdit: () => _editDialog(kid),
+                                  ),
+                                ),
+                              );
                             }),
                             Padding(
-                              padding: const EdgeInsets.only(left: 24, bottom: 8),
+                              padding: const EdgeInsets.only(
+                                left: 24,
+                                bottom: 8,
+                              ),
                               child: Align(
                                 alignment: Alignment.centerLeft,
                                 child: TextButton.icon(
-                                  onPressed: _busy ? null : () => _addDialog(all, parentId: root.id),
+                                  onPressed: _busy
+                                      ? null
+                                      : () =>
+                                            _addDialog(all, parentId: root.id),
                                   icon: const Icon(Icons.add, size: 18),
                                   label: const Text('Thêm vào nhóm này'),
                                 ),
@@ -419,9 +520,14 @@ class _CategoryLeadingIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (iconName != null && iconName!.isNotEmpty) {
-      return Icon(categoryIconOf(iconName), size: size, color: Theme.of(context).colorScheme.primary);
+      return Icon(
+        categoryIconOf(iconName),
+        size: size,
+        color: Theme.of(context).colorScheme.primary,
+      );
     }
-    if (iconUrl == null || iconUrl!.isEmpty) return Icon(Icons.folder_outlined, size: size);
+    if (iconUrl == null || iconUrl!.isEmpty)
+      return Icon(Icons.folder_outlined, size: size);
     return Image.network(
       iconUrl!,
       width: size,
@@ -440,10 +546,15 @@ class _CategoryLeadingIcon extends StatelessWidget {
 class _LibraryIconPickerField extends StatefulWidget {
   final String? initialIconUrl;
   final ValueChanged<String?> onChanged;
-  const _LibraryIconPickerField({super.key, this.initialIconUrl, required this.onChanged});
+  const _LibraryIconPickerField({
+    super.key,
+    this.initialIconUrl,
+    required this.onChanged,
+  });
 
   @override
-  State<_LibraryIconPickerField> createState() => _LibraryIconPickerFieldState();
+  State<_LibraryIconPickerField> createState() =>
+      _LibraryIconPickerFieldState();
 }
 
 class _LibraryIconPickerFieldState extends State<_LibraryIconPickerField> {
@@ -472,7 +583,9 @@ class _LibraryIconPickerFieldState extends State<_LibraryIconPickerField> {
       widget.onChanged(pngUrl);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
       }
     } finally {
       if (mounted) setState(() => _uploading = false);
@@ -485,7 +598,10 @@ class _LibraryIconPickerFieldState extends State<_LibraryIconPickerField> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Icon từ thư viện (Lucide/Online)', style: theme.textTheme.labelLarge),
+        Text(
+          'Icon từ thư viện (Lucide/Online)',
+          style: theme.textTheme.labelLarge,
+        ),
         const SizedBox(height: 8),
         InkWell(
           onTap: _uploading ? null : _pick,
@@ -501,27 +617,33 @@ class _LibraryIconPickerFieldState extends State<_LibraryIconPickerField> {
             child: _uploading
                 ? const Center(child: CircularProgressIndicator())
                 : _iconUrl != null
-                    ? Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Image.network(
-                          _iconUrl!,
-                          fit: BoxFit.contain,
-                          color: theme.colorScheme.primary,
-                          colorBlendMode: BlendMode.srcIn,
-                          errorBuilder: (_, _, _) =>
-                              Icon(Icons.broken_image_outlined, color: theme.colorScheme.outline),
-                        ),
-                      )
-                    : Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(Icons.add_circle_outline, color: theme.colorScheme.outline, size: 28),
-                            const SizedBox(height: 4),
-                            Text('Chọn icon', style: theme.textTheme.bodySmall),
-                          ],
-                        ),
+                ? Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Image.network(
+                      _iconUrl!,
+                      fit: BoxFit.contain,
+                      color: theme.colorScheme.primary,
+                      colorBlendMode: BlendMode.srcIn,
+                      errorBuilder: (_, _, _) => Icon(
+                        Icons.broken_image_outlined,
+                        color: theme.colorScheme.outline,
                       ),
+                    ),
+                  )
+                : Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.add_circle_outline,
+                          color: theme.colorScheme.outline,
+                          size: 28,
+                        ),
+                        const SizedBox(height: 4),
+                        Text('Chọn icon', style: theme.textTheme.bodySmall),
+                      ],
+                    ),
+                  ),
           ),
         ),
       ],

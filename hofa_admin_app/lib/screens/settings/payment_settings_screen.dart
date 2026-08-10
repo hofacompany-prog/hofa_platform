@@ -8,6 +8,7 @@ import '../../models/bank_account_settings.dart';
 import '../../models/driver_wallet_request.dart';
 import '../../models/order.dart';
 import '../../providers/admin_providers.dart';
+import '../../core/responsive.dart';
 
 /// 5 tab dưới 1 màn "Thanh toán" — tách nhỏ để mỗi tab không bị quá tải:
 /// Cấu hình (tài khoản ngân hàng của sàn), Đơn hàng (chờ xác nhận thanh toán chuyển khoản),
@@ -85,23 +86,31 @@ class _ConfigTabState extends ConsumerState<_ConfigTab> {
   Future<void> _save(String? id) async {
     setState(() => _saving = true);
     try {
-      final saved = await ref.read(adminRepoProvider).updateBankAccountSettings(
+      final saved = await ref
+          .read(adminRepoProvider)
+          .updateBankAccountSettings(
             BankAccountSettings(
               id: id,
               bankName: _bankNameCtrl.text.trim(),
               bankBin: _bankBinCtrl.text.trim(),
               accountNumber: _accountNumberCtrl.text.trim(),
               accountHolderName: _accountHolderCtrl.text.trim(),
-              minWithdrawalBalance: int.tryParse(_minWithdrawalCtrl.text.trim()) ?? 0,
+              minWithdrawalBalance:
+                  int.tryParse(_minWithdrawalCtrl.text.trim()) ?? 0,
             ),
           );
       ref.invalidate(bankAccountSettingsProvider);
       if (mounted) {
         _fillFrom(saved);
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Đã lưu thông tin ngân hàng')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Đã lưu thông tin ngân hàng')),
+        );
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -128,13 +137,18 @@ class _ConfigTabState extends ConsumerState<_ConfigTab> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Thông tin tài khoản ngân hàng', style: theme.textTheme.titleMedium),
+                  Text(
+                    'Thông tin tài khoản ngân hàng',
+                    style: theme.textTheme.titleMedium,
+                  ),
                   const SizedBox(height: 4),
                   Text(
                     'Dùng để tạo mã VietQR cho khách quét chuyển khoản khi đặt hàng bằng '
                     'phương thức "Chuyển khoản ngân hàng", và để tài xế nạp tiền vào ví. Miễn '
                     'phí, không cần tài khoản/API của cổng thanh toán nào.',
-                    style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.outline,
+                    ),
                   ),
                   const SizedBox(height: 16),
                   Card(
@@ -158,7 +172,8 @@ class _ConfigTabState extends ConsumerState<_ConfigTab> {
                             controller: _bankBinCtrl,
                             decoration: const InputDecoration(
                               labelText: 'Mã ngân hàng (BIN chuẩn VietQR)',
-                              helperText: 'Tra mã BIN tại vietqr.io/danh-sach-ngan-hang — bắt buộc để tạo được QR.',
+                              helperText:
+                                  'Tra mã BIN tại vietqr.io/danh-sach-ngan-hang — bắt buộc để tạo được QR.',
                               helperMaxLines: 2,
                               border: OutlineInputBorder(),
                             ),
@@ -166,7 +181,10 @@ class _ConfigTabState extends ConsumerState<_ConfigTab> {
                           const SizedBox(height: 16),
                           TextField(
                             controller: _accountNumberCtrl,
-                            decoration: const InputDecoration(labelText: 'Số tài khoản', border: OutlineInputBorder()),
+                            decoration: const InputDecoration(
+                              labelText: 'Số tài khoản',
+                              border: OutlineInputBorder(),
+                            ),
                             keyboardType: TextInputType.number,
                           ),
                           const SizedBox(height: 16),
@@ -174,7 +192,8 @@ class _ConfigTabState extends ConsumerState<_ConfigTab> {
                             controller: _accountHolderCtrl,
                             decoration: const InputDecoration(
                               labelText: 'Tên chủ tài khoản',
-                              helperText: 'Không dấu, viết hoa — đúng như trên thẻ ngân hàng.',
+                              helperText:
+                                  'Không dấu, viết hoa — đúng như trên thẻ ngân hàng.',
                               border: OutlineInputBorder(),
                             ),
                           ),
@@ -182,8 +201,10 @@ class _ConfigTabState extends ConsumerState<_ConfigTab> {
                           TextField(
                             controller: _minWithdrawalCtrl,
                             decoration: const InputDecoration(
-                              labelText: 'Số dư tối thiểu sau khi tài xế rút ví (đ)',
-                              helperText: 'Tài xế không rút được nếu số dư còn lại sau khi rút thấp hơn số này.',
+                              labelText:
+                                  'Số dư tối thiểu sau khi tài xế rút ví (đ)',
+                              helperText:
+                                  'Tài xế không rút được nếu số dư còn lại sau khi rút thấp hơn số này.',
                               helperMaxLines: 2,
                               border: OutlineInputBorder(),
                             ),
@@ -193,9 +214,17 @@ class _ConfigTabState extends ConsumerState<_ConfigTab> {
                           SizedBox(
                             width: double.infinity,
                             child: FilledButton(
-                              onPressed: _saving ? null : () => _save(settings.id),
+                              onPressed: _saving
+                                  ? null
+                                  : () => _save(settings.id),
                               child: _saving
-                                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                                  ? const SizedBox(
+                                      height: 20,
+                                      width: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
                                   : const Text('Lưu'),
                             ),
                           ),
@@ -216,16 +245,28 @@ class _ConfigTabState extends ConsumerState<_ConfigTab> {
 class _PendingOrdersTab extends ConsumerWidget {
   const _PendingOrdersTab();
 
-  Future<void> _confirmPayment(BuildContext context, WidgetRef ref, Order o) async {
+  Future<void> _confirmPayment(
+    BuildContext context,
+    WidgetRef ref,
+    Order o,
+  ) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Xác nhận đã nhận tiền?'),
-        content: Text('Xác nhận đã nhận được ${formatVnd(o.totalAmount)} cho đơn ${o.orderCode}. '
-            'Không thể hoàn tác thao tác này — đơn sẽ được xử lý tiếp ngay sau khi xác nhận.'),
+        content: Text(
+          'Xác nhận đã nhận được ${formatVnd(o.totalAmount)} cho đơn ${o.orderCode}. '
+          'Không thể hoàn tác thao tác này — đơn sẽ được xử lý tiếp ngay sau khi xác nhận.',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Huỷ')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Xác nhận')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Huỷ'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Xác nhận'),
+          ),
         ],
       ),
     );
@@ -235,10 +276,15 @@ class _PendingOrdersTab extends ConsumerWidget {
       await ref.read(adminRepoProvider).confirmPayment(o.id, o.totalAmount);
       ref.invalidate(pendingPaymentOrdersProvider);
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Đã xác nhận thanh toán đơn ${o.orderCode}')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Đã xác nhận thanh toán đơn ${o.orderCode}')),
+        );
       }
     } catch (e) {
-      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      if (context.mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
     }
   }
 
@@ -255,22 +301,35 @@ class _PendingOrdersTab extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Đơn đang chờ thanh toán', style: theme.textTheme.titleMedium),
+              Text(
+                'Đơn đang chờ thanh toán',
+                style: theme.textTheme.titleMedium,
+              ),
               const SizedBox(height: 4),
               Text(
                 'Đơn chuyển khoản khách đã đặt nhưng chưa xác nhận có tiền về — bấm '
                 '"Xác nhận thanh toán" ngay khi bạn thấy tiền vào tài khoản.',
-                style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.outline,
+                ),
               ),
               const SizedBox(height: 12),
               pendingAsync.when(
-                loading: () => const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator())),
+                loading: () => const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(24),
+                    child: CircularProgressIndicator(),
+                  ),
+                ),
                 error: (e, _) => Text('Lỗi: $e'),
                 data: (orders) {
                   if (orders.isEmpty) {
                     return Padding(
                       padding: const EdgeInsets.symmetric(vertical: 16),
-                      child: Text('Không có đơn nào đang chờ thanh toán.', style: theme.textTheme.bodyMedium),
+                      child: Text(
+                        'Không có đơn nào đang chờ thanh toán.',
+                        style: theme.textTheme.bodyMedium,
+                      ),
                     );
                   }
                   return Column(
@@ -280,21 +339,54 @@ class _PendingOrdersTab extends ConsumerWidget {
                             elevation: 0,
                             color: theme.colorScheme.surfaceContainerLow,
                             margin: const EdgeInsets.only(bottom: 8),
-                            child: ListTile(
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                            child: InkWell(
                               onTap: () => context.go('/orders/${o.id}'),
-                              title: Text('${o.orderCode} · ${o.merchantName ?? ""}', style: const TextStyle(fontWeight: FontWeight.w500)),
-                              subtitle: Text('${o.customerName ?? o.shipRecipientName} — ${formatDateTime(o.createdAt)}'),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(formatVnd(o.totalAmount), style: const TextStyle(fontWeight: FontWeight.w600)),
-                                  const SizedBox(width: 12),
-                                  FilledButton(
-                                    onPressed: () => _confirmPayment(context, ref, o),
-                                    child: const Text('Xác nhận thanh toán'),
-                                  ),
-                                ],
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 12,
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      '${o.orderCode} · ${o.merchantName ?? ""}',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    Text(
+                                      '${o.customerName ?? o.shipRecipientName} — ${formatDateTime(o.createdAt)}',
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Wrap(
+                                      alignment: WrapAlignment.end,
+                                      crossAxisAlignment:
+                                          WrapCrossAlignment.center,
+                                      spacing: 12,
+                                      runSpacing: 4,
+                                      children: [
+                                        Text(
+                                          formatVnd(o.totalAmount),
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                        FilledButton(
+                                          onPressed: () =>
+                                              _confirmPayment(context, ref, o),
+                                          child: const Text(
+                                            'Xác nhận thanh toán',
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           ),
@@ -314,15 +406,27 @@ class _PendingOrdersTab extends ConsumerWidget {
 class _WalletDepositsTab extends ConsumerWidget {
   const _WalletDepositsTab();
 
-  Future<void> _confirm(BuildContext context, WidgetRef ref, DriverWalletRequest r) async {
+  Future<void> _confirm(
+    BuildContext context,
+    WidgetRef ref,
+    DriverWalletRequest r,
+  ) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Xác nhận đã nhận tiền?'),
-        content: Text('Xác nhận đã nhận được ${formatVnd(r.amount)} nạp ví từ tài xế ${r.driverName}.'),
+        content: Text(
+          'Xác nhận đã nhận được ${formatVnd(r.amount)} nạp ví từ tài xế ${r.driverName}.',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Huỷ')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Xác nhận')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Huỷ'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Xác nhận'),
+          ),
         ],
       ),
     );
@@ -330,9 +434,15 @@ class _WalletDepositsTab extends ConsumerWidget {
     try {
       await ref.read(adminRepoProvider).confirmWalletDeposit(r.id);
       ref.invalidate(pendingWalletDepositsProvider);
-      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Đã cộng tiền vào ví tài xế')));
+      if (context.mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Đã cộng tiền vào ví tài xế')),
+        );
     } catch (e) {
-      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      if (context.mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
     }
   }
 
@@ -349,21 +459,34 @@ class _WalletDepositsTab extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Tài xế đang chờ nạp tiền', style: theme.textTheme.titleMedium),
+              Text(
+                'Tài xế đang chờ nạp tiền',
+                style: theme.textTheme.titleMedium,
+              ),
               const SizedBox(height: 4),
               Text(
                 'Tài xế đã tạo yêu cầu nạp và chuyển khoản vào tài khoản của sàn — bấm "Xác nhận" ngay khi thấy tiền về.',
-                style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.outline,
+                ),
               ),
               const SizedBox(height: 12),
               depositsAsync.when(
-                loading: () => const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator())),
+                loading: () => const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(24),
+                    child: CircularProgressIndicator(),
+                  ),
+                ),
                 error: (e, _) => Text('Lỗi: $e'),
                 data: (rows) {
                   if (rows.isEmpty) {
                     return Padding(
                       padding: const EdgeInsets.symmetric(vertical: 16),
-                      child: Text('Không có yêu cầu nạp tiền nào đang chờ.', style: theme.textTheme.bodyMedium),
+                      child: Text(
+                        'Không có yêu cầu nạp tiền nào đang chờ.',
+                        style: theme.textTheme.bodyMedium,
+                      ),
                     );
                   }
                   return Column(
@@ -373,16 +496,48 @@ class _WalletDepositsTab extends ConsumerWidget {
                             elevation: 0,
                             color: theme.colorScheme.surfaceContainerLow,
                             margin: const EdgeInsets.only(bottom: 8),
-                            child: ListTile(
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                              title: Text(r.driverName, style: const TextStyle(fontWeight: FontWeight.w500)),
-                              subtitle: Text('${r.driverPhone ?? ""} — ${formatDateTime(r.createdAt)}'),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 12,
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(formatVnd(r.amount), style: const TextStyle(fontWeight: FontWeight.w600)),
-                                  const SizedBox(width: 12),
-                                  FilledButton(onPressed: () => _confirm(context, ref, r), child: const Text('Xác nhận')),
+                                  Text(
+                                    r.driverName,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  Text(
+                                    '${r.driverPhone ?? ""} — ${formatDateTime(r.createdAt)}',
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Wrap(
+                                    alignment: WrapAlignment.end,
+                                    crossAxisAlignment:
+                                        WrapCrossAlignment.center,
+                                    spacing: 12,
+                                    runSpacing: 4,
+                                    children: [
+                                      Text(
+                                        formatVnd(r.amount),
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      FilledButton(
+                                        onPressed: () =>
+                                            _confirm(context, ref, r),
+                                        child: const Text('Xác nhận'),
+                                      ),
+                                    ],
+                                  ),
                                 ],
                               ),
                             ),
@@ -403,15 +558,27 @@ class _WalletDepositsTab extends ConsumerWidget {
 class _WalletWithdrawalsTab extends ConsumerWidget {
   const _WalletWithdrawalsTab();
 
-  Future<void> _confirm(BuildContext context, WidgetRef ref, DriverWalletRequest r) async {
+  Future<void> _confirm(
+    BuildContext context,
+    WidgetRef ref,
+    DriverWalletRequest r,
+  ) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Xác nhận đã chuyển khoản?'),
-        content: Text('Xác nhận đã chuyển ${formatVnd(r.amount)} cho tài xế ${r.driverName} qua tài khoản ngân hàng ở trên.'),
+        content: Text(
+          'Xác nhận đã chuyển ${formatVnd(r.amount)} cho tài xế ${r.driverName} qua tài khoản ngân hàng ở trên.',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Huỷ')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Xác nhận')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Huỷ'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Xác nhận'),
+          ),
         ],
       ),
     );
@@ -419,13 +586,23 @@ class _WalletWithdrawalsTab extends ConsumerWidget {
     try {
       await ref.read(adminRepoProvider).confirmWalletWithdrawal(r.id);
       ref.invalidate(pendingWalletWithdrawalsProvider);
-      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Đã xác nhận rút tiền')));
+      if (context.mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Đã xác nhận rút tiền')));
     } catch (e) {
-      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      if (context.mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
     }
   }
 
-  Future<void> _reject(BuildContext context, WidgetRef ref, DriverWalletRequest r) async {
+  Future<void> _reject(
+    BuildContext context,
+    WidgetRef ref,
+    DriverWalletRequest r,
+  ) async {
     final reasonCtrl = TextEditingController();
     final ok = await showDialog<bool>(
       context: context,
@@ -435,15 +612,27 @@ class _WalletWithdrawalsTab extends ConsumerWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('${formatVnd(r.amount)} sẽ được hoàn lại vào ví tài xế ${r.driverName}.'),
+            Text(
+              '${formatVnd(r.amount)} sẽ được hoàn lại vào ví tài xế ${r.driverName}.',
+            ),
             const SizedBox(height: 12),
-            TextField(controller: reasonCtrl, decoration: const InputDecoration(labelText: 'Lý do (không bắt buộc)')),
+            TextField(
+              controller: reasonCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Lý do (không bắt buộc)',
+              ),
+            ),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Huỷ')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Huỷ'),
+          ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
             onPressed: () => Navigator.pop(context, true),
             child: const Text('Từ chối'),
           ),
@@ -452,11 +641,26 @@ class _WalletWithdrawalsTab extends ConsumerWidget {
     );
     if (ok != true) return;
     try {
-      await ref.read(adminRepoProvider).rejectWalletWithdrawal(r.id, reason: reasonCtrl.text.trim().isEmpty ? null : reasonCtrl.text.trim());
+      await ref
+          .read(adminRepoProvider)
+          .rejectWalletWithdrawal(
+            r.id,
+            reason: reasonCtrl.text.trim().isEmpty
+                ? null
+                : reasonCtrl.text.trim(),
+          );
       ref.invalidate(pendingWalletWithdrawalsProvider);
-      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Đã từ chối, tiền được hoàn lại ví tài xế')));
+      if (context.mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Đã từ chối, tiền được hoàn lại ví tài xế'),
+          ),
+        );
     } catch (e) {
-      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      if (context.mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
     }
   }
 
@@ -473,27 +677,42 @@ class _WalletWithdrawalsTab extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Tài xế đang chờ rút tiền', style: theme.textTheme.titleMedium),
+              Text(
+                'Tài xế đang chờ rút tiền',
+                style: theme.textTheme.titleMedium,
+              ),
               const SizedBox(height: 4),
               Text(
                 'Tiền đã bị trừ khỏi ví tài xế ngay lúc tạo yêu cầu — quét mã bên dưới để chuyển khoản trả tài xế, '
                 'rồi bấm "Xác nhận". Nếu không chuyển được (vd sai thông tin ngân hàng), bấm "Từ chối" để hoàn tiền lại ví.',
-                style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.outline,
+                ),
               ),
               const SizedBox(height: 12),
               withdrawalsAsync.when(
-                loading: () => const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator())),
+                loading: () => const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(24),
+                    child: CircularProgressIndicator(),
+                  ),
+                ),
                 error: (e, _) => Text('Lỗi: $e'),
                 data: (rows) {
                   if (rows.isEmpty) {
                     return Padding(
                       padding: const EdgeInsets.symmetric(vertical: 16),
-                      child: Text('Không có yêu cầu rút tiền nào đang chờ.', style: theme.textTheme.bodyMedium),
+                      child: Text(
+                        'Không có yêu cầu rút tiền nào đang chờ.',
+                        style: theme.textTheme.bodyMedium,
+                      ),
                     );
                   }
                   return Column(
                     children: rows.map((r) {
-                      final hasBankInfo = (r.bankBin?.isNotEmpty ?? false) && (r.bankAccountNumber?.isNotEmpty ?? false);
+                      final hasBankInfo =
+                          (r.bankBin?.isNotEmpty ?? false) &&
+                          (r.bankAccountNumber?.isNotEmpty ?? false);
                       return Card(
                         elevation: 0,
                         color: theme.colorScheme.surfaceContainerLow,
@@ -507,19 +726,37 @@ class _WalletWithdrawalsTab extends ConsumerWidget {
                                 children: [
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
-                                        Text(r.driverName, style: const TextStyle(fontWeight: FontWeight.w500)),
-                                        Text('${r.driverPhone ?? ""} — ${formatDateTime(r.createdAt)}', style: theme.textTheme.bodySmall),
+                                        Text(
+                                          r.driverName,
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                        Text(
+                                          '${r.driverPhone ?? ""} — ${formatDateTime(r.createdAt)}',
+                                          style: theme.textTheme.bodySmall,
+                                        ),
                                       ],
                                     ),
                                   ),
-                                  Text(formatVnd(r.amount), style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                                  Text(
+                                    formatVnd(r.amount),
+                                    style: theme.textTheme.titleMedium
+                                        ?.copyWith(fontWeight: FontWeight.bold),
+                                  ),
                                 ],
                               ),
                               const SizedBox(height: 12),
                               if (!hasBankInfo)
-                                Text('Tài xế chưa có thông tin ngân hàng.', style: TextStyle(color: theme.colorScheme.error))
+                                Text(
+                                  'Tài xế chưa có thông tin ngân hàng.',
+                                  style: TextStyle(
+                                    color: theme.colorScheme.error,
+                                  ),
+                                )
                               else ...[
                                 Row(
                                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -531,23 +768,37 @@ class _WalletWithdrawalsTab extends ConsumerWidget {
                                           bankBin: r.bankBin!,
                                           accountNumber: r.bankAccountNumber!,
                                           amount: r.amount,
-                                          addInfo: 'RUT-${r.id.substring(0, 8).toUpperCase()}',
+                                          addInfo:
+                                              'RUT-${r.id.substring(0, 8).toUpperCase()}',
                                           accountName: r.bankAccountHolder,
                                         ),
                                         width: 160,
                                         height: 160,
                                         fit: BoxFit.contain,
-                                        errorBuilder: (context, error, stackTrace) =>
-                                            const SizedBox(width: 160, height: 160, child: Center(child: Text('Lỗi tải QR'))),
+                                        errorBuilder:
+                                            (context, error, stackTrace) =>
+                                                const SizedBox(
+                                                  width: 160,
+                                                  height: 160,
+                                                  child: Center(
+                                                    child: Text('Lỗi tải QR'),
+                                                  ),
+                                                ),
                                       ),
                                     ),
                                     const SizedBox(width: 16),
                                     Expanded(
                                       child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
-                                          Text('${r.bankName ?? ""} · ${r.bankAccountNumber}'),
-                                          Text(r.bankAccountHolder ?? '', style: theme.textTheme.bodySmall),
+                                          Text(
+                                            '${r.bankName ?? ""} · ${r.bankAccountNumber}',
+                                          ),
+                                          Text(
+                                            r.bankAccountHolder ?? '',
+                                            style: theme.textTheme.bodySmall,
+                                          ),
                                         ],
                                       ),
                                     ),
@@ -559,7 +810,10 @@ class _WalletWithdrawalsTab extends ConsumerWidget {
                                 children: [
                                   Expanded(
                                     child: OutlinedButton(
-                                      style: OutlinedButton.styleFrom(foregroundColor: theme.colorScheme.error),
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor:
+                                            theme.colorScheme.error,
+                                      ),
                                       onPressed: () => _reject(context, ref, r),
                                       child: const Text('Từ chối'),
                                     ),
@@ -567,8 +821,11 @@ class _WalletWithdrawalsTab extends ConsumerWidget {
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: FilledButton(
-                                      onPressed: () => _confirm(context, ref, r),
-                                      child: const Text('Xác nhận đã chuyển khoản'),
+                                      onPressed: () =>
+                                          _confirm(context, ref, r),
+                                      child: const Text(
+                                        'Xác nhận đã chuyển khoản',
+                                      ),
                                     ),
                                   ),
                                 ],
@@ -592,7 +849,11 @@ class _WalletWithdrawalsTab extends ConsumerWidget {
 class _BanksTab extends ConsumerWidget {
   const _BanksTab();
 
-  Future<void> _editBank(BuildContext context, WidgetRef ref, {Bank? bank}) async {
+  Future<void> _editBank(
+    BuildContext context,
+    WidgetRef ref, {
+    Bank? bank,
+  }) async {
     final nameCtrl = TextEditingController(text: bank?.name ?? '');
     final binCtrl = TextEditingController(text: bank?.bin ?? '');
     final ok = await showDialog<bool>(
@@ -600,49 +861,83 @@ class _BanksTab extends ConsumerWidget {
       builder: (context) => AlertDialog(
         title: Text(bank == null ? 'Thêm ngân hàng' : 'Sửa ngân hàng'),
         content: SizedBox(
-          width: 360,
+          width: dialogWidth(context, 360),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Tên ngân hàng')),
+              TextField(
+                controller: nameCtrl,
+                decoration: const InputDecoration(labelText: 'Tên ngân hàng'),
+              ),
               const SizedBox(height: 12),
               TextField(
                 controller: binCtrl,
-                decoration: const InputDecoration(labelText: 'Mã BIN (chuẩn VietQR)', helperText: 'Tra tại vietqr.io/danh-sach-ngan-hang'),
+                decoration: const InputDecoration(
+                  labelText: 'Mã BIN (chuẩn VietQR)',
+                  helperText: 'Tra tại vietqr.io/danh-sach-ngan-hang',
+                ),
               ),
             ],
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Huỷ')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Lưu')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Huỷ'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Lưu'),
+          ),
         ],
       ),
     );
-    if (ok != true || nameCtrl.text.trim().isEmpty || binCtrl.text.trim().isEmpty) return;
+    if (ok != true ||
+        nameCtrl.text.trim().isEmpty ||
+        binCtrl.text.trim().isEmpty)
+      return;
 
     try {
       if (bank == null) {
-        await ref.read(adminRepoProvider).createBank(name: nameCtrl.text.trim(), bin: binCtrl.text.trim());
+        await ref
+            .read(adminRepoProvider)
+            .createBank(name: nameCtrl.text.trim(), bin: binCtrl.text.trim());
       } else {
-        await ref.read(adminRepoProvider).updateBank(bank.id, {'name': nameCtrl.text.trim(), 'bin': binCtrl.text.trim()});
+        await ref.read(adminRepoProvider).updateBank(bank.id, {
+          'name': nameCtrl.text.trim(),
+          'bin': binCtrl.text.trim(),
+        });
       }
       ref.invalidate(banksProvider);
     } catch (e) {
-      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      if (context.mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
     }
   }
 
-  Future<void> _deleteBank(BuildContext context, WidgetRef ref, Bank bank) async {
+  Future<void> _deleteBank(
+    BuildContext context,
+    WidgetRef ref,
+    Bank bank,
+  ) async {
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Xoá ngân hàng?'),
-        content: Text('Xoá "${bank.name}" khỏi danh sách — tài xế đã chọn ngân hàng này trước đó không bị ảnh hưởng.'),
+        content: Text(
+          'Xoá "${bank.name}" khỏi danh sách — tài xế đã chọn ngân hàng này trước đó không bị ảnh hưởng.',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Huỷ')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Huỷ'),
+          ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
             onPressed: () => Navigator.pop(context, true),
             child: const Text('Xoá'),
           ),
@@ -654,7 +949,10 @@ class _BanksTab extends ConsumerWidget {
       await ref.read(adminRepoProvider).deleteBank(bank.id);
       ref.invalidate(banksProvider);
     } catch (e) {
-      if (context.mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      if (context.mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
     }
   }
 
@@ -680,17 +978,27 @@ class _BanksTab extends ConsumerWidget {
                 const SizedBox(height: 4),
                 Text(
                   'Tài xế chọn từ danh sách này (dropdown) lúc đăng ký/sửa hồ sơ, thay vì tự gõ tên/mã ngân hàng.',
-                  style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.outline,
+                  ),
                 ),
                 const SizedBox(height: 12),
                 banksAsync.when(
-                  loading: () => const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator())),
+                  loading: () => const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(24),
+                      child: CircularProgressIndicator(),
+                    ),
+                  ),
                   error: (e, _) => Text('Lỗi: $e'),
                   data: (banks) {
                     if (banks.isEmpty) {
                       return Padding(
                         padding: const EdgeInsets.symmetric(vertical: 16),
-                        child: Text('Chưa có ngân hàng nào — bấm nút + để thêm.', style: theme.textTheme.bodyMedium),
+                        child: Text(
+                          'Chưa có ngân hàng nào — bấm nút + để thêm.',
+                          style: theme.textTheme.bodyMedium,
+                        ),
                       );
                     }
                     return Column(
@@ -701,13 +1009,25 @@ class _BanksTab extends ConsumerWidget {
                               color: theme.colorScheme.surfaceContainerLow,
                               margin: const EdgeInsets.only(bottom: 8),
                               child: ListTile(
-                                title: Text(b.name),
+                                title: Text(
+                                  b.name,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                                 subtitle: Text('Mã BIN: ${b.bin}'),
                                 trailing: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    IconButton(icon: const Icon(Icons.edit_outlined), onPressed: () => _editBank(context, ref, bank: b)),
-                                    IconButton(icon: const Icon(Icons.delete_outline), onPressed: () => _deleteBank(context, ref, b)),
+                                    IconButton(
+                                      icon: const Icon(Icons.edit_outlined),
+                                      onPressed: () =>
+                                          _editBank(context, ref, bank: b),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.delete_outline),
+                                      onPressed: () =>
+                                          _deleteBank(context, ref, b),
+                                    ),
                                   ],
                                 ),
                               ),

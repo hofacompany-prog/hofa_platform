@@ -4,6 +4,7 @@ import '../../core/format.dart';
 import '../../models/bank.dart';
 import '../../models/driver.dart';
 import '../../providers/admin_providers.dart';
+import '../../core/responsive.dart';
 
 const _vehicleTypeOptions = [
   ('xe máy', 'Xe máy'),
@@ -42,8 +43,14 @@ class _DriversScreenState extends ConsumerState<DriversScreen> {
           'Xe: ${d.vehicleType ?? "—"} · ${d.vehiclePlate ?? "—"}',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Huỷ')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Duyệt')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Huỷ'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Duyệt'),
+          ),
         ],
       ),
     );
@@ -54,7 +61,10 @@ class _DriversScreenState extends ConsumerState<DriversScreen> {
       await ref.read(adminRepoProvider).verifyDriver(d.id);
       ref.invalidate(driversProvider);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -68,8 +78,9 @@ class _DriversScreenState extends ConsumerState<DriversScreen> {
       banks = await ref.read(banksProvider.future);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text('Không tải được danh sách ngân hàng: $e')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Không tải được danh sách ngân hàng: $e')),
+        );
       }
       return;
     }
@@ -78,8 +89,12 @@ class _DriversScreenState extends ConsumerState<DriversScreen> {
     final nationalIdCtrl = TextEditingController(text: d.nationalId ?? '');
     final licenseNoCtrl = TextEditingController(text: d.licenseNo ?? '');
     final plateCtrl = TextEditingController(text: d.vehiclePlate ?? '');
-    final accountNumberCtrl = TextEditingController(text: d.bankAccountNumber ?? '');
-    final accountHolderCtrl = TextEditingController(text: d.bankAccountHolder ?? '');
+    final accountNumberCtrl = TextEditingController(
+      text: d.bankAccountNumber ?? '',
+    );
+    final accountHolderCtrl = TextEditingController(
+      text: d.bankAccountHolder ?? '',
+    );
     var vehicleType = d.vehicleType ?? _vehicleTypeOptions.first.$1;
     Bank? selectedBank;
     if (d.bankBin != null) {
@@ -93,7 +108,7 @@ class _DriversScreenState extends ConsumerState<DriversScreen> {
         builder: (context, setInner) => AlertDialog(
           title: const Text('Sửa hồ sơ tài xế'),
           content: SizedBox(
-            width: 420,
+            width: dialogWidth(context, 420),
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -101,54 +116,100 @@ class _DriversScreenState extends ConsumerState<DriversScreen> {
                 children: [
                   TextField(
                     controller: nationalIdCtrl,
-                    decoration: const InputDecoration(labelText: 'Số CCCD/CMND', border: OutlineInputBorder(), isDense: true),
+                    decoration: const InputDecoration(
+                      labelText: 'Số CCCD/CMND',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: licenseNoCtrl,
-                    decoration: const InputDecoration(labelText: 'Số GPLX', border: OutlineInputBorder(), isDense: true),
+                    decoration: const InputDecoration(
+                      labelText: 'Số GPLX',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
                     initialValue: vehicleType,
-                    decoration: const InputDecoration(labelText: 'Loại xe', border: OutlineInputBorder(), isDense: true),
+                    decoration: const InputDecoration(
+                      labelText: 'Loại xe',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
                     items: _vehicleTypeOptions
-                        .map((v) => DropdownMenuItem(value: v.$1, child: Text(v.$2)))
+                        .map(
+                          (v) =>
+                              DropdownMenuItem(value: v.$1, child: Text(v.$2)),
+                        )
                         .toList(),
-                    onChanged: (v) => setInner(() => vehicleType = v ?? vehicleType),
+                    onChanged: (v) =>
+                        setInner(() => vehicleType = v ?? vehicleType),
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: plateCtrl,
-                    decoration: const InputDecoration(labelText: 'Biển số xe', border: OutlineInputBorder(), isDense: true),
+                    decoration: const InputDecoration(
+                      labelText: 'Biển số xe',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
                   ),
                   const Divider(height: 28),
-                  Text('Tài khoản nhận tiền', style: Theme.of(context).textTheme.titleSmall),
+                  Text(
+                    'Tài khoản nhận tiền',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<Bank>(
                     initialValue: selectedBank,
-                    decoration: const InputDecoration(labelText: 'Ngân hàng', border: OutlineInputBorder(), isDense: true),
-                    items: banks.map((b) => DropdownMenuItem(value: b, child: Text(b.name))).toList(),
+                    decoration: const InputDecoration(
+                      labelText: 'Ngân hàng',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                    items: banks
+                        .map(
+                          (b) =>
+                              DropdownMenuItem(value: b, child: Text(b.name)),
+                        )
+                        .toList(),
                     onChanged: (v) => setInner(() => selectedBank = v),
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: accountNumberCtrl,
-                    decoration: const InputDecoration(labelText: 'Số tài khoản', border: OutlineInputBorder(), isDense: true),
+                    decoration: const InputDecoration(
+                      labelText: 'Số tài khoản',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
                     keyboardType: TextInputType.number,
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: accountHolderCtrl,
-                    decoration: const InputDecoration(labelText: 'Tên chủ tài khoản', border: OutlineInputBorder(), isDense: true),
+                    decoration: const InputDecoration(
+                      labelText: 'Tên chủ tài khoản',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
                   ),
                 ],
               ),
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Huỷ')),
-            FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Lưu')),
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Huỷ'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Lưu'),
+            ),
           ],
         ),
       ),
@@ -169,7 +230,10 @@ class _DriversScreenState extends ConsumerState<DriversScreen> {
       });
       ref.invalidate(driversProvider);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -184,17 +248,25 @@ class _DriversScreenState extends ConsumerState<DriversScreen> {
         builder: (context, setInner) => AlertDialog(
           title: const Text('Từ chối hồ sơ tài xế?'),
           content: SizedBox(
-            width: 360,
+            width: dialogWidth(context, 360),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Tài xế sẽ nhận được thông báo kèm lý do, sửa/nộp lại hồ sơ để được xét duyệt tiếp.'),
+                const Text(
+                  'Tài xế sẽ nhận được thông báo kèm lý do, sửa/nộp lại hồ sơ để được xét duyệt tiếp.',
+                ),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
                   initialValue: reason,
-                  decoration: const InputDecoration(labelText: 'Lý do', border: OutlineInputBorder(), isDense: true),
-                  items: _rejectionReasonPresets.map((r) => DropdownMenuItem(value: r, child: Text(r))).toList(),
+                  decoration: const InputDecoration(
+                    labelText: 'Lý do',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                  items: _rejectionReasonPresets
+                      .map((r) => DropdownMenuItem(value: r, child: Text(r)))
+                      .toList(),
                   onChanged: (v) => setInner(() => reason = v ?? reason),
                 ),
                 if (reason == 'Khác') ...[
@@ -202,7 +274,10 @@ class _DriversScreenState extends ConsumerState<DriversScreen> {
                   TextField(
                     controller: customCtrl,
                     autofocus: true,
-                    decoration: const InputDecoration(labelText: 'Ghi rõ lý do', border: OutlineInputBorder()),
+                    decoration: const InputDecoration(
+                      labelText: 'Ghi rõ lý do',
+                      border: OutlineInputBorder(),
+                    ),
                     maxLines: 2,
                   ),
                 ],
@@ -210,9 +285,14 @@ class _DriversScreenState extends ConsumerState<DriversScreen> {
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Huỷ')),
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Huỷ'),
+            ),
             FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
+              style: FilledButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.error,
+              ),
               onPressed: () => Navigator.pop(context, true),
               child: const Text('Từ chối'),
             ),
@@ -229,7 +309,10 @@ class _DriversScreenState extends ConsumerState<DriversScreen> {
       await ref.read(adminRepoProvider).rejectDriver(d.id, finalReason);
       ref.invalidate(driversProvider);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -246,18 +329,28 @@ class _DriversScreenState extends ConsumerState<DriversScreen> {
         builder: (context, setInner) => AlertDialog(
           title: const Text('Đổi trạng thái tài xế'),
           content: SizedBox(
-            width: 320,
+            width: dialogWidth(context, 320),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Dùng khi tài xế bị kẹt trạng thái (vd "Đang giao" mãi) và không nhận được chuyến mới.'),
+                const Text(
+                  'Dùng khi tài xế bị kẹt trạng thái (vd "Đang giao" mãi) và không nhận được chuyến mới.',
+                ),
                 const SizedBox(height: 16),
                 DropdownButtonFormField<String>(
                   initialValue: selected,
-                  decoration: const InputDecoration(border: OutlineInputBorder(), isDense: true),
+                  decoration: const InputDecoration(
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
                   items: driverStatusLabels.entries
-                      .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value)))
+                      .map(
+                        (e) => DropdownMenuItem(
+                          value: e.key,
+                          child: Text(e.value),
+                        ),
+                      )
                       .toList(),
                   onChanged: (v) => setInner(() => selected = v ?? selected),
                 ),
@@ -265,8 +358,14 @@ class _DriversScreenState extends ConsumerState<DriversScreen> {
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Huỷ')),
-            FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Xác nhận')),
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Huỷ'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Xác nhận'),
+            ),
           ],
         ),
       ),
@@ -278,7 +377,10 @@ class _DriversScreenState extends ConsumerState<DriversScreen> {
       await ref.read(adminRepoProvider).forceDriverStatus(d.id, selected);
       ref.invalidate(driversProvider);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -321,9 +423,17 @@ class _DriversScreenState extends ConsumerState<DriversScreen> {
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (e, _) => Center(child: Text('Lỗi: $e')),
               data: (all) {
-                final list = _onlyUnverified ? all.where((d) => !d.isVerified).toList() : all;
+                final list = _onlyUnverified
+                    ? all.where((d) => !d.isVerified).toList()
+                    : all;
                 if (list.isEmpty) {
-                  return Center(child: Text(_onlyUnverified ? 'Không có hồ sơ nào chờ duyệt' : 'Chưa có tài xế nào'));
+                  return Center(
+                    child: Text(
+                      _onlyUnverified
+                          ? 'Không có hồ sơ nào chờ duyệt'
+                          : 'Chưa có tài xế nào',
+                    ),
+                  );
                 }
                 return ListView.separated(
                   padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
@@ -335,62 +445,131 @@ class _DriversScreenState extends ConsumerState<DriversScreen> {
                     final owing = d.walletBalance < 0;
                     final verification = driverVerificationState(d);
                     final (statusIcon, statusColor) = switch (verification) {
-                      DriverVerificationState.verified => (Icons.verified_user, Colors.green),
-                      DriverVerificationState.rejected => (Icons.block, theme.colorScheme.error),
-                      DriverVerificationState.pending => (Icons.pending, Colors.orange),
+                      DriverVerificationState.verified => (
+                        Icons.verified_user,
+                        Colors.green,
+                      ),
+                      DriverVerificationState.rejected => (
+                        Icons.block,
+                        theme.colorScheme.error,
+                      ),
+                      DriverVerificationState.pending => (
+                        Icons.pending,
+                        Colors.orange,
+                      ),
                     };
+                    // Card tự dựng (không dùng ListTile.trailing) — trailing kiểu Row cứng
+                    // (tối đa 5 nút/chip) tràn ra ngoài trên màn hẹp vì ListTile không co giãn
+                    // trailing được; Wrap bên dưới title/subtitle tự xuống dòng khi hết chỗ.
                     return Card(
                       elevation: 0,
                       color: theme.colorScheme.surfaceContainerLow,
-                      child: ListTile(
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        leading: Tooltip(
-                          message: verification == DriverVerificationState.rejected
-                              ? 'Bị từ chối: ${d.rejectionReason ?? ""}'
-                              : '',
-                          child: CircleAvatar(
-                            backgroundColor: statusColor.withValues(alpha: 0.12),
-                            child: Icon(statusIcon, color: statusColor),
-                          ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 12,
                         ),
-                        title: Text('${d.vehicleType ?? "Xe"} · ${d.vehiclePlate ?? "—"}',
-                            style: const TextStyle(fontWeight: FontWeight.w500)),
-                        subtitle: Text(
-                          '${d.totalDeliveries} chuyến · ${d.ratingAvg}★'
-                          '${owing ? ' · Đang giữ ${formatVnd(-d.walletBalance)} tiền COD' : ''}'
-                          '${verification == DriverVerificationState.rejected ? ' · Bị từ chối: ${d.rejectionReason ?? ""}' : ''}',
-                          style: TextStyle(color: owing || verification == DriverVerificationState.rejected ? theme.colorScheme.error : null),
-                        ),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            IconButton(
-                              tooltip: 'Sửa hồ sơ',
-                              icon: const Icon(Icons.edit_outlined),
-                              onPressed: _busy ? null : () => _editProfile(d),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Tooltip(
+                                  message:
+                                      verification ==
+                                          DriverVerificationState.rejected
+                                      ? 'Bị từ chối: ${d.rejectionReason ?? ""}'
+                                      : '',
+                                  child: CircleAvatar(
+                                    backgroundColor: statusColor.withValues(
+                                      alpha: 0.12,
+                                    ),
+                                    child: Icon(statusIcon, color: statusColor),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        '${d.vehicleType ?? "Xe"} · ${d.vehiclePlate ?? "—"}',
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      Text(
+                                        '${d.totalDeliveries} chuyến · ${d.ratingAvg}★'
+                                        '${owing ? ' · Đang giữ ${formatVnd(-d.walletBalance)} tiền COD' : ''}'
+                                        '${verification == DriverVerificationState.rejected ? ' · Bị từ chối: ${d.rejectionReason ?? ""}' : ''}',
+                                        style: TextStyle(
+                                          color:
+                                              owing ||
+                                                  verification ==
+                                                      DriverVerificationState
+                                                          .rejected
+                                              ? theme.colorScheme.error
+                                              : null,
+                                        ),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
                             ),
-                            ActionChip(
-                              label: Text(driverStatusLabels[d.status] ?? d.status),
-                              visualDensity: VisualDensity.compact,
-                              onPressed: _busy ? null : () => _changeStatus(d),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              alignment: WrapAlignment.end,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              spacing: 8,
+                              runSpacing: 4,
+                              children: [
+                                IconButton(
+                                  tooltip: 'Sửa hồ sơ',
+                                  icon: const Icon(Icons.edit_outlined),
+                                  onPressed: _busy
+                                      ? null
+                                      : () => _editProfile(d),
+                                ),
+                                ActionChip(
+                                  label: Text(
+                                    driverStatusLabels[d.status] ?? d.status,
+                                  ),
+                                  visualDensity: VisualDensity.compact,
+                                  onPressed: _busy
+                                      ? null
+                                      : () => _changeStatus(d),
+                                ),
+                                if (!d.isVerified) ...[
+                                  OutlinedButton(
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: theme.colorScheme.error,
+                                    ),
+                                    onPressed: _busy ? null : () => _reject(d),
+                                    child: const Text('Từ chối'),
+                                  ),
+                                  FilledButton(
+                                    onPressed: _busy ? null : () => _verify(d),
+                                    child: const Text('Duyệt hồ sơ'),
+                                  ),
+                                ] else
+                                  const Padding(
+                                    padding: EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                    ),
+                                    child: Text(
+                                      'Đã duyệt',
+                                      style: TextStyle(color: Colors.green),
+                                    ),
+                                  ),
+                              ],
                             ),
-                            const SizedBox(width: 8),
-                            if (!d.isVerified) ...[
-                              OutlinedButton(
-                                style: OutlinedButton.styleFrom(foregroundColor: theme.colorScheme.error),
-                                onPressed: _busy ? null : () => _reject(d),
-                                child: const Text('Từ chối'),
-                              ),
-                              const SizedBox(width: 8),
-                              FilledButton(
-                                onPressed: _busy ? null : () => _verify(d),
-                                child: const Text('Duyệt hồ sơ'),
-                              ),
-                            ] else
-                              const Padding(
-                                padding: EdgeInsets.symmetric(horizontal: 8),
-                                child: Text('Đã duyệt', style: TextStyle(color: Colors.green)),
-                              ),
                           ],
                         ),
                       ),

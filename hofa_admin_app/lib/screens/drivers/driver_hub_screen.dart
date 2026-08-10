@@ -22,6 +22,8 @@ class DriverHubScreen extends StatelessWidget {
             Material(
               color: theme.colorScheme.surface,
               child: const TabBar(
+                isScrollable: true,
+                tabAlignment: TabAlignment.start,
                 tabs: [
                   Tab(text: 'Tài xế'),
                   Tab(text: 'Chuyến giao hàng'),

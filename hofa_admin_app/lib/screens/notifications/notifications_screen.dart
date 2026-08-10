@@ -7,6 +7,7 @@ import '../../models/notification_inbox_item.dart';
 import '../../models/user_profile.dart';
 import '../../providers/admin_providers.dart';
 import '../../widgets/stat_card.dart';
+import '../../core/responsive.dart';
 
 const _userPickerRoleLabels = {'customer': 'khách hàng', 'driver': 'tài xế'};
 
@@ -264,7 +265,12 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
         title: const Text('Thông báo'),
         bottom: TabBar(
           controller: _tabController,
-          tabs: const [Tab(text: 'Gửi thông báo'), Tab(text: 'Hộp thư theo cửa hàng')],
+          isScrollable: true,
+          tabAlignment: TabAlignment.start,
+          tabs: const [
+            Tab(text: 'Gửi thông báo'),
+            Tab(text: 'Hộp thư theo cửa hàng'),
+          ],
         ),
       ),
       body: TabBarView(
@@ -274,7 +280,10 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
     );
   }
 
-  Widget _buildSendTab(ThemeData theme, AsyncValue<List<AdminNotification>> historyAsync) {
+  Widget _buildSendTab(
+    ThemeData theme,
+    AsyncValue<List<AdminNotification>> historyAsync,
+  ) {
     final typeLabel = audienceTypeLabels[_audienceType]!;
     final typeLabelLower = typeLabel.toLowerCase();
     final selectionCount = _audienceType == 'merchant'
@@ -282,310 +291,310 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
         : _selectedUsers.length;
 
     return ListView(
-        padding: const EdgeInsets.all(24),
-        children: [
-          Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 720),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Gửi thông báo đẩy — hiện ra ngay trên điện thoại của người nhận kể '
-                    'cả khi không mở app. Chọn nhóm (khách hàng/cửa hàng/tài xế) rồi gửi '
-                    'cho cả nhóm hoặc tự chọn 1/nhiều đối tượng cụ thể.',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.outline,
-                    ),
+      padding: const EdgeInsets.all(24),
+      children: [
+        Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 720),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Gửi thông báo đẩy — hiện ra ngay trên điện thoại của người nhận kể '
+                  'cả khi không mở app. Chọn nhóm (khách hàng/cửa hàng/tài xế) rồi gửi '
+                  'cho cả nhóm hoặc tự chọn 1/nhiều đối tượng cụ thể.',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.outline,
                   ),
-                  const SizedBox(height: 20),
-                  Card(
-                    elevation: 0,
-                    color: theme.colorScheme.surfaceContainerLow,
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Nhóm đối tượng',
-                            style: theme.textTheme.titleSmall,
+                ),
+                const SizedBox(height: 20),
+                Card(
+                  elevation: 0,
+                  color: theme.colorScheme.surfaceContainerLow,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Nhóm đối tượng',
+                          style: theme.textTheme.titleSmall,
+                        ),
+                        const SizedBox(height: 4),
+                        Wrap(
+                          spacing: 8,
+                          children: audienceTypeLabels.entries
+                              .map(
+                                (e) => ChoiceChip(
+                                  label: Text(e.value),
+                                  selected: _audienceType == e.key,
+                                  onSelected: _sending
+                                      ? null
+                                      : (_) => _onAudienceTypeChanged(e.key),
+                                ),
+                              )
+                              .toList(),
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Đối tượng nhận',
+                          style: theme.textTheme.titleSmall,
+                        ),
+                        const SizedBox(height: 4),
+                        RadioGroup<bool>(
+                          groupValue: _sendToAll,
+                          onChanged: (v) {
+                            if (v != null) _onSendToAllChanged(v);
+                          },
+                          child: Column(
+                            children: [
+                              RadioListTile<bool>(
+                                contentPadding: EdgeInsets.zero,
+                                dense: true,
+                                title: Text('Tất cả $typeLabelLower'),
+                                value: true,
+                              ),
+                              RadioListTile<bool>(
+                                contentPadding: EdgeInsets.zero,
+                                dense: true,
+                                title: Text('$typeLabel cụ thể'),
+                                value: false,
+                              ),
+                            ],
                           ),
-                          const SizedBox(height: 4),
+                        ),
+                        if (!_sendToAll) ...[
+                          const SizedBox(height: 8),
                           Wrap(
                             spacing: 8,
-                            children: audienceTypeLabels.entries
-                                .map(
-                                  (e) => ChoiceChip(
-                                    label: Text(e.value),
-                                    selected: _audienceType == e.key,
-                                    onSelected: _sending
+                            runSpacing: 8,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              OutlinedButton.icon(
+                                onPressed: _sending ? null : _pickEntities,
+                                icon: const Icon(Icons.add_circle_outline),
+                                label: Text(
+                                  selectionCount == 0
+                                      ? 'Chọn $typeLabelLower'
+                                      : 'Sửa danh sách ($selectionCount)',
+                                ),
+                              ),
+                              if (_audienceType == 'merchant')
+                                ..._selectedMerchants.map(
+                                  (m) => Chip(
+                                    label: Text(m.name),
+                                    onDeleted: _sending
                                         ? null
-                                        : (_) => _onAudienceTypeChanged(e.key),
+                                        : () {
+                                            setState(
+                                              () =>
+                                                  _selectedMerchants.remove(m),
+                                            );
+                                            _refreshSpecificAudienceCount();
+                                          },
                                   ),
                                 )
-                                .toList(),
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            'Đối tượng nhận',
-                            style: theme.textTheme.titleSmall,
-                          ),
-                          const SizedBox(height: 4),
-                          RadioGroup<bool>(
-                            groupValue: _sendToAll,
-                            onChanged: (v) {
-                              if (v != null) _onSendToAllChanged(v);
-                            },
-                            child: Column(
-                              children: [
-                                RadioListTile<bool>(
-                                  contentPadding: EdgeInsets.zero,
-                                  dense: true,
-                                  title: Text('Tất cả $typeLabelLower'),
-                                  value: true,
-                                ),
-                                RadioListTile<bool>(
-                                  contentPadding: EdgeInsets.zero,
-                                  dense: true,
-                                  title: Text('$typeLabel cụ thể'),
-                                  value: false,
-                                ),
-                              ],
-                            ),
-                          ),
-                          if (!_sendToAll) ...[
-                            const SizedBox(height: 8),
-                            Wrap(
-                              spacing: 8,
-                              runSpacing: 8,
-                              crossAxisAlignment: WrapCrossAlignment.center,
-                              children: [
-                                OutlinedButton.icon(
-                                  onPressed: _sending ? null : _pickEntities,
-                                  icon: const Icon(Icons.add_circle_outline),
-                                  label: Text(
-                                    selectionCount == 0
-                                        ? 'Chọn $typeLabelLower'
-                                        : 'Sửa danh sách ($selectionCount)',
+                              else
+                                ..._selectedUsers.map(
+                                  (u) => Chip(
+                                    label: Text(
+                                      u.fullName.isNotEmpty
+                                          ? u.fullName
+                                          : u.phone,
+                                    ),
+                                    onDeleted: _sending
+                                        ? null
+                                        : () {
+                                            setState(
+                                              () => _selectedUsers.remove(u),
+                                            );
+                                            _refreshSpecificAudienceCount();
+                                          },
                                   ),
                                 ),
-                                if (_audienceType == 'merchant')
-                                  ..._selectedMerchants.map(
-                                    (m) => Chip(
-                                      label: Text(m.name),
-                                      onDeleted: _sending
-                                          ? null
-                                          : () {
-                                              setState(
-                                                () => _selectedMerchants.remove(
-                                                  m,
-                                                ),
-                                              );
-                                              _refreshSpecificAudienceCount();
-                                            },
-                                    ),
-                                  )
-                                else
-                                  ..._selectedUsers.map(
-                                    (u) => Chip(
-                                      label: Text(
-                                        u.fullName.isNotEmpty
-                                            ? u.fullName
-                                            : u.phone,
-                                      ),
-                                      onDeleted: _sending
-                                          ? null
-                                          : () {
-                                              setState(
-                                                () => _selectedUsers.remove(u),
-                                              );
-                                              _refreshSpecificAudienceCount();
-                                            },
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ],
+                            ],
+                          ),
                         ],
-                      ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: 280,
-                    child: StatCard(
-                      label: 'Sẽ gửi tới',
-                      value: _sendToAll
-                          ? (_loadingAllAudience
-                                ? '...'
-                                : '${_allAudienceCount ?? 0} thiết bị')
-                          : (_loadingSpecificAudience
-                                ? '...'
-                                : '${_specificAudienceCount ?? 0} thiết bị'),
-                      sub: _sendToAll
-                          ? 'Toàn bộ $typeLabelLower đã bật thông báo'
-                          : '$selectionCount $typeLabelLower đã chọn',
-                      icon: Icons.smartphone_outlined,
-                    ),
+                ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: 280,
+                  child: StatCard(
+                    label: 'Sẽ gửi tới',
+                    value: _sendToAll
+                        ? (_loadingAllAudience
+                              ? '...'
+                              : '${_allAudienceCount ?? 0} thiết bị')
+                        : (_loadingSpecificAudience
+                              ? '...'
+                              : '${_specificAudienceCount ?? 0} thiết bị'),
+                    sub: _sendToAll
+                        ? 'Toàn bộ $typeLabelLower đã bật thông báo'
+                        : '$selectionCount $typeLabelLower đã chọn',
+                    icon: Icons.smartphone_outlined,
                   ),
-                  const SizedBox(height: 20),
-                  Card(
-                    elevation: 0,
-                    color: theme.colorScheme.surfaceContainerLow,
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Soạn thông báo mới',
-                            style: theme.textTheme.titleSmall,
+                ),
+                const SizedBox(height: 20),
+                Card(
+                  elevation: 0,
+                  color: theme.colorScheme.surfaceContainerLow,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Soạn thông báo mới',
+                          style: theme.textTheme.titleSmall,
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: _titleCtrl,
+                          enabled: !_sending,
+                          maxLength: 150,
+                          decoration: const InputDecoration(
+                            labelText: 'Tiêu đề',
+                            helperText: 'Ngắn gọn, hiện đậm ở đầu thông báo',
+                            border: OutlineInputBorder(),
                           ),
-                          const SizedBox(height: 12),
-                          TextField(
-                            controller: _titleCtrl,
-                            enabled: !_sending,
-                            maxLength: 150,
-                            decoration: const InputDecoration(
-                              labelText: 'Tiêu đề',
-                              helperText: 'Ngắn gọn, hiện đậm ở đầu thông báo',
-                              border: OutlineInputBorder(),
-                            ),
+                        ),
+                        const SizedBox(height: 4),
+                        TextField(
+                          controller: _bodyCtrl,
+                          enabled: !_sending,
+                          maxLength: 500,
+                          minLines: 3,
+                          maxLines: 6,
+                          decoration: const InputDecoration(
+                            labelText: 'Nội dung',
+                            helperText: 'Nội dung đầy đủ của thông báo',
+                            border: OutlineInputBorder(),
+                            alignLabelWithHint: true,
                           ),
-                          const SizedBox(height: 4),
-                          TextField(
-                            controller: _bodyCtrl,
-                            enabled: !_sending,
-                            maxLength: 500,
-                            minLines: 3,
-                            maxLines: 6,
-                            decoration: const InputDecoration(
-                              labelText: 'Nội dung',
-                              helperText: 'Nội dung đầy đủ của thông báo',
-                              border: OutlineInputBorder(),
-                              alignLabelWithHint: true,
-                            ),
+                        ),
+                        CheckboxListTile(
+                          contentPadding: EdgeInsets.zero,
+                          controlAffinity: ListTileControlAffinity.leading,
+                          value: _showBadge,
+                          onChanged: _sending
+                              ? null
+                              : (v) => setState(() => _showBadge = v ?? false),
+                          title: const Text(
+                            'Hiển thị số trên biểu tượng ứng dụng',
                           ),
-                          CheckboxListTile(
-                            contentPadding: EdgeInsets.zero,
-                            controlAffinity: ListTileControlAffinity.leading,
-                            value: _showBadge,
-                            onChanged: _sending
-                                ? null
-                                : (v) => setState(() => _showBadge = v ?? false),
-                            title: const Text(
-                              'Hiển thị số trên biểu tượng ứng dụng',
-                            ),
-                            subtitle: const Text(
-                              'Cộng thêm 1 vào ô số nhỏ trên icon PWA ở màn hình chính của '
-                              'người nhận (chỉ áp dụng nếu họ đã "Thêm vào màn hình chính"). '
-                              'Thông báo về đơn hàng luôn tự hiện số, không cần bật ở đây.',
-                            ),
+                          subtitle: const Text(
+                            'Cộng thêm 1 vào ô số nhỏ trên icon PWA ở màn hình chính của '
+                            'người nhận (chỉ áp dụng nếu họ đã "Thêm vào màn hình chính"). '
+                            'Thông báo về đơn hàng luôn tự hiện số, không cần bật ở đây.',
                           ),
-                          const SizedBox(height: 8),
-                          DropdownButtonFormField<String>(
-                            initialValue: _category,
-                            decoration: const InputDecoration(
-                              labelText: 'Danh mục thông báo',
-                              helperText:
-                                  'Quyết định thông báo này nằm ở tab nào trong hộp thư của người nhận.',
-                              border: OutlineInputBorder(),
+                        ),
+                        const SizedBox(height: 8),
+                        DropdownButtonFormField<String>(
+                          initialValue: _category,
+                          decoration: const InputDecoration(
+                            labelText: 'Danh mục thông báo',
+                            helperText:
+                                'Quyết định thông báo này nằm ở tab nào trong hộp thư của người nhận.',
+                            border: OutlineInputBorder(),
+                          ),
+                          items: notificationCategoryLabels.entries
+                              .where((e) => e.key != 'order')
+                              .map(
+                                (e) => DropdownMenuItem(
+                                  value: e.key,
+                                  child: Text(e.value),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: _sending
+                              ? null
+                              : (v) =>
+                                    setState(() => _category = v ?? _category),
+                        ),
+                        const SizedBox(height: 8),
+                        DropdownButtonFormField<String?>(
+                          initialValue: _targetScreen,
+                          decoration: const InputDecoration(
+                            labelText: 'Khi bấm vào thông báo, mở màn nào',
+                            helperText:
+                                'Để trống thì bấm vào chỉ mở app ở màn mặc định, không nhảy tới đâu cụ thể.',
+                            helperMaxLines: 2,
+                            border: OutlineInputBorder(),
+                          ),
+                          items: [
+                            const DropdownMenuItem(
+                              value: null,
+                              child: Text('Không chỉ định'),
                             ),
-                            items: notificationCategoryLabels.entries
-                                .where((e) => e.key != 'order')
+                            ...(notificationTargetScreensByAudience[_audienceType] ??
+                                    const {})
+                                .entries
                                 .map(
                                   (e) => DropdownMenuItem(
                                     value: e.key,
                                     child: Text(e.value),
                                   ),
-                                )
-                                .toList(),
-                            onChanged: _sending
-                                ? null
-                                : (v) => setState(() => _category = v ?? _category),
-                          ),
-                          const SizedBox(height: 8),
-                          DropdownButtonFormField<String?>(
-                            initialValue: _targetScreen,
-                            decoration: const InputDecoration(
-                              labelText: 'Khi bấm vào thông báo, mở màn nào',
-                              helperText:
-                                  'Để trống thì bấm vào chỉ mở app ở màn mặc định, không nhảy tới đâu cụ thể.',
-                              helperMaxLines: 2,
-                              border: OutlineInputBorder(),
-                            ),
-                            items: [
-                              const DropdownMenuItem(
-                                value: null,
-                                child: Text('Không chỉ định'),
-                              ),
-                              ...(notificationTargetScreensByAudience[_audienceType] ??
-                                      const {})
-                                  .entries
-                                  .map(
-                                    (e) => DropdownMenuItem(
-                                      value: e.key,
-                                      child: Text(e.value),
+                                ),
+                          ],
+                          onChanged: _sending
+                              ? null
+                              : (v) => setState(() => _targetScreen = v),
+                        ),
+                        const SizedBox(height: 8),
+                        SizedBox(
+                          width: double.infinity,
+                          child: FilledButton.icon(
+                            onPressed: _sending ? null : _send,
+                            icon: _sending
+                                ? const SizedBox(
+                                    height: 16,
+                                    width: 16,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
                                     ),
-                                  ),
-                            ],
-                            onChanged: _sending
-                                ? null
-                                : (v) => setState(() => _targetScreen = v),
+                                  )
+                                : const Icon(Icons.send_outlined),
+                            label: const Text('Gửi thông báo'),
                           ),
-                          const SizedBox(height: 8),
-                          SizedBox(
-                            width: double.infinity,
-                            child: FilledButton.icon(
-                              onPressed: _sending ? null : _send,
-                              icon: _sending
-                                  ? const SizedBox(
-                                      height: 16,
-                                      width: 16,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
-                                    )
-                                  : const Icon(Icons.send_outlined),
-                              label: const Text('Gửi thông báo'),
-                            ),
-                          ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 28),
-                  Text('Lịch sử đã gửi', style: theme.textTheme.titleMedium),
-                  const SizedBox(height: 12),
-                  historyAsync.when(
-                    loading: () => const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 24),
-                      child: Center(child: CircularProgressIndicator()),
-                    ),
-                    error: (e, _) => Text('Lỗi: $e'),
-                    data: (items) => items.isEmpty
-                        ? Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            child: Text(
-                              'Chưa gửi thông báo nào.',
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: theme.colorScheme.outline,
-                              ),
-                            ),
-                          )
-                        : Column(
-                            children: items
-                                .map((n) => _NotificationCard(notification: n))
-                                .toList(),
-                          ),
+                ),
+                const SizedBox(height: 28),
+                Text('Lịch sử đã gửi', style: theme.textTheme.titleMedium),
+                const SizedBox(height: 12),
+                historyAsync.when(
+                  loading: () => const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 24),
+                    child: Center(child: CircularProgressIndicator()),
                   ),
-                ],
-              ),
+                  error: (e, _) => Text('Lỗi: $e'),
+                  data: (items) => items.isEmpty
+                      ? Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          child: Text(
+                            'Chưa gửi thông báo nào.',
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              color: theme.colorScheme.outline,
+                            ),
+                          ),
+                        )
+                      : Column(
+                          children: items
+                              .map((n) => _NotificationCard(notification: n))
+                              .toList(),
+                        ),
+                ),
+              ],
             ),
           ),
-        ],
-      );
+        ),
+      ],
+    );
   }
 }
 
@@ -650,7 +659,7 @@ class _UserPickerDialogState extends ConsumerState<_UserPickerDialog> {
         'Chọn ${roleLabel[0].toUpperCase()}${roleLabel.substring(1)}',
       ),
       content: SizedBox(
-        width: 480,
+        width: dialogWidth(context, 480),
         height: 480,
         child: Column(
           children: [
@@ -760,7 +769,7 @@ class _MerchantPickerDialogState extends ConsumerState<_MerchantPickerDialog> {
     return AlertDialog(
       title: const Text('Chọn cửa hàng'),
       content: SizedBox(
-        width: 480,
+        width: dialogWidth(context, 480),
         height: 480,
         child: Column(
           children: [
@@ -868,7 +877,10 @@ class _NotificationCard extends StatelessWidget {
                 ),
                 Chip(
                   visualDensity: VisualDensity.compact,
-                  label: Text(notificationCategoryLabels[notification.category] ?? notification.category),
+                  label: Text(
+                    notificationCategoryLabels[notification.category] ??
+                        notification.category,
+                  ),
                 ),
                 if (notification.showBadge)
                   const Chip(
@@ -880,7 +892,8 @@ class _NotificationCard extends StatelessWidget {
                     visualDensity: VisualDensity.compact,
                     avatar: const Icon(Icons.open_in_new, size: 14),
                     label: Text(
-                      notificationTargetScreensByAudience[notification.audienceType]?[notification.targetScreen] ??
+                      notificationTargetScreensByAudience[notification
+                              .audienceType]?[notification.targetScreen] ??
                           notification.targetScreen!,
                     ),
                   ),
@@ -937,13 +950,18 @@ class _InboxTabState extends ConsumerState<_InboxTab> {
   }
 
   bool get _hasAudience =>
-      _all || (_audienceType == 'merchant' ? _selectedMerchants.isNotEmpty : _selectedUsers.isNotEmpty);
+      _all ||
+      (_audienceType == 'merchant'
+          ? _selectedMerchants.isNotEmpty
+          : _selectedUsers.isNotEmpty);
 
-  List<String>? get _merchantIds =>
-      _audienceType == 'merchant' && !_all ? _selectedMerchants.map((m) => m.id).toList() : null;
+  List<String>? get _merchantIds => _audienceType == 'merchant' && !_all
+      ? _selectedMerchants.map((m) => m.id).toList()
+      : null;
 
-  List<String>? get _userIds =>
-      _audienceType != 'merchant' && !_all ? _selectedUsers.map((u) => u.id).toList() : null;
+  List<String>? get _userIds => _audienceType != 'merchant' && !_all
+      ? _selectedUsers.map((u) => u.id).toList()
+      : null;
 
   Future<void> _loadItems() async {
     if (!_hasAudience) {
@@ -958,7 +976,9 @@ class _InboxTabState extends ConsumerState<_InboxTab> {
       _error = null;
     });
     try {
-      final items = await ref.read(adminRepoProvider).notificationInbox(
+      final items = await ref
+          .read(adminRepoProvider)
+          .notificationInbox(
             audienceType: _audienceType,
             merchantIds: _merchantIds,
             userIds: _userIds,
@@ -996,7 +1016,8 @@ class _InboxTabState extends ConsumerState<_InboxTab> {
     if (_audienceType == 'merchant') {
       final result = await showDialog<List<Merchant>>(
         context: context,
-        builder: (context) => _MerchantPickerDialog(initiallySelected: _selectedMerchants),
+        builder: (context) =>
+            _MerchantPickerDialog(initiallySelected: _selectedMerchants),
       );
       if (result == null) return;
       setState(() {
@@ -1007,7 +1028,10 @@ class _InboxTabState extends ConsumerState<_InboxTab> {
     } else {
       final result = await showDialog<List<UserProfile>>(
         context: context,
-        builder: (context) => _UserPickerDialog(role: _audienceType, initiallySelected: _selectedUsers),
+        builder: (context) => _UserPickerDialog(
+          role: _audienceType,
+          initiallySelected: _selectedUsers,
+        ),
       );
       if (result == null) return;
       setState(() {
@@ -1024,9 +1048,14 @@ class _InboxTabState extends ConsumerState<_InboxTab> {
       context: context,
       builder: (context) => AlertDialog(
         title: Text(confirmLabel ?? 'Xoá ${ids.length} thông báo đã chọn?'),
-        content: const Text('Không thể hoàn tác — người nhận sẽ không còn thấy các dòng này trong hộp thư nữa.'),
+        content: const Text(
+          'Không thể hoàn tác — người nhận sẽ không còn thấy các dòng này trong hộp thư nữa.',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Huỷ')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Huỷ'),
+          ),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () => Navigator.pop(context, true),
@@ -1041,7 +1070,10 @@ class _InboxTabState extends ConsumerState<_InboxTab> {
       await ref.read(adminRepoProvider).deleteNotificationInbox(ids: ids);
       await _loadItems();
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -1061,7 +1093,10 @@ class _InboxTabState extends ConsumerState<_InboxTab> {
           'Không thể hoàn tác.',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Huỷ')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Huỷ'),
+          ),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () => Navigator.pop(context, true),
@@ -1073,17 +1108,24 @@ class _InboxTabState extends ConsumerState<_InboxTab> {
     if (ok != true) return;
     setState(() => _busy = true);
     try {
-      final deleted = await ref.read(adminRepoProvider).deleteNotificationInbox(
+      final deleted = await ref
+          .read(adminRepoProvider)
+          .deleteNotificationInbox(
             audienceType: _audienceType,
             merchantIds: _merchantIds,
             userIds: _userIds,
           );
       await _loadItems();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Đã xoá $deleted thông báo')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Đã xoá $deleted thông báo')));
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -1100,7 +1142,10 @@ class _InboxTabState extends ConsumerState<_InboxTab> {
           'toàn bộ dữ liệu hộp thư.',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Huỷ')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Huỷ'),
+          ),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () => Navigator.pop(context, true),
@@ -1112,13 +1157,22 @@ class _InboxTabState extends ConsumerState<_InboxTab> {
     if (ok != true) return;
     setState(() => _busy = true);
     try {
-      final deleted = await ref.read(adminRepoProvider).deleteNotificationInbox(all: true);
+      final deleted = await ref
+          .read(adminRepoProvider)
+          .deleteNotificationInbox(all: true);
       await _loadItems();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Đã xoá $deleted thông báo trên toàn hệ thống')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Đã xoá $deleted thông báo trên toàn hệ thống'),
+          ),
+        );
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -1129,7 +1183,9 @@ class _InboxTabState extends ConsumerState<_InboxTab> {
     final theme = Theme.of(context);
     final typeLabel = audienceTypeLabels[_audienceType]!;
     final typeLabelLower = typeLabel.toLowerCase();
-    final selectionCount = _audienceType == 'merchant' ? _selectedMerchants.length : _selectedUsers.length;
+    final selectionCount = _audienceType == 'merchant'
+        ? _selectedMerchants.length
+        : _selectedUsers.length;
 
     return ListView(
       padding: const EdgeInsets.all(24),
@@ -1150,20 +1206,30 @@ class _InboxTabState extends ConsumerState<_InboxTab> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Nhóm đối tượng', style: theme.textTheme.titleSmall),
+                        Text(
+                          'Nhóm đối tượng',
+                          style: theme.textTheme.titleSmall,
+                        ),
                         const SizedBox(height: 4),
                         Wrap(
                           spacing: 8,
                           children: audienceTypeLabels.entries
-                              .map((e) => ChoiceChip(
-                                    label: Text(e.value),
-                                    selected: _audienceType == e.key,
-                                    onSelected: _busy ? null : (_) => _onAudienceTypeChanged(e.key),
-                                  ))
+                              .map(
+                                (e) => ChoiceChip(
+                                  label: Text(e.value),
+                                  selected: _audienceType == e.key,
+                                  onSelected: _busy
+                                      ? null
+                                      : (_) => _onAudienceTypeChanged(e.key),
+                                ),
+                              )
                               .toList(),
                         ),
                         const SizedBox(height: 16),
-                        Text('Xem hộp thư của', style: theme.textTheme.titleSmall),
+                        Text(
+                          'Xem hộp thư của',
+                          style: theme.textTheme.titleSmall,
+                        ),
                         const SizedBox(height: 4),
                         RadioGroup<bool>(
                           groupValue: _all,
@@ -1198,7 +1264,9 @@ class _InboxTabState extends ConsumerState<_InboxTab> {
                                 onPressed: _busy ? null : _pickEntities,
                                 icon: const Icon(Icons.add_circle_outline),
                                 label: Text(
-                                  selectionCount == 0 ? 'Chọn $typeLabelLower' : 'Sửa danh sách ($selectionCount)',
+                                  selectionCount == 0
+                                      ? 'Chọn $typeLabelLower'
+                                      : 'Sửa danh sách ($selectionCount)',
                                 ),
                               ),
                               if (_audienceType == 'merchant')
@@ -1208,7 +1276,10 @@ class _InboxTabState extends ConsumerState<_InboxTab> {
                                     onDeleted: _busy
                                         ? null
                                         : () {
-                                            setState(() => _selectedMerchants.remove(m));
+                                            setState(
+                                              () =>
+                                                  _selectedMerchants.remove(m),
+                                            );
                                             _loadItems();
                                           },
                                   ),
@@ -1216,11 +1287,17 @@ class _InboxTabState extends ConsumerState<_InboxTab> {
                               else
                                 ..._selectedUsers.map(
                                   (u) => Chip(
-                                    label: Text(u.fullName.isNotEmpty ? u.fullName : u.phone),
+                                    label: Text(
+                                      u.fullName.isNotEmpty
+                                          ? u.fullName
+                                          : u.phone,
+                                    ),
                                     onDeleted: _busy
                                         ? null
                                         : () {
-                                            setState(() => _selectedUsers.remove(u));
+                                            setState(
+                                              () => _selectedUsers.remove(u),
+                                            );
                                             _loadItems();
                                           },
                                   ),
@@ -1235,7 +1312,9 @@ class _InboxTabState extends ConsumerState<_InboxTab> {
                 const SizedBox(height: 12),
                 TextButton.icon(
                   onPressed: _busy ? null : _deleteAllGlobal,
-                  style: TextButton.styleFrom(foregroundColor: theme.colorScheme.error),
+                  style: TextButton.styleFrom(
+                    foregroundColor: theme.colorScheme.error,
+                  ),
                   icon: const Icon(Icons.delete_forever_outlined, size: 18),
                   label: const Text('Xoá toàn bộ thông báo trên toàn hệ thống'),
                 ),
@@ -1246,7 +1325,9 @@ class _InboxTabState extends ConsumerState<_InboxTab> {
                     child: Center(
                       child: Text(
                         'Chọn ít nhất 1 $typeLabelLower cụ thể ở trên để xem hộp thư.',
-                        style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.outline),
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.outline,
+                        ),
                       ),
                     ),
                   )
@@ -1263,7 +1344,9 @@ class _InboxTabState extends ConsumerState<_InboxTab> {
                     child: Center(
                       child: Text(
                         'Không có thông báo nào trong phạm vi này.',
-                        style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.outline),
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.outline,
+                        ),
                       ),
                     ),
                   )
@@ -1275,55 +1358,90 @@ class _InboxTabState extends ConsumerState<_InboxTab> {
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
+                          // Wrap thay Row+Spacer — nhãn nút dài ("Xoá tất cả trong phạm vi
+                          // này") tràn ra ngoài trên màn hẹp nếu ép nằm chung 1 hàng.
+                          Wrap(
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            spacing: 8,
+                            runSpacing: 4,
                             children: [
-                              Checkbox(
-                                value: allSelected,
-                                onChanged: _busy
-                                    ? null
-                                    : (v) => setState(() {
-                                          if (v == true) {
-                                            _selectedIds
-                                              ..clear()
-                                              ..addAll(items.map((e) => e.id));
-                                          } else {
-                                            _selectedIds.clear();
-                                          }
-                                        }),
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Checkbox(
+                                    value: allSelected,
+                                    onChanged: _busy
+                                        ? null
+                                        : (v) => setState(() {
+                                            if (v == true) {
+                                              _selectedIds
+                                                ..clear()
+                                                ..addAll(
+                                                  items.map((e) => e.id),
+                                                );
+                                            } else {
+                                              _selectedIds.clear();
+                                            }
+                                          }),
+                                  ),
+                                  Text(
+                                    'Chọn tất cả (${items.length})',
+                                    style: theme.textTheme.bodySmall,
+                                  ),
+                                ],
                               ),
-                              Text('Chọn tất cả (${items.length})', style: theme.textTheme.bodySmall),
-                              const Spacer(),
                               if (_selectedIds.isNotEmpty)
                                 TextButton.icon(
-                                  onPressed: _busy ? null : () => _deleteIds(_selectedIds.toList()),
-                                  style: TextButton.styleFrom(foregroundColor: theme.colorScheme.error),
-                                  icon: const Icon(Icons.delete_outline, size: 18),
-                                  label: Text('Xoá đã chọn (${_selectedIds.length})'),
+                                  onPressed: _busy
+                                      ? null
+                                      : () => _deleteIds(_selectedIds.toList()),
+                                  style: TextButton.styleFrom(
+                                    foregroundColor: theme.colorScheme.error,
+                                  ),
+                                  icon: const Icon(
+                                    Icons.delete_outline,
+                                    size: 18,
+                                  ),
+                                  label: Text(
+                                    'Xoá đã chọn (${_selectedIds.length})',
+                                  ),
                                 ),
-                              const SizedBox(width: 8),
                               OutlinedButton.icon(
                                 onPressed: _busy ? null : _deleteAllInScope,
-                                style: OutlinedButton.styleFrom(foregroundColor: theme.colorScheme.error),
-                                icon: const Icon(Icons.delete_sweep_outlined, size: 18),
-                                label: const Text('Xoá tất cả trong phạm vi này'),
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: theme.colorScheme.error,
+                                ),
+                                icon: const Icon(
+                                  Icons.delete_sweep_outlined,
+                                  size: 18,
+                                ),
+                                label: const Text(
+                                  'Xoá tất cả trong phạm vi này',
+                                ),
                               ),
                             ],
                           ),
                           const Divider(height: 1),
-                          ...items.map((n) => _InboxRow(
-                                item: n,
-                                selected: _selectedIds.contains(n.id),
-                                onSelectedChanged: _busy
-                                    ? null
-                                    : (v) => setState(() {
-                                          if (v == true) {
-                                            _selectedIds.add(n.id);
-                                          } else {
-                                            _selectedIds.remove(n.id);
-                                          }
-                                        }),
-                                onDelete: _busy ? null : () => _deleteIds([n.id], confirmLabel: 'Xoá thông báo này?'),
-                              )),
+                          ...items.map(
+                            (n) => _InboxRow(
+                              item: n,
+                              selected: _selectedIds.contains(n.id),
+                              onSelectedChanged: _busy
+                                  ? null
+                                  : (v) => setState(() {
+                                      if (v == true) {
+                                        _selectedIds.add(n.id);
+                                      } else {
+                                        _selectedIds.remove(n.id);
+                                      }
+                                    }),
+                              onDelete: _busy
+                                  ? null
+                                  : () => _deleteIds([
+                                      n.id,
+                                    ], confirmLabel: 'Xoá thông báo này?'),
+                            ),
+                          ),
                         ],
                       );
                     },
@@ -1354,12 +1472,23 @@ class _InboxRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Container(
-      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: theme.colorScheme.outlineVariant))),
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: theme.colorScheme.outlineVariant),
+        ),
+      ),
       child: CheckboxListTile(
         value: selected,
         onChanged: onSelectedChanged,
         controlAffinity: ListTileControlAffinity.leading,
-        title: Text(item.title, style: TextStyle(fontWeight: item.isRead ? FontWeight.normal : FontWeight.bold)),
+        title: Text(
+          item.title,
+          style: TextStyle(
+            fontWeight: item.isRead ? FontWeight.normal : FontWeight.bold,
+          ),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -1374,12 +1503,16 @@ class _InboxRow extends StatelessWidget {
                 ),
                 Chip(
                   visualDensity: VisualDensity.compact,
-                  label: Text(notificationCategoryLabels[item.category] ?? item.category),
+                  label: Text(
+                    notificationCategoryLabels[item.category] ?? item.category,
+                  ),
                 ),
                 Chip(
                   visualDensity: VisualDensity.compact,
                   label: Text(item.isRead ? 'Đã đọc' : 'Chưa đọc'),
-                  backgroundColor: item.isRead ? null : theme.colorScheme.primary.withValues(alpha: 0.12),
+                  backgroundColor: item.isRead
+                      ? null
+                      : theme.colorScheme.primary.withValues(alpha: 0.12),
                 ),
                 Chip(
                   visualDensity: VisualDensity.compact,
@@ -1439,7 +1572,13 @@ class _TtlSettingsCardState extends ConsumerState<_TtlSettingsCard> {
     if (raw.isNotEmpty) {
       final value = int.tryParse(raw);
       if (value == null || value <= 0) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Nhập số nguyên dương, hoặc để trống để không tự xoá')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Nhập số nguyên dương, hoặc để trống để không tự xoá',
+            ),
+          ),
+        );
         return;
       }
       ttlHours = _unit == 'days' ? value * 24 : value;
@@ -1450,11 +1589,20 @@ class _TtlSettingsCardState extends ConsumerState<_TtlSettingsCard> {
       ref.invalidate(notificationSettingsProvider);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(ttlHours == null ? 'Đã tắt tự xoá' : 'Đã lưu — tự xoá sau $raw ${_unit == 'days' ? 'ngày' : 'giờ'}')),
+          SnackBar(
+            content: Text(
+              ttlHours == null
+                  ? 'Đã tắt tự xoá'
+                  : 'Đã lưu — tự xoá sau $raw ${_unit == 'days' ? 'ngày' : 'giờ'}',
+            ),
+          ),
         );
       }
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -1485,7 +1633,9 @@ class _TtlSettingsCardState extends ConsumerState<_TtlSettingsCard> {
             Text(
               'Sau khoảng thời gian này, thông báo tự bị xoá khỏi hộp thư của MỌI người dùng '
               '(kiểm tra mỗi giờ). Để trống thì không bao giờ tự xoá.',
-              style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.outline,
+              ),
             ),
             const SizedBox(height: 12),
             Row(
@@ -1507,7 +1657,9 @@ class _TtlSettingsCardState extends ConsumerState<_TtlSettingsCard> {
                 const SizedBox(width: 12),
                 DropdownButton<String>(
                   value: _unit,
-                  onChanged: _saving ? null : (v) => setState(() => _unit = v ?? _unit),
+                  onChanged: _saving
+                      ? null
+                      : (v) => setState(() => _unit = v ?? _unit),
                   items: const [
                     DropdownMenuItem(value: 'days', child: Text('Ngày')),
                     DropdownMenuItem(value: 'hours', child: Text('Giờ')),
@@ -1517,7 +1669,11 @@ class _TtlSettingsCardState extends ConsumerState<_TtlSettingsCard> {
                 FilledButton(
                   onPressed: _saving ? null : _save,
                   child: _saving
-                      ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                      ? const SizedBox(
+                          height: 16,
+                          width: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
                       : const Text('Lưu'),
                 ),
               ],

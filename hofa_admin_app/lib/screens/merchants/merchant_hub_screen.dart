@@ -22,6 +22,10 @@ class MerchantHubScreen extends StatelessWidget {
             Material(
               color: theme.colorScheme.surface,
               child: const TabBar(
+                // Nhãn dài ("Thông số cửa hàng") dễ bị bóp/xuống dòng nếu chia đều cho cả 3 tab
+                // trên màn hẹp — isScrollable để mỗi tab tự chiếm đúng bề rộng cần, cuộn ngang.
+                isScrollable: true,
+                tabAlignment: TabAlignment.start,
                 tabs: [
                   Tab(text: 'Cửa hàng'),
                   Tab(text: 'Mã đơn hàng'),

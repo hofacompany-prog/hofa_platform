@@ -206,6 +206,9 @@ class _MerchantsScreenState extends ConsumerState<MerchantsScreen> {
                   itemBuilder: (context, i) {
                     final m = list[i];
                     final color = _statusColor(m.status, theme.colorScheme);
+                    // Chip + nút duyệt/từ chối gộp vào Wrap riêng dưới hàng tên — trước đây
+                    // nằm chung 1 Row với avatar + tên, tràn ra ngoài trên màn hẹp vì có tới
+                    // 4 thành phần cỡ cố định (2 chip + tối đa 2 nút) không co giãn được.
                     return Card(
                       elevation: 0,
                       color: theme.colorScheme.surfaceContainerLow,
@@ -213,88 +216,102 @@ class _MerchantsScreenState extends ConsumerState<MerchantsScreen> {
                       child: InkWell(
                         onTap: () => context.push('/merchants/${m.id}'),
                         child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Row(
-                          children: [
-                            CircleAvatar(
-                              backgroundColor: color.withValues(alpha: 0.12),
-                              backgroundImage: m.logoUrl != null ? NetworkImage(m.logoUrl!) : null,
-                              child: m.logoUrl == null ? Icon(Icons.storefront, color: color) : null,
-                            ),
-                            const SizedBox(width: 16),
-                            Expanded(
-                              child: Column(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Row(
-                                    children: [
-                                      Flexible(
-                                        child: Text(m.name,
-                                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                                            overflow: TextOverflow.ellipsis),
-                                      ),
-                                      if (m.merchantType == 'standard') ...[
-                                        const SizedBox(width: 8),
-                                        const Tooltip(
-                                          message: 'HOFA Standard',
-                                          child: Icon(Icons.verified, size: 16, color: Colors.blue),
+                                  CircleAvatar(
+                                    backgroundColor: color.withValues(alpha: 0.12),
+                                    backgroundImage: m.logoUrl != null ? NetworkImage(m.logoUrl!) : null,
+                                    child: m.logoUrl == null ? Icon(Icons.storefront, color: color) : null,
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            Flexible(
+                                              child: Text(m.name,
+                                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                                                  maxLines: 2,
+                                                  overflow: TextOverflow.ellipsis),
+                                            ),
+                                            if (m.merchantType == 'standard') ...[
+                                              const SizedBox(width: 8),
+                                              const Tooltip(
+                                                message: 'HOFA Standard',
+                                                child: Icon(Icons.verified, size: 16, color: Colors.blue),
+                                              ),
+                                            ],
+                                          ],
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          'Hoa hồng ${m.commissionRate}% · Đơn tối thiểu ${formatVnd(m.minOrderAmount)}'
+                                          '${m.ratingCount > 0 ? ' · ${m.ratingAvg}★ (${m.ratingCount})' : ''}',
+                                          style: theme.textTheme.bodySmall,
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
                                         ),
                                       ],
-                                    ],
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    'Hoa hồng ${m.commissionRate}% · Đơn tối thiểu ${formatVnd(m.minOrderAmount)}'
-                                    '${m.ratingCount > 0 ? ' · ${m.ratingAvg}★ (${m.ratingCount})' : ''}',
-                                    style: theme.textTheme.bodySmall,
+                                    ),
                                   ),
                                 ],
                               ),
-                            ),
-                            const SizedBox(width: 12),
-                            Chip(
-                              label: Text(merchantTypeLabels[m.merchantType] ?? m.merchantType),
-                              backgroundColor: theme.colorScheme.secondary.withValues(alpha: 0.12),
-                              labelStyle: TextStyle(color: theme.colorScheme.secondary),
-                              visualDensity: VisualDensity.compact,
-                            ),
-                            const SizedBox(width: 8),
-                            Chip(
-                              label: Text(merchantStatusLabels[m.status] ?? m.status),
-                              backgroundColor: color.withValues(alpha: 0.12),
-                              side: BorderSide(color: color.withValues(alpha: 0.4)),
-                              visualDensity: VisualDensity.compact,
-                            ),
-                            const SizedBox(width: 8),
-                            if (m.status == 'pending_review') ...[
-                              FilledButton(
-                                onPressed: _busy ? null : () => _review(m, true),
-                                child: const Text('Duyệt'),
+                              const SizedBox(height: 8),
+                              Wrap(
+                                alignment: WrapAlignment.end,
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                spacing: 8,
+                                runSpacing: 4,
+                                children: [
+                                  Chip(
+                                    label: Text(merchantTypeLabels[m.merchantType] ?? m.merchantType),
+                                    backgroundColor: theme.colorScheme.secondary.withValues(alpha: 0.12),
+                                    labelStyle: TextStyle(color: theme.colorScheme.secondary),
+                                    visualDensity: VisualDensity.compact,
+                                  ),
+                                  Chip(
+                                    label: Text(merchantStatusLabels[m.status] ?? m.status),
+                                    backgroundColor: color.withValues(alpha: 0.12),
+                                    side: BorderSide(color: color.withValues(alpha: 0.4)),
+                                    visualDensity: VisualDensity.compact,
+                                  ),
+                                  if (m.status == 'pending_review') ...[
+                                    FilledButton(
+                                      onPressed: _busy ? null : () => _review(m, true),
+                                      child: const Text('Duyệt'),
+                                    ),
+                                    OutlinedButton(
+                                      onPressed: _busy ? null : () => _review(m, false),
+                                      style: OutlinedButton.styleFrom(foregroundColor: theme.colorScheme.error),
+                                      child: const Text('Từ chối'),
+                                    ),
+                                  ] else if (m.status == 'active')
+                                    OutlinedButton(
+                                      onPressed: _busy
+                                          ? null
+                                          : () => _run(() =>
+                                              ref.read(adminRepoProvider).setMerchantPaused(m.id, true).then((_) {})),
+                                      child: const Text('Tạm dừng'),
+                                    )
+                                  else if (m.status == 'paused')
+                                    FilledButton.tonal(
+                                      onPressed: _busy
+                                          ? null
+                                          : () => _run(() =>
+                                              ref.read(adminRepoProvider).setMerchantPaused(m.id, false).then((_) {})),
+                                      child: const Text('Mở lại'),
+                                    ),
+                                ],
                               ),
-                              const SizedBox(width: 8),
-                              OutlinedButton(
-                                onPressed: _busy ? null : () => _review(m, false),
-                                style: OutlinedButton.styleFrom(foregroundColor: theme.colorScheme.error),
-                                child: const Text('Từ chối'),
-                              ),
-                            ] else if (m.status == 'active')
-                              OutlinedButton(
-                                onPressed: _busy
-                                    ? null
-                                    : () => _run(() =>
-                                        ref.read(adminRepoProvider).setMerchantPaused(m.id, true).then((_) {})),
-                                child: const Text('Tạm dừng'),
-                              )
-                            else if (m.status == 'paused')
-                              FilledButton.tonal(
-                                onPressed: _busy
-                                    ? null
-                                    : () => _run(() =>
-                                        ref.read(adminRepoProvider).setMerchantPaused(m.id, false).then((_) {})),
-                                child: const Text('Mở lại'),
-                              ),
-                          ],
-                        ),
+                            ],
+                          ),
                         ),
                       ),
                     );
