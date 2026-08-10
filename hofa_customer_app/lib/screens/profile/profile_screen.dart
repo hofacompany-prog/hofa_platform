@@ -1,6 +1,8 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../../core/pwa_version_service.dart';
 import '../../models/address.dart';
 import '../../providers/app_providers.dart';
 import '../../providers/auth_providers.dart';
@@ -16,6 +18,23 @@ class ProfileScreen extends ConsumerStatefulWidget {
 
 class _ProfileScreenState extends ConsumerState<ProfileScreen> {
   bool _busy = false;
+  bool _checkingUpdate = false;
+
+  /// Chỉ web mới có khái niệm cache PWA cần xoá để lấy bản mới (xem PwaVersionService) — bản
+  /// Android cập nhật qua chính Play Store/APK, nút này không có ý nghĩa gì ở đó.
+  Future<void> _checkForUpdate() async {
+    setState(() => _checkingUpdate = true);
+    try {
+      final found = await PwaVersionService.checkForUpdate(context);
+      if (!found && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Bạn đang dùng phiên bản mới nhất rồi')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _checkingUpdate = false);
+    }
+  }
 
   Future<void> _editProfile() async {
     final profile = ref.read(userProfileProvider).valueOrNull;
@@ -280,6 +299,20 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             icon: const Icon(Icons.logout),
             label: const Text('Đăng xuất'),
           ),
+          if (kIsWeb) ...[
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: _checkingUpdate ? null : _checkForUpdate,
+              icon: _checkingUpdate
+                  ? const SizedBox(
+                      height: 16,
+                      width: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.system_update_alt_outlined),
+              label: const Text('Kiểm tra cập nhật'),
+            ),
+          ],
           const SizedBox(height: 12),
           const AppVersionText(),
         ],

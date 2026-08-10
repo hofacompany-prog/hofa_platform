@@ -59,32 +59,12 @@ class _HofaCustomerAppState extends ConsumerState<HofaCustomerApp> {
   }
 
   Future<void> _checkPwaVersion() async {
-    // Chạy mỗi lần mở app, không chờ phát hiện lệch version — xem lý do ở
-    // pwa_version_service_web.dart#unregisterStaleServiceWorkers.
-    PwaVersionService.unregisterStaleServiceWorkers().catchError((_) {});
-    final deployedVersion = await PwaVersionService.fetchDeployedVersion();
-    if (!mounted || deployedVersion == null) return;
-    if (deployedVersion == Env.appVersion) return;
-
+    // Chạy mỗi lần mở app — logic so sánh + hiện popup dùng chung với nút "Kiểm tra cập nhật"
+    // ở màn Tài khoản, xem PwaVersionService.checkForUpdate.
+    if (!mounted) return;
     final context = navigatorKey.currentContext;
     if (context == null || !context.mounted) return;
-
-    await showDialog<void>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: const Text('Đã có phiên bản mới'),
-        content: Text(
-          'Phiên bản $deployedVersion đã sẵn sàng. Cập nhật để tải dữ liệu và giao diện mới nhất.',
-        ),
-        actions: [
-          FilledButton(
-            onPressed: PwaVersionService.clearCacheAndReload,
-            child: const Text('Cập nhật ngay'),
-          ),
-        ],
-      ),
-    );
+    await PwaVersionService.checkForUpdate(context);
   }
 
   @override
