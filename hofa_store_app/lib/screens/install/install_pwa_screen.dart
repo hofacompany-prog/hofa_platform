@@ -43,7 +43,8 @@ class _InstallPwaScreenState extends State<InstallPwaScreen> {
     // còn cài nữa (vd khách đã gỡ app ra), nên nếu tín hiệu đó đang có thì phải cho cài lại
     // ngay, không giữ mãi thông báo "đã cài rồi" cũ khiến không cài lại được (xem
     // web/index.html — beforeinstallprompt cũng tự xoá cờ localStorage cũ).
-    final alreadyInstalled = !canPromptNative &&
+    final alreadyInstalled =
+        !canPromptNative &&
         (_justInstalled || PwaInstallService.wasInstalledPreviously());
 
     return Scaffold(
@@ -66,18 +67,26 @@ class _InstallPwaScreenState extends State<InstallPwaScreen> {
                 ),
                 const SizedBox(height: 40),
                 if (alreadyInstalled) ...[
-                  Icon(Icons.check_circle_outline, size: 56, color: theme.colorScheme.primary),
+                  Icon(
+                    Icons.check_circle_outline,
+                    size: 56,
+                    color: theme.colorScheme.primary,
+                  ),
                   const SizedBox(height: 16),
                   Text(
                     'Đã cài đặt xong!',
                     textAlign: TextAlign.center,
-                    style: theme.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold),
+                    style: theme.textTheme.headlineMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   const SizedBox(height: 12),
                   Text(
                     'Hãy thoát ra và mở app HOFA Store ở màn hình chính để tiếp tục sử dụng.',
                     textAlign: TextAlign.center,
-                    style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   const SizedBox(height: 20),
                   TextButton(
@@ -88,25 +97,35 @@ class _InstallPwaScreenState extends State<InstallPwaScreen> {
                     child: const Text('Đã gỡ app? Bấm để kiểm tra lại'),
                   ),
                 ] else if (canPromptNative) ...[
-                  Icon(Icons.install_mobile, size: 56, color: theme.colorScheme.primary),
+                  Icon(
+                    Icons.install_mobile,
+                    size: 56,
+                    color: theme.colorScheme.primary,
+                  ),
                   const SizedBox(height: 16),
                   Text(
                     'Cài đặt ứng dụng để tiếp tục!',
                     textAlign: TextAlign.center,
-                    style: theme.textTheme.headlineLarge?.copyWith(fontWeight: FontWeight.bold),
+                    style: theme.textTheme.headlineLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   const SizedBox(height: 12),
                   Text(
                     'Bấm nút bên dưới để cài ứng dụng lên máy.',
                     textAlign: TextAlign.center,
-                    style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   const SizedBox(height: 32),
                   SizedBox(
                     width: double.infinity,
                     child: FilledButton(
                       onPressed: _installing ? null : _install,
-                      style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 18)),
+                      style: FilledButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 18),
+                      ),
                       child: _installing
                           ? const SizedBox(
                               height: 20,
@@ -115,7 +134,10 @@ class _InstallPwaScreenState extends State<InstallPwaScreen> {
                             )
                           : const Text(
                               'Cài đặt ngay',
-                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                     ),
                   ),
@@ -123,7 +145,9 @@ class _InstallPwaScreenState extends State<InstallPwaScreen> {
                   Text(
                     'Thoát ra màn hình vào app HOFA Store để tiếp tục',
                     textAlign: TextAlign.center,
-                    style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.outline),
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.outline,
+                    ),
                   ),
                 ] else ...[
                   // iOS không có API tự bật popup cài — đúng 3 bước thật trên Safari hiện nay:
@@ -132,14 +156,34 @@ class _InstallPwaScreenState extends State<InstallPwaScreen> {
                   Text(
                     'Làm theo 3 bước sau để cài đặt:',
                     textAlign: TextAlign.center,
-                    style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   const SizedBox(height: 28),
-                  const _InstallStep(icon: Icons.ios_share, label: 'Nhấn Chia sẻ'),
+                  const _InstallStep(
+                    icon: Icons.ios_share,
+                    label: 'Nhấn Chia sẻ',
+                    note: '(Bấm trên trình duyệt, không phải ở đây!)',
+                  ),
                   const SizedBox(height: 16),
-                  const _InstallStep(icon: Icons.expand_more, label: 'Xem thêm'),
+                  const _InstallStep(
+                    icon: Icons.expand_more,
+                    label: 'Xem thêm',
+                  ),
                   const SizedBox(height: 16),
-                  const _InstallStep(icon: Icons.add_box_outlined, label: 'Thêm vào Màn hình chính'),
+                  const _InstallStep(
+                    icon: Icons.add_box_outlined,
+                    label: 'Thêm vào Màn hình chính',
+                  ),
+                  const SizedBox(height: 24),
+                  Text(
+                    'Thoát ra màn hình chính và vào App HOFA Store để tiếp tục!',
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.outline,
+                    ),
+                  ),
                 ],
               ],
             ),
@@ -155,7 +199,8 @@ class _InstallPwaScreenState extends State<InstallPwaScreen> {
 class _InstallStep extends StatelessWidget {
   final IconData icon;
   final String label;
-  const _InstallStep({required this.icon, required this.label});
+  final String? note;
+  const _InstallStep({required this.icon, required this.label, this.note});
 
   @override
   Widget build(BuildContext context) {
@@ -173,9 +218,26 @@ class _InstallStep extends StatelessWidget {
         ),
         const SizedBox(width: 16),
         Expanded(
-          child: Text(
-            label,
-            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              if (note != null) ...[
+                const SizedBox(height: 2),
+                Text(
+                  note!,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.outline,
+                  ),
+                ),
+              ],
+            ],
           ),
         ),
       ],
