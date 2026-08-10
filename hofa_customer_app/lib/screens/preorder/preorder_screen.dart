@@ -1325,7 +1325,10 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
     style: OutlinedButton.styleFrom(
       visualDensity: VisualDensity.compact,
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      textStyle: const TextStyle(fontSize: 13),
+      // fontSize qua copyWith trên style CHỮ SẴN CÓ của theme (Montserrat) — không tự tạo
+      // TextStyle() mới, vì TextStyle() trần không có fontFamily sẽ đè về font hệ thống mặc
+      // định thay vì Montserrat, làm cả nút lệch font so với phần còn lại của app.
+      textStyle: Theme.of(context).textTheme.labelLarge?.copyWith(fontSize: 13),
     ),
     icon: Icon(icon, size: 16),
     label: Text(label, overflow: TextOverflow.ellipsis),
@@ -1338,7 +1341,10 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
     required bool selected,
     required VoidCallback onSelected,
   }) => ChoiceChip(
-    label: Text(label, style: const TextStyle(fontSize: 12)),
+    label: Text(
+      label,
+      style: Theme.of(context).textTheme.labelMedium?.copyWith(fontSize: 12),
+    ),
     selected: selected,
     visualDensity: VisualDensity.compact,
     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 0),
