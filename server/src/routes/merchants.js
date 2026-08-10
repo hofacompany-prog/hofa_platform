@@ -326,9 +326,12 @@ router.get('/merchants/:merchantId/stats/today', asyncHandler(async (req, res) =
  * (entry_type=order_payout, chỉ được insert lúc đơn chuyển sang delivered, xem
  * update_order_status trong hofa-db/64_merchant_wallet_ledger.sql), không tính đơn đang chạy
  * dù đã đặt/đang chuẩn bị — khác hẳn cách tính cũ (mọi đơn chưa huỷ, tính ngay từ lúc đặt).
- * revenue/commission_amount lấy lại đúng số đã CHỐT trên từng đơn (orders.subtotal/
- * commission_amount) thay vì suy từ commission_rate hiện tại — chính xác hơn nếu tỷ lệ hoa
- * hồng cửa hàng từng đổi giữa chừng.
+ * revenue/commission_amount/vat_amount/pit_amount lấy lại đúng số đã CHỐT trên từng đơn
+ * (orders.subtotal/commission_amount/vat_amount/pit_amount, xem
+ * hofa-db/67_merchant_net_income_wallet.sql) thay vì suy từ tỷ lệ hiện tại của cửa hàng —
+ * chính xác hơn nếu tỷ lệ từng đổi giữa chừng, và net_income ở đây LUÔN khớp đúng số thực đã
+ * cộng vào merchant_wallet_transactions (merchant_payout = subtotal - commission_amount -
+ * vat_amount - pit_amount), không còn lệch với số dư ví ở tab "Số tiền thu về".
  */
 router.get('/merchants/:merchantId/finance/summary', asyncHandler(async (req, res) => {
   await requirePermission(req.ctx, req.params.merchantId, 'finance.view');
@@ -359,6 +362,8 @@ router.get('/merchants/:merchantId/finance/summary', asyncHandler(async (req, re
      SELECT b.from_date, b.to_date,
             COALESCE(SUM(o.subtotal), 0)::bigint AS revenue,
             COALESCE(SUM(o.commission_amount), 0)::bigint AS commission_amount,
+            COALESCE(SUM(o.vat_amount), 0)::bigint AS vat_amount,
+            COALESCE(SUM(o.pit_amount), 0)::bigint AS pit_amount,
             COUNT(o.id)::int AS order_count
        FROM bounds b
        LEFT JOIN merchant_wallet_transactions t ON t.merchant_id = $1 AND t.entry_type = 'order_payout'
@@ -370,10 +375,10 @@ router.get('/merchants/:merchantId/finance/summary', asyncHandler(async (req, re
 
   const revenue = Number(row.revenue);
   const commissionAmount = Number(row.commission_amount);
-  const netRevenue = revenue - commissionAmount; // = merchant_payout đã cộng vào sổ cái
-  const vatAmount = Math.round((revenue * Number(merchant.vat_rate)) / 100);
-  const pitAmount = Math.round((revenue * Number(merchant.pit_rate)) / 100);
-  const netIncome = netRevenue - vatAmount - pitAmount;
+  const vatAmount = Number(row.vat_amount);
+  const pitAmount = Number(row.pit_amount);
+  // = SUM(merchant_payout) của các đơn trong khoảng này — đúng bằng số đã cộng vào sổ cái.
+  const netIncome = revenue - commissionAmount - vatAmount - pitAmount;
 
   res.json({
     ok: true,
