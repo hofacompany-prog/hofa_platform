@@ -564,13 +564,19 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen>
                     // (_confirmCancel), chỉ hiện khi đơn còn ở giai đoạn huỷ được.
                     if (canCancel) ...[
                       const SizedBox(height: 16),
-                      OutlinedButton.icon(
-                        onPressed: _updating ? null : _confirmCancel,
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: theme.colorScheme.error,
+                      Center(
+                        child: FilledButton.icon(
+                          onPressed: _updating ? null : _confirmCancel,
+                          style: FilledButton.styleFrom(
+                            backgroundColor: Colors.red,
+                            foregroundColor: Colors.white,
+                            textStyle: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          icon: const Icon(Icons.cancel_outlined),
+                          label: const Text('Huỷ đơn'),
                         ),
-                        icon: const Icon(Icons.cancel_outlined),
-                        label: const Text('Huỷ đơn'),
                       ),
                     ],
                     deliveryAsync.when(
