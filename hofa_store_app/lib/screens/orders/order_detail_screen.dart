@@ -570,7 +570,9 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen>
                           style: FilledButton.styleFrom(
                             backgroundColor: Colors.red,
                             foregroundColor: Colors.white,
-                            textStyle: const TextStyle(
+                            // copyWith trên style CHỮ SẴN CÓ của theme — TextStyle() trần
+                            // không có fontFamily sẽ đè về font hệ thống thay vì font app.
+                            textStyle: theme.textTheme.labelLarge?.copyWith(
                               fontWeight: FontWeight.bold,
                             ),
                           ),
