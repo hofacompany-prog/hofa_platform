@@ -653,6 +653,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     }
     final shippingFee =
         _estimatedShippingFee(cart, addresses, itemsSubtotal) ?? 0;
+    // Đặt trước tạo NHIỀU đơn riêng (1 đơn/lần giao, xem _placeOrder) — MỖI đơn tự cộng
+    // nguyên phí ship (_orderBody truyền deliveryFee cho từng đơn), nên tổng phí ship THẬT
+    // SỰ phải thu = shippingFee x số đơn, không phải chỉ 1 lần như khi chỉ có 1 đơn.
+    final orderCount = scheduledOrders?.length ?? 1;
+    final totalShippingFee = shippingFee * orderCount;
 
     // Phí mua hộ chỉ để KHÁCH XEM TRƯỚC — server tự tính lại số thật lúc tạo đơn (không
     // gửi lên như delivery_fee), nên sai khác nhỏ do làm tròn không ảnh hưởng số tiền thu
@@ -676,7 +681,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           );
     final buyOnBehalfFee = buyOnBehalfEstimate.fee;
 
-    final total = itemsSubtotal + shippingFee + buyOnBehalfFee - _voucherDiscount;
+    final total = itemsSubtotal + totalShippingFee + buyOnBehalfFee - _voucherDiscount;
 
     return Scaffold(
       appBar: AppBar(
@@ -1029,8 +1034,16 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Phí giao hàng'),
-                Text(shippingFee == 0 ? 'Miễn phí' : formatVnd(shippingFee)),
+                Text(
+                  orderCount > 1
+                      ? 'Phí giao hàng (x$orderCount lần giao)'
+                      : 'Phí giao hàng',
+                ),
+                Text(
+                  totalShippingFee == 0
+                      ? 'Miễn phí'
+                      : formatVnd(totalShippingFee),
+                ),
               ],
             ),
           ),
