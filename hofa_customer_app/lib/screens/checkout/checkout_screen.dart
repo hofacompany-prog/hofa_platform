@@ -971,6 +971,36 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             maxLines: 2,
           ),
           const Divider(height: 32),
+          Text('Sản phẩm', style: theme.textTheme.titleSmall),
+          const SizedBox(height: 8),
+          ...items.map(
+            (i) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(i.productName),
+                        Text(
+                          '${i.variantName} · ${i.quantity} x ${formatVnd(i.unitPrice + i.toppingsTotal)}',
+                          style: theme.textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    formatVnd(i.lineTotal),
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const Divider(height: 32),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [const Text('Tạm tính'), Text(formatVnd(itemsSubtotal))],
