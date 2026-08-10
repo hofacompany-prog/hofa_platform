@@ -130,10 +130,6 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   NetworkImageBox(url: merchant.logoUrl, width: 72, height: 72, fallbackIcon: Icons.storefront_outlined),
-                  if (merchant.photoUrls.isNotEmpty) ...[
-                    const SizedBox(width: 8),
-                    _MerchantPhotoStrip(photoUrls: merchant.photoUrls),
-                  ],
                   const SizedBox(width: 12),
                   Expanded(
                     child: Column(
@@ -174,6 +170,10 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
                       ],
                     ),
                   ),
+                  if (merchant.photoUrls.isNotEmpty) ...[
+                    const SizedBox(width: 8),
+                    _MerchantPhotoStrip(photoUrls: merchant.photoUrls),
+                  ],
                 ],
               ),
               if (merchant.isBuyOnBehalf) BuyOnBehalfFeeNotice(merchant: merchant),
