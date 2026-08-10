@@ -5,6 +5,7 @@ import '../models/finance_summary.dart';
 import '../models/branch.dart';
 import '../models/branch_hours.dart';
 import '../models/prep_tier_settings.dart';
+import '../models/staff_member.dart';
 
 class MerchantRepository {
   final _api = ApiClient.instance;
@@ -113,5 +114,52 @@ class MerchantRepository {
   Future<PrepTierSettings> prepTierSettings() async {
     final data = await _api.get('/auto-accept-settings') as Map<String, dynamic>?;
     return data == null ? PrepTierSettings.fromJson(const {}) : PrepTierSettings.fromJson(data);
+  }
+
+  // ---- Nhân viên cửa hàng ----
+
+  Future<List<StaffMember>> staff(String merchantId) async {
+    final list = await _api.get('/merchants/$merchantId/staff') as List;
+    return list.map((e) => StaffMember.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  Future<StaffMember> createStaff({
+    required String merchantId,
+    required String fullName,
+    required String phone,
+    required String password,
+    String? position,
+    List<String> permissions = const [],
+  }) async => StaffMember.fromJson(
+    await _api.post(
+          '/merchants/$merchantId/staff',
+          body: {
+            'full_name': fullName,
+            'phone': phone,
+            'password': password,
+            if (position != null && position.isNotEmpty) 'position': position,
+            'permissions': permissions,
+          },
+        )
+        as Map<String, dynamic>,
+  );
+
+  Future<void> updateStaff(
+    String merchantId,
+    String staffId, {
+    String? position,
+    List<String>? permissions,
+  }) async {
+    await _api.patch(
+      '/merchants/$merchantId/staff/$staffId',
+      body: {
+        if (position != null) 'position': position,
+        if (permissions != null) 'permissions': permissions,
+      },
+    );
+  }
+
+  Future<void> deleteStaff(String merchantId, String staffId) async {
+    await _api.delete('/merchants/$merchantId/staff/$staffId');
   }
 }

@@ -26,6 +26,9 @@ class Merchant {
   final int avgPrepMinutes;
   final num ratingAvg;
   final int ratingCount;
+  /// null = chủ cửa hàng (full quyền); mảng (kể cả rỗng) = nhân viên, đúng danh sách quyền
+  /// được cấp trong merchant_staff.permissions. Xem myPermissionsProvider.
+  final List<String>? myPermissions;
 
   Merchant({
     required this.id,
@@ -50,6 +53,7 @@ class Merchant {
     required this.avgPrepMinutes,
     required this.ratingAvg,
     required this.ratingCount,
+    this.myPermissions,
   });
 
   factory Merchant.fromJson(Map<String, dynamic> json) => Merchant(
@@ -75,5 +79,8 @@ class Merchant {
         avgPrepMinutes: (json['avg_prep_minutes'] as num?)?.toInt() ?? 15,
         ratingAvg: num.tryParse('${json['rating_avg']}') ?? 0,
         ratingCount: (json['rating_count'] as num?)?.toInt() ?? 0,
+        myPermissions: (json['my_permissions'] as List?)
+            ?.map((e) => e.toString())
+            .toList(),
       );
 }

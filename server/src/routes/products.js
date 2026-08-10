@@ -2,7 +2,7 @@ const router = require('express').Router();
 const db = require('../db');
 const asyncHandler = require('../asyncHandler');
 const { ApiError } = require('../errors');
-const { pickFields, requireFields, pagination, requireRole, requireMerchantAccess } = require('../utils');
+const { pickFields, requireFields, pagination, requireRole, requireMerchantAccess, requirePermission } = require('../utils');
 
 const PRODUCT_FIELDS = [
   'name', 'slug', 'description', 'sales_model', 'status', 'brand', 'unit', 'variant_group_name',
@@ -204,7 +204,7 @@ router.post('/products', asyncHandler(async (req, res) => {
 router.patch('/products/:id', asyncHandler(async (req, res) => {
   const product = await db.queryOne('SELECT id, merchant_id FROM products WHERE id = $1', [req.params.id]);
   if (!product) throw new ApiError('NOT_FOUND', 'Không tìm thấy sản phẩm', 404);
-  await requireMerchantAccess(req.ctx, product.merchant_id);
+  await requirePermission(req.ctx, product.merchant_id, 'products.manage');
   const updated = await db.updateById('products', req.params.id, pickFields(req.body, PRODUCT_FIELDS));
   res.json({ ok: true, data: updated });
 }));
@@ -213,7 +213,7 @@ router.patch('/products/:id', asyncHandler(async (req, res) => {
 router.delete('/products/:id', asyncHandler(async (req, res) => {
   const product = await db.queryOne('SELECT id, merchant_id FROM products WHERE id = $1', [req.params.id]);
   if (!product) throw new ApiError('NOT_FOUND', 'Không tìm thấy sản phẩm', 404);
-  await requireMerchantAccess(req.ctx, product.merchant_id);
+  await requirePermission(req.ctx, product.merchant_id, 'products.manage');
   const updated = await db.updateById('products', req.params.id, { deleted_at: new Date().toISOString(), status: 'archived' });
   res.json({ ok: true, data: updated });
 }));

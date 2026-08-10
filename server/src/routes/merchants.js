@@ -2,7 +2,7 @@ const router = require('express').Router();
 const db = require('../db');
 const asyncHandler = require('../asyncHandler');
 const { ApiError } = require('../errors');
-const { pickFields, requireFields, pagination, requireAuth, requireRole, requireMerchantAccess } = require('../utils');
+const { pickFields, requireFields, pagination, requireAuth, requireRole, requireMerchantAccess, requirePermission, requireOwnerAccess } = require('../utils');
 const supabaseAdmin = require('../supabaseAdmin');
 const push = require('../push');
 
@@ -56,11 +56,25 @@ router.get('/merchants', asyncHandler(async (req, res) => {
  * để Express không hiểu nhầm "mine" là 1 giá trị :id. */
 router.get('/merchants/mine', asyncHandler(async (req, res) => {
   requireAuth(req.ctx);
-  const rows = await db.query(
+  const owned = await db.query(
     'SELECT * FROM merchants WHERE owner_id = $1 AND deleted_at IS NULL ORDER BY created_at DESC',
     [req.ctx.userId]
   );
-  res.json({ ok: true, data: rows });
+  if (owned.length) {
+    // Chủ cửa hàng luôn full quyền — my_permissions null nghĩa là "không giới hạn", phân biệt
+    // với nhân viên luôn có 1 mảng permissions cụ thể (có thể rỗng).
+    return res.json({ ok: true, data: owned.map((m) => ({ ...m, my_permissions: null })) });
+  }
+  // Không sở hữu cửa hàng nào — có thể là nhân viên (merchant_staff) của 1 cửa hàng khác.
+  const staffRows = await db.query(
+    `SELECT m.*, ms.permissions AS my_permissions
+       FROM merchant_staff ms
+       JOIN merchants m ON m.id = ms.merchant_id
+      WHERE ms.user_id = $1 AND m.deleted_at IS NULL
+      ORDER BY ms.created_at DESC`,
+    [req.ctx.userId]
+  );
+  res.json({ ok: true, data: staffRows });
 }));
 
 // Field nhạy cảm (ngân hàng/thuế) — chỉ admin hoặc chính chủ cửa hàng mới thấy.
@@ -243,7 +257,7 @@ router.get('/merchants/:merchantId/stats/today', asyncHandler(async (req, res) =
  * cần kèm from/to (YYYY-MM-DD). Mọi mốc ngày tính theo giờ Việt Nam, không dùng giờ server.
  */
 router.get('/merchants/:merchantId/finance/summary', asyncHandler(async (req, res) => {
-  await requireMerchantAccess(req.ctx, req.params.merchantId);
+  await requirePermission(req.ctx, req.params.merchantId, 'finance.view');
   const merchant = await db.queryOne(
     'SELECT commission_rate, vat_rate, pit_rate FROM merchants WHERE id = $1',
     [req.params.merchantId]
@@ -376,30 +390,104 @@ router.put('/branches/:id/hours', asyncHandler(async (req, res) => {
 }));
 
 // ---- Nhân viên cửa hàng ----
+// Chỉ CHỦ cửa hàng (không phải merchant_staff dù có quyền gì) mới thêm/sửa/xoá được nhân
+// viên — xem requireOwnerAccess. Tạo nhân viên = tạo thẳng 1 tài khoản Supabase Auth mới
+// bằng SĐT + mật khẩu chủ tự đặt (tái dùng đúng pattern supabaseAdmin.createAuthUser đã
+// dùng khi admin tạo chủ cửa hàng mới, xem POST /merchants phía trên) — nhân viên đăng nhập
+// được ngay, không cần tự đăng ký OTP trước.
+
+const STAFF_PERMISSIONS = [
+  'products.view', 'products.manage',
+  'orders.view', 'orders.manage',
+  'inventory.manage',
+  'finance.view',
+];
+// staff.manage CỐ Ý không nằm trong danh sách này — quản lý nhân viên luôn chỉ dành cho chủ
+// cửa hàng ở bản đầu, không cấp được qua UI/API này dù có truyền lên.
+
+function sanitizeStaffPermissions(input) {
+  return Array.isArray(input) ? input.filter((p) => STAFF_PERMISSIONS.includes(p)) : [];
+}
+
+const STAFF_SELECT = `
+  SELECT ms.id, ms.merchant_id, ms.branch_id, ms.user_id, ms.position, ms.permissions, ms.created_at,
+         u.full_name, u.phone
+    FROM merchant_staff ms
+    JOIN users u ON u.id = ms.user_id
+`;
 
 router.get('/merchants/:merchantId/staff', asyncHandler(async (req, res) => {
-  await requireMerchantAccess(req.ctx, req.params.merchantId);
-  const rows = await db.query('SELECT * FROM merchant_staff WHERE merchant_id = $1', [req.params.merchantId]);
+  await requireOwnerAccess(req.ctx, req.params.merchantId);
+  const rows = await db.query(
+    `${STAFF_SELECT} WHERE ms.merchant_id = $1 ORDER BY ms.created_at ASC`,
+    [req.params.merchantId]
+  );
   res.json({ ok: true, data: rows });
 }));
 
 router.post('/merchants/:merchantId/staff', asyncHandler(async (req, res) => {
-  requireFields(req.body, ['user_id']);
-  await requireMerchantAccess(req.ctx, req.params.merchantId);
+  requireFields(req.body, ['full_name', 'phone', 'password']);
+  await requireOwnerAccess(req.ctx, req.params.merchantId);
+
+  const existing = await db.queryOne('SELECT id FROM users WHERE phone = $1', [req.body.phone]);
+  if (existing) {
+    throw new ApiError(
+      'CONFLICT',
+      'Số điện thoại này đã có tài khoản HOFA — không thể tạo tài khoản nhân viên mới với SĐT này',
+      409
+    );
+  }
+  if (String(req.body.password).length < 6) {
+    throw new ApiError('BAD_REQUEST', 'Mật khẩu ban đầu phải từ 6 ký tự', 400);
+  }
+
+  let authUserId;
+  try {
+    authUserId = await supabaseAdmin.createAuthUser(req.body.phone, req.body.password);
+  } catch (err) {
+    throw new ApiError('CONFLICT', `Không tạo được tài khoản mới: ${err.message}`, 409);
+  }
+  const user = await db.insertRow('users', {
+    id: authUserId,
+    phone: req.body.phone,
+    full_name: req.body.full_name,
+    role: 'merchant_staff',
+    status: 'active'
+  });
   const created = await db.insertRow('merchant_staff', {
     merchant_id: req.params.merchantId,
     branch_id: req.body.branch_id || null,
-    user_id: req.body.user_id,
+    user_id: user.id,
     position: req.body.position || null,
-    permissions: req.body.permissions || []
+    permissions: sanitizeStaffPermissions(req.body.permissions)
   });
-  await db.query(`UPDATE users SET role = 'merchant_staff' WHERE id = $1 AND role = 'customer'`, [req.body.user_id]);
-  res.status(201).json({ ok: true, data: created });
+  const [full] = await db.query(`${STAFF_SELECT} WHERE ms.id = $1`, [created.id]);
+  res.status(201).json({ ok: true, data: full });
 }));
 
+router.patch('/merchants/:merchantId/staff/:id', asyncHandler(async (req, res) => {
+  await requireOwnerAccess(req.ctx, req.params.merchantId);
+  const data = {};
+  if (req.body.position !== undefined) data.position = req.body.position;
+  if (req.body.permissions !== undefined) data.permissions = sanitizeStaffPermissions(req.body.permissions);
+  if (Object.keys(data).length) await db.updateById('merchant_staff', req.params.id, data);
+  const [full] = await db.query(`${STAFF_SELECT} WHERE ms.id = $1`, [req.params.id]);
+  if (!full) throw new ApiError('NOT_FOUND', 'Không tìm thấy nhân viên', 404);
+  res.json({ ok: true, data: full });
+}));
+
+/** Gỡ khỏi cửa hàng — không xoá tài khoản Supabase Auth (họ vẫn còn tài khoản HOFA bình
+ * thường). Hạ role về lại 'customer' nếu không còn thuộc merchant_staff nào khác, tránh role
+ * 'merchant_staff' mồ côi không gắn cửa hàng nào. */
 router.delete('/merchants/:merchantId/staff/:id', asyncHandler(async (req, res) => {
-  await requireMerchantAccess(req.ctx, req.params.merchantId);
+  await requireOwnerAccess(req.ctx, req.params.merchantId);
+  const staff = await db.queryOne('SELECT user_id FROM merchant_staff WHERE id = $1', [req.params.id]);
+  if (!staff) throw new ApiError('NOT_FOUND', 'Không tìm thấy nhân viên', 404);
   await db.deleteById('merchant_staff', req.params.id);
+  const remaining = await db.queryOne('SELECT id FROM merchant_staff WHERE user_id = $1', [staff.user_id]);
+  if (!remaining) {
+    await db.query(`UPDATE users SET role = 'customer' WHERE id = $1 AND role = 'merchant_staff'`, [staff.user_id]);
+  }
   res.json({ ok: true, data: { deleted: true } });
 }));
 

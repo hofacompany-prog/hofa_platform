@@ -22,6 +22,7 @@ const _shellDestinations = <NavDestination>[
     selected: Icons.home,
     label: 'Trang chủ',
     path: '/home',
+    permission: null,
   ),
   ...kNavDestinations,
 ];
@@ -30,8 +31,8 @@ class DashboardShell extends ConsumerWidget {
   final Widget child;
   const DashboardShell({super.key, required this.child});
 
-  int _indexFor(String location) {
-    final i = _shellDestinations.indexWhere((d) => location.startsWith(d.path));
+  int _indexFor(List<NavDestination> destinations, String location) {
+    final i = destinations.indexWhere((d) => location.startsWith(d.path));
     return i < 0 ? 0 : i;
   }
 
@@ -48,7 +49,13 @@ class DashboardShell extends ConsumerWidget {
     // hàng còn tồn đọng cần làm, đúng nghĩa hơn hẳn số thông báo chưa đọc.
     final preparingCount = ref.watch(merchantTodayStatsProvider).valueOrNull?.preparingCount ?? 0;
     final iconByTabKey = ref.watch(navIconsProvider).valueOrNull ?? const {};
-    final selectedIndex = _indexFor(location);
+    // Chủ cửa hàng (myPermissions null) thấy hết; nhân viên chỉ thấy tab đúng quyền được cấp
+    // — xem myPermissionsProvider/hasPermission trong auth_provider.dart.
+    final myPermissions = ref.watch(myPermissionsProvider).valueOrNull;
+    final destinations = _shellDestinations
+        .where((d) => d.permission == null || hasPermission(myPermissions, d.permission!))
+        .toList();
+    final selectedIndex = _indexFor(destinations, location);
     final isMobile = MediaQuery.of(context).size.width < _kMobileBreakpoint;
 
     if (isMobile) {
@@ -69,9 +76,9 @@ class DashboardShell extends ConsumerWidget {
           ),
           child: NavigationBar(
             selectedIndex: selectedIndex,
-            onDestinationSelected: (i) => context.go(_shellDestinations[i].path),
+            onDestinationSelected: (i) => context.go(destinations[i].path),
             labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
-            destinations: _shellDestinations
+            destinations: destinations
                 .map((d) => NavigationDestination(
                       icon: _destinationIcon(d, d.icon, preparingCount, iconByTabKey, theme.colorScheme.outline, size: 22),
                       selectedIcon: _destinationIcon(d, d.selected, preparingCount, iconByTabKey, theme.colorScheme.primary, size: 22),
@@ -89,7 +96,7 @@ class DashboardShell extends ConsumerWidget {
           NavigationRail(
             extended: MediaQuery.of(context).size.width > 900,
             selectedIndex: selectedIndex,
-            onDestinationSelected: (i) => context.go(_shellDestinations[i].path),
+            onDestinationSelected: (i) => context.go(destinations[i].path),
             leading: Padding(
               padding: const EdgeInsets.symmetric(vertical: 16),
               child: Column(
@@ -129,7 +136,7 @@ class DashboardShell extends ConsumerWidget {
                 ),
               ),
             ),
-            destinations: _shellDestinations
+            destinations: destinations
                 .map((d) => NavigationRailDestination(
                       icon: _destinationIcon(d, d.icon, preparingCount, iconByTabKey, theme.colorScheme.outline),
                       selectedIcon: _destinationIcon(d, d.selected, preparingCount, iconByTabKey, theme.colorScheme.primary),

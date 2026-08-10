@@ -2,14 +2,20 @@ const router = require('express').Router();
 const db = require('../db');
 const asyncHandler = require('../asyncHandler');
 const { ApiError } = require('../errors');
-const { pickFields, requireFields, requireAuth, pagination, requireMerchantAccess } = require('../utils');
+const { pickFields, requireFields, requireAuth, pagination, requireMerchantAccess, requirePermission } = require('../utils');
 
 const INVENTORY_UPDATE_FIELDS = ['low_stock_threshold'];
 
-async function requireBranchAccess(ctx, branchId) {
+/** [permission] không truyền = chỉ cần thuộc cửa hàng (requireMerchantAccess); truyền vào thì
+ * xiết thêm theo quyền cụ thể cho riêng merchant_staff (xem requirePermission). */
+async function requireBranchAccess(ctx, branchId, permission) {
   const branch = await db.queryOne('SELECT id, merchant_id FROM branches WHERE id = $1', [branchId]);
   if (!branch) throw new ApiError('NOT_FOUND', 'Không tìm thấy chi nhánh', 404);
-  await requireMerchantAccess(ctx, branch.merchant_id);
+  if (permission) {
+    await requirePermission(ctx, branch.merchant_id, permission);
+  } else {
+    await requireMerchantAccess(ctx, branch.merchant_id);
+  }
   return branch;
 }
 
@@ -42,7 +48,7 @@ router.post('/inventory/adjust', asyncHandler(async (req, res) => {
   if (req.body.move_type === 'sale_out') {
     throw new ApiError('BAD_REQUEST', 'sale_out chỉ được ghi tự động khi giao hàng, không gọi tay', 400);
   }
-  await requireBranchAccess(req.ctx, req.body.branch_id);
+  await requireBranchAccess(req.ctx, req.body.branch_id, 'inventory.manage');
 
   const result = await db.callRpc('apply_stock_movement', {
     p_branch_id: req.body.branch_id,

@@ -38,6 +38,7 @@ class HomeScreen extends ConsumerWidget {
     final statsAsync = ref.watch(merchantTodayStatsProvider);
     final todayFinanceAsync = ref.watch(financeSummaryProvider('today'));
     final branches = ref.watch(_homeBranchesProvider).valueOrNull ?? const <Branch>[];
+    final myPermissions = ref.watch(myPermissionsProvider).valueOrNull;
     final preparingCount = statsAsync.valueOrNull?.preparingCount ?? 0;
     final mainBranch = branches.isEmpty
         ? null
@@ -114,6 +115,7 @@ class HomeScreen extends ConsumerWidget {
                 children: [
                   ...kNavDestinations
                       .where((d) => d.path != '/home')
+                      .where((d) => d.permission == null || hasPermission(myPermissions, d.permission!))
                       .map((d) => _ShortcutTile(
                             icon: d.selected,
                             label: d.label,
@@ -122,17 +124,20 @@ class HomeScreen extends ConsumerWidget {
                           )),
                   // Danh mục và Kho hàng không còn nằm trong thanh điều hướng chính (đỡ chật,
                   // nhường chỗ cho Tài chính) nhưng vẫn cần dùng được — giữ lại làm lối tắt ở
-                  // đây, giống Thiết bị.
-                  const _ShortcutTile(
-                    icon: Icons.category_outlined,
-                    label: 'Danh mục',
-                    path: '/categories',
-                  ),
-                  const _ShortcutTile(
-                    icon: Icons.inventory_2_outlined,
-                    label: 'Kho hàng',
-                    path: '/inventory',
-                  ),
+                  // đây, giống Thiết bị. Ẩn với nhân viên không có quyền tương ứng, giống các
+                  // lối tắt khác ở trên.
+                  if (hasPermission(myPermissions, 'products.view'))
+                    const _ShortcutTile(
+                      icon: Icons.category_outlined,
+                      label: 'Danh mục',
+                      path: '/categories',
+                    ),
+                  if (hasPermission(myPermissions, 'inventory.manage'))
+                    const _ShortcutTile(
+                      icon: Icons.inventory_2_outlined,
+                      label: 'Kho hàng',
+                      path: '/inventory',
+                    ),
                   const _ShortcutTile(
                     icon: Icons.devices_other_outlined,
                     label: 'Thiết bị',

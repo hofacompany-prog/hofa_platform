@@ -62,6 +62,34 @@ async function requireMerchantAccess(ctx, merchantId) {
   throw new ApiError('FORBIDDEN', 'Bạn không có quyền quản lý cửa hàng này', 403);
 }
 
+/** admin/merchant_owner (đúng chủ) luôn qua; merchant_staff phải có đúng [permission] trong
+ * merchant_staff.permissions mới qua — dùng cho action nhạy cảm (sửa/xoá sản phẩm, đổi trạng
+ * thái đơn, xem tài chính, điều chỉnh tồn kho...). requireMerchantAccess vẫn chạy trước để
+ * xác nhận có thuộc cửa hàng này không, hàm này chỉ xiết thêm riêng cho merchant_staff. */
+async function requirePermission(ctx, merchantId, permission) {
+  await requireMerchantAccess(ctx, merchantId);
+  if (ctx.role !== 'merchant_staff') return true;
+  const staff = await db.queryOne(
+    'SELECT permissions FROM merchant_staff WHERE merchant_id = $1 AND user_id = $2',
+    [merchantId, ctx.userId]
+  );
+  const perms = staff?.permissions || [];
+  if (!perms.includes(permission)) {
+    throw new ApiError('FORBIDDEN', 'Bạn không có quyền thực hiện thao tác này', 403);
+  }
+  return true;
+}
+
+/** Chỉ chủ cửa hàng thật sự (owner_id đúng) hoặc admin — merchant_staff KHÔNG được quản lý
+ * nhân viên khác dù có quyền gì đi nữa, đây là hành động chỉ chủ cửa hàng mới làm. */
+async function requireOwnerAccess(ctx, merchantId) {
+  requireAuth(ctx);
+  if (ctx.role === 'admin') return true;
+  const merchant = await db.queryOne('SELECT owner_id FROM merchants WHERE id = $1', [merchantId]);
+  if (merchant && merchant.owner_id === ctx.userId) return true;
+  throw new ApiError('FORBIDDEN', 'Chỉ chủ cửa hàng mới quản lý được nhân viên', 403);
+}
+
 async function orderCanView(ctx, order) {
   if (!ctx.authenticated) return false;
   if (ctx.role === 'admin') return true;
@@ -102,5 +130,6 @@ function haversineKm(lat1, lon1, lat2, lon2) {
 module.exports = {
   pickFields, requireFields, pagination,
   requireAuth, requireRole, requireOwnRow, requireMerchantAccess,
+  requirePermission, requireOwnerAccess,
   orderCanView, requireOrderAccess, haversineKm
 };

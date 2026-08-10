@@ -2,7 +2,7 @@ const router = require('express').Router();
 const db = require('../db');
 const asyncHandler = require('../asyncHandler');
 const { ApiError } = require('../errors');
-const { requireFields, pickFields, pagination, requireAuth, requireRole, requireMerchantAccess, requireOrderAccess } = require('../utils');
+const { requireFields, pickFields, pagination, requireAuth, requireRole, requireMerchantAccess, requireOrderAccess, requirePermission } = require('../utils');
 const dispatch = require('../dispatch');
 const orderOffer = require('../orderOffer');
 const push = require('../push');
@@ -262,6 +262,11 @@ router.patch('/orders/:id/status', asyncHandler(async (req, res) => {
     }
     if (req.body.status === 'cancelled' && req.ctx.role === 'customer' && order.customer_id !== req.ctx.userId) {
       throw new ApiError('FORBIDDEN', 'Không phải đơn của bạn', 403);
+    }
+    // Nhân viên đổi trạng thái đơn (khác 'cancelled' của khách ở trên) cần đúng quyền
+    // orders.manage — chủ cửa hàng/admin đã qua ORDER_STATUS_ROLES ở trên là đủ.
+    if (req.ctx.role === 'merchant_staff') {
+      await requirePermission(req.ctx, order.merchant_id, 'orders.manage');
     }
   }
 

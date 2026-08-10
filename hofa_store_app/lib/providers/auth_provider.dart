@@ -52,12 +52,26 @@ final userProfileProvider = FutureProvider.autoDispose<UserProfile?>((
   }
 });
 
-/// Cửa hàng của user hiện tại — null nếu chưa tạo cửa hàng.
+/// Cửa hàng của user hiện tại — null nếu chưa tạo cửa hàng (chủ) và không làm nhân viên ở
+/// đâu cả. Trả về cả khi user là merchant_staff (không chỉ chủ sở hữu), xem GET /merchants/mine.
 final myMerchantProvider = FutureProvider.autoDispose<Merchant?>((ref) async {
   final profile = await ref.watch(userProfileProvider.future);
   if (profile == null) return null;
   return _merchantRepo.myMerchant();
 });
+
+/// null = chủ cửa hàng, không giới hạn gì; mảng (kể cả rỗng) = nhân viên, đúng danh sách
+/// quyền được cấp — dùng để ẩn/hiện tab điều hướng và nút hành động theo quyền.
+final myPermissionsProvider = FutureProvider.autoDispose<List<String>?>((
+  ref,
+) async {
+  final merchant = await ref.watch(myMerchantProvider.future);
+  return merchant?.myPermissions;
+});
+
+/// true nếu được phép làm [permission] — null (chủ cửa hàng) luôn true.
+bool hasPermission(List<String>? myPermissions, String permission) =>
+    myPermissions == null || myPermissions.contains(permission);
 
 /// Số liệu nhanh (đơn đang chuẩn bị, thu nhập/số đơn hôm nay) cho màn Trang chủ.
 final merchantTodayStatsProvider = FutureProvider.autoDispose<MerchantTodayStats?>((ref) async {

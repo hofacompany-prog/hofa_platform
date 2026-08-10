@@ -22,6 +22,9 @@ class BranchSettingsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final merchantAsync = ref.watch(myMerchantProvider);
     final branchesAsync = ref.watch(_branchesProvider);
+    // Quản lý nhân viên chỉ dành cho chủ cửa hàng — merchant_staff (dù có quyền gì) không
+    // được thêm/sửa/xoá nhân viên khác, xem requireOwnerAccess ở server.
+    final isOwner = ref.watch(userProfileProvider).valueOrNull?.role == 'merchant_owner';
     final theme = Theme.of(context);
 
     return Scaffold(
@@ -167,6 +170,25 @@ class BranchSettingsScreen extends ConsumerWidget {
                   'Tắt công tắc khi hết hàng hoặc nghỉ đột xuất — cửa hàng sẽ tạm ngừng nhận đơn mới.',
                   style: TextStyle(color: Colors.grey),
                 ),
+                if (isOwner) ...[
+                  const SizedBox(height: 24),
+                  Text('Nhân viên', style: theme.textTheme.titleMedium),
+                  const SizedBox(height: 8),
+                  Card(
+                    elevation: 0,
+                    color: theme.colorScheme.surfaceContainerLow,
+                    child: ListTile(
+                      onTap: () => context.push('/settings/staff'),
+                      leading: Icon(
+                        Icons.badge_outlined,
+                        color: theme.colorScheme.primary,
+                      ),
+                      title: const Text('Quản lý nhân viên'),
+                      subtitle: const Text('Thêm nhân viên, phân quyền được làm gì trong app'),
+                      trailing: const Icon(Icons.chevron_right),
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 24),
                 Text('Bảo mật', style: theme.textTheme.titleMedium),
                 const SizedBox(height: 8),

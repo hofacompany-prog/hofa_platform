@@ -9,6 +9,9 @@ typedef NavDestination = ({
   IconData selected,
   String label,
   String path,
+  // null = luôn hiện (chủ cửa hàng lẫn mọi nhân viên) — dùng để ẩn tab với nhân viên không
+  // được cấp quyền tương ứng, xem myPermissionsProvider/hasPermission trong auth_provider.dart.
+  String? permission,
 });
 
 const kNavDestinations = <NavDestination>[
@@ -18,6 +21,7 @@ const kNavDestinations = <NavDestination>[
     selected: Icons.storefront,
     label: 'Sản phẩm',
     path: '/products',
+    permission: 'products.view',
   ),
   (
     tabKey: 'orders',
@@ -25,6 +29,7 @@ const kNavDestinations = <NavDestination>[
     selected: Icons.receipt_long,
     label: 'Đơn hàng',
     path: '/orders',
+    permission: 'orders.view',
   ),
   (
     tabKey: 'finance',
@@ -32,6 +37,7 @@ const kNavDestinations = <NavDestination>[
     selected: Icons.account_balance_wallet,
     label: 'Tài chính',
     path: '/finance',
+    permission: 'finance.view',
   ),
   (
     tabKey: 'settings',
@@ -39,5 +45,6 @@ const kNavDestinations = <NavDestination>[
     selected: Icons.settings,
     label: 'Cài đặt',
     path: '/settings',
+    permission: null,
   ),
 ];
