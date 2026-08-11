@@ -96,6 +96,9 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
         break;
       }
     }
+    // Chỉ để XEM, không cho gõ tay — luôn khớp đúng ngân hàng đang chọn ở dropdown, tránh
+    // trường hợp admin tự sửa sai lệch giữa tên và mã BIN thật.
+    final bankBinCtrl = TextEditingController(text: selectedBank?.bin ?? '');
     if (!mounted) return;
 
     final ok = await showDialog<bool>(
@@ -254,16 +257,41 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  DropdownButtonFormField<Bank>(
-                    initialValue: selectedBank,
-                    decoration: const InputDecoration(labelText: 'Ngân hàng'),
-                    items: banks
-                        .map(
-                          (b) =>
-                              DropdownMenuItem(value: b, child: Text(b.name)),
-                        )
-                        .toList(),
-                    onChanged: (v) => setInner(() => selectedBank = v),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: DropdownButtonFormField<Bank>(
+                          initialValue: selectedBank,
+                          decoration: const InputDecoration(
+                            labelText: 'Ngân hàng',
+                          ),
+                          items: banks
+                              .map(
+                                (b) => DropdownMenuItem(
+                                  value: b,
+                                  child: Text(b.name),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (v) => setInner(() {
+                            selectedBank = v;
+                            bankBinCtrl.text = v?.bin ?? '';
+                          }),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      SizedBox(
+                        width: 110,
+                        child: TextField(
+                          controller: bankBinCtrl,
+                          readOnly: true,
+                          decoration: const InputDecoration(
+                            labelText: 'Mã BIN',
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 12),
                   TextField(

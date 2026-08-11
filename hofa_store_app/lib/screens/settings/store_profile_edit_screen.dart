@@ -42,6 +42,10 @@ class _StoreProfileEditScreenState
   late final _bankAccNameCtrl = TextEditingController(
     text: widget.merchant.bankAccountName ?? '',
   );
+  // Chỉ để XEM, không cho gõ tay — luôn khớp đúng ngân hàng đang chọn ở dropdown.
+  late final _bankBinCtrl = TextEditingController(
+    text: widget.merchant.bankBin ?? '',
+  );
   late final _taxCodeCtrl = TextEditingController(
     text: widget.merchant.taxCode ?? '',
   );
@@ -68,6 +72,7 @@ class _StoreProfileEditScreenState
     _prepCtrl.dispose();
     _bankAccNoCtrl.dispose();
     _bankAccNameCtrl.dispose();
+    _bankBinCtrl.dispose();
     _taxCodeCtrl.dispose();
     _licenseCtrl.dispose();
     super.dispose();
@@ -147,7 +152,12 @@ class _StoreProfileEditScreenState
         );
         if (matches.isNotEmpty) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) setState(() => _selectedBank = matches.first);
+            if (mounted) {
+              setState(() {
+                _selectedBank = matches.first;
+                _bankBinCtrl.text = matches.first.bin;
+              });
+            }
           });
         }
       }
@@ -277,19 +287,43 @@ class _StoreProfileEditScreenState
                   ),
                   error: (e, _) =>
                       Text('Không tải được danh sách ngân hàng: $e'),
-                  data: (banks) => DropdownButtonFormField<Bank>(
-                    initialValue: _selectedBank,
-                    decoration: const InputDecoration(
-                      labelText: 'Ngân hàng',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: banks
-                        .map(
-                          (b) =>
-                              DropdownMenuItem(value: b, child: Text(b.name)),
-                        )
-                        .toList(),
-                    onChanged: (v) => setState(() => _selectedBank = v),
+                  data: (banks) => Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: DropdownButtonFormField<Bank>(
+                          initialValue: _selectedBank,
+                          decoration: const InputDecoration(
+                            labelText: 'Ngân hàng',
+                            border: OutlineInputBorder(),
+                          ),
+                          items: banks
+                              .map(
+                                (b) => DropdownMenuItem(
+                                  value: b,
+                                  child: Text(b.name),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (v) => setState(() {
+                            _selectedBank = v;
+                            _bankBinCtrl.text = v?.bin ?? '';
+                          }),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      SizedBox(
+                        width: 110,
+                        child: TextField(
+                          controller: _bankBinCtrl,
+                          readOnly: true,
+                          decoration: const InputDecoration(
+                            labelText: 'Mã BIN',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 12),

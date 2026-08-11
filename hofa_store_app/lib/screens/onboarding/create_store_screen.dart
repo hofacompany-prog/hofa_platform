@@ -32,6 +32,8 @@ class _CreateStoreScreenState extends ConsumerState<CreateStoreScreen> {
   final _radiusCtrl = TextEditingController(text: '5');
   final _bankAccNoCtrl = TextEditingController();
   final _bankAccNameCtrl = TextEditingController();
+  // Chỉ để XEM, không cho gõ tay — luôn khớp đúng ngân hàng đang chọn ở dropdown.
+  final _bankBinCtrl = TextEditingController();
 
   bool _loading = false;
   String? _error;
@@ -53,6 +55,7 @@ class _CreateStoreScreenState extends ConsumerState<CreateStoreScreen> {
     _radiusCtrl.dispose();
     _bankAccNoCtrl.dispose();
     _bankAccNameCtrl.dispose();
+    _bankBinCtrl.dispose();
     super.dispose();
   }
 
@@ -275,21 +278,41 @@ class _CreateStoreScreenState extends ConsumerState<CreateStoreScreen> {
                             ),
                             error: (e, _) =>
                                 Text('Không tải được danh sách ngân hàng: $e'),
-                            data: (banks) => DropdownButtonFormField<Bank>(
-                              initialValue: _selectedBank,
-                              decoration: const InputDecoration(
-                                labelText: 'Ngân hàng',
-                              ),
-                              items: banks
-                                  .map(
-                                    (b) => DropdownMenuItem(
-                                      value: b,
-                                      child: Text(b.name),
+                            data: (banks) => Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Expanded(
+                                  child: DropdownButtonFormField<Bank>(
+                                    initialValue: _selectedBank,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Ngân hàng',
                                     ),
-                                  )
-                                  .toList(),
-                              onChanged: (v) =>
-                                  setState(() => _selectedBank = v),
+                                    items: banks
+                                        .map(
+                                          (b) => DropdownMenuItem(
+                                            value: b,
+                                            child: Text(b.name),
+                                          ),
+                                        )
+                                        .toList(),
+                                    onChanged: (v) => setState(() {
+                                      _selectedBank = v;
+                                      _bankBinCtrl.text = v?.bin ?? '';
+                                    }),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                SizedBox(
+                                  width: 110,
+                                  child: TextFormField(
+                                    controller: _bankBinCtrl,
+                                    readOnly: true,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Mã BIN',
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           );
                         },
