@@ -2,14 +2,30 @@ const db = require('./db');
 const { haversineKm } = require('./utils');
 const push = require('./push');
 
-// Công thức phí tạm thời — dễ chỉnh sau này khi có số liệu thật.
-const BASE_FEE = 12000;
-const PER_KM_FEE = 4000;
 const AVG_SPEED_KMH = 25; // giả định tốc độ trung bình nội thành, dùng để ước lượng ETA
 
-function computeDriverFee(distanceKm) {
-  const raw = BASE_FEE + PER_KM_FEE * (distanceKm || 0);
-  return Math.round(raw / 500) * 500;
+/** Chỉ giữ 1 dòng đang áp dụng — dòng mới nhất theo updated_at. Fallback đúng giá trị mặc định
+ * seed sẵn (hofa-db/16_shipping_fee_settings.sql) nếu chưa từng cấu hình. */
+async function currentShippingFeeSettings() {
+  const row = await db.queryOne('SELECT * FROM shipping_fee_settings ORDER BY updated_at DESC LIMIT 1');
+  return row || { base_fee: 15000, base_distance_km: 2, per_km_fee: 4000, round_to: 500 };
+}
+
+/** Phí trả tài xế — dùng CHUNG base_fee/base_distance_km/per_km_fee/round_to với
+ * shipping_fee_settings (đúng công thức phí ship hiện cho KHÁCH lúc đặt đơn, xem
+ * hofa_customer_app/lib/models/shipping_fee_settings.dart:estimate()) để 2 bên khớp số cho
+ * cùng 1 đơn — trước đây dùng hằng số riêng (BASE_FEE=12000, không có base_distance_km miễn phí)
+ * lệch hẳn với cấu hình khách thấy (mặc định base_fee=15000, 2km đầu miễn phí), gây lệch tiền
+ * hiển thị 2 bên tài xế/khách. CỐ Ý bỏ qua free_ship_threshold/max_fee/is_active của
+ * shipping_fee_settings — đó là ưu đãi/khuyến mãi cho KHÁCH (đơn lớn miễn ship, hoặc trần phí),
+ * không được làm giảm tiền tài xế thực nhận; khách được miễn/giảm ship thì HOFA tự bù, tài xế
+ * vẫn nhận đúng phí theo khoảng cách thật. */
+async function computeDriverFee(distanceKm) {
+  const s = await currentShippingFeeSettings();
+  const extraKm = Math.max(0, (distanceKm || 0) - Number(s.base_distance_km));
+  const raw = Number(s.base_fee) + Number(s.per_km_fee) * extraKm;
+  const roundTo = Number(s.round_to) || 500;
+  return Math.round(raw / roundTo) * roundTo;
 }
 
 /** Chỉ giữ 1 dòng đang áp dụng — dòng mới nhất theo updated_at. Fallback 8s/25s nếu chưa
@@ -96,7 +112,7 @@ async function offerToSpecificDriver(orderId, driverId) {
  * chốt accept_deadline bằng now() của Postgres, gửi push mời nhận đơn. Dùng chung cho cả
  * offerToNearestDriver (tự tìm gần nhất) lẫn offerToSpecificDriver (khách tự chọn tài xế). */
 async function assignDriverAndNotify(order, driver, distanceKm) {
-  const driverFee = computeDriverFee(distanceKm ?? 0);
+  const driverFee = await computeDriverFee(distanceKm ?? 0);
   const etaMinutes = distanceKm != null ? Math.max(1, Math.round((distanceKm / AVG_SPEED_KMH) * 60)) : null;
 
   const delivery = await db.callRpc('assign_driver', {
