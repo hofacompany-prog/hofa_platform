@@ -3,9 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/driver_finance_settings.dart';
 import '../../providers/admin_providers.dart';
 
-/// % HOFA cắt trên phí giao (driver_fee) + hạn mức COD toàn sàn — xem
-/// hofa-db/62_driver_wallet_ledger.sql. driver_fee_commission_rate mặc định 0 (an toàn, không
-/// tự động giảm thu nhập tài xế cho tới khi admin chủ động đặt tỷ lệ khác 0).
+/// % HOFA cắt trên phí giao (driver_fee) toàn sàn — xem hofa-db/69_driver_wallet_vi_tren.sql.
+/// driver_fee_commission_rate mặc định 0 (an toàn, không tự động giảm thu nhập tài xế cho tới
+/// khi admin chủ động đặt tỷ lệ khác 0). Không còn cấu hình "hạn mức COD" — Ví trên giờ là vốn,
+/// không phải nợ COD cần giới hạn (cod_debt_limit vẫn còn trong DB nhưng không đụng tới nữa).
 class DriverFinanceSettingsScreen extends ConsumerStatefulWidget {
   const DriverFinanceSettingsScreen({super.key});
 
@@ -17,34 +18,26 @@ class DriverFinanceSettingsScreen extends ConsumerStatefulWidget {
 class _DriverFinanceSettingsScreenState
     extends ConsumerState<DriverFinanceSettingsScreen> {
   final _rateCtrl = TextEditingController();
-  final _limitCtrl = TextEditingController();
   bool _initialized = false;
   bool _saving = false;
 
   @override
   void dispose() {
     _rateCtrl.dispose();
-    _limitCtrl.dispose();
     super.dispose();
   }
 
   void _fillFrom(DriverFinanceSettings s) {
     _rateCtrl.text = _trimZero(s.driverFeeCommissionRate);
-    _limitCtrl.text = s.codDebtLimit.toString();
   }
 
   String _trimZero(double v) =>
       v == v.roundToDouble() ? v.toInt().toString() : v.toString();
 
-  Future<void> _save(String? id) async {
+  Future<void> _save(DriverFinanceSettings current) async {
     final rate = double.tryParse(_rateCtrl.text.trim());
-    final limit = int.tryParse(_limitCtrl.text.trim());
     if (rate == null || rate < 0 || rate > 100) {
       _showError('Tỷ lệ % phải từ 0 đến 100');
-      return;
-    }
-    if (limit == null || limit <= 0) {
-      _showError('Hạn mức COD phải lớn hơn 0');
       return;
     }
     setState(() => _saving = true);
@@ -53,9 +46,9 @@ class _DriverFinanceSettingsScreenState
           .read(adminRepoProvider)
           .updateDriverFinanceSettings(
             DriverFinanceSettings(
-              id: id,
+              id: current.id,
               driverFeeCommissionRate: rate,
-              codDebtLimit: limit,
+              codDebtLimit: current.codDebtLimit,
             ),
           );
       ref.invalidate(driverFinanceSettingsProvider);
@@ -143,43 +136,11 @@ class _DriverFinanceSettingsScreenState
                         ),
                       ),
                     ),
-                    const SizedBox(height: 16),
-                    Card(
-                      elevation: 0,
-                      color: theme.colorScheme.surfaceContainerLow,
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Hạn mức COD được giữ',
-                              style: theme.textTheme.titleSmall,
-                            ),
-                            const SizedBox(height: 8),
-                            TextField(
-                              controller: _limitCtrl,
-                              keyboardType: TextInputType.number,
-                              decoration: const InputDecoration(
-                                suffixText: 'đ',
-                                border: OutlineInputBorder(),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Tài xế giữ COD vượt mức này sẽ bị khoá rút tiền ví thu nhập VÀ '
-                              'không được gán thêm đơn COD mới cho tới khi nộp lại.',
-                              style: theme.textTheme.bodySmall,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
                     const SizedBox(height: 24),
                     SizedBox(
                       width: double.infinity,
                       child: FilledButton(
-                        onPressed: _saving ? null : () => _save(settings.id),
+                        onPressed: _saving ? null : () => _save(settings),
                         child: _saving
                             ? const SizedBox(
                                 height: 20,

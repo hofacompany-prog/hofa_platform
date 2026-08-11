@@ -12,9 +12,10 @@ final earningsProvider = FutureProvider.autoDispose<Earnings>(
 );
 final _driverRepo = DriverRepository();
 
-/// Thu nhập — 2 ví riêng (xem hofa-db/62_driver_wallet_ledger.sql): Ví COD (tiền đang giữ hộ
-/// khách/HOFA, không rút được, chỉ nộp lại qua "Nộp COD") và Ví thu nhập (phí giao hàng, rút
-/// được về ngân hàng). Trước đây gộp chung 1 số dư duy nhất, dễ hiểu lầm.
+/// Thu nhập — 2 ví riêng (xem hofa-db/69_driver_wallet_vi_tren.sql): **Ví trên** (vốn để chạy
+/// đơn — phải nạp trước, trừ tự động khi giao đơn xong, KHÔNG rút/chuyển đi đâu được) và **Ví
+/// thu nhập** (tiền thật, rút được về ngân hàng). Nạp tiền luôn cộng vào Ví trên và là hành động
+/// quan trọng nhất để tiếp tục nhận đơn — đặt lên đầu màn hình.
 class EarningsScreen extends ConsumerStatefulWidget {
   const EarningsScreen({super.key});
 
@@ -23,15 +24,15 @@ class EarningsScreen extends ConsumerStatefulWidget {
 }
 
 class _EarningsScreenState extends ConsumerState<EarningsScreen> {
-  /// Nạp thẳng vào ví thu nhập (khác "Nộp COD" — trả nợ COD cho HOFA). Cần cho tài xế mới/tài
-  /// xế thiếu tiền: hệ thống chỉ gán đơn khi earning_balance >= giá trị đơn (xem
-  /// server/src/dispatch.js), nên không đủ tiền là không nhận được đơn nào, kể cả đơn đầu tiên.
+  /// Nạp thẳng vào Ví trên (chuyển khoản cho HOFA, admin xác nhận). Cần cho tài xế mới/tài xế
+  /// thiếu vốn: hệ thống chỉ gán đơn khi cod_balance (Ví trên) > giá trị đơn (xem
+  /// server/src/dispatch.js), nên không đủ vốn là không nhận được đơn nào, kể cả đơn đầu tiên.
   Future<void> _deposit() async {
     final amountCtrl = TextEditingController();
     final amount = await showDialog<int>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Nạp tiền vào ví thu nhập'),
+        title: const Text('Nạp tiền vào Ví trên'),
         content: TextField(
           controller: amountCtrl,
           autofocus: true,
@@ -105,7 +106,7 @@ class _EarningsScreenState extends ConsumerState<EarningsScreen> {
                 ),
                 const SizedBox(height: 8),
                 const Text(
-                  'HOFA sẽ cộng tiền vào ví thu nhập ngay sau khi xác nhận đã nhận được chuyển khoản.',
+                  'HOFA sẽ cộng tiền vào Ví trên ngay sau khi xác nhận đã nhận được chuyển khoản.',
                   textAlign: TextAlign.center,
                 ),
               ],
@@ -184,6 +185,61 @@ class _EarningsScreenState extends ConsumerState<EarningsScreen> {
     }
   }
 
+  /// Chuyển nội bộ 1 chiều Ví thu nhập → Ví trên — tự động ngay, không cần admin duyệt (khác
+  /// hẳn "Nạp tiền"/"Rút tiền" thật qua ngân hàng ở trên).
+  Future<void> _transferToViTren(int earningBalance) async {
+    final amountCtrl = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Nạp vào Ví trên'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Số dư Ví thu nhập: ${formatVnd(earningBalance)}'),
+            const SizedBox(height: 12),
+            TextField(
+              controller: amountCtrl,
+              autofocus: true,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Số tiền muốn chuyển (đ)',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Huỷ'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Chuyển ngay'),
+          ),
+        ],
+      ),
+    );
+    final amount = int.tryParse(amountCtrl.text.trim());
+    if (ok != true || amount == null || amount <= 0 || !mounted) return;
+
+    try {
+      await _driverRepo.transferEarningToViTren(amount);
+      ref.invalidate(earningsProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Đã chuyển vào Ví trên')));
+      }
+    } catch (e) {
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final earningsAsync = ref.watch(earningsProvider);
@@ -208,6 +264,50 @@ class _EarningsScreenState extends ConsumerState<EarningsScreen> {
           data: (earnings) => ListView(
             padding: const EdgeInsets.all(16),
             children: [
+              // Nạp tiền — nổi bật, đặt đầu tiên vì đây là hành động quan trọng nhất để tiếp
+              // tục nhận được đơn (Ví trên hết vốn thì hệ thống ngừng gán đơn mới).
+              Card(
+                elevation: 0,
+                color: theme.colorScheme.primary,
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Nạp tiền vào Ví trên',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          color: theme.colorScheme.onPrimary,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Cần đủ Ví trên mới nhận được đơn mới — nạp ngay để tiếp tục chạy đơn.',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.onPrimary.withValues(
+                            alpha: 0.9,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton.icon(
+                          onPressed: _deposit,
+                          style: FilledButton.styleFrom(
+                            backgroundColor: theme.colorScheme.onPrimary,
+                            foregroundColor: theme.colorScheme.primary,
+                          ),
+                          icon: const Icon(Icons.add_card_outlined),
+                          label: const Text('Nạp tiền'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
               Card(
                 elevation: 0,
                 color: theme.colorScheme.secondaryContainer.withValues(
@@ -218,7 +318,7 @@ class _EarningsScreenState extends ConsumerState<EarningsScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Ví COD', style: theme.textTheme.bodyMedium),
+                      Text('Ví trên', style: theme.textTheme.bodyMedium),
                       const SizedBox(height: 4),
                       Text(
                         formatVnd(earnings.codBalance),
@@ -228,25 +328,9 @@ class _EarningsScreenState extends ConsumerState<EarningsScreen> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        earnings.codBalance > 0
-                            ? 'Tiền khách trả tiền mặt bạn đang giữ hộ — cần nộp lại cho HOFA'
-                            : 'Chưa giữ khoản COD nào',
+                        'Vốn để nhận đơn mới — tự động trừ khi giao đơn xong, không rút/chuyển '
+                        'đi đâu được.',
                         style: theme.textTheme.bodySmall,
-                      ),
-                      const SizedBox(height: 16),
-                      SizedBox(
-                        width: double.infinity,
-                        child: OutlinedButton.icon(
-                          onPressed: earnings.codBalance > 0
-                              ? () => context
-                                    .push('/wallet/cod-settlement')
-                                    .then(
-                                      (_) => ref.invalidate(earningsProvider),
-                                    )
-                              : null,
-                          icon: const Icon(Icons.receipt_long_outlined),
-                          label: const Text('Nộp COD'),
-                        ),
                       ),
                     ],
                   ),
@@ -271,8 +355,7 @@ class _EarningsScreenState extends ConsumerState<EarningsScreen> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Có thể rút về tài khoản ngân hàng. Cần đủ số dư ≥ giá trị đơn mới '
-                        'nhận được đơn mới — thiếu thì nạp thêm bên dưới.',
+                        'Tiền thật, rút được về tài khoản ngân hàng.',
                         style: theme.textTheme.bodySmall,
                       ),
                       const SizedBox(height: 16),
@@ -280,18 +363,19 @@ class _EarningsScreenState extends ConsumerState<EarningsScreen> {
                         children: [
                           Expanded(
                             child: OutlinedButton.icon(
-                              onPressed: _deposit,
-                              icon: const Icon(Icons.add_card_outlined),
-                              label: const Text('Nạp tiền'),
+                              onPressed: () =>
+                                  _withdraw(earnings.earningBalance),
+                              icon: const Icon(Icons.savings_outlined),
+                              label: const Text('Rút tiền'),
                             ),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
                             child: OutlinedButton.icon(
                               onPressed: () =>
-                                  _withdraw(earnings.earningBalance),
-                              icon: const Icon(Icons.savings_outlined),
-                              label: const Text('Rút tiền'),
+                                  _transferToViTren(earnings.earningBalance),
+                              icon: const Icon(Icons.arrow_upward),
+                              label: const Text('Nạp vào Ví trên'),
                             ),
                           ),
                         ],
@@ -342,22 +426,6 @@ class _EarningsScreenState extends ConsumerState<EarningsScreen> {
                             ? formatDateTime(d.deliveredAt!)
                             : '—',
                       ),
-                      trailing: d.isCod
-                          ? Chip(
-                              label: Text(
-                                d.codSettledOrPending
-                                    ? 'Đã nộp COD'
-                                    : 'Chưa nộp COD',
-                              ),
-                              backgroundColor: d.codSettledOrPending
-                                  ? theme.colorScheme.primary.withValues(
-                                      alpha: 0.15,
-                                    )
-                                  : theme.colorScheme.error.withValues(
-                                      alpha: 0.12,
-                                    ),
-                            )
-                          : null,
                     ),
                   ),
                 ),

@@ -6,27 +6,27 @@ import '../../core/vietqr.dart';
 import '../../models/bank.dart';
 import '../../models/bank_account_settings.dart';
 import '../../models/driver_wallet_request.dart';
-import '../../models/cod_settlement_request.dart';
 import '../../models/merchant_wallet_request.dart';
 import '../../models/order.dart';
 import '../../providers/admin_providers.dart';
 import '../../core/responsive.dart';
 
-/// 7 tab dưới 1 màn "Thanh toán" — tách nhỏ để mỗi tab không bị quá tải:
+/// 6 tab dưới 1 màn "Thanh toán" — tách nhỏ để mỗi tab không bị quá tải:
 /// Cấu hình (tài khoản ngân hàng của sàn), Đơn hàng (chờ xác nhận thanh toán chuyển khoản),
-/// Tài xế nạp tiền (nạp thẳng vào ví thu nhập — cần lại vì tài xế phải có earning_balance ≥
-/// giá trị đơn mới được gán đơn, xem hofa-db/63_driver_deposit_entry_type.sql), Đối soát COD
-/// (nộp lại tiền COD theo từng đơn) / Tài xế rút tiền (duyệt ví tài xế), Cửa hàng rút tiền
-/// (duyệt ví cửa hàng — xem hofa-db/65_merchant_wallet_withdrawals.sql, không có QR như tài xế
-/// vì merchants chưa thu thập mã BIN ngân hàng), Ngân hàng (danh sách cho dropdown ở app tài
-/// xế lúc đăng ký/sửa hồ sơ).
+/// Tài xế nạp tiền (nạp thẳng vào Ví trên — tài xế phải có cod_balance (Ví trên) > giá trị đơn
+/// mới được gán đơn, xem hofa-db/69_driver_wallet_vi_tren.sql) / Tài xế rút tiền (duyệt ví tài
+/// xế, chỉ đụng Ví thu nhập), Cửa hàng rút tiền (duyệt ví cửa hàng — xem
+/// hofa-db/65_merchant_wallet_withdrawals.sql, không có QR như tài xế vì merchants chưa thu
+/// thập mã BIN ngân hàng), Ngân hàng (danh sách cho dropdown ở app tài xế lúc đăng ký/sửa hồ
+/// sơ). Không còn tab "Đối soát COD" — Ví trên đổi vai trò thành vốn, không còn khái niệm "tiền
+/// COD nợ cần nộp lại" (xem hofa-db/69_driver_wallet_vi_tren.sql).
 class PaymentSettingsScreen extends StatelessWidget {
   const PaymentSettingsScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 7,
+      length: 6,
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Thanh toán'),
@@ -36,7 +36,6 @@ class PaymentSettingsScreen extends StatelessWidget {
               Tab(text: 'Cấu hình'),
               Tab(text: 'Đơn hàng'),
               Tab(text: 'Tài xế nạp tiền'),
-              Tab(text: 'Đối soát COD'),
               Tab(text: 'Tài xế rút tiền'),
               Tab(text: 'Cửa hàng rút tiền'),
               Tab(text: 'Ngân hàng'),
@@ -48,7 +47,6 @@ class PaymentSettingsScreen extends StatelessWidget {
             _ConfigTab(),
             _PendingOrdersTab(),
             _WalletDepositsTab(),
-            _CodSettlementsTab(),
             _WalletWithdrawalsTab(),
             _MerchantWithdrawalsTab(),
             _BanksTab(),
@@ -446,7 +444,7 @@ class _WalletDepositsTab extends ConsumerWidget {
       ref.invalidate(pendingWalletDepositsProvider);
       if (context.mounted)
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Đã cộng tiền vào ví thu nhập tài xế')),
+          const SnackBar(content: Text('Đã cộng tiền vào Ví trên của tài xế')),
         );
     } catch (e) {
       if (context.mounted)
@@ -475,7 +473,7 @@ class _WalletDepositsTab extends ConsumerWidget {
               ),
               const SizedBox(height: 4),
               Text(
-                'Tài xế đã tạo yêu cầu nạp và chuyển khoản vào tài khoản của sàn — bấm "Xác nhận" ngay khi thấy tiền về. Tiền vào thẳng ví thu nhập (đủ điều kiện nhận đơn mới).',
+                'Tài xế đã tạo yêu cầu nạp và chuyển khoản vào tài khoản của sàn — bấm "Xác nhận" ngay khi thấy tiền về. Tiền vào thẳng Ví trên (đủ điều kiện nhận đơn mới).',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.outline,
                 ),
@@ -545,251 +543,6 @@ class _WalletDepositsTab extends ConsumerWidget {
                                         onPressed: () =>
                                             _confirm(context, ref, r),
                                         child: const Text('Xác nhận'),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        )
-                        .toList(),
-                  );
-                },
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _CodSettlementsTab extends ConsumerWidget {
-  const _CodSettlementsTab();
-
-  Future<void> _confirm(
-    BuildContext context,
-    WidgetRef ref,
-    CodSettlementRequest r,
-  ) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Xác nhận đã nhận tiền?'),
-        content: Text(
-          'Xác nhận đã nhận được ${formatVnd(r.totalAmount)} nộp COD (${r.orderCount} đơn) từ tài xế ${r.driverName}.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Huỷ'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Xác nhận'),
-          ),
-        ],
-      ),
-    );
-    if (ok != true) return;
-    try {
-      await ref.read(adminRepoProvider).confirmCodSettlement(r.id);
-      ref.invalidate(codSettlementsProvider);
-      if (context.mounted)
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Đã trừ ví COD của tài xế')),
-        );
-    } catch (e) {
-      if (context.mounted)
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
-    }
-  }
-
-  Future<void> _reject(
-    BuildContext context,
-    WidgetRef ref,
-    CodSettlementRequest r,
-  ) async {
-    final reasonCtrl = TextEditingController();
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Từ chối yêu cầu nộp COD?'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '${r.orderCount} đơn của tài xế ${r.driverName} sẽ trở lại "chưa nộp".',
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: reasonCtrl,
-              decoration: const InputDecoration(
-                labelText: 'Lý do (không bắt buộc)',
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Huỷ'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.error,
-            ),
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Từ chối'),
-          ),
-        ],
-      ),
-    );
-    if (ok != true) return;
-    try {
-      await ref
-          .read(adminRepoProvider)
-          .rejectCodSettlement(
-            r.id,
-            reason: reasonCtrl.text.trim().isEmpty
-                ? null
-                : reasonCtrl.text.trim(),
-          );
-      ref.invalidate(codSettlementsProvider);
-      if (context.mounted)
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Đã từ chối, tài xế chọn nộp lại được ngay'),
-          ),
-        );
-    } catch (e) {
-      if (context.mounted)
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
-    }
-  }
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
-    final settlementsAsync = ref.watch(codSettlementsProvider);
-
-    return ListView(
-      padding: const EdgeInsets.all(24),
-      children: [
-        ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 640),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Tài xế đang chờ nộp COD',
-                style: theme.textTheme.titleMedium,
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Tài xế đã chọn đơn muốn nộp và chuyển khoản vào tài khoản của sàn — bấm "Xác nhận" ngay khi thấy tiền về.',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.outline,
-                ),
-              ),
-              const SizedBox(height: 12),
-              settlementsAsync.when(
-                loading: () => const Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(24),
-                    child: CircularProgressIndicator(),
-                  ),
-                ),
-                error: (e, _) => Text('Lỗi: $e'),
-                data: (rows) {
-                  if (rows.isEmpty) {
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      child: Text(
-                        'Không có yêu cầu nộp COD nào đang chờ.',
-                        style: theme.textTheme.bodyMedium,
-                      ),
-                    );
-                  }
-                  return Column(
-                    children: rows
-                        .map(
-                          (r) => Card(
-                            elevation: 0,
-                            color: theme.colorScheme.surfaceContainerLow,
-                            margin: const EdgeInsets.only(bottom: 8),
-                            child: Padding(
-                              padding: const EdgeInsets.all(16),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    r.driverName,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  Text(
-                                    '${r.driverPhone ?? ""} — ${r.orderCount} đơn — ${formatDateTime(r.createdAt)}',
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                  if (r.proofImageUrl != null) ...[
-                                    const SizedBox(height: 8),
-                                    ClipRRect(
-                                      borderRadius: BorderRadius.circular(8),
-                                      child: Image.network(
-                                        r.proofImageUrl!,
-                                        height: 160,
-                                        fit: BoxFit.contain,
-                                        errorBuilder:
-                                            (context, error, stackTrace) =>
-                                                const SizedBox(
-                                                  height: 160,
-                                                  child: Center(
-                                                    child: Text('Lỗi tải ảnh'),
-                                                  ),
-                                                ),
-                                      ),
-                                    ),
-                                  ],
-                                  const SizedBox(height: 12),
-                                  Row(
-                                    mainAxisAlignment:
-                                        MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Text(
-                                        formatVnd(r.totalAmount),
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                      Row(
-                                        children: [
-                                          OutlinedButton(
-                                            style: OutlinedButton.styleFrom(
-                                              foregroundColor:
-                                                  theme.colorScheme.error,
-                                            ),
-                                            onPressed: () =>
-                                                _reject(context, ref, r),
-                                            child: const Text('Từ chối'),
-                                          ),
-                                          const SizedBox(width: 8),
-                                          FilledButton(
-                                            onPressed: () =>
-                                                _confirm(context, ref, r),
-                                            child: const Text('Xác nhận'),
-                                          ),
-                                        ],
                                       ),
                                     ],
                                   ),

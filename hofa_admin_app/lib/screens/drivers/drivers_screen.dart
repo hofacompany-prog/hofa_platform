@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../core/format.dart';
 import '../../models/bank.dart';
 import '../../models/driver.dart';
 import '../../providers/admin_providers.dart';
@@ -441,7 +440,6 @@ class _DriversScreenState extends ConsumerState<DriversScreen> {
                   separatorBuilder: (_, _) => const SizedBox(height: 8),
                   itemBuilder: (context, i) {
                     final d = list[i];
-                    final owing = d.codBalance > 0;
                     final verification = driverVerificationState(d);
                     final (statusIcon, statusColor) = switch (verification) {
                       DriverVerificationState.verified => (
@@ -503,14 +501,12 @@ class _DriversScreenState extends ConsumerState<DriversScreen> {
                                       ),
                                       Text(
                                         '${d.totalDeliveries} chuyến · ${d.ratingAvg}★'
-                                        '${owing ? ' · Đang giữ ${formatVnd(d.codBalance)} tiền COD' : ''}'
                                         '${verification == DriverVerificationState.rejected ? ' · Bị từ chối: ${d.rejectionReason ?? ""}' : ''}',
                                         style: TextStyle(
                                           color:
-                                              owing ||
-                                                  verification ==
-                                                      DriverVerificationState
-                                                          .rejected
+                                              verification ==
+                                                  DriverVerificationState
+                                                      .rejected
                                               ? theme.colorScheme.error
                                               : null,
                                         ),

@@ -15,7 +15,9 @@ async function requireOwnDriverRow(ctx) {
   return driver;
 }
 
-// ---- Tài xế: đối soát COD + lịch sử ví ----
+// ---- Tài xế: đối soát COD (KHÔNG còn gọi từ UI từ hofa-db/69_driver_wallet_vi_tren.sql — Ví
+// trên đổi vai trò thành vốn, không còn khái niệm "tiền COD nợ cần nộp lại"; giữ nguyên route +
+// bảng, không xoá, chỉ ngừng dùng) + lịch sử ví ----
 
 /** Đơn COD đã giao xong, thuộc tài xế này, CHƯA nằm trong lần nộp nào đang pending/confirmed —
  * hiện ở màn "Nộp COD" (hofa_driver_app) để tài xế tick chọn. */
@@ -53,6 +55,21 @@ router.post('/drivers/me/wallet/cod-settlements', asyncHandler(async (req, res) 
   res.status(201).json({ ok: true, data: created });
 }));
 
+/** Chuyển nội bộ 1 CHIỀU DUY NHẤT: Ví thu nhập → Ví trên — tự động ngay lập tức, không cần admin
+ * duyệt (khác hẳn "Nạp tiền"/"Rút tiền" thật qua ngân hàng), xem RPC deposit_earning_to_vi_tren
+ * (hofa-db/69_driver_wallet_vi_tren.sql). Không có chiều ngược lại — Ví trên không rút/chuyển đi
+ * đâu được. */
+router.post('/drivers/me/wallet/transfer-to-vi-tren', asyncHandler(async (req, res) => {
+  const driver = await requireOwnDriverRow(req.ctx);
+  requireFields(req.body, ['amount']);
+  const amount = Number(req.body.amount);
+  if (!Number.isInteger(amount) || amount <= 0) {
+    throw new ApiError('BAD_REQUEST', 'Số tiền không hợp lệ', 400);
+  }
+  await db.callRpc('deposit_earning_to_vi_tren', { p_driver_id: driver.id, p_amount: amount });
+  res.status(201).json({ ok: true, data: { status: 'ok' } });
+}));
+
 /** Lịch sử ví (cả 2 ví gộp chung, sắp mới nhất trước) — màn "Lịch sử ví" app tài xế. */
 router.get('/drivers/me/wallet/transactions', asyncHandler(async (req, res) => {
   const driver = await requireOwnDriverRow(req.ctx);
@@ -66,7 +83,7 @@ router.get('/drivers/me/wallet/transactions', asyncHandler(async (req, res) => {
   res.json({ ok: true, data: rows, hasMore: rows.length === limit });
 }));
 
-// ---- Admin: đối soát COD ----
+// ---- Admin: đối soát COD (không còn tab gọi tới từ hofa_admin_app, xem ghi chú ở trên) ----
 
 router.get('/admin/driver-cod-settlements', asyncHandler(async (req, res) => {
   requireRole(req.ctx, ['admin']);
@@ -160,8 +177,7 @@ router.get('/admin/driver-wallets/summary', asyncHandler(async (req, res) => {
     `SELECT
        COALESCE((SELECT SUM(cod_balance) FROM driver_wallet_balances), 0) AS cod_held,
        COALESCE((SELECT SUM(earning_balance) FROM driver_wallet_balances), 0) AS earning_total,
-       COALESCE((SELECT SUM(amount) FROM driver_wallet_withdrawals WHERE status = 'pending'), 0) AS pending_withdrawals,
-       COALESCE((SELECT SUM(total_amount) FROM driver_cod_settlements WHERE status = 'pending'), 0) AS pending_settlements`
+       COALESCE((SELECT SUM(amount) FROM driver_wallet_withdrawals WHERE status = 'pending'), 0) AS pending_withdrawals`
   );
   res.json({ ok: true, data: row });
 }));

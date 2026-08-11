@@ -79,33 +79,6 @@ DriverVerificationState driverVerificationState(Driver d) {
   return DriverVerificationState.pending;
 }
 
-/// Mức rủi ro COD — tính động từ tỷ lệ codBalance/cod_debt_limit (driver_finance_settings,
-/// admin cấu hình ở "Tài chính tài xế"), không lưu cột riêng.
-enum DriverCodRiskLevel { normal, warning, restricted, locked }
-
-DriverCodRiskLevel driverCodRiskLevel(int codBalance, int codDebtLimit) {
-  if (codDebtLimit <= 0) return DriverCodRiskLevel.normal;
-  final ratio = codBalance / codDebtLimit;
-  if (ratio > 2.5) return DriverCodRiskLevel.locked;
-  if (ratio > 1.5) return DriverCodRiskLevel.restricted;
-  if (ratio > 1.0) return DriverCodRiskLevel.warning;
-  return DriverCodRiskLevel.normal;
-}
-
-const driverCodRiskEmoji = {
-  DriverCodRiskLevel.normal: '🟢',
-  DriverCodRiskLevel.warning: '🟡',
-  DriverCodRiskLevel.restricted: '🟠',
-  DriverCodRiskLevel.locked: '🔴',
-};
-
-const driverCodRiskLabels = {
-  DriverCodRiskLevel.normal: 'Bình thường',
-  DriverCodRiskLevel.warning: 'Cảnh báo',
-  DriverCodRiskLevel.restricted: 'Hạn chế',
-  DriverCodRiskLevel.locked: 'Khoá tài chính',
-};
-
 const driverStatusLabels = {
   'offline': 'Ngoại tuyến',
   'online': 'Sẵn sàng',

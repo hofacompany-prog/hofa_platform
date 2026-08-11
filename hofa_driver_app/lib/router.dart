@@ -14,7 +14,6 @@ import 'screens/install/install_pwa_screen.dart';
 import 'screens/shell/driver_shell.dart';
 import 'screens/home/home_screen.dart';
 import 'screens/earnings/earnings_screen.dart';
-import 'screens/earnings/cod_settlement_screen.dart';
 import 'screens/earnings/wallet_history_screen.dart';
 import 'screens/profile/profile_screen.dart';
 import 'screens/delivery/delivery_detail_screen.dart';
@@ -119,10 +118,6 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/deliveries/:id/map',
         builder: (context, state) =>
             DeliveryMapScreen(deliveryId: state.pathParameters['id']!),
-      ),
-      GoRoute(
-        path: '/wallet/cod-settlement',
-        builder: (context, state) => const CodSettlementScreen(),
       ),
       GoRoute(
         path: '/wallet/history',

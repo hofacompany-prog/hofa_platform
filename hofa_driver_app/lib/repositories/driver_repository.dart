@@ -150,25 +150,11 @@ class DriverRepository {
     await _api.post('/drivers/me/wallet/withdrawals', body: {'amount': amount});
   }
 
-  /// Đơn COD đã giao, chưa nộp lần nào (hoặc lần trước bị từ chối) — màn "Nộp COD" tick chọn.
-  Future<List<CodPendingOrder>> codPendingOrders() async {
-    final list =
-        await _api.get('/drivers/me/wallet/cod-pending-orders') as List;
-    return list
-        .map((e) => CodPendingOrder.fromJson(e as Map<String, dynamic>))
-        .toList();
-  }
-
-  Future<void> submitCodSettlement({
-    required List<String> orderIds,
-    String? proofImageUrl,
-  }) async {
+  /// Chuyển nội bộ 1 chiều Ví thu nhập → Ví trên — tự động ngay, không cần admin duyệt.
+  Future<void> transferEarningToViTren(int amount) async {
     await _api.post(
-      '/drivers/me/wallet/cod-settlements',
-      body: {
-        'order_ids': orderIds,
-        if (proofImageUrl != null) 'proof_image_url': proofImageUrl,
-      },
+      '/drivers/me/wallet/transfer-to-vi-tren',
+      body: {'amount': amount},
     );
   }
 

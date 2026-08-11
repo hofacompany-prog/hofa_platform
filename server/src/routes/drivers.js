@@ -131,12 +131,7 @@ router.get('/drivers/me/earnings', asyncHandler(async (req, res) => {
   const { limit } = pagination(req.query);
   const recent = await db.query(
     `SELECT d.driver_fee, d.delivered_at, o.order_code, o.payment_method,
-            (o.payment_method = 'cod') AS is_cod, o.total_amount,
-            EXISTS (
-              SELECT 1 FROM driver_cod_settlement_items i
-                JOIN driver_cod_settlements s ON s.id = i.settlement_id
-               WHERE i.order_id = o.id AND s.status IN ('pending','confirmed')
-            ) AS cod_settled_or_pending
+            (o.payment_method = 'cod') AS is_cod, o.total_amount
        FROM deliveries d
        JOIN orders o ON o.id = d.order_id
       WHERE d.driver_id = $1 AND d.status = 'delivered'
@@ -148,9 +143,10 @@ router.get('/drivers/me/earnings', asyncHandler(async (req, res) => {
 
 // ---- Ví tài xế: nạp/rút tiền ----
 
-/** Yêu cầu nạp tiền — chỉ tạo dòng 'pending', KHÔNG cộng wallet_balance ngay (đợi admin xác
- * nhận đã nhận được chuyển khoản ở tab Thanh toán). App tài xế tự dựng QR chuyển khoản từ
- * GET /bank-account-settings (tài khoản của sàn) + amount trả về ở đây. */
+/** Yêu cầu nạp tiền — chỉ tạo dòng 'pending', KHÔNG cộng ví ngay (đợi admin xác nhận đã nhận
+ * được chuyển khoản ở tab Thanh toán — xem POST /admin/wallet-deposits/:id/confirm, cộng thẳng
+ * vào Ví trên/wallet='cod', xem hofa-db/69_driver_wallet_vi_tren.sql). App tài xế tự dựng QR
+ * chuyển khoản từ GET /bank-account-settings (tài khoản của sàn) + amount trả về ở đây. */
 router.post('/drivers/me/wallet/deposits', asyncHandler(async (req, res) => {
   const driver = await requireOwnDriverRow(req.ctx);
   requireFields(req.body, ['amount']);
@@ -163,11 +159,10 @@ router.post('/drivers/me/wallet/deposits', asyncHandler(async (req, res) => {
 }));
 
 /** Yêu cầu rút tiền — trừ NGAY (atomic, xem RPC request_driver_withdrawal:
- * hofa-db/62_driver_wallet_ledger.sql) thay vì đợi admin duyệt, tránh tài xế tạo nhiều yêu cầu
- * rút vượt số dư thật trước khi admin kịp xử lý. Kiểm cả cod_balance chưa vượt hạn mức đối soát
- * (driver_finance_settings.cod_debt_limit) — vượt thì khoá rút. Admin từ chối thì hoàn lại tiền
- * (xem POST /admin/wallet-withdrawals/:id/reject). Bắt buộc đã có thông tin ngân hàng vì admin
- * cần đó để chuyển khoản trả lại. */
+ * hofa-db/69_driver_wallet_vi_tren.sql) thay vì đợi admin duyệt, tránh tài xế tạo nhiều yêu cầu
+ * rút vượt số dư thật trước khi admin kịp xử lý. Chỉ đụng Ví thu nhập (wallet='earning') — Ví
+ * trên không rút được. Admin từ chối thì hoàn lại tiền (xem POST /admin/wallet-withdrawals/:id/
+ * reject). Bắt buộc đã có thông tin ngân hàng vì admin cần đó để chuyển khoản trả lại. */
 router.post('/drivers/me/wallet/withdrawals', asyncHandler(async (req, res) => {
   const driver = await requireOwnDriverRow(req.ctx);
   requireFields(req.body, ['amount']);
@@ -182,9 +177,9 @@ router.post('/drivers/me/wallet/withdrawals', asyncHandler(async (req, res) => {
   res.status(201).json({ ok: true, data: created });
 }));
 
-/** Kèm cod_balance/earning_balance mỗi tài xế trong 1 lần gọi (LEFT JOIN driver_wallet_balances,
- * xem hofa-db/62_driver_wallet_ledger.sql) — DriversScreen (admin app) cần cả 2 số để hiện badge
- * COD đang giữ, không phải gọi thêm round-trip riêng. */
+/** Kèm cod_balance (Ví trên)/earning_balance (Ví thu nhập) mỗi tài xế trong 1 lần gọi (LEFT JOIN
+ * driver_wallet_balances, xem hofa-db/69_driver_wallet_vi_tren.sql) — DriversScreen (admin app)
+ * cần cả 2 số, không phải gọi thêm round-trip riêng. */
 router.get('/admin/drivers', asyncHandler(async (req, res) => {
   requireRole(req.ctx, ['admin']);
   const { limit, offset } = pagination(req.query);
@@ -275,7 +270,7 @@ router.post('/admin/wallet-deposits/:id/confirm', asyncHandler(async (req, res) 
   });
   await db.insertRow('driver_wallet_transactions', {
     driver_id: deposit.driver_id,
-    wallet: 'earning',
+    wallet: 'cod',
     entry_type: 'deposit',
     amount: deposit.amount,
     created_by: req.ctx.userId

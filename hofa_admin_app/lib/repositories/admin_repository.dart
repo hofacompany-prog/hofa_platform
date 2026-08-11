@@ -25,7 +25,6 @@ import '../models/notification_inbox_item.dart';
 import '../models/notification_settings.dart';
 import '../models/nav_tab_icon.dart';
 import '../models/icon_library.dart';
-import '../models/cod_settlement_request.dart';
 import '../models/driver_finance_settings.dart';
 import '../models/driver_wallet_summary.dart';
 import '../models/merchant_wallet_summary.dart';
@@ -526,35 +525,12 @@ class AdminRepository {
     );
   }
 
-  // ---- Ví tài xế: tổng quan + đối soát COD + điều chỉnh tay ----
+  // ---- Ví tài xế: tổng quan + điều chỉnh tay ----
 
   Future<DriverWalletSummary> driverWalletSummary() async =>
       DriverWalletSummary.fromJson(
         await _api.get('/admin/driver-wallets/summary') as Map<String, dynamic>,
       );
-
-  Future<List<CodSettlementRequest>> codSettlements({String? status}) async {
-    final list =
-        await _api.get(
-              '/admin/driver-cod-settlements',
-              query: {'limit': 100, if (status != null) 'status': status},
-            )
-            as List;
-    return list
-        .map((e) => CodSettlementRequest.fromJson(e as Map<String, dynamic>))
-        .toList();
-  }
-
-  Future<void> confirmCodSettlement(String id) async {
-    await _api.post('/admin/driver-cod-settlements/$id/confirm');
-  }
-
-  Future<void> rejectCodSettlement(String id, {String? reason}) async {
-    await _api.post(
-      '/admin/driver-cod-settlements/$id/reject',
-      body: {if (reason != null) 'reason': reason},
-    );
-  }
 
   /// wallet: 'cod' | 'earning' — amount có dấu (+/-), reason bắt buộc (server yêu cầu, xem
   /// CHECK driver_wallet_tx_adjustment_needs_note).

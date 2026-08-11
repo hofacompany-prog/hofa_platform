@@ -19,25 +19,18 @@ async function currentDriverAcceptSettings() {
   return row || { auto_accept_sweep_seconds: 8, manual_accept_sweep_seconds: 25 };
 }
 
-/** [isCod] — đơn COD thì loại luôn tài xế đang giữ cod_balance vượt hạn mức đối soát
- * (driver_finance_settings.cod_debt_limit, xem hofa-db/62_driver_wallet_ledger.sql) khỏi danh
- * sách ứng viên, tránh gán thêm COD cho tài xế đã quá hạn nộp lại. [minEarningBalance] — tài xế
- * phải có ví thu nhập (earning_balance) ĐỦ LỚN HƠN HOẶC BẰNG giá trị đơn mới được nhận, áp dụng
- * cho MỌI loại đơn (không riêng COD) — coi như tiền ký quỹ tối thiểu trước khi chạy đơn. Tài xế
- * chưa đủ (kể cả tài xế mới, số dư 0) phải tự nạp tiền vào ví thu nhập ("Nạp tiền", app tài xế)
- * trước khi nhận được đơn đầu tiên — xem hofa-db/63_driver_deposit_entry_type.sql. */
-async function findNearestOnlineDriver(pickupLat, pickupLng, excludeDriverIds, { isCod = false, minEarningBalance = 0 } = {}) {
-  const codLimitClause = isCod
-    ? `AND COALESCE(w.cod_balance, 0) <= COALESCE((SELECT cod_debt_limit FROM driver_finance_settings ORDER BY updated_at DESC LIMIT 1), 2000000)`
-    : '';
+/** [minViTrenBalance] — tài xế phải có Ví trên (wallet='cod', xem hofa-db/69_driver_wallet_vi_
+ * tren.sql) ĐỦ LỚN HƠN giá trị đơn mới được nhận, áp dụng cho MỌI loại đơn (không riêng COD) —
+ * coi như tiền vốn tối thiểu trước khi chạy đơn. Tài xế chưa đủ (kể cả tài xế mới, số dư 0)
+ * phải tự nạp tiền vào Ví trên ("Nạp tiền", app tài xế) trước khi nhận được đơn đầu tiên. */
+async function findNearestOnlineDriver(pickupLat, pickupLng, excludeDriverIds, { minViTrenBalance = 0 } = {}) {
   const drivers = await db.query(
     `SELECT d.* FROM drivers d
        LEFT JOIN driver_wallet_balances w ON w.driver_id = d.id
       WHERE d.status = 'online' AND d.current_latitude IS NOT NULL AND d.current_longitude IS NOT NULL
         AND d.id <> ALL($1::uuid[])
-        AND COALESCE(w.earning_balance, 0) >= $2
-        ${codLimitClause}`,
-    [excludeDriverIds, minEarningBalance]
+        AND COALESCE(w.cod_balance, 0) > $2`,
+    [excludeDriverIds, minViTrenBalance]
   );
   if (!drivers.length) return null;
   if (pickupLat == null || pickupLng == null) return drivers[0];
@@ -65,8 +58,7 @@ async function offerToNearestDriver(orderId, { excludeDriverIds = [] } = {}) {
   const branch = await db.queryOne('SELECT * FROM branches WHERE id = $1', [order.branch_id]);
 
   const driver = await findNearestOnlineDriver(branch?.latitude ?? null, branch?.longitude ?? null, excludeDriverIds, {
-    isCod: order.payment_method === 'cod',
-    minEarningBalance: order.total_amount
+    minViTrenBalance: order.total_amount
   });
   if (!driver) return null;
 
@@ -79,7 +71,7 @@ async function offerToNearestDriver(orderId, { excludeDriverIds = [] } = {}) {
 
 /** Gán CHÍNH XÁC 1 tài xế khách đã chỉ định (đơn mua hộ — khách tự chọn ở checkout hoặc lúc
  * chọn lại sau khi tài xế trước từ chối) — không tự tìm tài xế khác nếu người này không còn
- * online HOẶC không đủ ví thu nhập theo giá trị đơn (xem findNearestOnlineDriver), trả về null
+ * online HOẶC không đủ Ví trên theo giá trị đơn (xem findNearestOnlineDriver), trả về null
  * để nơi gọi tự báo lại cho khách chọn người khác. */
 async function offerToSpecificDriver(orderId, driverId) {
   const order = await db.queryOne('SELECT * FROM orders WHERE id = $1', [orderId]);
@@ -87,7 +79,7 @@ async function offerToSpecificDriver(orderId, driverId) {
   const driver = await db.queryOne(
     `SELECT d.* FROM drivers d
        LEFT JOIN driver_wallet_balances w ON w.driver_id = d.id
-      WHERE d.id = $1 AND d.status = 'online' AND COALESCE(w.earning_balance, 0) >= $2`,
+      WHERE d.id = $1 AND d.status = 'online' AND COALESCE(w.cod_balance, 0) > $2`,
     [driverId, order.total_amount]
   );
   if (!driver) return null;

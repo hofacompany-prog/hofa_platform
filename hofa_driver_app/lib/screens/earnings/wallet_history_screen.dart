@@ -10,7 +10,8 @@ final _walletTransactionsProvider =
     );
 
 /// Lịch sử ví — cả 2 ví gộp chung 1 danh sách, mỗi dòng ghi rõ ví/loại/số tiền để tài xế truy
-/// vết được vì sao số dư đổi (xem hofa-db/62_driver_wallet_ledger.sql).
+/// vết được vì sao số dư đổi (xem hofa-db/62_driver_wallet_ledger.sql,
+/// hofa-db/69_driver_wallet_vi_tren.sql).
 class WalletHistoryScreen extends ConsumerWidget {
   const WalletHistoryScreen({super.key});
 
@@ -49,7 +50,7 @@ class WalletHistoryScreen extends ConsumerWidget {
                     walletEntryTypeLabels[tx.entryType] ?? tx.entryType,
                   ),
                   subtitle: Text(
-                    '${tx.wallet == 'cod' ? 'Ví COD' : 'Ví thu nhập'} · ${formatDateTime(tx.createdAt)}'
+                    '${tx.wallet == 'cod' ? 'Ví trên' : 'Ví thu nhập'} · ${formatDateTime(tx.createdAt)}'
                     '${tx.note != null && tx.note!.isNotEmpty ? '\n${tx.note}' : ''}',
                   ),
                   isThreeLine: tx.note != null && tx.note!.isNotEmpty,

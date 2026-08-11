@@ -4,8 +4,6 @@ class RecentDelivery {
   final String orderCode;
   final bool isCod;
   final int totalAmount;
-  // true nếu đơn COD này đã nằm trong 1 lần nộp COD đang chờ duyệt/đã duyệt — không cần nộp lại.
-  final bool codSettledOrPending;
 
   RecentDelivery({
     required this.driverFee,
@@ -13,7 +11,6 @@ class RecentDelivery {
     required this.orderCode,
     required this.isCod,
     required this.totalAmount,
-    required this.codSettledOrPending,
   });
 
   factory RecentDelivery.fromJson(Map<String, dynamic> json) => RecentDelivery(
@@ -24,13 +21,12 @@ class RecentDelivery {
     orderCode: json['order_code'] as String? ?? '',
     isCod: json['is_cod'] as bool? ?? false,
     totalAmount: (json['total_amount'] as num?)?.toInt() ?? 0,
-    codSettledOrPending: json['cod_settled_or_pending'] as bool? ?? false,
   );
 }
 
-/// Ví tài xế — TÁCH 2 ví riêng (xem hofa-db/62_driver_wallet_ledger.sql): codBalance là tiền
-/// COD đang giữ hộ khách/HOFA (không rút được, chỉ nộp lại qua "Nộp COD"), earningBalance là
-/// thu nhập thực sự có thể rút.
+/// Ví tài xế — TÁCH 2 ví riêng (xem hofa-db/69_driver_wallet_vi_tren.sql): codBalance là **Ví
+/// trên** (vốn để nhận đơn mới, trừ tự động khi giao đơn xong, KHÔNG rút/chuyển đi đâu được),
+/// earningBalance là **Ví thu nhập** (tiền thật, rút được về ngân hàng).
 class Earnings {
   final int codBalance;
   final int earningBalance;
@@ -77,30 +73,6 @@ class Earnings {
   }
 }
 
-class CodPendingOrder {
-  final String orderId;
-  final String orderCode;
-  final int totalAmount;
-  final DateTime? deliveredAt;
-
-  CodPendingOrder({
-    required this.orderId,
-    required this.orderCode,
-    required this.totalAmount,
-    this.deliveredAt,
-  });
-
-  factory CodPendingOrder.fromJson(Map<String, dynamic> json) =>
-      CodPendingOrder(
-        orderId: json['order_id'] as String,
-        orderCode: json['order_code'] as String? ?? '',
-        totalAmount: (json['total_amount'] as num?)?.toInt() ?? 0,
-        deliveredAt: json['delivered_at'] != null
-            ? DateTime.tryParse(json['delivered_at'] as String)
-            : null,
-      );
-}
-
 class WalletTransaction {
   final String id;
   final String wallet; // 'cod' | 'earning'
@@ -131,13 +103,20 @@ class WalletTransaction {
       );
 }
 
-/// Nhãn tiếng Việt cho từng loại giao dịch — dùng ở màn "Lịch sử ví".
+/// Nhãn tiếng Việt cho từng loại giao dịch — dùng ở màn "Lịch sử ví". cod_collected/cod_settled/
+/// earning_released không còn phát sinh mới (giữ nhãn để hiện đúng lịch sử cũ trước migration
+/// hofa-db/69_driver_wallet_vi_tren.sql).
 const walletEntryTypeLabels = {
-  'cod_collected': 'Thu COD',
-  'cod_settled': 'Đã nộp COD',
-  'earning_released': 'Phí giao hàng',
+  'cod_collected': 'Thu COD (cũ)',
+  'cod_settled': 'Đã nộp COD (cũ)',
+  'earning_released': 'Phí giao hàng (cũ)',
+  'order_deducted': 'Trừ vốn đơn hàng',
+  'order_payment_received': 'Tiền đơn hàng',
   'buy_on_behalf_reimbursement': 'Hoàn tiền mua hộ',
   'withdrawal': 'Rút tiền',
   'withdrawal_rejected': 'Hoàn tiền rút bị từ chối',
   'admin_adjustment': 'HOFA điều chỉnh',
+  'deposit': 'Nạp tiền',
+  'earning_transfer_out': 'Chuyển sang Ví trên',
+  'earning_transfer_in': 'Nhận từ Ví thu nhập',
 };

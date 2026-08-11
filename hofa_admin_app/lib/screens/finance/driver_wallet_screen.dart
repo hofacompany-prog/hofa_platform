@@ -5,8 +5,8 @@ import '../../core/responsive.dart';
 import '../../models/driver.dart';
 import '../../providers/admin_providers.dart';
 
-/// "Quản lý tiền tài xế" — số tổng toàn sàn + bảng từng tài xế (COD giữ, có thể rút, mức rủi
-/// ro), admin điều chỉnh tay ví (luôn có lý do, xem hofa-db/62_driver_wallet_ledger.sql).
+/// "Quản lý tiền tài xế" — số tổng toàn sàn + bảng từng tài xế (Ví trên, Ví thu nhập), admin
+/// điều chỉnh tay ví (luôn có lý do) — xem hofa-db/69_driver_wallet_vi_tren.sql.
 class DriverWalletScreen extends ConsumerWidget {
   const DriverWalletScreen({super.key});
 
@@ -32,7 +32,7 @@ class DriverWalletScreen extends ConsumerWidget {
                 SegmentedButton<String>(
                   segments: const [
                     ButtonSegment(value: 'earning', label: Text('Ví thu nhập')),
-                    ButtonSegment(value: 'cod', label: Text('Ví COD')),
+                    ButtonSegment(value: 'cod', label: Text('Ví trên')),
                   ],
                   selected: {wallet},
                   onSelectionChanged: (s) => setInner(() => wallet = s.first),
@@ -111,8 +111,6 @@ class DriverWalletScreen extends ConsumerWidget {
     final theme = Theme.of(context);
     final summaryAsync = ref.watch(driverWalletSummaryProvider);
     final driversAsync = ref.watch(driversProvider);
-    final settingsAsync = ref.watch(driverFinanceSettingsProvider);
-    final codDebtLimit = settingsAsync.valueOrNull?.codDebtLimit ?? 2000000;
 
     return ListView(
       padding: const EdgeInsets.all(24),
@@ -132,7 +130,7 @@ class DriverWalletScreen extends ConsumerWidget {
             runSpacing: 12,
             children: [
               _SummaryCard(
-                label: 'COD đang giữ',
+                label: 'Tổng Ví trên',
                 value: formatVnd(s.codHeld),
                 color: theme.colorScheme.secondary,
               ),
@@ -144,11 +142,6 @@ class DriverWalletScreen extends ConsumerWidget {
               _SummaryCard(
                 label: 'Chờ rút',
                 value: formatVnd(s.pendingWithdrawals),
-                color: null,
-              ),
-              _SummaryCard(
-                label: 'Chờ đối soát',
-                value: formatVnd(s.pendingSettlements),
                 color: null,
               ),
             ],
@@ -178,7 +171,6 @@ class DriverWalletScreen extends ConsumerWidget {
             }
             return Column(
               children: drivers.map((d) {
-                final risk = driverCodRiskLevel(d.codBalance, codDebtLimit);
                 return Card(
                   elevation: 0,
                   color: theme.colorScheme.surfaceContainerLow,
@@ -189,11 +181,7 @@ class DriverWalletScreen extends ConsumerWidget {
                       '${d.vehicleType ?? "Xe"} · ${d.vehiclePlate ?? d.id}',
                     ),
                     subtitle: Text(
-                      'COD giữ: ${formatVnd(d.codBalance)} · Có thể rút: ${formatVnd(d.earningBalance)}',
-                    ),
-                    trailing: Text(
-                      '${driverCodRiskEmoji[risk]} ${driverCodRiskLabels[risk]}',
-                      style: theme.textTheme.bodySmall,
+                      'Ví trên: ${formatVnd(d.codBalance)} · Có thể rút: ${formatVnd(d.earningBalance)}',
                     ),
                   ),
                 );
