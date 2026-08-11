@@ -41,27 +41,36 @@ final routerProvider = Provider<GoRouter>((ref) {
       Supabase.instance.client.auth.onAuthStateChange,
     ),
     redirect: (context, state) async {
-      // Bắt buộc cài PWA trước khi dùng bất cứ gì khác (kể cả đăng nhập) — chỉ áp dụng khi
-      // trình duyệt thực sự có cách cài (Android/Chrome hoặc bất kỳ trình duyệt nào trên iOS),
-      // desktop không hỗ trợ (Firefox, Safari desktop...) thì không bị chặn. Đã từng cài
-      // (appinstalled, xem PwaInstallService.wasInstalledPreviously) mà vẫn đang mở bằng trình
-      // duyệt thường (chưa mở từ icon màn hình chính) thì cũng vào màn này — InstallPwaScreen
-      // tự đổi sang thông báo "mở app ngoài màn hình" thay vì hỏi cài lại.
+      // Cho lướt tự do ở trang chủ ('/') dù chưa cài PWA — chỉ chặn bắt cài khi bấm sang BẤT KỲ
+      // màn nào khác (kể cả đăng nhập), để khách xem thử cửa hàng/sản phẩm trước khi bị yêu cầu
+      // cài. Chỉ áp dụng khi trình duyệt thực sự có cách cài (Android/Chrome hoặc bất kỳ trình
+      // duyệt nào trên iOS), desktop không hỗ trợ (Firefox, Safari desktop...) thì không bị
+      // chặn. Đã từng cài (appinstalled, xem PwaInstallService.wasInstalledPreviously) mà vẫn
+      // đang mở bằng trình duyệt thường (chưa mở từ icon màn hình chính) thì cũng vào màn này —
+      // InstallPwaScreen tự đổi sang thông báo "mở app ngoài màn hình" thay vì hỏi cài lại.
       final needsInstall =
           !PwaInstallService.isStandalone() &&
           (PwaInstallService.wasInstalledPreviously() ||
               PwaInstallService.hasDeferredPrompt() ||
               PwaInstallService.isIOS());
-      if (needsInstall) {
+      if (needsInstall && state.matchedLocation != '/') {
         return state.matchedLocation == '/install-pwa' ? null : '/install-pwa';
       }
-      if (state.matchedLocation == '/install-pwa') return '/';
+      if (!needsInstall && state.matchedLocation == '/install-pwa') return '/';
 
       final session = Supabase.instance.client.auth.currentSession;
       final loggingIn = state.matchedLocation == '/login';
       final completingProfile = state.matchedLocation == '/complete-profile';
+      // Khách chưa đăng nhập vẫn xem được trang chủ (lướt cửa hàng/sản phẩm) — chỉ bắt đăng
+      // nhập khi bấm sang màn khác (giỏ hàng, đặt đơn, đơn hàng, hồ sơ...). home_screen.dart
+      // chỉ đọc API công khai (merchants/categories/products) + vài provider phụ tự rơi về giá
+      // trị mặc định khi 401 (customerCoordsProvider, unreadNotificationCountProvider), không
+      // cần session để hiện đúng.
+      final browsingHomeAsGuest = state.matchedLocation == '/';
 
-      if (session == null) return loggingIn ? null : '/login';
+      if (session == null) {
+        return (loggingIn || browsingHomeAsGuest) ? null : '/login';
+      }
 
       try {
         final profile = await ref.read(userProfileProvider.future);

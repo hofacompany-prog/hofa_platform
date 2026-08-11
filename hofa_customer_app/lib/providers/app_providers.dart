@@ -59,9 +59,14 @@ final notificationsPagedProvider = StateNotifierProvider.autoDispose
     );
 
 /// Số chưa đọc — hiện badge trên icon chuông ở màn chủ.
-final unreadNotificationCountProvider = FutureProvider.autoDispose<int>(
-  (ref) => ref.watch(notificationRepoProvider).unreadCount(),
-);
+/// null (khách chưa đăng nhập, xem trang chủ không cần tài khoản — router.dart) thì bỏ qua,
+/// không gọi API sẽ chắc chắn bị 401.
+final unreadNotificationCountProvider = FutureProvider.autoDispose<int>((
+  ref,
+) async {
+  if (ref.watch(currentSessionProvider) == null) return 0;
+  return ref.watch(notificationRepoProvider).unreadCount();
+});
 
 /// Voucher công khai cho khách chọn ở màn thanh toán (xem voucher_picker_dialog.dart).
 final publicVouchersProvider = FutureProvider.autoDispose
@@ -273,9 +278,14 @@ final orderDeliveryProvider = FutureProvider.autoDispose
 
 // ---- Địa chỉ ----
 
-final addressesProvider = FutureProvider.autoDispose<List<Address>>(
-  (ref) => ref.watch(userRepoProvider).addresses(),
-);
+/// null (khách chưa đăng nhập) thì rơi về danh sách rỗng thay vì gọi API chắc chắn bị 401 —
+/// khách xem trang chủ không cần tài khoản (router.dart).
+final addressesProvider = FutureProvider.autoDispose<List<Address>>((
+  ref,
+) async {
+  if (ref.watch(currentSessionProvider) == null) return [];
+  return ref.watch(userRepoProvider).addresses();
+});
 
 /// Toạ độ địa chỉ MẶC ĐỊNH của khách (hoặc địa chỉ đầu tiên nếu chưa đặt mặc định) — dùng để
 /// hiện khoảng cách từ cửa hàng tới khách ở MerchantCard/merchant_detail_screen.dart, cùng
