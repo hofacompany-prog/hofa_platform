@@ -94,6 +94,13 @@ class _CreateStoreScreenState extends ConsumerState<CreateStoreScreen> {
       setState(() => _error = 'Vui lòng chọn vị trí chi nhánh trên bản đồ');
       return;
     }
+    if (_bankAccNoCtrl.text.trim().isNotEmpty && _selectedBank == null) {
+      setState(
+        () => _error =
+            'Đã nhập số tài khoản nhưng chưa chọn đúng ngân hàng ở trên',
+      );
+      return;
+    }
     // _formKey.validate() ở trên đã đảm bảo giá trị hợp lệ (0, 100] — xem validator của
     // _radiusCtrl.
     final radiusKm = num.parse(_radiusCtrl.text.trim());

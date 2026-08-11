@@ -91,6 +91,13 @@ class _MerchantFormScreenState extends ConsumerState<MerchantFormScreen> {
       setState(() => _error = 'Vui lòng chọn vị trí chi nhánh trên bản đồ');
       return;
     }
+    if (_bankAccNoCtrl.text.trim().isNotEmpty && _selectedBank == null) {
+      setState(
+        () => _error =
+            'Đã nhập số tài khoản nhưng chưa chọn đúng ngân hàng ở trên',
+      );
+      return;
+    }
     setState(() {
       _loading = true;
       _error = null;

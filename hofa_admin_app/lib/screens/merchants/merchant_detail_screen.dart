@@ -317,6 +317,23 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
     );
     if (ok != true) return;
 
+    // Có số tài khoản mà chưa chọn đúng ngân hàng trong dropdown (vd tên ngân hàng gõ tay
+    // trước đây không khớp tên nào trong danh sách banks) — chặn lưu để tránh lưu nhầm
+    // bank_bin=null trong khi vẫn còn số tài khoản, hoặc lưu nhầm sang ngân hàng khác dẫn tới
+    // QR chuyển khoản bị ngân hàng từ chối lúc rút tiền.
+    if (bankAccNoCtrl.text.trim().isNotEmpty && selectedBank == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Đã nhập số tài khoản nhưng chưa chọn đúng ngân hàng trong danh sách — mở lại và chọn ngân hàng trước khi lưu',
+            ),
+          ),
+        );
+      }
+      return;
+    }
+
     await _run(
       () => ref.read(adminRepoProvider).updateMerchant(m.id, {
         'name': nameCtrl.text.trim(),

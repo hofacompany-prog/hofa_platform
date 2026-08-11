@@ -74,6 +74,17 @@ class _StoreProfileEditScreenState
   }
 
   Future<void> _save() async {
+    // Có số tài khoản mà chưa chọn đúng ngân hàng trong dropdown (vd tên ngân hàng gõ tay
+    // trước đây không khớp tên nào trong danh sách banks) — chặn lưu để tránh lưu nhầm
+    // bank_bin=null, hoặc lưu nhầm sang ngân hàng khác khiến QR chuyển khoản bị ngân hàng
+    // từ chối lúc admin duyệt rút tiền.
+    if (_bankAccNoCtrl.text.trim().isNotEmpty && _selectedBank == null) {
+      setState(
+        () => _error =
+            'Đã nhập số tài khoản nhưng chưa chọn đúng ngân hàng ở trên',
+      );
+      return;
+    }
     setState(() {
       _loading = true;
       _error = null;
