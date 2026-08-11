@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../core/require_login.dart';
 import '../providers/favorites_provider.dart';
 
 /// Nút tim bấm để thêm/bớt 1 cửa hàng khỏi "Cửa hàng yêu thích" — dùng chung cho MerchantCard
@@ -18,6 +19,8 @@ class MerchantFavoriteButton extends ConsumerWidget {
   });
 
   Future<void> _toggle(BuildContext context, WidgetRef ref) async {
+    if (!await requireLogin(context)) return;
+    if (!context.mounted) return;
     try {
       await ref.read(favoriteIdsProvider.notifier).toggle(merchantId);
     } catch (e) {

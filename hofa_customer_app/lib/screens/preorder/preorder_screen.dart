@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/format.dart';
+import '../../core/require_login.dart';
 import '../../models/cart_item.dart';
 import '../../models/delivery_slot.dart';
 import '../../models/preorder_schedule.dart';
@@ -94,7 +95,7 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
     if (picked != null) setState(() => _wholesaleTime = picked);
   }
 
-  void _goCheckoutWholesale(List<CartItem> items) {
+  Future<void> _goCheckoutWholesale(List<CartItem> items) async {
     if (items.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Chưa có sản phẩm giá sỉ nào trong giỏ')),
@@ -107,6 +108,8 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
       );
       return;
     }
+    if (!await requireLogin(context)) return;
+    if (!mounted) return;
     final scheduledFor = DateTime(
       _wholesaleDate!.year,
       _wholesaleDate!.month,
@@ -652,7 +655,7 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
     if (confirm == true) setState(() => _recurringConfirmed = true);
   }
 
-  void _goCheckout(List<CartItem> items) {
+  Future<void> _goCheckout(List<CartItem> items) async {
     if (items.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -694,6 +697,8 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
       recurring: _mode == 'recurring',
       weeks: _mode == 'recurring' ? _weeks : 1,
     );
+    if (!await requireLogin(context)) return;
+    if (!mounted) return;
     context.push('/checkout', extra: schedule);
   }
 

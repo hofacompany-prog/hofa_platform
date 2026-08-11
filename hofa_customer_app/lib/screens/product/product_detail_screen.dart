@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/format.dart';
+import '../../core/require_login.dart';
 import '../../models/buy_now_request.dart';
 import '../../models/cart_item.dart';
 import '../../models/product.dart';
@@ -143,6 +144,12 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
     List<ToppingGroup> toppingGroups, {
     bool buyNow = false,
   }) async {
+    // "Mua ngay" đặt đơn thẳng nên cần đăng nhập — kiểm tra ngay từ đầu, trước cả bước chọn
+    // topping, để khách không phải chọn xong rồi mới bị hỏi đăng nhập. "Thêm vào giỏ" (buyNow
+    // = false) không cần đăng nhập, giỏ hàng là state cục bộ.
+    if (buyNow && !await requireLogin(context)) return;
+    if (!mounted) return;
+
     var toppings = _selectedToppings;
     var note = _note;
     if (toppingGroups.isNotEmpty) {
@@ -336,9 +343,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
           // dùng unitPrice của MỌI bậc (cả giá sỉ lẫn đặt trước), vì unitPrice luôn là "giá
           // khi chỉ đạt điều kiện số lượng" bất kể loại bậc — số ngày/tuần (chỉ áp dụng cho
           // bậc đặt trước) chưa chọn được ở màn này nên không cần quan tâm lúc xem trước.
-          final unitPrice = variant != null
-              ? _unitPriceFor(variant, tiers)
-              : 0;
+          final unitPrice = variant != null ? _unitPriceFor(variant, tiers) : 0;
           final toppingGroups =
               ref.watch(toppingGroupsProvider(product.id)).valueOrNull ?? [];
           final toppingsTotal = _selectedToppings.fold(
@@ -498,12 +503,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                         IconButton.outlined(
                           onPressed: () => variant == null
                               ? setState(() => _quantity++)
-                              : _changeQuantity(
-                                  1,
-                                  product,
-                                  variant,
-                                  tiers,
-                                ),
+                              : _changeQuantity(1, product, variant, tiers),
                           icon: const Icon(Icons.add),
                         ),
                       ],
@@ -624,7 +624,9 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                           child: Text(
                             'Cửa hàng đang tạm đóng cửa, chưa thể đặt hàng lúc này.',
                             textAlign: TextAlign.center,
-                            style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error),
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.error,
+                            ),
                           ),
                         ),
                       if (isClosed)

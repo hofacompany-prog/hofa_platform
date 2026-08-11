@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/require_login.dart';
 import '../../providers/app_providers.dart';
 import '../../providers/cart_provider.dart';
 import '../../widgets/tab_icon.dart';
@@ -78,13 +79,24 @@ class CustomerShell extends ConsumerWidget {
           labelTextStyle: WidgetStateProperty.resolveWith(
             (states) => TextStyle(
               fontSize: 11,
-              fontWeight: states.contains(WidgetState.selected) ? FontWeight.w600 : FontWeight.w400,
+              fontWeight: states.contains(WidgetState.selected)
+                  ? FontWeight.w600
+                  : FontWeight.w400,
             ),
           ),
         ),
         child: NavigationBar(
           selectedIndex: selectedIndex,
-          onDestinationSelected: (i) => context.go(_items[i].path),
+          // "Đơn hàng"/"Tài khoản" cần đăng nhập — hỏi bằng popup trước khi chuyển tab, các tab
+          // còn lại (Trang chủ/Giỏ hàng/Đặt trước) xem tự do (xem require_login.dart).
+          onDestinationSelected: (i) async {
+            final path = _items[i].path;
+            if ((path == '/orders' || path == '/profile') &&
+                !await requireLogin(context)) {
+              return;
+            }
+            if (context.mounted) context.go(path);
+          },
           labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
           destinations: _items.map((d) {
             final count = d.label == 'Giỏ hàng'
@@ -93,11 +105,25 @@ class CustomerShell extends ConsumerWidget {
                 ? preorderCount
                 : 0;
             final iconUrl = iconByTabKey[d.tabKey];
-            final unselected = TabIcon(url: iconUrl, fallback: d.icon, color: theme.colorScheme.outline, size: 22);
-            final selected = TabIcon(url: iconUrl, fallback: d.selected, color: theme.colorScheme.primary, size: 22);
+            final unselected = TabIcon(
+              url: iconUrl,
+              fallback: d.icon,
+              color: theme.colorScheme.outline,
+              size: 22,
+            );
+            final selected = TabIcon(
+              url: iconUrl,
+              fallback: d.selected,
+              color: theme.colorScheme.primary,
+              size: 22,
+            );
             return NavigationDestination(
-              icon: count > 0 ? Badge(label: Text('$count'), child: unselected) : unselected,
-              selectedIcon: count > 0 ? Badge(label: Text('$count'), child: selected) : selected,
+              icon: count > 0
+                  ? Badge(label: Text('$count'), child: unselected)
+                  : unselected,
+              selectedIcon: count > 0
+                  ? Badge(label: Text('$count'), child: selected)
+                  : selected,
               label: d.label,
             );
           }).toList(),

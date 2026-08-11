@@ -61,15 +61,34 @@ final routerProvider = Provider<GoRouter>((ref) {
       final session = Supabase.instance.client.auth.currentSession;
       final loggingIn = state.matchedLocation == '/login';
       final completingProfile = state.matchedLocation == '/complete-profile';
-      // Khách chưa đăng nhập vẫn xem được trang chủ (lướt cửa hàng/sản phẩm) — chỉ bắt đăng
-      // nhập khi bấm sang màn khác (giỏ hàng, đặt đơn, đơn hàng, hồ sơ...). home_screen.dart
-      // chỉ đọc API công khai (merchants/categories/products) + vài provider phụ tự rơi về giá
-      // trị mặc định khi 401 (customerCoordsProvider, unreadNotificationCountProvider), không
-      // cần session để hiện đúng.
-      final browsingHomeAsGuest = state.matchedLocation == '/';
+
+      // Khách chưa đăng nhập lướt TỰ DO hầu hết app (trang chủ, giỏ hàng, đặt trước, chi tiết
+      // cửa hàng/sản phẩm, danh mục...) — không còn bị router tự đá sang /login nữa. Chỉ chặn
+      // đúng những màn THẬT SỰ cần tài khoản (đặt hàng, đơn hàng, hồ sơ, thông báo, yêu thích).
+      // Trải nghiệm CHÍNH là chặn bằng popup "Đăng nhập để tiếp tục" ngay tại nút bấm/tab điều
+      // hướng tới các màn này (xem lib/core/require_login.dart, dùng ở cart_screen.dart,
+      // product_detail_screen.dart, preorder_screen.dart, merchant_favorite_button.dart,
+      // favorites_icon.dart, notification_bell.dart, customer_shell.dart) — TRƯỚC khi điều
+      // hướng nên trong luồng dùng bình thường không bao giờ chạm nhánh dưới đây. Nhánh này chỉ
+      // là lưới an toàn cho ai gõ thẳng URL/mở deep link, lặng lẽ đưa về trang chủ thay vì hiện
+      // màn vỡ vì thiếu đăng nhập (orders/notifications/favorites 401 nhưng không crash — chỉ
+      // hiện chữ lỗi xấu; checkout thì chưa xử lý guest, sẽ kẹt lúc đặt đơn).
+      const guestProtectedPaths = [
+        '/checkout',
+        '/orders',
+        '/profile',
+        '/notifications',
+        '/favorites',
+      ];
+      final isGuestProtected = guestProtectedPaths.any(
+        (p) =>
+            state.matchedLocation == p ||
+            state.matchedLocation.startsWith('$p/'),
+      );
 
       if (session == null) {
-        return (loggingIn || browsingHomeAsGuest) ? null : '/login';
+        if (loggingIn) return null;
+        return isGuestProtected ? '/' : null;
       }
 
       try {
