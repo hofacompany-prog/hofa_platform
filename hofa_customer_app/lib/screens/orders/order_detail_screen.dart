@@ -329,7 +329,17 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                   loading: () => const SizedBox(),
                   error: (_, _) => const SizedBox(),
                   data: (delivery) {
-                    if (delivery == null || delivery.deliveryOtp == null)
+                    // Đơn giá trị thấp (<= ngưỡng admin cấu hình) bỏ qua xác nhận OTP hoàn toàn
+                    // — không hiện mã nữa, xem hofa-db/73_otp_threshold_settings.sql.
+                    final otpMinAmount =
+                        ref
+                            .watch(otpSettingsProvider)
+                            .valueOrNull
+                            ?.minOrderAmount ??
+                        0;
+                    if (delivery == null ||
+                        delivery.deliveryOtp == null ||
+                        o.totalAmount <= otpMinAmount)
                       return const SizedBox();
                     return Padding(
                       padding: const EdgeInsets.only(top: 12),

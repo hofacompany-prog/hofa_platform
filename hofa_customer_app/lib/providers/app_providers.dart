@@ -11,6 +11,7 @@ import '../models/merchant.dart';
 import '../models/merchant_classification.dart';
 import '../models/merchant_fee_tier.dart';
 import '../models/order.dart';
+import '../models/otp_settings.dart';
 import '../models/product.dart';
 import '../models/review.dart';
 import '../models/shipping_fee_settings.dart';
@@ -168,6 +169,12 @@ final bankAccountSettingsProvider =
     FutureProvider.autoDispose<BankAccountSettings>(
       (ref) => ref.watch(bankSettingsRepoProvider).get(),
     );
+
+/// Ngưỡng giá trị đơn để bắt buộc xác nhận OTP giao hàng (admin cấu hình toàn sàn) — đơn <=
+/// ngưỡng không cần hiện mã, xem hofa-db/73_otp_threshold_settings.sql.
+final otpSettingsProvider = FutureProvider.autoDispose<OtpSettings>(
+  (ref) => ref.watch(merchantRepoProvider).otpSettings(),
+);
 
 // ---- Sản phẩm ----
 

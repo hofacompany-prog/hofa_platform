@@ -4,11 +4,12 @@ import '../deliveries/deliveries_screen.dart';
 import '../settings/driver_accept_settings_screen.dart';
 import '../finance/driver_wallet_screen.dart';
 import '../settings/driver_finance_settings_screen.dart';
+import '../settings/otp_settings_screen.dart';
 
 /// Gom các màn trước đây tách riêng ở NavigationRail (Tài xế, Chuyến giao hàng, Thông số tài
-/// xế, Ví tài xế, Tài chính tài xế) vào 1 mục "Tài xế" duy nhất, mỗi màn là 1 tab con — giữ
-/// nguyên hoàn toàn từng màn (kể cả AppBar/action riêng của nó), chỉ thêm 1 dải tab mỏng phía
-/// trên để chuyển qua lại.
+/// xế, Ví tài xế, Tài chính tài xế, Ngưỡng OTP) vào 1 mục "Tài xế" duy nhất, mỗi màn là 1 tab
+/// con — giữ nguyên hoàn toàn từng màn (kể cả AppBar/action riêng của nó), chỉ thêm 1 dải tab
+/// mỏng phía trên để chuyển qua lại.
 class DriverHubScreen extends StatelessWidget {
   final int initialTab;
   const DriverHubScreen({super.key, this.initialTab = 0});
@@ -17,8 +18,8 @@ class DriverHubScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return DefaultTabController(
-      length: 5,
-      initialIndex: initialTab.clamp(0, 4),
+      length: 6,
+      initialIndex: initialTab.clamp(0, 5),
       child: Scaffold(
         body: Column(
           children: [
@@ -33,6 +34,7 @@ class DriverHubScreen extends StatelessWidget {
                   Tab(text: 'Thông số'),
                   Tab(text: 'Ví tài xế'),
                   Tab(text: 'Tài chính'),
+                  Tab(text: 'Ngưỡng OTP'),
                 ],
               ),
             ),
@@ -44,6 +46,7 @@ class DriverHubScreen extends StatelessWidget {
                   DriverAcceptSettingsScreen(),
                   DriverWalletScreen(),
                   DriverFinanceSettingsScreen(),
+                  OtpSettingsScreen(),
                 ],
               ),
             ),

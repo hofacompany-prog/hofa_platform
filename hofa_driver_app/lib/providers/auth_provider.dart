@@ -6,6 +6,7 @@ import '../models/bank_account_settings.dart';
 import '../models/user_profile.dart';
 import '../models/driver.dart';
 import '../models/driver_finance_settings.dart';
+import '../models/otp_settings.dart';
 import '../repositories/user_repository.dart';
 import '../repositories/driver_repository.dart';
 
@@ -60,3 +61,9 @@ final driverFinanceSettingsProvider =
     FutureProvider.autoDispose<DriverFinanceSettings>(
       (ref) => _driverRepo.financeSettings(),
     );
+
+/// Ngưỡng giá trị đơn để bắt buộc xác nhận OTP (admin cấu hình toàn sàn) — đơn thấp hơn/bằng
+/// ngưỡng này bỏ qua xác nhận OTP, xem hofa-db/73_otp_threshold_settings.sql.
+final otpSettingsProvider = FutureProvider.autoDispose<OtpSettings>(
+  (ref) => _driverRepo.otpSettings(),
+);

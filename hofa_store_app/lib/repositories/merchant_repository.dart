@@ -3,6 +3,7 @@ import '../models/bank.dart';
 import '../models/merchant.dart';
 import '../models/merchant_classification.dart';
 import '../models/merchant_today_stats.dart';
+import '../models/otp_settings.dart';
 import '../models/finance_summary.dart';
 import '../models/branch.dart';
 import '../models/branch_hours.dart';
@@ -51,6 +52,15 @@ class MerchantRepository {
   Future<List<Bank>> banks() async {
     final list = await _api.get('/banks') as List;
     return list.map((e) => Bank.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  /// Ngưỡng giá trị đơn để bắt buộc xác nhận OTP lấy hàng — xem
+  /// hofa-db/73_otp_threshold_settings.sql.
+  Future<OtpSettings> otpSettings() async {
+    final json = await _api.get('/otp-settings');
+    return json == null
+        ? OtpSettings.fallback()
+        : OtpSettings.fromJson(json as Map<String, dynamic>);
   }
 
   Future<Merchant> updateMerchant(String id, Map<String, dynamic> data) async =>

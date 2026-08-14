@@ -48,6 +48,17 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
   model.Order? _order;
   Branch? _branch;
 
+  /// Đơn giá trị THẤP HƠN HOẶC BẰNG ngưỡng admin cấu hình thì bỏ qua xác nhận OTP hoàn toàn —
+  /// xem hofa-db/73_otp_threshold_settings.sql. Chưa tải xong _order thì mặc định BẮT BUỘC
+  /// (an toàn hơn — không lỡ bỏ qua xác nhận thật cần thiết).
+  bool get _otpRequired {
+    final order = _order;
+    if (order == null) return true;
+    final minAmount =
+        ref.read(otpSettingsProvider).valueOrNull?.minOrderAmount ?? 0;
+    return order.totalAmount > minAmount;
+  }
+
   Future<void> _loadContext(String orderId) async {
     if (_order != null || _loadingContext) return;
     _loadingContext = true;
@@ -138,8 +149,10 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
             children: [
               TextField(
                 controller: otpCtrl,
-                decoration: const InputDecoration(
-                  labelText: 'Mã OTP khách đọc cho bạn',
+                decoration: InputDecoration(
+                  labelText: _otpRequired
+                      ? 'Mã OTP khách đọc cho bạn'
+                      : 'Mã OTP khách đọc cho bạn (không bắt buộc — đơn giá trị thấp)',
                 ),
                 keyboardType: TextInputType.number,
               ),
@@ -171,10 +184,11 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
         ],
       ),
     );
-    if (ok != true || otpCtrl.text.trim().isEmpty) return;
+    if (ok != true) return;
+    if (_otpRequired && otpCtrl.text.trim().isEmpty) return;
     await _advance(
       'delivered',
-      otp: otpCtrl.text.trim(),
+      otp: otpCtrl.text.trim().isEmpty ? null : otpCtrl.text.trim(),
       recipientName: nameCtrl.text.trim().isEmpty ? null : nameCtrl.text.trim(),
       proofPhotoUrls: photoUrl != null ? [photoUrl!] : null,
     );
@@ -282,6 +296,8 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final deliveryAsync = ref.watch(deliveryProvider(widget.deliveryId));
+    // watch (không chỉ read) để provider thực sự tải — dùng ở _otpRequired qua ref.read.
+    ref.watch(otpSettingsProvider);
     final theme = Theme.of(context);
 
     return Scaffold(
@@ -449,10 +465,12 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
                 busy: _busy,
                 isBuyOnBehalf: delivery.isBuyOnBehalf,
                 onArrivedStore: () => _advance('arrived_store'),
-                onPickedUp: () => _promptOtp(
-                  'Nhập mã OTP lấy hàng (cửa hàng đọc cho bạn)',
-                  'picked_up',
-                ),
+                onPickedUp: _otpRequired
+                    ? () => _promptOtp(
+                        'Nhập mã OTP lấy hàng (cửa hàng đọc cho bạn)',
+                        'picked_up',
+                      )
+                    : () => _advance('picked_up'),
                 onBuyOnBehalfPickup: _promptBuyOnBehalfPickup,
                 onStartDelivering: () => _advance('delivering'),
                 onDelivered: _promptDelivered,

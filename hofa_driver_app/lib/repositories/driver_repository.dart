@@ -5,6 +5,7 @@ import '../models/bank_account_settings.dart';
 import '../models/driver.dart';
 import '../models/driver_finance_settings.dart';
 import '../models/earnings.dart';
+import '../models/otp_settings.dart';
 
 class DriverRepository {
   final _api = ApiClient.instance;
@@ -131,6 +132,14 @@ class DriverRepository {
     return json == null
         ? DriverFinanceSettings.fallback()
         : DriverFinanceSettings.fromJson(json as Map<String, dynamic>);
+  }
+
+  /// Ngưỡng giá trị đơn để bắt buộc xác nhận OTP — xem hofa-db/73_otp_threshold_settings.sql.
+  Future<OtpSettings> otpSettings() async {
+    final json = await _api.get('/otp-settings');
+    return json == null
+        ? OtpSettings.fallback()
+        : OtpSettings.fromJson(json as Map<String, dynamic>);
   }
 
   /// Danh sách ngân hàng admin quản lý — dropdown lúc đăng ký/sửa hồ sơ.

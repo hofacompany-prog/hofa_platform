@@ -26,6 +26,7 @@ import '../models/notification_settings.dart';
 import '../models/nav_tab_icon.dart';
 import '../models/icon_library.dart';
 import '../models/driver_finance_settings.dart';
+import '../models/otp_settings.dart';
 import '../models/driver_wallet_summary.dart';
 import '../models/merchant_wallet_summary.dart';
 import '../models/merchant_wallet_request.dart';
@@ -611,6 +612,21 @@ class AdminRepository {
     await _api.patch('/driver-finance-settings', body: settings.toJson())
         as Map<String, dynamic>,
   );
+
+  // ---- Ngưỡng OTP xác nhận giao/nhận ----
+
+  Future<OtpSettings> otpSettings() async {
+    final data = await _api.get('/otp-settings');
+    return data == null
+        ? OtpSettings.fallback()
+        : OtpSettings.fromJson(data as Map<String, dynamic>);
+  }
+
+  Future<OtpSettings> updateOtpSettings(OtpSettings settings) async =>
+      OtpSettings.fromJson(
+        await _api.patch('/otp-settings', body: settings.toJson())
+            as Map<String, dynamic>,
+      );
 
   // ---- Ví cửa hàng: tổng quan + rút tiền + điều chỉnh tay ----
 

@@ -2,6 +2,7 @@ import '../core/api_client.dart';
 import '../models/merchant.dart';
 import '../models/merchant_classification.dart';
 import '../models/merchant_fee_tier.dart';
+import '../models/otp_settings.dart';
 import '../models/branch.dart';
 
 class MerchantRepository {
@@ -40,6 +41,15 @@ class MerchantRepository {
     return list
         .map((e) => Merchant.fromJson(e as Map<String, dynamic>))
         .toList();
+  }
+
+  /// Ngưỡng giá trị đơn để bắt buộc xác nhận OTP giao hàng — xem
+  /// hofa-db/73_otp_threshold_settings.sql.
+  Future<OtpSettings> otpSettings() async {
+    final json = await _api.get('/otp-settings');
+    return json == null
+        ? OtpSettings.fallback()
+        : OtpSettings.fromJson(json as Map<String, dynamic>);
   }
 
   /// Danh sách phân loại cửa hàng — viên nang lọc ở trang chủ.

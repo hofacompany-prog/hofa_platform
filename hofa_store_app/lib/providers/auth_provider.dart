@@ -6,6 +6,7 @@ import '../models/bank.dart';
 import '../models/merchant.dart';
 import '../models/merchant_classification.dart';
 import '../models/merchant_today_stats.dart';
+import '../models/otp_settings.dart';
 import '../models/finance_summary.dart';
 import '../models/product.dart';
 import '../repositories/user_repository.dart';
@@ -95,6 +96,12 @@ final financeSummaryProvider = FutureProvider.autoDispose
 /// Danh sách ngân hàng admin quản lý — dropdown lúc tạo/sửa hồ sơ cửa hàng.
 final banksProvider = FutureProvider.autoDispose<List<Bank>>(
   (ref) => _merchantRepo.banks(),
+);
+
+/// Ngưỡng giá trị đơn để bắt buộc xác nhận OTP lấy hàng (admin cấu hình toàn sàn) — đơn <=
+/// ngưỡng không cần hiện mã OTP, xem hofa-db/73_otp_threshold_settings.sql.
+final otpSettingsProvider = FutureProvider.autoDispose<OtpSettings>(
+  (ref) => _merchantRepo.otpSettings(),
 );
 
 /// Danh sách phân loại cửa hàng (Nhà hàng/Cà phê/Siêu thị mini...) admin quản lý — cửa hàng
