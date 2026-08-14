@@ -366,7 +366,10 @@ class ProductsListScreen extends ConsumerWidget {
                           borderRadius: BorderRadius.circular(6),
                           onTap: () => _quickEditPrice(context, ref, p),
                           child: Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 2),
+                            padding: const EdgeInsets.symmetric(
+                              vertical: 4,
+                              horizontal: 2,
+                            ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
@@ -374,11 +377,11 @@ class ProductsListScreen extends ConsumerWidget {
                                   '${p.variants.length} biến thể · từ ${formatVnd(p.lowestPrice)}',
                                   style: Theme.of(context).textTheme.bodySmall,
                                 ),
-                                const SizedBox(width: 4),
+                                const SizedBox(width: 6),
                                 Icon(
                                   Icons.edit_outlined,
-                                  size: 14,
-                                  color: Theme.of(context).colorScheme.outline,
+                                  size: 20,
+                                  color: Theme.of(context).colorScheme.primary,
                                 ),
                               ],
                             ),
