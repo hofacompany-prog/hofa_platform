@@ -396,19 +396,34 @@ class ProductsListScreen extends ConsumerWidget {
                   ),
                 ),
               ),
-              Switch(
-                value: isActive,
-                onChanged: (_) => _toggleActive(context, ref, p),
-              ),
-              IconButton(
-                tooltip: 'Sao chép sản phẩm',
-                icon: const Icon(Icons.copy_outlined),
-                onPressed: () => _copyProduct(context, ref, p),
-              ),
-              IconButton(
-                tooltip: 'Xoá sản phẩm',
-                icon: const Icon(Icons.delete_outline),
-                onPressed: () => _confirmDelete(context, ref, p),
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Transform.scale(
+                    scale: 0.75,
+                    child: Switch(
+                      value: isActive,
+                      onChanged: (_) => _toggleActive(context, ref, p),
+                    ),
+                  ),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        tooltip: 'Sao chép sản phẩm',
+                        icon: const Icon(Icons.copy_outlined, size: 20),
+                        visualDensity: VisualDensity.compact,
+                        onPressed: () => _copyProduct(context, ref, p),
+                      ),
+                      IconButton(
+                        tooltip: 'Xoá sản phẩm',
+                        icon: const Icon(Icons.delete_outline, size: 20),
+                        visualDensity: VisualDensity.compact,
+                        onPressed: () => _confirmDelete(context, ref, p),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             ],
           ),
