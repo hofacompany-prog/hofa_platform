@@ -15,8 +15,11 @@ import '../../repositories/order_repository.dart';
 import '../../repositories/pickup_repository.dart';
 import '../delivery/delivery_detail_screen.dart';
 
-final _offerOrderProvider = FutureProvider.autoDispose.family<model.Order, String>((ref, id) => OrderRepository().get(id));
-final _offerBranchProvider = FutureProvider.autoDispose.family<Branch, String>((ref, id) => PickupRepository().branch(id));
+final _offerOrderProvider = FutureProvider.autoDispose
+    .family<model.Order, String>((ref, id) => OrderRepository().get(id));
+final _offerBranchProvider = FutureProvider.autoDispose.family<Branch, String>(
+  (ref, id) => PickupRepository().branch(id),
+);
 
 /// Màn hình đơn giao hàng mới cần xác nhận — mở toàn màn hình ngay khi có push (kể cả khi app
 /// đang mở sẵn). Luôn hiện thanh trượt xác nhận với 1 dải màu chạy, thuần phía client
@@ -44,7 +47,8 @@ class OfferScreen extends ConsumerStatefulWidget {
   ConsumerState<OfferScreen> createState() => _OfferScreenState();
 }
 
-class _OfferScreenState extends ConsumerState<OfferScreen> with SingleTickerProviderStateMixin {
+class _OfferScreenState extends ConsumerState<OfferScreen>
+    with SingleTickerProviderStateMixin {
   final _deliveryRepo = DeliveryRepository();
   AnimationController? _sweepController;
   bool _sweepStarted = false;
@@ -65,6 +69,19 @@ class _OfferScreenState extends ConsumerState<OfferScreen> with SingleTickerProv
   void _clearPendingOffer() {
     if (ref.read(pendingOfferIdProvider) == widget.deliveryId) {
       ref.read(pendingOfferIdProvider.notifier).state = null;
+    }
+  }
+
+  /// Rời màn này sau khi đơn đã được xử lý xong (nhận/từ chối/đóng do lỗi) — màn /offer/:id
+  /// nhiều lúc là route DUY NHẤT trên stack (router.dart tự redirect thẳng vào đây khi
+  /// pendingOfferIdProvider còn set, kể cả lúc mở app từ trạng thái tắt hẳn qua push), context.pop()
+  /// khi đó ném GoError "There is nothing to pop" — chỉ pop được nếu thật sự có gì để pop, không
+  /// thì về thẳng trang chủ.
+  void _closeOffer() {
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go('/');
     }
   }
 
@@ -89,7 +106,10 @@ class _OfferScreenState extends ConsumerState<OfferScreen> with SingleTickerProv
       ref.invalidate(deliveryProvider(widget.deliveryId));
     } catch (e) {
       _resolved = false; // cho thử lại (tự động hoặc trượt tay) nếu lỗi
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -106,7 +126,7 @@ class _OfferScreenState extends ConsumerState<OfferScreen> with SingleTickerProv
       // im lặng — server tự chặn accept trễ + vòng quét vẫn dọn được dù gọi lỗi ở đây
     }
     _clearPendingOffer();
-    if (mounted) context.pop();
+    if (mounted) _closeOffer();
   }
 
   Future<void> _decline() async {
@@ -116,10 +136,13 @@ class _OfferScreenState extends ConsumerState<OfferScreen> with SingleTickerProv
     try {
       await _deliveryRepo.decline(widget.deliveryId);
       _clearPendingOffer();
-      if (mounted) context.pop();
+      if (mounted) _closeOffer();
     } catch (e) {
       _resolved = false;
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -141,7 +164,8 @@ class _OfferScreenState extends ConsumerState<OfferScreen> with SingleTickerProv
     final theme = Theme.of(context);
 
     return deliveryAsync.when(
-      loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
+      loading: () =>
+          const Scaffold(body: Center(child: CircularProgressIndicator())),
       error: (e, _) => Scaffold(
         body: Center(
           child: Padding(
@@ -154,7 +178,7 @@ class _OfferScreenState extends ConsumerState<OfferScreen> with SingleTickerProv
                 FilledButton(
                   onPressed: () {
                     _clearPendingOffer();
-                    context.pop();
+                    _closeOffer();
                   },
                   child: const Text('Đóng'),
                 ),
@@ -170,7 +194,9 @@ class _OfferScreenState extends ConsumerState<OfferScreen> with SingleTickerProv
           // (cùng route /offer/:id, không điều hướng đi đâu cả) thay vì đóng màn. Không còn
           // PopScope(canPop:false) ở nhánh này — DeliveryDetailScreen tự có Scaffold/AppBar
           // riêng, đóng/back bình thường được vì đơn đã có chủ, không cần ép quyết định nữa.
-          WidgetsBinding.instance.addPostFrameCallback((_) => _clearPendingOffer());
+          WidgetsBinding.instance.addPostFrameCallback(
+            (_) => _clearPendingOffer(),
+          );
           return DeliveryDetailScreen(deliveryId: widget.deliveryId);
         }
         // ref.read(...).state = ... không được gọi thẳng trong build() (Riverpod chặn sửa
@@ -208,10 +234,15 @@ class _OfferScreenState extends ConsumerState<OfferScreen> with SingleTickerProv
       final Duration totalDuration;
       final double startValue;
       if (delivery.acceptDeadline != null && delivery.assignedAt != null) {
-        totalDuration = delivery.acceptDeadline!.difference(delivery.assignedAt!);
+        totalDuration = delivery.acceptDeadline!.difference(
+          delivery.assignedAt!,
+        );
         final elapsed = DateTime.now().difference(delivery.assignedAt!);
         startValue = totalDuration.inMilliseconds > 0
-            ? (elapsed.inMilliseconds / totalDuration.inMilliseconds).clamp(0.0, 1.0)
+            ? (elapsed.inMilliseconds / totalDuration.inMilliseconds).clamp(
+                0.0,
+                1.0,
+              )
             : 1.0;
       } else {
         totalDuration = Duration.zero;
@@ -221,7 +252,9 @@ class _OfferScreenState extends ConsumerState<OfferScreen> with SingleTickerProv
       _sweepIsAutoAccept = driverAsync.valueOrNull?.autoAccept ?? false;
       _sweepController = AnimationController(
         vsync: this,
-        duration: totalDuration > Duration.zero ? totalDuration : const Duration(milliseconds: 1),
+        duration: totalDuration > Duration.zero
+            ? totalDuration
+            : const Duration(milliseconds: 1),
       );
       _sweepController!.addStatusListener((status) {
         if (status != AnimationStatus.completed) return;
@@ -241,7 +274,12 @@ class _OfferScreenState extends ConsumerState<OfferScreen> with SingleTickerProv
           child: Row(
             children: [
               Expanded(
-                child: Text('Đơn giao hàng mới', style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+                child: Text(
+                  'Đơn giao hàng mới',
+                  style: theme.textTheme.headlineSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
               orderAsync.when(
                 data: (order) => Row(
@@ -276,13 +314,21 @@ class _OfferScreenState extends ConsumerState<OfferScreen> with SingleTickerProv
                   children: [
                     _AmountChip(
                       icon: Icons.route,
-                      label: delivery.distanceKm != null ? '${delivery.distanceKm!.toStringAsFixed(1)} km' : '—',
+                      label: delivery.distanceKm != null
+                          ? '${delivery.distanceKm!.toStringAsFixed(1)} km'
+                          : '—',
                     ),
                     _AmountChip(
                       icon: Icons.timer_outlined,
-                      label: delivery.etaMinutes != null ? '${delivery.etaMinutes} phút' : '—',
+                      label: delivery.etaMinutes != null
+                          ? '${delivery.etaMinutes} phút'
+                          : '—',
                     ),
-                    _AmountChip(icon: Icons.payments, label: formatVnd(delivery.driverFee), highlight: true),
+                    _AmountChip(
+                      icon: Icons.payments,
+                      label: formatVnd(delivery.driverFee),
+                      highlight: true,
+                    ),
                   ],
                 ),
                 const SizedBox(height: 24),
@@ -308,24 +354,41 @@ class _OfferScreenState extends ConsumerState<OfferScreen> with SingleTickerProv
                   child: Text(
                     'Bạn đang tắt "Tự động nhận đơn" — hết giờ mà chưa trượt, đơn sẽ chuyển cho tài xế khác.',
                     textAlign: TextAlign.center,
-                    style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.error, fontWeight: FontWeight.bold),
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.error,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
               ],
               _sweepController == null
-                  ? const SizedBox(height: 60, child: Center(child: CircularProgressIndicator(strokeWidth: 2)))
+                  ? const SizedBox(
+                      height: 60,
+                      child: Center(
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    )
                   : _SweepSlideToConfirm(
                       sweep: _sweepController!,
                       busy: _busy,
                       onConfirm: _accept,
-                      baseColor: _sweepIsAutoAccept ? theme.colorScheme.primary : theme.colorScheme.secondary,
+                      baseColor: _sweepIsAutoAccept
+                          ? theme.colorScheme.primary
+                          : theme.colorScheme.secondary,
                     ),
-              const SizedBox(height: 8),
-              TextButton(
-                onPressed: _busy ? null : _decline,
-                style: TextButton.styleFrom(foregroundColor: theme.colorScheme.error),
-                child: const Text('Từ chối đơn này'),
-              ),
+              // Bật "Tự động nhận đơn" thì không cho từ chối tay — hết giờ thanh trượt sẽ tự
+              // nhận đơn (xem addStatusListener ở trên), nút "Từ chối" ở đây chỉ có ý nghĩa khi
+              // tài xế đang TẮT chế độ đó.
+              if (!_sweepIsAutoAccept) ...[
+                const SizedBox(height: 8),
+                TextButton(
+                  onPressed: _busy ? null : _decline,
+                  style: TextButton.styleFrom(
+                    foregroundColor: theme.colorScheme.error,
+                  ),
+                  child: const Text('Từ chối đơn này'),
+                ),
+              ],
             ],
           ),
         ),
@@ -338,14 +401,23 @@ class _AmountChip extends StatelessWidget {
   final IconData icon;
   final String label;
   final bool highlight;
-  const _AmountChip({required this.icon, required this.label, this.highlight = false});
+  const _AmountChip({
+    required this.icon,
+    required this.label,
+    this.highlight = false,
+  });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Column(
       children: [
-        Icon(icon, color: highlight ? theme.colorScheme.primary : theme.colorScheme.outline),
+        Icon(
+          icon,
+          color: highlight
+              ? theme.colorScheme.primary
+              : theme.colorScheme.outline,
+        ),
         const SizedBox(height: 6),
         Text(
           label,
@@ -377,8 +449,18 @@ class _OfferDetails extends ConsumerWidget {
             title: branch.displayName,
             subtitle: branch.fullLine,
           ),
-          loading: () => const _AddressTile(icon: Icons.storefront, label: 'Lấy hàng', title: 'Đang tải...', subtitle: ''),
-          error: (_, _) => const _AddressTile(icon: Icons.storefront, label: 'Lấy hàng', title: '—', subtitle: ''),
+          loading: () => const _AddressTile(
+            icon: Icons.storefront,
+            label: 'Lấy hàng',
+            title: 'Đang tải...',
+            subtitle: '',
+          ),
+          error: (_, _) => const _AddressTile(
+            icon: Icons.storefront,
+            label: 'Lấy hàng',
+            title: '—',
+            subtitle: '',
+          ),
         ),
         if (branchAsync.valueOrNull?.isBuyOnBehalf == true) ...[
           const SizedBox(height: 8),
@@ -392,7 +474,11 @@ class _OfferDetails extends ConsumerWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.shopping_bag_outlined, size: 18, color: theme.colorScheme.primary),
+                Icon(
+                  Icons.shopping_bag_outlined,
+                  size: 18,
+                  color: theme.colorScheme.primary,
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -420,15 +506,26 @@ class _OfferDetails extends ConsumerWidget {
             width: double.infinity,
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: theme.colorScheme.secondaryContainer.withValues(alpha: 0.5),
+              color: theme.colorScheme.secondaryContainer.withValues(
+                alpha: 0.5,
+              ),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.info_outline, size: 18, color: theme.colorScheme.secondary),
+                Icon(
+                  Icons.info_outline,
+                  size: 18,
+                  color: theme.colorScheme.secondary,
+                ),
                 const SizedBox(width: 8),
-                Expanded(child: Text(order.shipNote!, style: TextStyle(color: theme.colorScheme.secondary))),
+                Expanded(
+                  child: Text(
+                    order.shipNote!,
+                    style: TextStyle(color: theme.colorScheme.secondary),
+                  ),
+                ),
               ],
             ),
           ),
@@ -449,7 +546,12 @@ class _AddressTile extends StatelessWidget {
   final String label;
   final String title;
   final String subtitle;
-  const _AddressTile({required this.icon, required this.label, required this.title, required this.subtitle});
+  const _AddressTile({
+    required this.icon,
+    required this.label,
+    required this.title,
+    required this.subtitle,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -465,7 +567,8 @@ class _AddressTile extends StatelessWidget {
             children: [
               Text(label, style: theme.textTheme.labelSmall),
               Text(title, style: theme.textTheme.titleSmall),
-              if (subtitle.isNotEmpty) Text(subtitle, style: theme.textTheme.bodySmall),
+              if (subtitle.isNotEmpty)
+                Text(subtitle, style: theme.textTheme.bodySmall),
             ],
           ),
         ),
@@ -501,7 +604,10 @@ class _SweepSlideToConfirm extends StatelessWidget {
       key: const ValueKey('offer-accept-slide'),
       enabled: !busy,
       text: 'Trượt để nhận đơn',
-      textStyle: theme.textTheme.titleMedium?.copyWith(color: Colors.white, fontWeight: FontWeight.w600),
+      textStyle: theme.textTheme.titleMedium?.copyWith(
+        color: Colors.white,
+        fontWeight: FontWeight.w600,
+      ),
       outerColor: Colors.transparent,
       innerColor: Colors.white,
       sliderButtonIcon: Icon(Icons.arrow_forward, color: baseColor),
@@ -523,8 +629,19 @@ class _SweepSlideToConfirm extends StatelessWidget {
                 child: Row(
                   children: [
                     if (usedFlex > 0)
-                      Expanded(flex: usedFlex, child: Container(color: theme.colorScheme.error.withValues(alpha: 0.55))),
-                    if (usedFlex < 1000) Expanded(flex: 1000 - usedFlex, child: Container(color: baseColor)),
+                      Expanded(
+                        flex: usedFlex,
+                        child: Container(
+                          color: theme.colorScheme.error.withValues(
+                            alpha: 0.55,
+                          ),
+                        ),
+                      ),
+                    if (usedFlex < 1000)
+                      Expanded(
+                        flex: 1000 - usedFlex,
+                        child: Container(color: baseColor),
+                      ),
                   ],
                 ),
               ),
