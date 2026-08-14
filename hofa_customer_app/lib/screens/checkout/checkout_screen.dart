@@ -751,448 +751,497 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         ),
         title: const Text('Thanh toán'),
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
+      // Từ "Tạm tính" tới nút "Đặt hàng" ghim cố định ở dưới (như cart_screen.dart) — cuộn
+      // phần địa chỉ/voucher/sản phẩm ở trên không làm mất khung tổng tiền + nút đặt hàng.
+      body: Column(
         children: [
-          Text('Địa chỉ giao hàng', style: theme.textTheme.titleSmall),
-          const SizedBox(height: 8),
-          addressesAsync.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, _) => Text('Lỗi: $e'),
-            data: (addresses) => Column(
+          Expanded(
+            child: ListView(
+              padding: const EdgeInsets.all(16),
               children: [
-                RadioGroup<String>(
-                  groupValue: _selectedAddressId,
-                  onChanged: (v) => setState(() => _selectedAddressId = v),
-                  child: Column(
-                    children: addresses
-                        .map(
-                          (a) => RadioListTile<String>(
-                            contentPadding: EdgeInsets.zero,
-                            value: a.id,
-                            title: Text(
-                              '${a.recipientName} · ${a.recipientPhone}',
-                            ),
-                            subtitle: Text(a.fullLine),
-                          ),
-                        )
-                        .toList(),
-                  ),
-                ),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: TextButton.icon(
-                    onPressed: _addAddress,
-                    icon: const Icon(Icons.add),
-                    label: const Text('Thêm địa chỉ mới'),
-                  ),
-                ),
-                if (_selectedAddressId != null)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4, bottom: 4),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.local_shipping_outlined,
-                          size: 16,
-                          color: theme.colorScheme.outline,
-                        ),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            'Phí giao hàng tới địa chỉ này: '
-                            '${shippingFee == 0 ? 'Miễn phí' : formatVnd(shippingFee)}',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.outline,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-              ],
-            ),
-          ),
-          const Divider(height: 32),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text('Mã giảm giá', style: theme.textTheme.titleSmall),
-              if (maxVouchers > 1)
-                Text(
-                  '${_appliedVouchers.length}/$maxVouchers mã',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.outline,
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          ..._appliedVouchers.map(
-            (v) => Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.primary.withValues(alpha: 0.08),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      Icons.local_offer,
-                      color: theme.colorScheme.primary,
-                      size: 20,
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Mã "${v.code}" — giảm ${formatVnd(v.discount)}',
-                        style: TextStyle(
-                          color: theme.colorScheme.primary,
-                          fontWeight: FontWeight.w600,
+                Text('Địa chỉ giao hàng', style: theme.textTheme.titleSmall),
+                const SizedBox(height: 8),
+                addressesAsync.when(
+                  loading: () =>
+                      const Center(child: CircularProgressIndicator()),
+                  error: (e, _) => Text('Lỗi: $e'),
+                  data: (addresses) => Column(
+                    children: [
+                      RadioGroup<String>(
+                        groupValue: _selectedAddressId,
+                        onChanged: (v) =>
+                            setState(() => _selectedAddressId = v),
+                        child: Column(
+                          children: addresses
+                              .map(
+                                (a) => RadioListTile<String>(
+                                  contentPadding: EdgeInsets.zero,
+                                  value: a.id,
+                                  title: Text(
+                                    '${a.recipientName} · ${a.recipientPhone}',
+                                  ),
+                                  subtitle: Text(a.fullLine),
+                                ),
+                              )
+                              .toList(),
                         ),
                       ),
-                    ),
-                    TextButton(
-                      onPressed: () => _removeVoucher(v.code),
-                      child: const Text('Bỏ'),
-                    ),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: TextButton.icon(
+                          onPressed: _addAddress,
+                          icon: const Icon(Icons.add),
+                          label: const Text('Thêm địa chỉ mới'),
+                        ),
+                      ),
+                      if (_selectedAddressId != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4, bottom: 4),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.local_shipping_outlined,
+                                size: 16,
+                                color: theme.colorScheme.outline,
+                              ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  'Phí giao hàng tới địa chỉ này: '
+                                  '${shippingFee == 0 ? 'Miễn phí' : formatVnd(shippingFee)}',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.outline,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 32),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Mã giảm giá', style: theme.textTheme.titleSmall),
+                    if (maxVouchers > 1)
+                      Text(
+                        '${_appliedVouchers.length}/$maxVouchers mã',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.outline,
+                        ),
+                      ),
                   ],
                 ),
-              ),
-            ),
-          ),
-          if (_appliedVouchers.length < maxVouchers)
-            OutlinedButton.icon(
-              onPressed: (_voucherChecking || cart.merchantId == null)
-                  ? null
-                  : () => _pickVoucher(
-                      publicVouchersAsync?.valueOrNull ?? [],
-                      cart.merchantId!,
-                      itemsSubtotal,
-                      shippingFee,
+                const SizedBox(height: 8),
+                ..._appliedVouchers.map(
+                  (v) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.primary.withValues(
+                          alpha: 0.08,
+                        ),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.local_offer,
+                            color: theme.colorScheme.primary,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Mã "${v.code}" — giảm ${formatVnd(v.discount)}',
+                              style: TextStyle(
+                                color: theme.colorScheme.primary,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                          TextButton(
+                            onPressed: () => _removeVoucher(v.code),
+                            child: const Text('Bỏ'),
+                          ),
+                        ],
+                      ),
                     ),
-              icon: _voucherChecking
-                  ? const SizedBox(
-                      height: 16,
-                      width: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.local_offer_outlined),
-              label: Text(
-                _appliedVouchers.isEmpty
-                    ? 'Chọn hoặc nhập mã giảm giá'
-                    : 'Thêm mã khác',
-              ),
-            ),
-          if (_voucherError != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 6),
-              child: Text(
-                _voucherError!,
-                style: TextStyle(color: theme.colorScheme.error),
-              ),
-            ),
-          const Divider(height: 32),
-          if (merchant != null && merchant.isBuyOnBehalf) ...[
-            BuyOnBehalfFeeNotice(merchant: merchant),
-            const SizedBox(height: 12),
-            Text('Cách tìm tài xế', style: theme.textTheme.titleSmall),
-            RadioGroup<bool>(
-              groupValue: _autoFindDriver,
-              onChanged: (v) => setState(() {
-                _autoFindDriver = v ?? true;
-                if (_autoFindDriver) _driverPickError = null;
-              }),
-              child: const Column(
-                children: [
-                  RadioListTile<bool>(
-                    contentPadding: EdgeInsets.zero,
-                    value: true,
-                    title: Text('Để hệ thống tự tìm tài xế gần nhất'),
-                  ),
-                  RadioListTile<bool>(
-                    contentPadding: EdgeInsets.zero,
-                    value: false,
-                    title: Text('Tự chọn tài xế ưng ý'),
-                  ),
-                ],
-              ),
-            ),
-            if (!_autoFindDriver) ...[
-              const SizedBox(height: 8),
-              Card(
-                elevation: 0,
-                color: theme.colorScheme.surfaceContainerLow,
-                child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundImage: _selectedDriver?.avatarUrl != null
-                        ? NetworkImage(_selectedDriver!.avatarUrl!)
-                        : null,
-                    child: _selectedDriver?.avatarUrl == null
-                        ? const Icon(Icons.person)
-                        : null,
-                  ),
-                  title: Text(_selectedDriver?.fullName ?? 'Chưa chọn tài xế'),
-                  subtitle: _selectedDriver != null
-                      ? Text(
-                          '★ ${_selectedDriver!.ratingAvg.toStringAsFixed(1)}'
-                          '${_selectedDriver!.vehicleType != null ? ' · ${_selectedDriver!.vehicleType}' : ''}',
-                        )
-                      : const Text(
-                          'Bấm để xem tài xế đang online gần cửa hàng',
-                        ),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: (branch?.latitude == null || branch?.longitude == null)
-                      ? null
-                      : () async {
-                          final picked = await showDriverPickerDialog(
-                            context,
-                            lat: branch!.latitude!,
-                            lng: branch.longitude!,
-                          );
-                          if (picked != null)
-                            setState(() => _selectedDriver = picked);
-                        },
-                ),
-              ),
-              if (_driverPickError != null)
-                Padding(
-                  padding: const EdgeInsets.only(top: 6),
-                  child: Text(
-                    _driverPickError!,
-                    style: TextStyle(color: theme.colorScheme.error),
                   ),
                 ),
-            ],
-            const Divider(height: 32),
-          ],
-          Text('Phương thức thanh toán', style: theme.textTheme.titleSmall),
-          RadioGroup<String>(
-            groupValue: _effectivePaymentMethod(cart),
-            onChanged: (merchant?.isBuyOnBehalf ?? false)
-                ? (_) {}
-                : (v) => setState(() => _paymentMethod = v ?? _paymentMethod),
-            child: Column(
-              children: [
-                if (!(merchant?.isBuyOnBehalf ?? false))
-                  const RadioListTile<String>(
-                    contentPadding: EdgeInsets.zero,
-                    value: 'cod',
-                    title: Text('Thanh toán khi nhận hàng (COD)'),
+                if (_appliedVouchers.length < maxVouchers)
+                  OutlinedButton.icon(
+                    onPressed: (_voucherChecking || cart.merchantId == null)
+                        ? null
+                        : () => _pickVoucher(
+                            publicVouchersAsync?.valueOrNull ?? [],
+                            cart.merchantId!,
+                            itemsSubtotal,
+                            shippingFee,
+                          ),
+                    icon: _voucherChecking
+                        ? const SizedBox(
+                            height: 16,
+                            width: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.local_offer_outlined),
+                    label: Text(
+                      _appliedVouchers.isEmpty
+                          ? 'Chọn hoặc nhập mã giảm giá'
+                          : 'Thêm mã khác',
+                    ),
                   ),
-                const RadioListTile<String>(
-                  contentPadding: EdgeInsets.zero,
-                  value: 'bank_transfer',
-                  title: Text('Chuyển khoản ngân hàng'),
-                ),
-              ],
-            ),
-          ),
-          if (_effectivePaymentMethod(cart) == 'bank_transfer' &&
-              orderCount > 1)
-            CheckboxListTile(
-              contentPadding: EdgeInsets.zero,
-              controlAffinity: ListTileControlAffinity.leading,
-              value: _payWeekly,
-              onChanged: (v) => setState(() => _payWeekly = v ?? false),
-              title: const Text('Thanh toán theo tuần'),
-              subtitle: Text(
-                'Chuyển khoản 1 lần cho cả $orderCount lần giao trong tuần — chỉ đơn đầu '
-                'tiên cần chờ cửa hàng xác nhận đã nhận tiền, các đơn sau không phải trả '
-                'riêng nữa.',
-              ),
-            ),
-          if (cart.salesModel == 'scheduled') ...[
-            const Divider(height: 32),
-            Text('Lịch giao', style: theme.textTheme.titleSmall),
-            const SizedBox(height: 8),
-            if (widget.preorderSchedule != null) ...[
-              Text(
-                (scheduledOrders?.length ?? 0) > 1
-                    ? 'Sẽ tạo ${scheduledOrders!.length} đơn hàng riêng, mỗi đơn đúng món của lần giao đó'
-                    : 'Giao 1 lần: ${formatDateTime(scheduledOrders!.first.key)}',
-              ),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton.icon(
-                  onPressed: () => context.pop(),
-                  icon: const Icon(Icons.edit_outlined),
-                  label: const Text('Sửa lịch giao'),
-                ),
-              ),
-            ] else if (widget.initialScheduledFor != null) ...[
-              Text('Giao: ${formatDateTime(_scheduledFor!)}'),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton.icon(
-                  onPressed: () => context.pop(),
-                  icon: const Icon(Icons.edit_outlined),
-                  label: const Text('Sửa lịch giao'),
-                ),
-              ),
-            ] else
-              OutlinedButton.icon(
-                icon: const Icon(Icons.calendar_today_outlined),
-                label: Text(
-                  _scheduledFor == null
-                      ? 'Chọn ngày'
-                      : formatDate(_scheduledFor!),
-                ),
-                onPressed: () async {
-                  final picked = await showDatePicker(
-                    context: context,
-                    initialDate: DateTime.now().add(const Duration(days: 2)),
-                    firstDate: DateTime.now(),
-                    lastDate: DateTime.now().add(const Duration(days: 90)),
-                  );
-                  if (picked != null) setState(() => _scheduledFor = picked);
-                },
-              ),
-          ],
-          const Divider(height: 32),
-          Text('Ghi chú cho cửa hàng', style: theme.textTheme.titleSmall),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _noteCtrl,
-            decoration: const InputDecoration(
-              hintText: 'Không bắt buộc',
-              border: OutlineInputBorder(),
-              isDense: true,
-            ),
-            maxLines: 2,
-          ),
-          const Divider(height: 32),
-          Text('Sản phẩm', style: theme.textTheme.titleSmall),
-          const SizedBox(height: 8),
-          ...items.map(
-            (i) => Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                if (_voucherError != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text(
+                      _voucherError!,
+                      style: TextStyle(color: theme.colorScheme.error),
+                    ),
+                  ),
+                const Divider(height: 32),
+                if (merchant != null && merchant.isBuyOnBehalf) ...[
+                  BuyOnBehalfFeeNotice(merchant: merchant),
+                  const SizedBox(height: 12),
+                  Text('Cách tìm tài xế', style: theme.textTheme.titleSmall),
+                  RadioGroup<bool>(
+                    groupValue: _autoFindDriver,
+                    onChanged: (v) => setState(() {
+                      _autoFindDriver = v ?? true;
+                      if (_autoFindDriver) _driverPickError = null;
+                    }),
+                    child: const Column(
                       children: [
-                        Text(i.productName),
-                        Text(
-                          '${i.variantName} · ${i.quantity} x '
-                          // Có topping thì tách rõ giá món + giá topping (khách biết đang
-                          // cộng gì vào), không có topping thì chỉ hiện đơn giá món.
-                          '${i.toppingsTotal > 0 ? '(${formatVnd(i.unitPrice)} + ${formatVnd(i.toppingsTotal)} topping)' : formatVnd(i.unitPrice)}',
-                          style: theme.textTheme.bodySmall,
+                        RadioListTile<bool>(
+                          contentPadding: EdgeInsets.zero,
+                          value: true,
+                          title: Text('Để hệ thống tự tìm tài xế gần nhất'),
                         ),
-                        if (i.toppings.isNotEmpty)
-                          Text(
-                            i.toppings.map((t) => t.name).join(', '),
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.secondary,
-                            ),
-                          ),
-                        if (i.note != null && i.note!.isNotEmpty)
-                          Text(
-                            'Ghi chú: ${i.note}',
-                            style: theme.textTheme.bodySmall?.copyWith(
-                              fontStyle: FontStyle.italic,
-                            ),
-                          ),
+                        RadioListTile<bool>(
+                          contentPadding: EdgeInsets.zero,
+                          value: false,
+                          title: Text('Tự chọn tài xế ưng ý'),
+                        ),
                       ],
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Text(
-                    formatVnd(i.lineTotal),
-                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  if (!_autoFindDriver) ...[
+                    const SizedBox(height: 8),
+                    Card(
+                      elevation: 0,
+                      color: theme.colorScheme.surfaceContainerLow,
+                      child: ListTile(
+                        leading: CircleAvatar(
+                          backgroundImage: _selectedDriver?.avatarUrl != null
+                              ? NetworkImage(_selectedDriver!.avatarUrl!)
+                              : null,
+                          child: _selectedDriver?.avatarUrl == null
+                              ? const Icon(Icons.person)
+                              : null,
+                        ),
+                        title: Text(
+                          _selectedDriver?.fullName ?? 'Chưa chọn tài xế',
+                        ),
+                        subtitle: _selectedDriver != null
+                            ? Text(
+                                '★ ${_selectedDriver!.ratingAvg.toStringAsFixed(1)}'
+                                '${_selectedDriver!.vehicleType != null ? ' · ${_selectedDriver!.vehicleType}' : ''}',
+                              )
+                            : const Text(
+                                'Bấm để xem tài xế đang online gần cửa hàng',
+                              ),
+                        trailing: const Icon(Icons.chevron_right),
+                        onTap:
+                            (branch?.latitude == null ||
+                                branch?.longitude == null)
+                            ? null
+                            : () async {
+                                final picked = await showDriverPickerDialog(
+                                  context,
+                                  lat: branch!.latitude!,
+                                  lng: branch.longitude!,
+                                );
+                                if (picked != null)
+                                  setState(() => _selectedDriver = picked);
+                              },
+                      ),
+                    ),
+                    if (_driverPickError != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Text(
+                          _driverPickError!,
+                          style: TextStyle(color: theme.colorScheme.error),
+                        ),
+                      ),
+                  ],
+                  const Divider(height: 32),
+                ],
+                Text(
+                  'Phương thức thanh toán',
+                  style: theme.textTheme.titleSmall,
+                ),
+                RadioGroup<String>(
+                  groupValue: _effectivePaymentMethod(cart),
+                  onChanged: (merchant?.isBuyOnBehalf ?? false)
+                      ? (_) {}
+                      : (v) => setState(
+                          () => _paymentMethod = v ?? _paymentMethod,
+                        ),
+                  child: Column(
+                    children: [
+                      if (!(merchant?.isBuyOnBehalf ?? false))
+                        const RadioListTile<String>(
+                          contentPadding: EdgeInsets.zero,
+                          value: 'cod',
+                          title: Text('Thanh toán khi nhận hàng (COD)'),
+                        ),
+                      const RadioListTile<String>(
+                        contentPadding: EdgeInsets.zero,
+                        value: 'bank_transfer',
+                        title: Text('Chuyển khoản ngân hàng'),
+                      ),
+                    ],
+                  ),
+                ),
+                if (_effectivePaymentMethod(cart) == 'bank_transfer' &&
+                    orderCount > 1)
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    controlAffinity: ListTileControlAffinity.leading,
+                    value: _payWeekly,
+                    onChanged: (v) => setState(() => _payWeekly = v ?? false),
+                    title: const Text('Thanh toán theo tuần'),
+                    subtitle: Text(
+                      'Chuyển khoản 1 lần cho cả $orderCount lần giao trong tuần — chỉ đơn đầu '
+                      'tiên cần chờ cửa hàng xác nhận đã nhận tiền, các đơn sau không phải trả '
+                      'riêng nữa.',
+                    ),
+                  ),
+                if (cart.salesModel == 'scheduled') ...[
+                  const Divider(height: 32),
+                  Text('Lịch giao', style: theme.textTheme.titleSmall),
+                  const SizedBox(height: 8),
+                  if (widget.preorderSchedule != null) ...[
+                    Text(
+                      (scheduledOrders?.length ?? 0) > 1
+                          ? 'Sẽ tạo ${scheduledOrders!.length} đơn hàng riêng, mỗi đơn đúng món của lần giao đó'
+                          : 'Giao 1 lần: ${formatDateTime(scheduledOrders!.first.key)}',
+                    ),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        onPressed: () => context.pop(),
+                        icon: const Icon(Icons.edit_outlined),
+                        label: const Text('Sửa lịch giao'),
+                      ),
+                    ),
+                  ] else if (widget.initialScheduledFor != null) ...[
+                    Text('Giao: ${formatDateTime(_scheduledFor!)}'),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        onPressed: () => context.pop(),
+                        icon: const Icon(Icons.edit_outlined),
+                        label: const Text('Sửa lịch giao'),
+                      ),
+                    ),
+                  ] else
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.calendar_today_outlined),
+                      label: Text(
+                        _scheduledFor == null
+                            ? 'Chọn ngày'
+                            : formatDate(_scheduledFor!),
+                      ),
+                      onPressed: () async {
+                        final picked = await showDatePicker(
+                          context: context,
+                          initialDate: DateTime.now().add(
+                            const Duration(days: 2),
+                          ),
+                          firstDate: DateTime.now(),
+                          lastDate: DateTime.now().add(
+                            const Duration(days: 90),
+                          ),
+                        );
+                        if (picked != null)
+                          setState(() => _scheduledFor = picked);
+                      },
+                    ),
+                ],
+                const Divider(height: 32),
+                Text('Ghi chú cho cửa hàng', style: theme.textTheme.titleSmall),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _noteCtrl,
+                  decoration: const InputDecoration(
+                    hintText: 'Không bắt buộc',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                  maxLines: 2,
+                ),
+                const Divider(height: 32),
+                Text('Sản phẩm', style: theme.textTheme.titleSmall),
+                const SizedBox(height: 8),
+                ...items.map(
+                  (i) => Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(i.productName),
+                              Text(
+                                '${i.variantName} · ${i.quantity} x '
+                                // Có topping thì tách rõ giá món + giá topping (khách biết đang
+                                // cộng gì vào), không có topping thì chỉ hiện đơn giá món.
+                                '${i.toppingsTotal > 0 ? '(${formatVnd(i.unitPrice)} + ${formatVnd(i.toppingsTotal)} topping)' : formatVnd(i.unitPrice)}',
+                                style: theme.textTheme.bodySmall,
+                              ),
+                              if (i.toppings.isNotEmpty)
+                                Text(
+                                  i.toppings.map((t) => t.name).join(', '),
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.secondary,
+                                  ),
+                                ),
+                              if (i.note != null && i.note!.isNotEmpty)
+                                Text(
+                                  'Ghi chú: ${i.note}',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          formatVnd(i.lineTotal),
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const Divider(height: 32),
+              ],
+            ),
+          ),
+          SafeArea(
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surface,
+                boxShadow: [
+                  BoxShadow(
+                    color: theme.colorScheme.shadow.withValues(alpha: 0.08),
+                    blurRadius: 8,
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text('Tạm tính'),
+                      Text(formatVnd(itemsSubtotal)),
+                    ],
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          orderCount > 1
+                              ? 'Phí giao hàng (x$orderCount lần giao)'
+                              : 'Phí giao hàng',
+                        ),
+                        Text(
+                          totalShippingFee == 0
+                              ? 'Miễn phí'
+                              : formatVnd(totalShippingFee),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (buyOnBehalfFee > 0)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('Phí mua hộ'),
+                          Text(formatVnd(buyOnBehalfFee)),
+                        ],
+                      ),
+                    ),
+                  if (_voucherDiscount > 0)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('Giảm giá'),
+                          Text('-${formatVnd(_voucherDiscount)}'),
+                        ],
+                      ),
+                    ),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Tổng cộng',
+                          style: TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        Text(
+                          formatVnd(total),
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: theme.colorScheme.primary,
+                            fontSize: 18,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  FilledButton(
+                    onPressed: (_placing || _selectedAddressId == null)
+                        ? null
+                        : () {
+                            final address = addresses
+                                .where((a) => a.id == _selectedAddressId)
+                                .toList();
+                            if (address.isEmpty) return;
+                            _placeOrder(address.first, shippingFee);
+                          },
+                    child: _placing
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Đặt hàng'),
                   ),
                 ],
               ),
             ),
-          ),
-          const Divider(height: 32),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [const Text('Tạm tính'), Text(formatVnd(itemsSubtotal))],
-          ),
-          Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  orderCount > 1
-                      ? 'Phí giao hàng (x$orderCount lần giao)'
-                      : 'Phí giao hàng',
-                ),
-                Text(
-                  totalShippingFee == 0
-                      ? 'Miễn phí'
-                      : formatVnd(totalShippingFee),
-                ),
-              ],
-            ),
-          ),
-          if (buyOnBehalfFee > 0)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text('Phí mua hộ'),
-                  Text(formatVnd(buyOnBehalfFee)),
-                ],
-              ),
-            ),
-          if (_voucherDiscount > 0)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text('Giảm giá'),
-                  Text('-${formatVnd(_voucherDiscount)}'),
-                ],
-              ),
-            ),
-          Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Tổng cộng',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-                Text(
-                  formatVnd(total),
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: theme.colorScheme.primary,
-                    fontSize: 18,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 24),
-          FilledButton(
-            onPressed: (_placing || _selectedAddressId == null)
-                ? null
-                : () {
-                    final address = addresses
-                        .where((a) => a.id == _selectedAddressId)
-                        .toList();
-                    if (address.isEmpty) return;
-                    _placeOrder(address.first, shippingFee);
-                  },
-            child: _placing
-                ? const SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Text('Đặt hàng'),
           ),
         ],
       ),
