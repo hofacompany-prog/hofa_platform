@@ -43,6 +43,13 @@ class _MerchantFormScreenState extends ConsumerState<MerchantFormScreen> {
   Bank? _selectedBank;
   Set<String> _selectedClassificationIds = {};
 
+  /// Cửa hàng mua hộ/bán sỉ là cấu trúc vận hành do admin quản lý thẳng, không có chủ thật đăng
+  /// nhập app Cửa hàng — chỉ cửa hàng thường/HOFA Standard mới cần 1 tài khoản chủ thật (SĐT/
+  /// mật khẩu/họ tên). Không điền thì server tự gán admin đang đăng nhập làm owner_id (xem
+  /// POST /merchants — owner_phone rỗng thì bỏ qua, ownerId mặc định = req.ctx.userId).
+  bool get _needsOwnerAccount =>
+      _merchantType == 'regular' || _merchantType == 'standard';
+
   @override
   void dispose() {
     _ownerPhoneCtrl.dispose();
@@ -179,76 +186,6 @@ class _MerchantFormScreenState extends ConsumerState<MerchantFormScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text('Chủ cửa hàng', style: theme.textTheme.labelLarge),
-                  const SizedBox(height: 8),
-                  TextFormField(
-                    controller: _ownerPhoneCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'SĐT chủ cửa hàng',
-                      border: OutlineInputBorder(),
-                    ),
-                    keyboardType: TextInputType.phone,
-                    validator: (v) => (v == null || v.trim().isEmpty)
-                        ? 'Nhập số điện thoại'
-                        : null,
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _ownerFullNameCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Họ tên chủ cửa hàng',
-                      border: OutlineInputBorder(),
-                    ),
-                    validator: (v) =>
-                        (_ownerPasswordCtrl.text.trim().isNotEmpty &&
-                            (v == null || v.trim().isEmpty))
-                        ? 'Nhập họ tên (bắt buộc khi tạo tài khoản mới)'
-                        : null,
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _ownerPasswordCtrl,
-                    obscureText: _obscurePassword,
-                    decoration: InputDecoration(
-                      labelText: 'Mật khẩu ban đầu',
-                      helperText:
-                          'Để trống nếu SĐT trên đã có tài khoản (gắn cửa hàng vào tài khoản đó). '
-                          'Nhập mật khẩu để tạo TÀI KHOẢN HOÀN TOÀN MỚI cho chủ cửa hàng đăng nhập app Cửa hàng.',
-                      helperMaxLines: 3,
-                      border: const OutlineInputBorder(),
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          _obscurePassword
-                              ? Icons.visibility_outlined
-                              : Icons.visibility_off_outlined,
-                        ),
-                        onPressed: () => setState(
-                          () => _obscurePassword = !_obscurePassword,
-                        ),
-                      ),
-                    ),
-                    onChanged: (_) => _formKey.currentState?.validate(),
-                    validator: (v) =>
-                        (v != null &&
-                            v.trim().isNotEmpty &&
-                            v.trim().length < 6)
-                        ? 'Mật khẩu phải từ 6 ký tự'
-                        : null,
-                  ),
-                  const SizedBox(height: 24),
-                  Text('Cửa hàng', style: theme.textTheme.labelLarge),
-                  const SizedBox(height: 8),
-                  TextFormField(
-                    controller: _nameCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Tên cửa hàng',
-                      border: OutlineInputBorder(),
-                    ),
-                    validator: (v) => (v == null || v.trim().isEmpty)
-                        ? 'Nhập tên cửa hàng'
-                        : null,
-                  ),
-                  const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
                     initialValue: _merchantType,
                     decoration: const InputDecoration(
@@ -265,6 +202,88 @@ class _MerchantFormScreenState extends ConsumerState<MerchantFormScreen> {
                         .toList(),
                     onChanged: (v) =>
                         setState(() => _merchantType = v ?? _merchantType),
+                  ),
+                  if (!_needsOwnerAccount) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      'Cửa hàng mua hộ/bán sỉ không cần chủ thật — bạn (admin) sẽ là chủ sở '
+                      'hữu, không cần SĐT/mật khẩu/họ tên bên dưới.',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.outline,
+                      ),
+                    ),
+                  ],
+                  if (_needsOwnerAccount) ...[
+                    const SizedBox(height: 24),
+                    Text('Chủ cửa hàng', style: theme.textTheme.labelLarge),
+                    const SizedBox(height: 8),
+                    TextFormField(
+                      controller: _ownerPhoneCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'SĐT chủ cửa hàng',
+                        border: OutlineInputBorder(),
+                      ),
+                      keyboardType: TextInputType.phone,
+                      validator: (v) => (v == null || v.trim().isEmpty)
+                          ? 'Nhập số điện thoại'
+                          : null,
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _ownerFullNameCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'Họ tên chủ cửa hàng',
+                        border: OutlineInputBorder(),
+                      ),
+                      validator: (v) =>
+                          (_ownerPasswordCtrl.text.trim().isNotEmpty &&
+                              (v == null || v.trim().isEmpty))
+                          ? 'Nhập họ tên (bắt buộc khi tạo tài khoản mới)'
+                          : null,
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _ownerPasswordCtrl,
+                      obscureText: _obscurePassword,
+                      decoration: InputDecoration(
+                        labelText: 'Mật khẩu ban đầu',
+                        helperText:
+                            'Để trống nếu SĐT trên đã có tài khoản (gắn cửa hàng vào tài khoản đó). '
+                            'Nhập mật khẩu để tạo TÀI KHOẢN HOÀN TOÀN MỚI cho chủ cửa hàng đăng nhập app Cửa hàng.',
+                        helperMaxLines: 3,
+                        border: const OutlineInputBorder(),
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            _obscurePassword
+                                ? Icons.visibility_outlined
+                                : Icons.visibility_off_outlined,
+                          ),
+                          onPressed: () => setState(
+                            () => _obscurePassword = !_obscurePassword,
+                          ),
+                        ),
+                      ),
+                      onChanged: (_) => _formKey.currentState?.validate(),
+                      validator: (v) =>
+                          (v != null &&
+                              v.trim().isNotEmpty &&
+                              v.trim().length < 6)
+                          ? 'Mật khẩu phải từ 6 ký tự'
+                          : null,
+                    ),
+                  ],
+                  const SizedBox(height: 24),
+                  Text('Cửa hàng', style: theme.textTheme.labelLarge),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: _nameCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Tên cửa hàng',
+                      border: OutlineInputBorder(),
+                    ),
+                    validator: (v) => (v == null || v.trim().isEmpty)
+                        ? 'Nhập tên cửa hàng'
+                        : null,
                   ),
                   const SizedBox(height: 12),
                   Text('Phân loại cửa hàng', style: theme.textTheme.labelLarge),
