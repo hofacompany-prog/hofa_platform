@@ -69,4 +69,18 @@ async function deleteAuthUser(authUserId) {
   }
 }
 
-module.exports = { createAuthUser, deleteAuthUser, phoneToAuthEmail };
+/**
+ * Đổi thẳng mật khẩu 1 tài khoản Supabase Auth — dùng cho luồng "Quên mật khẩu" (routes/auth.js),
+ * không cần biết mật khẩu cũ vì đây là Admin API (Service Role key), không phải đổi mật khẩu
+ * lúc đã đăng nhập (updateUser thường của chính user đó).
+ */
+async function updateUserPassword(authUserId, password) {
+  const supabase = getClient();
+  if (!supabase) {
+    throw new Error('Server chưa cấu hình SUPABASE_SERVICE_ROLE_KEY — không đổi được mật khẩu.');
+  }
+  const { error } = await supabase.auth.admin.updateUserById(authUserId, { password });
+  if (error) throw error;
+}
+
+module.exports = { createAuthUser, deleteAuthUser, updateUserPassword, phoneToAuthEmail };

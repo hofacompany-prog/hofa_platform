@@ -19,6 +19,7 @@ app.use(attachContext);
 
 app.get('/health', (req, res) => res.json({ ok: true, data: { status: 'up' } }));
 
+app.use('/', require('./routes/auth'));
 app.use('/', require('./routes/admin'));
 app.use('/', require('./routes/users'));
 app.use('/', require('./routes/merchants'));

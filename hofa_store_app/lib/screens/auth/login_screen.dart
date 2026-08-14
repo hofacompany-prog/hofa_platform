@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/auth_error.dart';
 import '../../core/phone_auth.dart';
 import '../../providers/auth_provider.dart';
+import '../../repositories/auth_repository.dart';
 import '../../widgets/app_version_text.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -74,6 +75,98 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       setState(() => _error = translateAuthError(e));
     } catch (e) {
       setState(() => _error = 'Có lỗi xảy ra: $e');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  /// Chưa nối SMS OTP thật nên không xác minh gì thêm ngoài đúng SĐT đã đăng ký, khớp mức xác
+  /// thực hiện có của cả hệ thống (xem server/src/routes/auth.js). Reset thẳng, không cần biết
+  /// mật khẩu cũ.
+  Future<void> _forgotPassword() async {
+    final phone = _phoneCtrl.text.trim();
+    if (!isValidPhone(phone)) {
+      setState(
+        () => _error =
+            'Nhập đúng số điện thoại ở trên trước khi bấm "Quên mật khẩu"',
+      );
+      return;
+    }
+    final newPasswordCtrl = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Quên mật khẩu?'),
+        content: SizedBox(
+          width: 360,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text.rich(
+                TextSpan(
+                  style: DefaultTextStyle.of(context).style,
+                  children: [
+                    const TextSpan(text: 'Mật khẩu sẽ được reset về '),
+                    TextSpan(
+                      text: '123123',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Theme.of(context).colorScheme.secondary,
+                      ),
+                    ),
+                    const TextSpan(
+                      text: ' nếu bạn không nhập mật khẩu mới bên dưới.',
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: newPasswordCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Mật khẩu mới (không bắt buộc)',
+                  border: OutlineInputBorder(),
+                ),
+                obscureText: true,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Huỷ'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Xác nhận'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    setState(() {
+      _loading = true;
+      _error = null;
+      _info = null;
+    });
+    try {
+      final newPassword = newPasswordCtrl.text.trim();
+      await AuthRepository().forgotPassword(
+        phone: phone,
+        newPassword: newPassword,
+      );
+      if (mounted) {
+        setState(
+          () => _info = newPassword.isEmpty
+              ? 'Đã đặt lại mật khẩu về 123123 — đăng nhập lại bằng mật khẩu này.'
+              : 'Đã đặt mật khẩu mới — đăng nhập lại bằng mật khẩu vừa đặt.',
+        );
+      }
+    } catch (e) {
+      if (mounted) setState(() => _error = 'Lỗi: $e');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -219,6 +312,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               ? 'Mật khẩu tối thiểu 6 ký tự'
                               : null,
                         ),
+                        if (!_isSignUp)
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton(
+                              onPressed: _loading ? null : _forgotPassword,
+                              child: const Text('Quên mật khẩu?'),
+                            ),
+                          ),
                       ],
                       if (_error != null) ...[
                         const SizedBox(height: 16),
