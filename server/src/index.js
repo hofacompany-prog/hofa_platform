@@ -97,6 +97,13 @@ setInterval(() => {
   orderOffer.sweepDuePreorders().catch((e) => console.error('[sweep-due-preorders]', e));
 }, 30_000);
 
+// Tự "nổ" cho cửa hàng các đơn GIAO NGAY đặt trước ở màn thanh toán (sales_model=instant,
+// scheduled_for khác NULL) còn đang ngủ khi tới ngưỡng còn default_prep_minutes phút nữa là
+// tới scheduled_for — xem hofa-db/84_instant_scheduled_order.sql + orderOffer.sweepDueScheduledInstant.
+setInterval(() => {
+  orderOffer.sweepDueScheduledInstant().catch((e) => console.error('[sweep-due-scheduled-instant]', e));
+}, 30_000);
+
 // Tự quét lại các đơn đang chờ tài xế mà lần gán gần nhất không tìm được ai (xem
 // dispatch.sweepDriverSearch) — quét Node mỗi 15s nhưng chỉ thật sự thử gán lại 1 đơn khi đã
 // đủ driver_dispatch_settings.rescan_interval_seconds, đủ mịn để đúng nhịp admin cấu hình

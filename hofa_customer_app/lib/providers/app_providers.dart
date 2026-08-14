@@ -26,6 +26,7 @@ import '../repositories/merchant_repository.dart';
 import '../repositories/nav_icon_repository.dart';
 import '../repositories/notification_repository.dart';
 import '../repositories/order_repository.dart';
+import '../repositories/prep_settings_repository.dart';
 import '../repositories/product_repository.dart';
 import '../repositories/review_repository.dart';
 import '../repositories/shipping_repository.dart';
@@ -42,6 +43,13 @@ final notificationRepoProvider = Provider((ref) => NotificationRepository());
 final bankSettingsRepoProvider = Provider((ref) => BankSettingsRepository());
 final adminContactRepoProvider = Provider((ref) => AdminContactRepository());
 final navIconRepoProvider = Provider((ref) => NavIconRepository());
+final prepSettingsRepoProvider = Provider((ref) => PrepSettingsRepository());
+
+/// Trần thời gian chuẩn bị mặc định (phút) — dùng chặn khách chọn giờ giao quá gần lúc "Đặt
+/// trước" ở màn thanh toán (đơn giao ngay), xem checkout_screen.dart.
+final prepDefaultMaxMinutesProvider = FutureProvider.autoDispose<int>(
+  (ref) => ref.watch(prepSettingsRepoProvider).prepDefaultMaxMinutes(),
+);
 
 /// Icon tabbar tuỳ chỉnh — không cần đăng nhập, lỗi mạng tự trả về map rỗng (xem
 /// NavIconRepository), không chặn khởi động app.

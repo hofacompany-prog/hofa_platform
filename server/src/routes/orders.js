@@ -112,7 +112,14 @@ router.post('/orders', asyncHandler(async (req, res) => {
   // hết quyền tự huỷ (Order.canCancel phía app khách). preorder_notified_at giờ đổi ý nghĩa:
   // không còn đánh dấu "đã báo", mà đánh dấu "đã tự chuyển sang preparing đúng giờ" (xem
   // orderOffer.sweepDuePreorders), nên để nguyên NULL ở đây.
-  if (order.status === 'placed') {
+  //
+  // Đơn GIAO NGAY đặt trước (sales_model=instant, scheduled_for khác NULL) còn đang "ngủ"
+  // (scheduled_activated_at NULL — create_order() đã tự chốt, xem
+  // hofa-db/84_instant_scheduled_order.sql) thì KHÔNG báo cửa hàng ngay, để orderOffer.
+  // sweepDueScheduledInstant tự "nổ" đúng lúc.
+  const isSleepingScheduledInstant =
+    order.sales_model === 'instant' && order.scheduled_for && !order.scheduled_activated_at;
+  if (order.status === 'placed' && !isSleepingScheduledInstant) {
     orderOffer.offerOrderToMerchant(order.id).catch((err) => {
       console.error('[orderOffer] Không báo được cửa hàng cho đơn', order.id, err.message);
     });
@@ -222,7 +229,13 @@ router.patch('/admin/orders/:id/shipping', asyncHandler(async (req, res) => {
 router.get('/merchants/:merchantId/orders', asyncHandler(async (req, res) => {
   await requireMerchantAccess(req.ctx, req.params.merchantId);
   const { limit, offset } = pagination(req.query);
-  const clauses = ['merchant_id = $1'];
+  // Đơn giao ngay đặt trước ở màn thanh toán còn đang "ngủ" (chưa tới ngưỡng báo cửa hàng, xem
+  // hofa-db/84_instant_scheduled_order.sql) — ẩn hẳn khỏi danh sách, cửa hàng chỉ thấy khi
+  // orderOffer.sweepDueScheduledInstant "nổ" đơn (scheduled_activated_at có giá trị).
+  const clauses = [
+    'merchant_id = $1',
+    "NOT (sales_model = 'instant' AND scheduled_for IS NOT NULL AND scheduled_activated_at IS NULL)"
+  ];
   const params = [req.params.merchantId];
   if (req.query.status) { params.push(req.query.status); clauses.push(`status = $${params.length}`); }
   if (req.query.branch_id) { params.push(req.query.branch_id); clauses.push(`branch_id = $${params.length}`); }

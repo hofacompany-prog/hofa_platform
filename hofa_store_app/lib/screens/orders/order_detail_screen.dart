@@ -388,6 +388,17 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen>
                         color: theme.colorScheme.outline,
                       ),
                     ),
+                    if (o.scheduledFor != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 2),
+                        child: Text(
+                          'Hẹn giao lúc ${formatDateTime(o.scheduledFor!)}',
+                          style: theme.textTheme.bodySmall?.copyWith(
+                            color: theme.colorScheme.primary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
                     const SizedBox(height: 12),
                     if (isBuyOnBehalf) ...[
                       Container(

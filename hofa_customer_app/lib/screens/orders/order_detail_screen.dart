@@ -216,6 +216,14 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text('Đặt lúc ${formatDateTime(o.createdAt)}'),
+                        if (o.scheduledFor != null)
+                          Text(
+                            'Hẹn giao lúc ${formatDateTime(o.scheduledFor!)}',
+                            style: TextStyle(
+                              color: theme.colorScheme.primary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                         if (o.merchantName != null) Text(o.merchantName!),
                         const Divider(height: 24),
                         Text('Giao đến', style: theme.textTheme.titleSmall),

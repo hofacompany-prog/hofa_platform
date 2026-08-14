@@ -59,6 +59,36 @@ async function sweepDuePreorders() {
   }
 }
 
+/** Quét định kỳ (xem index.js) các đơn GIAO NGAY đặt trước ở màn thanh toán (sales_model=
+ * 'instant', scheduled_for khác NULL) còn đang "ngủ" (scheduled_activated_at NULL, chưa báo
+ * cửa hàng — xem hofa-db/84_instant_scheduled_order.sql + POST /orders) và giờ đã tới ngưỡng
+ * còn đúng default_prep_minutes phút nữa là tới scheduled_for — "nổ" cho cửa hàng: tính lại
+ * confirm_sweep_deadline theo cấu hình HIỆN TẠI (chi nhánh có thể đổi auto_accept_orders từ lúc
+ * đặt đơn tới giờ) rồi báo y hệt 1 đơn tức thời vừa đặt (offerOrderToMerchant). */
+async function sweepDueScheduledInstant() {
+  const due = await db.query(
+    `SELECT id, branch_id FROM orders
+      WHERE sales_model = 'instant' AND status = 'placed'
+        AND scheduled_for IS NOT NULL AND scheduled_activated_at IS NULL
+        AND scheduled_for - (COALESCE(default_prep_minutes, 15) || ' minutes')::interval <= now()`
+  );
+  if (!due.length) return;
+  const settings = await db.queryOne(
+    'SELECT confirm_sweep_seconds, manual_confirm_sweep_seconds FROM auto_accept_settings ORDER BY updated_at DESC LIMIT 1'
+  );
+  for (const row of due) {
+    const branch = await db.queryOne('SELECT auto_accept_orders FROM branches WHERE id = $1', [row.branch_id]);
+    const seconds = (branch?.auto_accept_orders ? settings?.confirm_sweep_seconds : settings?.manual_confirm_sweep_seconds) ?? 10;
+    await db.query(
+      `UPDATE orders SET scheduled_activated_at = now(), confirm_sweep_deadline = now() + ($2 || ' seconds')::interval WHERE id = $1`,
+      [row.id, seconds]
+    );
+    offerOrderToMerchant(row.id).catch((err) => {
+      console.error('[sweep-due-scheduled-instant] Không báo được cửa hàng cho đơn', row.id, err.message);
+    });
+  }
+}
+
 /**
  * Gán đơn mua hộ cho ĐÚNG tài xế khách đã chọn (orders.selected_driver_id) — dùng chung cho lần
  * gán đầu tiên (ngay sau khi thanh toán, xem dispatchBuyOnBehalfOrder) LẪN mỗi lần khách chọn
@@ -117,5 +147,6 @@ module.exports = {
   offerOrderToMerchant,
   dispatchBuyOnBehalfOrder,
   dispatchToSelectedDriver,
-  sweepDuePreorders
+  sweepDuePreorders,
+  sweepDueScheduledInstant
 };

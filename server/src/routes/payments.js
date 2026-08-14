@@ -56,7 +56,12 @@ router.post('/payments', asyncHandler(async (req, res) => {
   });
   // Cửa hàng mua hộ không xác nhận/chuẩn bị gì cả (đơn không qua cửa hàng) — không báo "Đơn
   // hàng mới!", chỉ orderOffer.dispatchBuyOnBehalfOrder bên dưới lo chuyển thẳng cho tài xế.
-  if (wasPendingPayment && merchant?.merchant_type !== 'buy_on_behalf') {
+  // Đơn giao ngay đặt trước còn đang "ngủ" (xem hofa-db/84_instant_scheduled_order.sql) cũng
+  // không báo ngay dù vừa được xác nhận đã chuyển khoản — để orderOffer.sweepDueScheduledInstant
+  // tự "nổ" đúng lúc như đã ngủ chờ từ đầu.
+  const isSleepingScheduledInstant =
+    order.sales_model === 'instant' && order.scheduled_for && !order.scheduled_activated_at;
+  if (wasPendingPayment && merchant?.merchant_type !== 'buy_on_behalf' && !isSleepingScheduledInstant) {
     orderOffer.offerOrderToMerchant(req.body.order_id).catch((err) => {
       console.error('[orderOffer] Không báo được cửa hàng cho đơn chuyển khoản', req.body.order_id, err.message);
     });

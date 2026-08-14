@@ -75,6 +75,7 @@ class Order {
   final String salesModel;
   final DateTime? scheduledFor;
   final DateTime? preorderNotifiedAt;
+  final DateTime? scheduledActivatedAt;
 
   /// Đơn đầu tiên trong tuần mà đơn này gộp thanh toán chung (khách chọn "Thanh toán theo
   /// tuần" lúc đặt trước) — null nghĩa là đơn tự thanh toán riêng như bình thường. Chỉ là
@@ -109,6 +110,7 @@ class Order {
     this.salesModel = 'instant',
     this.scheduledFor,
     this.preorderNotifiedAt,
+    this.scheduledActivatedAt,
     this.paymentGroupOrderId,
     required this.items,
   });
@@ -151,6 +153,9 @@ class Order {
         : null,
     preorderNotifiedAt: json['preorder_notified_at'] != null
         ? DateTime.tryParse(json['preorder_notified_at'].toString())
+        : null,
+    scheduledActivatedAt: json['scheduled_activated_at'] != null
+        ? DateTime.tryParse(json['scheduled_activated_at'].toString())
         : null,
     paymentGroupOrderId: json['payment_group_order_id'] as String?,
     items:

@@ -52,6 +52,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   // từng đơn — xem _placeOrder.
   bool _payWeekly = false;
   DateTime? _scheduledFor;
+  // "Đặt trước" cho đơn GIAO NGAY (khác _scheduledFor dùng cho tab Giá sỉ/Đặt trước cũ, salesModel
+  // 'scheduled' — 2 luồng dùng chung field _scheduledFor vì luôn loại trừ nhau: 1 checkout chỉ
+  // rơi vào đúng 1 trong 2 salesModel). Đơn vẫn mang mã HF, chỉ "ngủ" chờ tới gần giờ chuẩn bị
+  // mới báo cửa hàng (xem hofa-db/84_instant_scheduled_order.sql).
+  bool _instantScheduleEnabled = false;
   final _noteCtrl = TextEditingController();
   // Nhiều voucher cùng lúc, tối đa theo voucherMaxCountProvider (admin cấu hình).
   final List<_AppliedVoucher> _appliedVouchers = [];
@@ -131,6 +136,52 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       address.first.longitude!,
     );
     return settings.estimate(distanceKm, orderAmount: orderAmount);
+  }
+
+  /// Chọn ngày+giờ giao cho đơn "Đặt trước" (giao ngay) — không cho chọn trong quá khứ và phải
+  /// sau ít nhất [ceilingMinutes] phút kể từ bây giờ (trần thời gian chuẩn bị mặc định, bất kể
+  /// bậc đơn thật cao đến đâu — xem PrepSettingsRepository.prepDefaultMaxMinutes) để đảm bảo lúc
+  /// server tính "nổ cho cửa hàng" (giờ giao trừ thời gian chuẩn bị thật của đơn, luôn ≤ trần
+  /// này) không bao giờ rơi vào quá khứ.
+  Future<void> _pickInstantScheduleTime(int ceilingMinutes) async {
+    final now = DateTime.now();
+    final earliestAllowed = now.add(Duration(minutes: ceilingMinutes));
+    final initialDate =
+        (_scheduledFor ?? earliestAllowed).isBefore(earliestAllowed)
+        ? earliestAllowed
+        : (_scheduledFor ?? earliestAllowed);
+    final pickedDate = await showDatePicker(
+      context: context,
+      initialDate: initialDate,
+      firstDate: now,
+      lastDate: now.add(const Duration(days: 30)),
+    );
+    if (pickedDate == null || !mounted) return;
+    final pickedTime = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(initialDate),
+    );
+    if (pickedTime == null || !mounted) return;
+    final combined = DateTime(
+      pickedDate.year,
+      pickedDate.month,
+      pickedDate.day,
+      pickedTime.hour,
+      pickedTime.minute,
+    );
+    if (combined.isBefore(
+      DateTime.now().add(Duration(minutes: ceilingMinutes)),
+    )) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Giờ giao phải sau ít nhất $ceilingMinutes phút kể từ bây giờ',
+          ),
+        ),
+      );
+      return;
+    }
+    setState(() => _scheduledFor = combined);
   }
 
   Future<void> _addAddress() async {
@@ -428,6 +479,12 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       'voucher_codes': _appliedVouchers.map((v) => v.code).toList(),
     if (cart.salesModel == 'scheduled' && scheduledFor != null)
       'scheduled_for': scheduledFor.toIso8601String(),
+    // Đơn giao ngay "Đặt trước" — vẫn mang mã HF, chỉ ngủ chờ tới gần giờ chuẩn bị mới báo cửa
+    // hàng (xem hofa-db/84_instant_scheduled_order.sql).
+    if (cart.salesModel != 'scheduled' &&
+        _instantScheduleEnabled &&
+        _scheduledFor != null)
+      'scheduled_for': _scheduledFor!.toIso8601String(),
     if (_noteCtrl.text.trim().isNotEmpty)
       'customer_note': _noteCtrl.text.trim(),
   };
@@ -548,6 +605,14 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       return;
     final items = _relevantItems(cart);
     if (items.isEmpty) return;
+    if (cart.salesModel != 'scheduled' &&
+        _instantScheduleEnabled &&
+        _scheduledFor == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Chọn ngày giờ giao cho đơn đặt trước')),
+      );
+      return;
+    }
     final orderDaysCount = _orderDaysCount(items);
 
     final merchant = ref
@@ -673,6 +738,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         ? null
         : ref.watch(publicVouchersProvider(cart.merchantId!));
     final maxVouchers = ref.watch(voucherMaxCountProvider).valueOrNull ?? 1;
+    final prepCeilingMinutes =
+        ref.watch(prepDefaultMaxMinutesProvider).valueOrNull ?? 60;
     final theme = Theme.of(context);
     final items = _relevantItems(cart);
 
@@ -1073,6 +1140,49 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                           setState(() => _scheduledFor = picked);
                       },
                     ),
+                ],
+                if (cart.salesModel != 'scheduled') ...[
+                  const Divider(height: 32),
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: _instantScheduleEnabled,
+                    onChanged: (v) => setState(() {
+                      _instantScheduleEnabled = v;
+                      if (!v) _scheduledFor = null;
+                    }),
+                    title: const Text('Đặt trước'),
+                    subtitle: Text(
+                      _instantScheduleEnabled && _scheduledFor != null
+                          ? 'Cửa hàng sẽ nhận đơn gần tới giờ chuẩn bị, giao lúc ${formatDateTime(_scheduledFor!)}'
+                          : 'Chọn ngày giờ giao thay vì giao ngay',
+                    ),
+                  ),
+                  if (_instantScheduleEnabled) ...[
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: OutlinedButton.icon(
+                        icon: const Icon(Icons.event_outlined),
+                        label: Text(
+                          _scheduledFor == null
+                              ? 'Chọn ngày giờ giao'
+                              : formatDateTime(_scheduledFor!),
+                        ),
+                        onPressed: () =>
+                            _pickInstantScheduleTime(prepCeilingMinutes),
+                      ),
+                    ),
+                    if (_scheduledFor == null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Text(
+                          'Chưa chọn giờ giao',
+                          style: TextStyle(
+                            color: theme.colorScheme.error,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                  ],
                 ],
                 const Divider(height: 32),
                 Text('Ghi chú cho cửa hàng', style: theme.textTheme.titleSmall),
