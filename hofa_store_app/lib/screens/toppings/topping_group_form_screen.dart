@@ -29,6 +29,14 @@ class _ToppingGroupFormScreenState
   bool _saving = false;
   String? _error;
 
+  // Kéo thả đổi thứ tự + bật/tắt lựa chọn CHỈ sửa ở đây, không gọi API ngay — phải bấm "Lưu
+  // thay đổi" bên dưới mới thật sự ghi xuống server (khác _submit ở trên, vẫn dành riêng cho
+  // tên/bắt buộc/chọn nhiều của cả nhóm). Đổi tên/giá (dialog) và xoá vẫn lưu ngay như cũ, vì
+  // bản thân dialog/hộp thoại xác nhận đã là 1 bước "chốt" riêng.
+  List<Topping> _localToppings = [];
+  bool _toppingsDirty = false;
+  bool _savingToppings = false;
+
   bool get _isEdit => widget.groupId != null;
 
   @override
@@ -52,12 +60,32 @@ class _ToppingGroupFormScreenState
         _nameCtrl.text = g.name;
         _isRequired = g.isRequired;
         _allowMultiple = g.allowMultiple;
+        _applyToppingsFromServer(g.toppings);
       });
     } catch (e) {
       setState(() => _error = 'Không tải được nhóm topping: $e');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  /// Đồng bộ danh sách lựa chọn mới nhất từ server vào [_localToppings] — nếu đang có thay
+  /// đổi thứ tự/bật-tắt CHƯA LƯU (vd vừa thêm 1 lựa chọn mới qua dialog trong lúc còn đang kéo
+  /// thả dở), giữ nguyên thứ tự + trạng thái đang chỉnh, chỉ lấy tên/giá mới nhất và thêm/bớt
+  /// đúng lựa chọn đã thêm/xoá ở nơi khác — không làm mất thao tác đang dở.
+  void _applyToppingsFromServer(List<Topping> serverToppings) {
+    if (!_toppingsDirty) {
+      _localToppings = List<Topping>.from(serverToppings);
+      return;
+    }
+    final byId = {for (final t in serverToppings) t.id: t};
+    final merged = <Topping>[];
+    for (final local in _localToppings) {
+      final fresh = byId.remove(local.id);
+      if (fresh != null) merged.add(fresh.copyWith(isActive: local.isActive));
+    }
+    merged.addAll(byId.values);
+    _localToppings = merged;
   }
 
   Future<void> _submit() async {
@@ -178,41 +206,69 @@ class _ToppingGroupFormScreenState
     }
   }
 
-  Future<void> _toggleToppingActive(Topping t) async {
+  /// Chỉ đổi ở local — bấm "Lưu thay đổi" bên dưới mới thật sự ghi xuống server.
+  void _toggleToppingActive(Topping t) {
+    setState(() {
+      final i = _localToppings.indexWhere((x) => x.id == t.id);
+      if (i == -1) return;
+      _localToppings[i] = _localToppings[i].copyWith(
+        isActive: !_localToppings[i].isActive,
+      );
+      _toppingsDirty = true;
+    });
+  }
+
+  /// Kéo thả đổi thứ tự hiển thị cho khách — chỉ đổi ở local, không gọi API ngay (khác trước
+  /// đây), bấm "Lưu thay đổi" mới ghi sort_order xuống server.
+  void _reorderToppings(int oldIndex, int newIndex) {
+    setState(() {
+      final item = _localToppings.removeAt(oldIndex);
+      _localToppings.insert(newIndex, item);
+      _toppingsDirty = true;
+    });
+  }
+
+  /// Ghi lại sort_order/is_active xuống server cho ĐÚNG những lựa chọn thật sự đổi so với dữ
+  /// liệu gốc từ server (_group.toppings) — không ghi tràn lan mọi dòng.
+  Future<void> _saveToppingChanges() async {
+    setState(() => _savingToppings = true);
     try {
-      await _repo.updateTopping(t.id, {'is_active': !t.isActive});
+      final original = {for (final t in _group?.toppings ?? []) t.id: t};
+      for (var i = 0; i < _localToppings.length; i++) {
+        final local = _localToppings[i];
+        final orig = original[local.id];
+        final updates = <String, dynamic>{};
+        if (orig == null || orig.sortOrder != i) updates['sort_order'] = i;
+        if (orig == null || orig.isActive != local.isActive) {
+          updates['is_active'] = local.isActive;
+        }
+        if (updates.isNotEmpty) {
+          await _repo.updateTopping(local.id, updates);
+        }
+      }
+      _toppingsDirty = false;
       await _load();
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Đã lưu thay đổi')));
+      }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
       }
+    } finally {
+      if (mounted) setState(() => _savingToppings = false);
     }
   }
 
-  /// Kéo thả đổi thứ tự hiển thị cho khách — chỉ ghi lại sort_order cho lựa chọn THẬT SỰ
-  /// đổi vị trí, giống _reorder ở products_list_screen.dart.
-  Future<void> _reorderToppings(int oldIndex, int newIndex) async {
-    final toppings = _group?.toppings ?? const <Topping>[];
-    final reordered = List<Topping>.from(toppings);
-    final item = reordered.removeAt(oldIndex);
-    reordered.insert(newIndex, item);
-
-    try {
-      for (var i = 0; i < reordered.length; i++) {
-        if (reordered[i].sortOrder != i) {
-          await _repo.updateTopping(reordered[i].id, {'sort_order': i});
-        }
-      }
-      await _load();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
-      }
-    }
+  void _discardToppingChanges() {
+    setState(() {
+      _localToppings = List<Topping>.from(_group?.toppings ?? []);
+      _toppingsDirty = false;
+    });
   }
 
   Future<void> _deleteTopping(Topping t) async {
@@ -249,7 +305,7 @@ class _ToppingGroupFormScreenState
 
   @override
   Widget build(BuildContext context) {
-    final toppings = _group?.toppings ?? const <Topping>[];
+    final toppings = _localToppings;
     return Scaffold(
       appBar: AppBar(
         title: Text(_isEdit ? 'Sửa nhóm topping' : 'Thêm nhóm topping'),
@@ -387,6 +443,50 @@ class _ToppingGroupFormScreenState
                           );
                         },
                       ),
+                    if (_toppingsDirty) ...[
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .secondaryContainer
+                              .withValues(alpha: 0.5),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                'Có thay đổi thứ tự/trạng thái chưa lưu',
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: _savingToppings
+                                  ? null
+                                  : _discardToppingChanges,
+                              child: const Text('Huỷ'),
+                            ),
+                            const SizedBox(width: 4),
+                            FilledButton(
+                              onPressed: _savingToppings
+                                  ? null
+                                  : _saveToppingChanges,
+                              child: _savingToppings
+                                  ? const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Text('Lưu thay đổi'),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ],
                 ],
               ),

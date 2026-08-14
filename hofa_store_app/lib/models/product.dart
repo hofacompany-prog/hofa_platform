@@ -106,6 +106,15 @@ class Topping {
     sortOrder: (json['sort_order'] as num?)?.toInt() ?? 0,
     isActive: json['is_active'] as bool? ?? true,
   );
+
+  Topping copyWith({int? sortOrder, bool? isActive}) => Topping(
+    id: id,
+    groupId: groupId,
+    name: name,
+    price: price,
+    sortOrder: sortOrder ?? this.sortOrder,
+    isActive: isActive ?? this.isActive,
+  );
 }
 
 /// Nhóm topping là thư viện dùng chung của 1 cửa hàng (merchantId), gắn được vào nhiều
