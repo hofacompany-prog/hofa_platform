@@ -11,7 +11,8 @@ const MERCHANT_FIELDS = [
   'business_license_no', 'tax_code', 'legal_doc_urls', 'photo_urls',
   'bank_name', 'bank_bin', 'bank_account_no', 'bank_account_name',
   'commission_rate', 'min_order_amount', 'avg_prep_minutes',
-  'buy_on_behalf_fee_basis', 'max_devices', 'vat_rate', 'pit_rate'
+  'buy_on_behalf_fee_basis', 'max_devices', 'vat_rate', 'pit_rate',
+  'featured_home', 'featured_home_sort_order'
 ];
 
 const BRANCH_FIELDS = [
@@ -42,6 +43,13 @@ router.get('/merchants', asyncHandler(async (req, res) => {
   if (!isPrivileged) clauses.push(`status = 'active'`);
   if (req.query.merchant_type) { params.push(req.query.merchant_type); clauses.push(`merchant_type = $${params.length}`); }
   if (req.query.q) { params.push(`%${req.query.q}%`); clauses.push(`name ILIKE $${params.length}`); }
+  // Danh sách duyệt mặc định của trang chủ app Khách CHỈ hiện cửa hàng admin đã chọn
+  // (featured_home) — cửa hàng khác vẫn tồn tại bình thường, tìm được qua ô tìm kiếm (có q) nên
+  // bỏ qua bộ lọc này khi có q. Admin xem danh sách quản lý (GET /merchants không phải để duyệt
+  // mua hàng) thì thấy đủ mọi cửa hàng như trước, không bị lọc — xem
+  // hofa-db/80_product_sort_and_featured_home.sql.
+  const filterFeaturedHome = !isPrivileged && !req.query.q;
+  if (filterFeaturedHome) clauses.push(`m.featured_home = true`);
   // Lọc theo phân loại cửa hàng (Nhà hàng/Cà phê/...) — chọn nhiều id cách nhau bằng dấu phẩy,
   // khớp NẾU CÓ ÍT NHẤT 1 phân loại trùng (OR), xem hofa-db/71_merchant_classifications.sql.
   if (req.query.classification_ids) {
@@ -87,10 +95,15 @@ router.get('/merchants', asyncHandler(async (req, res) => {
   // Sắp xếp "Gần tôi" (sort=distance) — chỉ áp dụng được khi có toạ độ khách, ngược lại rơi về
   // mặc định (đánh giá cao trước) như cũ, không báo lỗi (khách chưa lưu địa chỉ vẫn dùng được
   // trang chủ bình thường). Cửa hàng chưa có chi nhánh nào định vị được (distance_km NULL) xếp
-  // xuống cuối thay vì lên đầu (Postgres mặc định NULL lớn nhất khi ASC).
+  // xuống cuối thay vì lên đầu (Postgres mặc định NULL lớn nhất khi ASC). Đang lọc theo
+  // featured_home thì luôn ưu tiên đúng thứ tự admin đã sắp (featured_home_sort_order) trước
+  // mọi cách sắp khác.
+  const featuredOrderPrefix = filterFeaturedHome
+    ? 'm.featured_home_sort_order ASC, '
+    : '';
   const orderBy = req.query.sort === 'distance' && coords
-    ? 'nearest_branch.distance_km ASC NULLS LAST, m.rating_avg DESC, m.id DESC'
-    : 'm.rating_avg DESC, m.created_at DESC, m.id DESC';
+    ? `${featuredOrderPrefix}nearest_branch.distance_km ASC NULLS LAST, m.rating_avg DESC, m.id DESC`
+    : `${featuredOrderPrefix}m.rating_avg DESC, m.created_at DESC, m.id DESC`;
 
   params.push(limit, offset);
   const rows = await db.query(

@@ -6,7 +6,7 @@ const { pickFields, requireFields, pagination, requireRole, requireMerchantAcces
 
 const PRODUCT_FIELDS = [
   'name', 'slug', 'description', 'sales_model', 'status', 'brand', 'unit', 'variant_group_name',
-  'images', 'video_url', 'tags', 'is_featured', 'merchant_category_id'
+  'images', 'video_url', 'tags', 'is_featured', 'merchant_category_id', 'sort_order'
 ];
 const MERCHANT_CATEGORY_FIELDS = ['category_id', 'name', 'sort_order', 'is_active'];
 const VARIANT_FIELDS = [
@@ -217,11 +217,17 @@ router.get('/products', asyncHandler(async (req, res) => {
   }
 
   params.push(limit, offset);
+  // Xem đúng 1 cửa hàng (màn chi tiết cửa hàng ở app khách, hoặc màn quản lý sản phẩm ở app cửa
+  // hàng) — dùng thứ tự cửa hàng tự sắp (sort_order). Duyệt nhiều cửa hàng cùng lúc (tìm kiếm/
+  // danh mục) thì sort_order của từng cửa hàng không so được với nhau, giữ nguyên created_at
+  // DESC như cũ. id DESC luôn là tiebreaker cuối — created_at không unique (nhiều sản phẩm tạo
+  // cùng lúc lúc seed dữ liệu), thiếu tiebreaker thì phân trang (limit/offset) có thể lặp/bỏ sót
+  // dòng giữa các trang do thứ tự trả về không ổn định.
+  const orderBy = req.query.merchant_id
+    ? 'sort_order ASC, created_at DESC, id DESC'
+    : 'created_at DESC, id DESC';
   const rows = await db.query(
-    // id DESC làm tiebreaker — created_at không unique (nhiều sản phẩm tạo cùng lúc lúc seed
-    // dữ liệu), thiếu tiebreaker thì phân trang (limit/offset) có thể lặp/bỏ sót dòng giữa các
-    // trang do thứ tự trả về không ổn định.
-    `SELECT * FROM products WHERE ${clauses.join(' AND ')} ORDER BY created_at DESC, id DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
+    `SELECT * FROM products WHERE ${clauses.join(' AND ')} ORDER BY ${orderBy} LIMIT $${params.length - 1} OFFSET $${params.length}`,
     params
   );
   const products = await attachVariants(rows);

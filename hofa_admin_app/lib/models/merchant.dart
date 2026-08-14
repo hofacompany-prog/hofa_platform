@@ -110,6 +110,10 @@ class Merchant {
   // Chỉ có ý nghĩa khi merchantType == 'buy_on_behalf' — 'quantity' hoặc 'value', xem
   // merchant_fee_tiers (bậc phí mua hộ, admin cấu hình riêng ở màn chi tiết cửa hàng).
   final String? buyOnBehalfFeeBasis;
+  // Danh sách "nổi bật" ở trang chủ app Khách — admin chọn + sắp xếp ở màn Trang chủ nổi bật,
+  // xem hofa-db/80_product_sort_and_featured_home.sql.
+  final bool featuredHome;
+  final int featuredHomeSortOrder;
   final DateTime? createdAt;
   // Chỉ có khi gọi GET /merchants/:id với quyền admin/chủ (server nhúng sẵn).
   final MerchantOwner? owner;
@@ -146,6 +150,8 @@ class Merchant {
     required this.ratingCount,
     this.standardCertifiedAt,
     this.buyOnBehalfFeeBasis,
+    this.featuredHome = false,
+    this.featuredHomeSortOrder = 0,
     this.createdAt,
     this.owner,
     this.branches,
@@ -190,6 +196,9 @@ class Merchant {
         ? DateTime.tryParse(json['standard_certified_at'] as String)
         : null,
     buyOnBehalfFeeBasis: json['buy_on_behalf_fee_basis'] as String?,
+    featuredHome: json['featured_home'] as bool? ?? false,
+    featuredHomeSortOrder:
+        (json['featured_home_sort_order'] as num?)?.toInt() ?? 0,
     createdAt: json['created_at'] != null
         ? DateTime.tryParse(json['created_at'] as String)
         : null,

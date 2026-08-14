@@ -158,6 +158,9 @@ class Product {
   final String? variantGroupName;
   final List<String> images;
   final List<ProductVariant> variants;
+  // Thứ tự hiển thị cho khách ở màn chi tiết cửa hàng — cửa hàng tự sắp xếp ở màn danh sách sản
+  // phẩm, xem hofa-db/80_product_sort_and_featured_home.sql.
+  final int sortOrder;
 
   Product({
     required this.id,
@@ -171,6 +174,7 @@ class Product {
     this.variantGroupName,
     required this.images,
     required this.variants,
+    this.sortOrder = 0,
   });
 
   factory Product.fromJson(Map<String, dynamic> json) => Product(
@@ -189,6 +193,7 @@ class Product {
             ?.map((e) => ProductVariant.fromJson(e as Map<String, dynamic>))
             .toList() ??
         [],
+    sortOrder: (json['sort_order'] as num?)?.toInt() ?? 0,
   );
 
   int get lowestPrice => variants.isEmpty

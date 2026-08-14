@@ -17,12 +17,12 @@ const merchantStatusLabels = {
 };
 
 Color _statusColor(String status, ColorScheme scheme) => switch (status) {
-      'active' => Colors.green,
-      'pending_review' => Colors.orange,
-      'rejected' || 'closed' => scheme.error,
-      'paused' => Colors.blueGrey,
-      _ => scheme.outline,
-    };
+  'active' => Colors.green,
+  'pending_review' => Colors.orange,
+  'rejected' || 'closed' => scheme.error,
+  'paused' => Colors.blueGrey,
+  _ => scheme.outline,
+};
 
 class MerchantsScreen extends ConsumerStatefulWidget {
   const MerchantsScreen({super.key});
@@ -67,7 +67,10 @@ class _MerchantsScreenState extends ConsumerState<MerchantsScreen> {
       ref.invalidate(merchantsProvider);
       ref.invalidate(statsProvider);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -84,9 +87,11 @@ class _MerchantsScreenState extends ConsumerState<MerchantsScreen> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(approve
-                  ? '"${m.name}" sẽ được mở bán và hiện với khách hàng.'
-                  : '"${m.name}" sẽ bị từ chối và không thể bán hàng.'),
+              Text(
+                approve
+                    ? '"${m.name}" sẽ được mở bán và hiện với khách hàng.'
+                    : '"${m.name}" sẽ bị từ chối và không thể bán hàng.',
+              ),
               if (approve) ...[
                 const SizedBox(height: 12),
                 CheckboxListTile(
@@ -100,9 +105,14 @@ class _MerchantsScreenState extends ConsumerState<MerchantsScreen> {
             ],
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Huỷ')),
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Huỷ'),
+            ),
             FilledButton(
-              style: approve ? null : FilledButton.styleFrom(backgroundColor: Colors.red),
+              style: approve
+                  ? null
+                  : FilledButton.styleFrom(backgroundColor: Colors.red),
               onPressed: () => Navigator.pop(context, true),
               child: Text(approve ? 'Duyệt' : 'Từ chối'),
             ),
@@ -111,8 +121,12 @@ class _MerchantsScreenState extends ConsumerState<MerchantsScreen> {
       ),
     );
     if (ok != true) return;
-    await _run(() =>
-        ref.read(adminRepoProvider).reviewMerchant(m.id, approve: approve, certifyStandard: certify).then((_) {}));
+    await _run(
+      () => ref
+          .read(adminRepoProvider)
+          .reviewMerchant(m.id, approve: approve, certifyStandard: certify)
+          .then((_) {}),
+    );
   }
 
   @override
@@ -128,6 +142,12 @@ class _MerchantsScreenState extends ConsumerState<MerchantsScreen> {
             tooltip: 'Tải lại',
             icon: const Icon(Icons.refresh),
             onPressed: () => ref.invalidate(merchantsProvider),
+          ),
+          const SizedBox(width: 8),
+          OutlinedButton.icon(
+            onPressed: () => context.push('/merchants/featured-home'),
+            icon: const Icon(Icons.home_outlined),
+            label: const Text('Trang chủ nổi bật'),
           ),
           const SizedBox(width: 8),
           FilledButton.icon(
@@ -168,9 +188,14 @@ class _MerchantsScreenState extends ConsumerState<MerchantsScreen> {
                   value: _typeFilter,
                   onChanged: (v) => setState(() => _typeFilter = v ?? 'all'),
                   items: [
-                    const DropdownMenuItem(value: 'all', child: Text('Mọi loại cửa hàng')),
-                    ...merchantTypeLabels.entries
-                        .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value))),
+                    const DropdownMenuItem(
+                      value: 'all',
+                      child: Text('Mọi loại cửa hàng'),
+                    ),
+                    ...merchantTypeLabels.entries.map(
+                      (e) =>
+                          DropdownMenuItem(value: e.key, child: Text(e.value)),
+                    ),
                   ],
                 ),
                 const SizedBox(width: 16),
@@ -178,9 +203,14 @@ class _MerchantsScreenState extends ConsumerState<MerchantsScreen> {
                   value: _statusFilter,
                   onChanged: (v) => setState(() => _statusFilter = v ?? 'all'),
                   items: [
-                    const DropdownMenuItem(value: 'all', child: Text('Mọi trạng thái')),
-                    ...merchantStatusLabels.entries
-                        .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value))),
+                    const DropdownMenuItem(
+                      value: 'all',
+                      child: Text('Mọi trạng thái'),
+                    ),
+                    ...merchantStatusLabels.entries.map(
+                      (e) =>
+                          DropdownMenuItem(value: e.key, child: Text(e.value)),
+                    ),
                   ],
                 ),
               ],
@@ -193,11 +223,19 @@ class _MerchantsScreenState extends ConsumerState<MerchantsScreen> {
               error: (e, _) => Center(child: Text('Lỗi: $e')),
               data: (all) {
                 final list = all
-                    .where((m) => _statusFilter == 'all' || m.status == _statusFilter)
-                    .where((m) => _typeFilter == 'all' || m.merchantType == _typeFilter)
+                    .where(
+                      (m) =>
+                          _statusFilter == 'all' || m.status == _statusFilter,
+                    )
+                    .where(
+                      (m) =>
+                          _typeFilter == 'all' || m.merchantType == _typeFilter,
+                    )
                     .toList();
                 if (list.isEmpty) {
-                  return const Center(child: Text('Không có cửa hàng nào khớp bộ lọc'));
+                  return const Center(
+                    child: Text('Không có cửa hàng nào khớp bộ lọc'),
+                  );
                 }
                 return ListView.separated(
                   padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
@@ -224,28 +262,45 @@ class _MerchantsScreenState extends ConsumerState<MerchantsScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   CircleAvatar(
-                                    backgroundColor: color.withValues(alpha: 0.12),
-                                    backgroundImage: m.logoUrl != null ? NetworkImage(m.logoUrl!) : null,
-                                    child: m.logoUrl == null ? Icon(Icons.storefront, color: color) : null,
+                                    backgroundColor: color.withValues(
+                                      alpha: 0.12,
+                                    ),
+                                    backgroundImage: m.logoUrl != null
+                                        ? NetworkImage(m.logoUrl!)
+                                        : null,
+                                    child: m.logoUrl == null
+                                        ? Icon(Icons.storefront, color: color)
+                                        : null,
                                   ),
                                   const SizedBox(width: 16),
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         Row(
                                           children: [
                                             Flexible(
-                                              child: Text(m.name,
-                                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                                                  maxLines: 2,
-                                                  overflow: TextOverflow.ellipsis),
+                                              child: Text(
+                                                m.name,
+                                                style: const TextStyle(
+                                                  fontWeight: FontWeight.bold,
+                                                  fontSize: 15,
+                                                ),
+                                                maxLines: 2,
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
                                             ),
-                                            if (m.merchantType == 'standard') ...[
+                                            if (m.merchantType ==
+                                                'standard') ...[
                                               const SizedBox(width: 8),
                                               const Tooltip(
                                                 message: 'HOFA Standard',
-                                                child: Icon(Icons.verified, size: 16, color: Colors.blue),
+                                                child: Icon(
+                                                  Icons.verified,
+                                                  size: 16,
+                                                  color: Colors.blue,
+                                                ),
                                               ),
                                             ],
                                           ],
@@ -271,41 +326,72 @@ class _MerchantsScreenState extends ConsumerState<MerchantsScreen> {
                                 runSpacing: 4,
                                 children: [
                                   Chip(
-                                    label: Text(merchantTypeLabels[m.merchantType] ?? m.merchantType),
-                                    backgroundColor: theme.colorScheme.secondary.withValues(alpha: 0.12),
-                                    labelStyle: TextStyle(color: theme.colorScheme.secondary),
+                                    label: Text(
+                                      merchantTypeLabels[m.merchantType] ??
+                                          m.merchantType,
+                                    ),
+                                    backgroundColor: theme.colorScheme.secondary
+                                        .withValues(alpha: 0.12),
+                                    labelStyle: TextStyle(
+                                      color: theme.colorScheme.secondary,
+                                    ),
                                     visualDensity: VisualDensity.compact,
                                   ),
                                   Chip(
-                                    label: Text(merchantStatusLabels[m.status] ?? m.status),
-                                    backgroundColor: color.withValues(alpha: 0.12),
-                                    side: BorderSide(color: color.withValues(alpha: 0.4)),
+                                    label: Text(
+                                      merchantStatusLabels[m.status] ??
+                                          m.status,
+                                    ),
+                                    backgroundColor: color.withValues(
+                                      alpha: 0.12,
+                                    ),
+                                    side: BorderSide(
+                                      color: color.withValues(alpha: 0.4),
+                                    ),
                                     visualDensity: VisualDensity.compact,
                                   ),
                                   if (m.status == 'pending_review') ...[
                                     FilledButton(
-                                      onPressed: _busy ? null : () => _review(m, true),
+                                      onPressed: _busy
+                                          ? null
+                                          : () => _review(m, true),
                                       child: const Text('Duyệt'),
                                     ),
                                     OutlinedButton(
-                                      onPressed: _busy ? null : () => _review(m, false),
-                                      style: OutlinedButton.styleFrom(foregroundColor: theme.colorScheme.error),
+                                      onPressed: _busy
+                                          ? null
+                                          : () => _review(m, false),
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor:
+                                            theme.colorScheme.error,
+                                      ),
                                       child: const Text('Từ chối'),
                                     ),
                                   ] else if (m.status == 'active')
                                     OutlinedButton(
                                       onPressed: _busy
                                           ? null
-                                          : () => _run(() =>
-                                              ref.read(adminRepoProvider).setMerchantPaused(m.id, true).then((_) {})),
+                                          : () => _run(
+                                              () => ref
+                                                  .read(adminRepoProvider)
+                                                  .setMerchantPaused(m.id, true)
+                                                  .then((_) {}),
+                                            ),
                                       child: const Text('Tạm dừng'),
                                     )
                                   else if (m.status == 'paused')
                                     FilledButton.tonal(
                                       onPressed: _busy
                                           ? null
-                                          : () => _run(() =>
-                                              ref.read(adminRepoProvider).setMerchantPaused(m.id, false).then((_) {})),
+                                          : () => _run(
+                                              () => ref
+                                                  .read(adminRepoProvider)
+                                                  .setMerchantPaused(
+                                                    m.id,
+                                                    false,
+                                                  )
+                                                  .then((_) {}),
+                                            ),
                                       child: const Text('Mở lại'),
                                     ),
                                 ],

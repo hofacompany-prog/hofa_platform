@@ -265,6 +265,37 @@ Future<void> _confirmDeleteToppingGroup(
   }
 }
 
+/// Kéo thả đổi thứ tự hiển thị cho khách ở màn chi tiết cửa hàng — chỉ ghi lại sort_order cho
+/// những sản phẩm THẬT SỰ đổi vị trí (giống cách categories_screen.dart bên app admin làm),
+/// tự "chữa" luôn trường hợp nhiều sản phẩm cũ đang cùng sort_order=0 (chưa từng sắp xếp) chỉ
+/// sau 1 lần kéo.
+Future<void> _reorder(
+  BuildContext context,
+  WidgetRef ref,
+  List<Product> products,
+  int oldIndex,
+  int newIndex,
+) async {
+  final reordered = List<Product>.from(products);
+  final item = reordered.removeAt(oldIndex);
+  reordered.insert(newIndex, item);
+
+  try {
+    for (var i = 0; i < reordered.length; i++) {
+      if (reordered[i].sortOrder != i) {
+        await _repo.update(reordered[i].id, {'sort_order': i});
+      }
+    }
+    ref.invalidate(_productsProvider);
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+    }
+  }
+}
+
 Future<void> _confirmDelete(
   BuildContext context,
   WidgetRef ref,
@@ -313,9 +344,15 @@ Future<void> _confirmDelete(
 class ProductsListScreen extends ConsumerWidget {
   const ProductsListScreen({super.key});
 
-  Widget _productCard(BuildContext context, WidgetRef ref, Product p) {
+  Widget _productCard(
+    BuildContext context,
+    WidgetRef ref,
+    Product p,
+    int index,
+  ) {
     final isActive = p.status == 'active';
     return Card(
+      key: ValueKey(p.id),
       child: InkWell(
         borderRadius: BorderRadius.circular(12),
         onTap: () => context.push('/products/${p.id}/edit'),
@@ -407,6 +444,14 @@ class ProductsListScreen extends ConsumerWidget {
                         icon: const Icon(Icons.delete_outline, size: 20),
                         visualDensity: VisualDensity.compact,
                         onPressed: () => _confirmDelete(context, ref, p),
+                      ),
+                      // Kéo để đổi thứ tự hiển thị cho khách — xem [_reorder].
+                      ReorderableDragStartListener(
+                        index: index,
+                        child: const Padding(
+                          padding: EdgeInsets.all(8),
+                          child: Icon(Icons.drag_handle, size: 20),
+                        ),
                       ),
                     ],
                   ),
@@ -536,13 +581,18 @@ class ProductsListScreen extends ConsumerWidget {
                     ),
                   );
                 }
-                return Column(
-                  children: [
-                    for (final p in products) ...[
-                      _productCard(context, ref, p),
-                      const SizedBox(height: 8),
-                    ],
-                  ],
+                return ReorderableListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  buildDefaultDragHandles: false,
+                  itemCount: products.length,
+                  onReorderItem: (oldIndex, newIndex) =>
+                      _reorder(context, ref, products, oldIndex, newIndex),
+                  itemBuilder: (context, index) => Padding(
+                    key: ValueKey('pad-${products[index].id}'),
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: _productCard(context, ref, products[index], index),
+                  ),
                 );
               },
             ),

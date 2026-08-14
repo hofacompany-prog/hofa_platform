@@ -10,6 +10,7 @@ import 'screens/dashboard/dashboard_screen.dart';
 import 'screens/merchants/merchant_hub_screen.dart';
 import 'screens/merchants/merchant_form_screen.dart';
 import 'screens/merchants/merchant_detail_screen.dart';
+import 'screens/merchants/featured_merchants_screen.dart';
 import 'screens/orders/orders_screen.dart';
 import 'screens/orders/order_detail_screen.dart';
 import 'screens/users/users_screen.dart';
@@ -65,12 +66,17 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/merchants',
             builder: (context, state) => MerchantHubScreen(
-              initialTab: int.tryParse(state.uri.queryParameters['tab'] ?? '') ?? 0,
+              initialTab:
+                  int.tryParse(state.uri.queryParameters['tab'] ?? '') ?? 0,
             ),
           ),
           GoRoute(
             path: '/merchants/new',
             builder: (context, state) => const MerchantFormScreen(),
+          ),
+          GoRoute(
+            path: '/merchants/featured-home',
+            builder: (context, state) => const FeaturedMerchantsScreen(),
           ),
           GoRoute(
             path: '/merchants/:id',
@@ -98,23 +104,27 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/drivers',
             builder: (context, state) => DriverHubScreen(
-              initialTab: int.tryParse(state.uri.queryParameters['tab'] ?? '') ?? 0,
+              initialTab:
+                  int.tryParse(state.uri.queryParameters['tab'] ?? '') ?? 0,
             ),
           ),
           GoRoute(
             path: '/deliveries/:id',
-            builder: (context, state) => DeliveryDetailScreen(deliveryId: state.pathParameters['id']!),
+            builder: (context, state) =>
+                DeliveryDetailScreen(deliveryId: state.pathParameters['id']!),
           ),
           GoRoute(
             path: '/categories',
             builder: (context, state) => CategoriesHubScreen(
-              initialTab: int.tryParse(state.uri.queryParameters['tab'] ?? '') ?? 0,
+              initialTab:
+                  int.tryParse(state.uri.queryParameters['tab'] ?? '') ?? 0,
             ),
           ),
           GoRoute(
             path: '/finance',
             builder: (context, state) => FinanceHubScreen(
-              initialTab: int.tryParse(state.uri.queryParameters['tab'] ?? '') ?? 0,
+              initialTab:
+                  int.tryParse(state.uri.queryParameters['tab'] ?? '') ?? 0,
             ),
           ),
           GoRoute(
