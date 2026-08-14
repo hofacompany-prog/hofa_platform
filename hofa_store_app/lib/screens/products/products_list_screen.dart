@@ -24,14 +24,6 @@ final _toppingGroupsProvider = FutureProvider.autoDispose<List<ToppingGroup>>((
   return ProductRepository().merchantToppingGroups(merchant.id);
 });
 
-const _statusLabels = {
-  'draft': 'Nháp',
-  'active': 'Đang bán',
-  'out_of_stock': 'Hết hàng',
-  'hidden': 'Đã ẩn',
-  'archived': 'Đã xoá',
-};
-
 final _repo = ProductRepository();
 
 Future<void> _toggleActive(
@@ -387,14 +379,6 @@ class ProductsListScreen extends ConsumerWidget {
                             ),
                           ),
                         ),
-                      const SizedBox(height: 6),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: Chip(
-                          label: Text(_statusLabels[p.status] ?? p.status),
-                          visualDensity: VisualDensity.compact,
-                        ),
-                      ),
                     ],
                   ),
                 ),
