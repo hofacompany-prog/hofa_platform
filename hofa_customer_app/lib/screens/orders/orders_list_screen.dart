@@ -91,16 +91,6 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               children: [
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: ChoiceChip(
-                    label: const Text('Tất cả'),
-                    selected: statusFilter == null,
-                    onSelected: (_) =>
-                        ref.read(orderStatusFilterProvider.notifier).state =
-                            null,
-                  ),
-                ),
                 ...orderStatusLabels.entries.map(
                   (e) => Padding(
                     padding: const EdgeInsets.only(right: 8),
