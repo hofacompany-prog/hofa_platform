@@ -147,16 +147,16 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              TextField(
-                controller: otpCtrl,
-                decoration: InputDecoration(
-                  labelText: _otpRequired
-                      ? 'Mã OTP khách đọc cho bạn'
-                      : 'Mã OTP khách đọc cho bạn (không bắt buộc — đơn giá trị thấp)',
+              if (_otpRequired) ...[
+                TextField(
+                  controller: otpCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Mã OTP khách đọc cho bạn',
+                  ),
+                  keyboardType: TextInputType.number,
                 ),
-                keyboardType: TextInputType.number,
-              ),
-              const SizedBox(height: 12),
+                const SizedBox(height: 12),
+              ],
               TextField(
                 controller: nameCtrl,
                 decoration: const InputDecoration(
