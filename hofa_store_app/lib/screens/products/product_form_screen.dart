@@ -34,7 +34,6 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
-  final _variantGroupNameCtrl = TextEditingController();
   final _defaultVariantNameCtrl = TextEditingController();
   final _priceCtrl = TextEditingController();
   final _stockCtrl = TextEditingController();
@@ -93,7 +92,6 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   void dispose() {
     _nameCtrl.dispose();
     _descCtrl.dispose();
-    _variantGroupNameCtrl.dispose();
     _defaultVariantNameCtrl.dispose();
     _priceCtrl.dispose();
     _stockCtrl.dispose();
@@ -139,7 +137,6 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
         _product = p;
         _nameCtrl.text = p.name;
         _descCtrl.text = p.description ?? '';
-        _variantGroupNameCtrl.text = p.variantGroupName ?? '';
         _salesModel = p.salesModel;
         _status = p.status;
         _imageUrl = p.images.isNotEmpty ? p.images.first : null;
@@ -730,7 +727,6 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     setState(() {
       _nameCtrl.text = c.name;
       _descCtrl.text = c.description ?? '';
-      _variantGroupNameCtrl.text = c.variantGroupName ?? '';
       _defaultVariantNameCtrl.text = c.defaultVariantName;
       _priceCtrl.text = c.price.toString();
       _salesModel = c.salesModel;
@@ -768,7 +764,6 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
         await _repo.update(widget.productId!, {
           'name': _nameCtrl.text.trim(),
           'description': _descCtrl.text.trim(),
-          'variant_group_name': _variantGroupNameCtrl.text.trim(),
           'sales_model': _salesModel,
           'status': _status,
           'images': [_imageUrl],
@@ -792,7 +787,6 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
           merchantCategoryId: _merchantCategoryId,
           name: _nameCtrl.text.trim(),
           description: _descCtrl.text.trim(),
-          variantGroupName: _variantGroupNameCtrl.text.trim(),
           salesModel: _salesModel,
           status: _status,
           imageUrl: _imageUrl!,
@@ -1045,9 +1039,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   Future<void> _deleteVariant(String id) async {
     if (!_isEdit) {
       setState(() {
-        _pendingVariants = _pendingVariants
-            .where((v) => v.id != id)
-            .toList();
+        _pendingVariants = _pendingVariants.where((v) => v.id != id).toList();
         _stockByPendingVariant = {..._stockByPendingVariant}..remove(id);
       });
       return;
@@ -1273,20 +1265,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                               style: Theme.of(context).textTheme.labelLarge,
                             ),
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Tên nhóm biến thể để gợi ý chung (VD: Trọng lượng, Kích cỡ) — không bắt buộc.',
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
                           const SizedBox(height: 12),
-                          TextFormField(
-                            controller: _variantGroupNameCtrl,
-                            decoration: const InputDecoration(
-                              labelText: 'Tên nhóm biến thể (không bắt buộc)',
-                              border: OutlineInputBorder(),
-                            ),
-                          ),
-                          const SizedBox(height: 16),
                           TextFormField(
                             controller: _defaultVariantNameCtrl,
                             decoration: const InputDecoration(
@@ -1374,20 +1353,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                               style: Theme.of(context).textTheme.labelLarge,
                             ),
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Tên nhóm biến thể để gợi ý chung (VD: Trọng lượng, Kích cỡ) — không bắt buộc.',
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
                           const SizedBox(height: 12),
-                          TextFormField(
-                            controller: _variantGroupNameCtrl,
-                            decoration: const InputDecoration(
-                              labelText: 'Tên nhóm biến thể (không bắt buộc)',
-                              border: OutlineInputBorder(),
-                            ),
-                          ),
-                          const SizedBox(height: 24),
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
@@ -1518,7 +1484,8 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                               ProductVariant(
                                 id: 'default',
                                 productId: '',
-                                name: _defaultVariantNameCtrl.text.trim().isEmpty
+                                name:
+                                    _defaultVariantNameCtrl.text.trim().isEmpty
                                     ? 'Mặc định'
                                     : _defaultVariantNameCtrl.text.trim(),
                                 price:
