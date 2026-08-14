@@ -223,6 +223,8 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
                             child: Text(
                               merchant.description!,
                               style: theme.textTheme.bodyMedium,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                         const SizedBox(height: 6),

@@ -104,7 +104,7 @@ class MerchantCard extends StatelessWidget {
                         Text(
                           merchant.description!,
                           style: theme.textTheme.bodySmall,
-                          maxLines: 1,
+                          maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
                       const SizedBox(height: 4),
