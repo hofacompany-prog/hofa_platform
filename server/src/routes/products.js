@@ -14,7 +14,7 @@ const VARIANT_FIELDS = [
   'wholesale_price', 'weight_gram', 'is_default', 'is_active'
 ];
 const TOPPING_GROUP_FIELDS = ['name', 'is_required', 'allow_multiple', 'sort_order'];
-const TOPPING_FIELDS = ['name', 'price', 'sort_order'];
+const TOPPING_FIELDS = ['name', 'price', 'sort_order', 'is_active'];
 const TIER_FIELDS = [
   'min_quantity', 'max_quantity', 'unit_price', 'min_days_per_week', 'unit_price_days', 'unit_price_both',
   'min_order_quantity', 'requires_deposit', 'deposit_percent',
@@ -348,11 +348,13 @@ router.delete('/variants/:id', asyncHandler(async (req, res) => {
 // vào nhiều sản phẩm qua bảng nối product_topping_group_links, không phải tạo lại cho
 // từng sản phẩm như trước.
 
-async function attachToppings(groups) {
+/** onlyActive: true dùng cho màn khách xem sản phẩm (ẩn lựa chọn cửa hàng đã tắt) — màn quản
+ * lý (cửa hàng/admin) luôn thấy cả lựa chọn đã tắt để bật lại được. */
+async function attachToppings(groups, { onlyActive = false } = {}) {
   if (!groups.length) return [];
   const ids = groups.map((g) => g.id);
   const toppings = await db.query(
-    'SELECT * FROM product_toppings WHERE group_id = ANY($1::uuid[]) ORDER BY sort_order ASC',
+    `SELECT * FROM product_toppings WHERE group_id = ANY($1::uuid[]) ${onlyActive ? 'AND is_active' : ''} ORDER BY sort_order ASC`,
     [ids]
   );
   const byGroup = {};
@@ -443,7 +445,10 @@ router.delete('/toppings/:id', asyncHandler(async (req, res) => {
 
 // ---- Gắn nhóm topping vào sản phẩm ----
 
-/** Nhóm topping đang gắn vào 1 sản phẩm — công khai (khách xem sản phẩm cần thấy). */
+/** Nhóm topping đang gắn vào 1 sản phẩm — công khai (khách xem sản phẩm cần thấy). Chỉ trả
+ * lựa chọn còn is_active, bỏ hẳn nhóm nào không còn lựa chọn nào sau khi lọc (nhóm rỗng
+ * không có gì cho khách chọn). Màn quản lý (cửa hàng/admin) dùng route
+ * /merchants/:merchantId/topping-groups và /topping-groups/:id riêng, không qua đây. */
 router.get('/products/:productId/topping-groups', asyncHandler(async (req, res) => {
   const groups = await db.query(
     `SELECT tg.* FROM topping_groups tg
@@ -452,7 +457,8 @@ router.get('/products/:productId/topping-groups', asyncHandler(async (req, res) 
       ORDER BY tg.sort_order ASC`,
     [req.params.productId]
   );
-  res.json({ ok: true, data: await attachToppings(groups) });
+  const withToppings = await attachToppings(groups, { onlyActive: true });
+  res.json({ ok: true, data: withToppings.filter((g) => g.toppings.length > 0) });
 }));
 
 /** Đặt lại toàn bộ danh sách nhóm topping gắn vào 1 sản phẩm — cùng pattern với

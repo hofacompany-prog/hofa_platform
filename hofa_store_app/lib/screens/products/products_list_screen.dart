@@ -297,6 +297,35 @@ Future<void> _reorder(
   }
 }
 
+/// Kéo thả đổi thứ tự nhóm topping hiển thị cho khách ở màn chi tiết sản phẩm — cùng pattern
+/// với [_reorder] ở trên.
+Future<void> _reorderToppingGroups(
+  BuildContext context,
+  WidgetRef ref,
+  List<ToppingGroup> groups,
+  int oldIndex,
+  int newIndex,
+) async {
+  final reordered = List<ToppingGroup>.from(groups);
+  final item = reordered.removeAt(oldIndex);
+  reordered.insert(newIndex, item);
+
+  try {
+    for (var i = 0; i < reordered.length; i++) {
+      if (reordered[i].sortOrder != i) {
+        await _repo.updateToppingGroup(reordered[i].id, {'sort_order': i});
+      }
+    }
+    ref.invalidate(_toppingGroupsProvider);
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+    }
+  }
+}
+
 Future<void> _confirmDelete(
   BuildContext context,
   WidgetRef ref,
@@ -469,8 +498,10 @@ class ProductsListScreen extends ConsumerWidget {
     BuildContext context,
     WidgetRef ref,
     ToppingGroup g,
+    int index,
   ) {
     return Card(
+      key: ValueKey('group-${g.id}'),
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
         onTap: () => context.push('/topping-groups/${g.id}/edit'),
@@ -480,10 +511,22 @@ class ProductsListScreen extends ConsumerWidget {
               ? 'Đã liên kết với ${g.linkedProductCount} món'
               : 'Chưa liên kết sản phẩm nào',
         ),
-        trailing: IconButton(
-          tooltip: 'Xoá nhóm topping',
-          icon: const Icon(Icons.delete_outline),
-          onPressed: () => _confirmDeleteToppingGroup(context, ref, g),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            IconButton(
+              tooltip: 'Xoá nhóm topping',
+              icon: const Icon(Icons.delete_outline),
+              onPressed: () => _confirmDeleteToppingGroup(context, ref, g),
+            ),
+            ReorderableDragStartListener(
+              index: index,
+              child: const Padding(
+                padding: EdgeInsets.all(8),
+                child: Icon(Icons.drag_handle, size: 20),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -626,10 +669,21 @@ class ProductsListScreen extends ConsumerWidget {
               error: (e, _) => Text('Lỗi tải nhóm topping: $e'),
               data: (groups) => groups.isEmpty
                   ? const Text('Chưa có nhóm topping nào.')
-                  : Column(
-                      children: groups
-                          .map((g) => _toppingGroupCard(context, ref, g))
-                          .toList(),
+                  : ReorderableListView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      buildDefaultDragHandles: false,
+                      itemCount: groups.length,
+                      onReorderItem: (oldIndex, newIndex) =>
+                          _reorderToppingGroups(
+                            context,
+                            ref,
+                            groups,
+                            oldIndex,
+                            newIndex,
+                          ),
+                      itemBuilder: (context, index) =>
+                          _toppingGroupCard(context, ref, groups[index], index),
                     ),
             ),
             if ((toppingGroupsAsync.valueOrNull?.isNotEmpty ?? false)) ...[

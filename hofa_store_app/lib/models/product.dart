@@ -87,6 +87,7 @@ class Topping {
   final String name;
   final int price;
   final int sortOrder;
+  final bool isActive;
 
   Topping({
     required this.id,
@@ -94,6 +95,7 @@ class Topping {
     required this.name,
     required this.price,
     required this.sortOrder,
+    this.isActive = true,
   });
 
   factory Topping.fromJson(Map<String, dynamic> json) => Topping(
@@ -102,6 +104,7 @@ class Topping {
     name: json['name'] as String? ?? '',
     price: (json['price'] as num?)?.toInt() ?? 0,
     sortOrder: (json['sort_order'] as num?)?.toInt() ?? 0,
+    isActive: json['is_active'] as bool? ?? true,
   );
 }
 

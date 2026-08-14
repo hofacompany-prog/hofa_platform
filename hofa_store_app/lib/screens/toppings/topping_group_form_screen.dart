@@ -178,6 +178,43 @@ class _ToppingGroupFormScreenState
     }
   }
 
+  Future<void> _toggleToppingActive(Topping t) async {
+    try {
+      await _repo.updateTopping(t.id, {'is_active': !t.isActive});
+      await _load();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      }
+    }
+  }
+
+  /// Kéo thả đổi thứ tự hiển thị cho khách — chỉ ghi lại sort_order cho lựa chọn THẬT SỰ
+  /// đổi vị trí, giống _reorder ở products_list_screen.dart.
+  Future<void> _reorderToppings(int oldIndex, int newIndex) async {
+    final toppings = _group?.toppings ?? const <Topping>[];
+    final reordered = List<Topping>.from(toppings);
+    final item = reordered.removeAt(oldIndex);
+    reordered.insert(newIndex, item);
+
+    try {
+      for (var i = 0; i < reordered.length; i++) {
+        if (reordered[i].sortOrder != i) {
+          await _repo.updateTopping(reordered[i].id, {'sort_order': i});
+        }
+      }
+      await _load();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      }
+    }
+  }
+
   Future<void> _deleteTopping(Topping t) async {
     final ok = await showDialog<bool>(
       context: context,
@@ -293,35 +330,62 @@ class _ToppingGroupFormScreenState
                     if (toppings.isEmpty)
                       const Text('Chưa có lựa chọn nào trong nhóm này.')
                     else
-                      ...toppings.map(
-                        (t) => Card(
-                          elevation: 0,
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.surfaceContainerLow,
-                          margin: const EdgeInsets.only(bottom: 8),
-                          child: ListTile(
-                            title: Text(t.name),
-                            subtitle: Text(
-                              t.price > 0
-                                  ? '+${formatVnd(t.price)}'
-                                  : 'Miễn phí',
-                            ),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  icon: const Icon(Icons.edit_outlined),
-                                  onPressed: () => _toppingDialog(existing: t),
+                      ReorderableListView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        buildDefaultDragHandles: false,
+                        itemCount: toppings.length,
+                        onReorderItem: _reorderToppings,
+                        itemBuilder: (context, i) {
+                          final t = toppings[i];
+                          return Card(
+                            key: ValueKey('topping-${t.id}'),
+                            elevation: 0,
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.surfaceContainerLow,
+                            margin: const EdgeInsets.only(bottom: 8),
+                            child: Opacity(
+                              opacity: t.isActive ? 1 : 0.5,
+                              child: ListTile(
+                                title: Text(t.name),
+                                subtitle: Text(
+                                  t.price > 0
+                                      ? '+${formatVnd(t.price)}'
+                                      : 'Miễn phí',
                                 ),
-                                IconButton(
-                                  icon: const Icon(Icons.delete_outline),
-                                  onPressed: () => _deleteTopping(t),
+                                trailing: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Switch(
+                                      value: t.isActive,
+                                      onChanged: (_) => _toggleToppingActive(t),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.edit_outlined),
+                                      onPressed: () =>
+                                          _toppingDialog(existing: t),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.delete_outline),
+                                      onPressed: () => _deleteTopping(t),
+                                    ),
+                                    ReorderableDragStartListener(
+                                      index: i,
+                                      child: const Padding(
+                                        padding: EdgeInsets.all(8),
+                                        child: Icon(
+                                          Icons.drag_handle,
+                                          size: 20,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                              ],
+                              ),
                             ),
-                          ),
-                        ),
+                          );
+                        },
                       ),
                   ],
                 ],

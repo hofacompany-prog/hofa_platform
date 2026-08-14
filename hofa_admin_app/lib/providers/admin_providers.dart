@@ -7,6 +7,7 @@ import '../models/user_detail.dart';
 import '../models/merchant.dart';
 import '../models/merchant_device.dart';
 import '../models/merchant_fee_tier.dart';
+import '../models/topping.dart';
 import '../models/driver.dart';
 import '../models/bank.dart';
 import '../models/driver_wallet_request.dart';
@@ -81,6 +82,12 @@ final merchantFeeTiersProvider = FutureProvider.autoDispose
     .family<List<MerchantFeeTier>, String>(
       (ref, merchantId) =>
           ref.watch(adminRepoProvider).merchantFeeTiers(merchantId),
+    );
+
+final merchantToppingGroupsProvider = FutureProvider.autoDispose
+    .family<List<ToppingGroup>, String>(
+      (ref, merchantId) =>
+          ref.watch(adminRepoProvider).merchantToppingGroups(merchantId),
     );
 
 final merchantDevicesProvider = FutureProvider.autoDispose

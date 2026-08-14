@@ -12,6 +12,7 @@ import '../../widgets/multi_image_upload_field.dart';
 import '../../widgets/merchant_classification_picker.dart';
 import 'merchant_devices_card.dart';
 import 'merchant_fee_tiers_card.dart';
+import 'merchant_topping_groups_card.dart';
 import 'merchants_screen.dart' show merchantStatusLabels;
 import '../../core/responsive.dart';
 
@@ -1167,6 +1168,8 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
                       const SizedBox(height: 16),
                       MerchantFeeTiersCard(merchant: m),
                     ],
+                    const SizedBox(height: 16),
+                    MerchantToppingGroupsCard(merchant: m),
                     const SizedBox(height: 16),
                     MerchantDevicesCard(merchant: m),
                   ],

@@ -32,6 +32,7 @@ import '../models/driver_wallet_summary.dart';
 import '../models/merchant_wallet_summary.dart';
 import '../models/merchant_wallet_request.dart';
 import '../models/merchant_classification.dart';
+import '../models/topping.dart';
 
 /// Gom mọi lời gọi API mà web admin cần. Tất cả endpoint ở đây đều yêu cầu
 /// role = 'admin' ở phía server (server/src/utils.js requireRole).
@@ -283,6 +284,50 @@ class AdminRepository {
 
   Future<void> deleteFeeTier(String id) async {
     await _api.delete('/fee-tiers/$id');
+  }
+
+  // ---- Nhóm topping (thư viện dùng chung của 1 cửa hàng) — cùng endpoint với
+  // hofa_store_app/lib/repositories/product_repository.dart, admin qua được nhờ
+  // requireMerchantAccess() cho role admin luôn qua (xem server/src/utils.js). ----
+
+  Future<List<ToppingGroup>> merchantToppingGroups(String merchantId) async {
+    final list =
+        await _api.get('/merchants/$merchantId/topping-groups') as List;
+    return list
+        .map((e) => ToppingGroup.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<ToppingGroup> createToppingGroup(
+    String merchantId,
+    Map<String, dynamic> data,
+  ) async => ToppingGroup.fromJson(
+    await _api.post('/merchants/$merchantId/topping-groups', body: data)
+        as Map<String, dynamic>,
+  );
+
+  Future<void> updateToppingGroup(String id, Map<String, dynamic> data) async {
+    await _api.patch('/topping-groups/$id', body: data);
+  }
+
+  Future<void> deleteToppingGroup(String id) async {
+    await _api.delete('/topping-groups/$id');
+  }
+
+  Future<Topping> createTopping(
+    String groupId,
+    Map<String, dynamic> data,
+  ) async => Topping.fromJson(
+    await _api.post('/topping-groups/$groupId/toppings', body: data)
+        as Map<String, dynamic>,
+  );
+
+  Future<void> updateTopping(String id, Map<String, dynamic> data) async {
+    await _api.patch('/toppings/$id', body: data);
+  }
+
+  Future<void> deleteTopping(String id) async {
+    await _api.delete('/toppings/$id');
   }
 
   // ---- Tài xế ----
