@@ -158,7 +158,11 @@ class HomeScreen extends ConsumerWidget {
                       label: 'Danh mục',
                       path: '/categories',
                     ),
-                  if (hasPermission(myPermissions, 'inventory.manage'))
+                  // Cửa hàng mua hộ không có tồn kho thật (tài xế tự đi mua theo yêu cầu) — ẩn
+                  // lối tắt Kho hàng, xem hofa-db/77_buy_on_behalf_unlimited_stock.sql.
+                  if (hasPermission(myPermissions, 'inventory.manage') &&
+                      merchantAsync.valueOrNull?.merchantType !=
+                          'buy_on_behalf')
                     const _ShortcutTile(
                       icon: Icons.inventory_2_outlined,
                       label: 'Kho hàng',

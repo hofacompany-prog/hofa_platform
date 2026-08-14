@@ -61,6 +61,13 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   bool _loadingProduct = false;
   String? _error;
 
+  /// Cửa hàng mua hộ: tài xế tự đi mua theo yêu cầu, không có tồn kho thật để quản lý — ẩn
+  /// hẳn ô nhập tồn kho (server cũng bỏ qua giữ chỗ tồn kho cho loại này, xem
+  /// hofa-db/77_buy_on_behalf_unlimited_stock.sql).
+  bool get _isBuyOnBehalf =>
+      ref.watch(myMerchantProvider).valueOrNull?.merchantType ==
+      'buy_on_behalf';
+
   String? _merchantId;
   List<Category> _allCategories = [];
   List<MerchantCategory> _merchantCategories = [];
@@ -887,7 +894,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                     ),
                     keyboardType: TextInputType.number,
                   ),
-                  if (_branch != null) ...[
+                  if (_branch != null && !_isBuyOnBehalf) ...[
                     const SizedBox(height: 12),
                     TextField(
                       controller: stockCtrl,
@@ -1286,7 +1293,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                                 ? 'Nhập giá bán hợp lệ'
                                 : null,
                           ),
-                          if (_branch != null) ...[
+                          if (_branch != null && !_isBuyOnBehalf) ...[
                             const SizedBox(height: 12),
                             TextFormField(
                               controller: _stockCtrl,
@@ -1295,6 +1302,18 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                                 border: OutlineInputBorder(),
                               ),
                               keyboardType: TextInputType.number,
+                            ),
+                          ],
+                          if (_isBuyOnBehalf) ...[
+                            const SizedBox(height: 12),
+                            Text(
+                              'Cửa hàng mua hộ: tồn kho không giới hạn, khỏi cần nhập.',
+                              style: Theme.of(context).textTheme.bodySmall
+                                  ?.copyWith(
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.outline,
+                                  ),
                             ),
                           ],
                           const SizedBox(height: 24),
