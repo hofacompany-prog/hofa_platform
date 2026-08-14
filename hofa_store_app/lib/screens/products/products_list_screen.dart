@@ -143,6 +143,89 @@ Future<void> _copyProduct(
   }
 }
 
+/// Sửa giá nhanh ngay từ danh sách, không cần mở màn "Sửa sản phẩm" đầy đủ — 1 biến thể thì
+/// sửa thẳng, nhiều biến thể thì liệt kê từng biến thể để chọn đúng cái cần đổi giá.
+Future<void> _quickEditPrice(
+  BuildContext context,
+  WidgetRef ref,
+  Product p,
+) async {
+  if (p.variants.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Sản phẩm chưa có biến thể/giá để sửa')),
+    );
+    return;
+  }
+  final controllers = {
+    for (final v in p.variants)
+      v.id: TextEditingController(text: v.price.toString()),
+  };
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: const Text('Sửa giá nhanh'),
+      content: SizedBox(
+        width: 360,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (final v in p.variants) ...[
+              TextField(
+                controller: controllers[v.id],
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: p.variants.length > 1 ? v.name : 'Giá (đ)',
+                  border: const OutlineInputBorder(),
+                ),
+              ),
+              if (v != p.variants.last) const SizedBox(height: 12),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(ctx, false),
+          child: const Text('Huỷ'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(ctx, true),
+          child: const Text('Lưu'),
+        ),
+      ],
+    ),
+  );
+  if (ok != true) return;
+
+  final changed = p.variants.where((v) {
+    final newPrice = int.tryParse(controllers[v.id]!.text.trim());
+    return newPrice != null && newPrice != v.price;
+  }).toList();
+  if (changed.isEmpty) return;
+
+  try {
+    await Future.wait(
+      changed.map(
+        (v) => _repo.updateVariant(v.id, {
+          'price': int.parse(controllers[v.id]!.text.trim()),
+        }),
+      ),
+    );
+    ref.invalidate(_productsProvider);
+    if (context.mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Đã cập nhật giá')));
+    }
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+    }
+  }
+}
+
 Future<void> _confirmDeleteToppingGroup(
   BuildContext context,
   WidgetRef ref,
@@ -273,12 +356,34 @@ class ProductsListScreen extends ConsumerWidget {
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
                       const SizedBox(height: 2),
-                      Text(
-                        p.variants.isEmpty
-                            ? 'Chưa có biến thể/giá — bấm để thêm'
-                            : '${p.variants.length} biến thể · từ ${formatVnd(p.lowestPrice)}',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
+                      if (p.variants.isEmpty)
+                        Text(
+                          'Chưa có biến thể/giá — bấm để thêm',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        )
+                      else
+                        InkWell(
+                          borderRadius: BorderRadius.circular(6),
+                          onTap: () => _quickEditPrice(context, ref, p),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 2),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  '${p.variants.length} biến thể · từ ${formatVnd(p.lowestPrice)}',
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                                const SizedBox(width: 4),
+                                Icon(
+                                  Icons.edit_outlined,
+                                  size: 14,
+                                  color: Theme.of(context).colorScheme.outline,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
                       const SizedBox(height: 6),
                       Align(
                         alignment: Alignment.centerLeft,
