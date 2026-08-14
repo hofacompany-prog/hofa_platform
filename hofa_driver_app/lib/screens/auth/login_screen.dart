@@ -44,6 +44,12 @@ class _LoginScreenState extends State<LoginScreen> {
     if (_isSignUp) {
       // Chưa nối SMS OTP thật — tạm hiện bước nhập mã, luôn chấp nhận 123123.
       // TODO: thay bằng gửi OTP thật qua supabase.auth.signInWithOtp(phone: ...) khi có provider SMS.
+      // kOtpStepEnabled = false (tạm bỏ theo yêu cầu) — bỏ qua thẳng bước nhập mã, gọi luôn
+      // _confirmOtp() (tự bỏ qua kiểm tra mã vì cùng cờ này) — xem core/phone_auth.dart.
+      if (!kOtpStepEnabled) {
+        await _confirmOtp();
+        return;
+      }
       setState(() {
         _awaitingOtp = true;
         _error = null;
@@ -73,7 +79,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _confirmOtp() async {
-    if (_otpCtrl.text.trim() != kTempOtpCode) {
+    if (kOtpStepEnabled && _otpCtrl.text.trim() != kTempOtpCode) {
       setState(() => _error = 'Mã OTP không đúng');
       return;
     }
