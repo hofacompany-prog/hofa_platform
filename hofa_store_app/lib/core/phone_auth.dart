@@ -5,11 +5,6 @@
 /// nó, thay bằng supabase.auth.signInWithOtp(phone: ...).
 const kTempOtpCode = '123123';
 
-/// Tạm TẮT bước nhập mã xác thực lúc đăng ký (đơn xin của người dùng, chưa có OTP SMS thật nên
-/// việc bắt gõ mã cố định gây phiền) — đăng ký bỏ qua thẳng, không hiện màn nhập mã. Bật lại =
-/// đổi false → true, không cần sửa gì khác (xem login_screen.dart).
-const kOtpStepEnabled = false;
-
 String phoneToAuthEmail(String phone) {
   final digits = phone.replaceAll(RegExp(r'[^0-9]'), '');
   return '$digits@hofa.local';

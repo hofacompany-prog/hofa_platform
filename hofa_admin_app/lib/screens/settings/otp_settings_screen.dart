@@ -17,6 +17,7 @@ class _OtpSettingsScreenState extends ConsumerState<OtpSettingsScreen> {
   final _amountCtrl = TextEditingController();
   bool _initialized = false;
   bool _saving = false;
+  bool _registrationOtpEnabled = false;
 
   @override
   void dispose() {
@@ -26,6 +27,7 @@ class _OtpSettingsScreenState extends ConsumerState<OtpSettingsScreen> {
 
   void _fillFrom(OtpSettings s) {
     _amountCtrl.text = s.minOrderAmount.toString();
+    _registrationOtpEnabled = s.registrationOtpEnabled;
   }
 
   Future<void> _save(OtpSettings current) async {
@@ -39,7 +41,11 @@ class _OtpSettingsScreenState extends ConsumerState<OtpSettingsScreen> {
       final saved = await ref
           .read(adminRepoProvider)
           .updateOtpSettings(
-            OtpSettings(id: current.id, minOrderAmount: amount),
+            OtpSettings(
+              id: current.id,
+              minOrderAmount: amount,
+              registrationOtpEnabled: _registrationOtpEnabled,
+            ),
           );
       ref.invalidate(otpSettingsProvider);
       if (mounted) {
@@ -122,6 +128,21 @@ class _OtpSettingsScreenState extends ConsumerState<OtpSettingsScreen> {
                             ),
                           ],
                         ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    Card(
+                      elevation: 0,
+                      color: theme.colorScheme.surfaceContainerLow,
+                      child: SwitchListTile(
+                        title: const Text('Bắt nhập mã OTP lúc đăng ký'),
+                        subtitle: const Text(
+                          'Tắt = khách/cửa hàng/tài xế đăng ký xong vào thẳng, không phải nhập '
+                          'mã xác thực (chưa nối SMS OTP thật nên mã hiện chỉ là số cố định).',
+                        ),
+                        value: _registrationOtpEnabled,
+                        onChanged: (v) =>
+                            setState(() => _registrationOtpEnabled = v),
                       ),
                     ),
                     const SizedBox(height: 24),

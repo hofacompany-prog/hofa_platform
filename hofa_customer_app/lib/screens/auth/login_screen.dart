@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/auth_error.dart';
 import '../../core/phone_auth.dart';
+import '../../providers/app_providers.dart';
 import '../../providers/auth_providers.dart';
 import '../../widgets/app_version_text.dart';
 
@@ -44,11 +45,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     if (!_formKey.currentState!.validate()) return;
 
     if (_isSignUp) {
-      // Chưa nối SMS OTP thật — tạm hiện bước nhập mã, luôn chấp nhận "123123".
+      // Chưa nối SMS OTP thật — tạm hiện bước nhập mã, luôn chấp nhận "123123". Admin bật/tắt
+      // bước này qua otp_settings.registration_otp_enabled (hofa-db/76_registration_otp_toggle.sql)
+      // — tắt thì gọi thẳng _confirmOtp() (tự bỏ qua kiểm tra mã vì đọc cùng cờ này).
       // TODO: thay bằng gửi OTP thật qua supabase.auth.signInWithOtp(phone: ...) khi có provider SMS.
-      // kOtpStepEnabled = false (tạm bỏ theo yêu cầu) — bỏ qua thẳng bước nhập mã, gọi luôn
-      // _confirmOtp() (tự bỏ qua kiểm tra mã vì cùng cờ này) — xem core/phone_auth.dart.
-      if (!kOtpStepEnabled) {
+      if (!_registrationOtpEnabled) {
         await _confirmOtp();
         return;
       }
@@ -82,8 +83,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   String get _phoneDisplay => _phoneCtrl.text.trim();
 
+  bool get _registrationOtpEnabled =>
+      ref.read(otpSettingsProvider).valueOrNull?.registrationOtpEnabled ??
+      false;
+
   Future<void> _confirmOtp() async {
-    if (kOtpStepEnabled && _otpCtrl.text.trim() != '123123') {
+    if (_registrationOtpEnabled && _otpCtrl.text.trim() != '123123') {
       setState(() => _error = 'Mã OTP không đúng');
       return;
     }
@@ -146,6 +151,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    ref.watch(
+      otpSettingsProvider,
+    ); // kích hoạt fetch sớm để có kịp khi bấm Đăng ký
     return Scaffold(
       // Không cho Scaffold co lại theo bàn phím — nếu không Positioned(bottom:) của
       // AppVersionText bên dưới tính theo mép dưới ĐÃ BỊ ĐẨY LÊN, làm chữ phiên bản trôi
