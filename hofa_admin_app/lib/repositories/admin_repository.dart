@@ -21,6 +21,7 @@ import '../models/auto_accept_settings.dart';
 import '../models/driver_accept_settings.dart';
 import '../models/driver_dispatch_settings.dart';
 import '../models/bank_account_settings.dart';
+import '../models/admin_contact_settings.dart';
 import '../models/admin_notification.dart';
 import '../models/notification_inbox_item.dart';
 import '../models/notification_settings.dart';
@@ -855,6 +856,22 @@ class AdminRepository {
         ? BankAccountSettings.fallback()
         : BankAccountSettings.fromJson(data as Map<String, dynamic>);
   }
+
+  // ---- SĐT liên hệ admin/hỗ trợ ----
+
+  Future<AdminContactSettings> adminContactSettings() async {
+    final data = await _api.get('/admin-contact-settings');
+    return data == null
+        ? AdminContactSettings.fallback()
+        : AdminContactSettings.fromJson(data as Map<String, dynamic>);
+  }
+
+  Future<AdminContactSettings> updateAdminContactSettings(
+    AdminContactSettings settings,
+  ) async => AdminContactSettings.fromJson(
+    await _api.patch('/admin-contact-settings', body: settings.toJson())
+        as Map<String, dynamic>,
+  );
 
   Future<BankAccountSettings> updateBankAccountSettings(
     BankAccountSettings settings,

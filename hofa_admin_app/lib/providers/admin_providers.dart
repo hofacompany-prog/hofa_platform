@@ -23,6 +23,7 @@ import '../models/auto_accept_settings.dart';
 import '../models/driver_accept_settings.dart';
 import '../models/driver_dispatch_settings.dart';
 import '../models/bank_account_settings.dart';
+import '../models/admin_contact_settings.dart';
 import '../models/admin_notification.dart';
 import '../models/notification_settings.dart';
 import '../models/nav_tab_icon.dart';
@@ -277,6 +278,11 @@ final driverDispatchSettingsProvider =
 final bankAccountSettingsProvider =
     FutureProvider.autoDispose<BankAccountSettings>(
       (ref) => ref.watch(adminRepoProvider).bankAccountSettings(),
+    );
+
+final adminContactSettingsProvider =
+    FutureProvider.autoDispose<AdminContactSettings>(
+      (ref) => ref.watch(adminRepoProvider).adminContactSettings(),
     );
 
 final pendingPaymentOrdersProvider = FutureProvider.autoDispose<List<Order>>(

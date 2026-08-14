@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../core/geo.dart';
 import '../../models/category.dart';
 import '../../models/product.dart';
@@ -108,6 +109,49 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
     }
   }
 
+  /// Cửa hàng mua hộ không trực tiếp xử lý đơn (tài xế tự đi mua) — nút này liên hệ thẳng
+  /// admin thay vì cửa hàng, dùng SĐT đặt ở app admin (xem adminContactSettingsProvider).
+  Future<void> _contactAdmin() async {
+    final phone = ref.read(adminContactSettingsProvider).valueOrNull?.phone;
+    if (phone == null || phone.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Admin chưa cập nhật số điện thoại liên hệ'),
+        ),
+      );
+      return;
+    }
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.call_outlined),
+              title: const Text('Gọi điện'),
+              onTap: () => Navigator.pop(context, 'call'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.sms_outlined),
+              title: const Text('Nhắn tin'),
+              onTap: () => Navigator.pop(context, 'sms'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (choice == null || !mounted) return;
+    final uri = Uri(scheme: choice == 'call' ? 'tel' : 'sms', path: phone);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    } else if (mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Không mở được: $phone')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final merchantId = widget.merchantId;
@@ -132,6 +176,9 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Lỗi: $e')),
         data: (merchant) {
+          // Chỉ cửa hàng mua hộ mới cần SĐT admin (nút "Liên hệ hỗ trợ" bên dưới) — watch sớm
+          // ở đây để có kịp dữ liệu khi khách bấm nút, không gọi API thừa cho cửa hàng thường.
+          if (merchant.isBuyOnBehalf) ref.watch(adminContactSettingsProvider);
           return ListView(
             controller: _scrollController,
             padding: const EdgeInsets.all(16),
@@ -257,8 +304,17 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
                   ],
                 ],
               ),
-              if (merchant.isBuyOnBehalf)
+              if (merchant.isBuyOnBehalf) ...[
                 BuyOnBehalfFeeNotice(merchant: merchant),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: _contactAdmin,
+                    icon: const Icon(Icons.support_agent_outlined),
+                    label: const Text('Liên hệ hỗ trợ'),
+                  ),
+                ),
+              ],
               if (!merchant.hasOpenBranch) ...[
                 const SizedBox(height: 12),
                 Container(

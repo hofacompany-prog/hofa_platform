@@ -3,6 +3,7 @@ import '../core/date_range_preset.dart';
 import '../core/paginated_list_notifier.dart';
 import '../models/address.dart';
 import '../models/bank_account_settings.dart';
+import '../models/admin_contact_settings.dart';
 import '../models/branch.dart';
 import '../models/category.dart';
 import '../models/delivery.dart';
@@ -20,6 +21,7 @@ import '../models/topping.dart';
 import '../models/voucher.dart';
 import '../models/wholesale_tier.dart';
 import '../repositories/bank_settings_repository.dart';
+import '../repositories/admin_contact_repository.dart';
 import '../repositories/merchant_repository.dart';
 import '../repositories/nav_icon_repository.dart';
 import '../repositories/notification_repository.dart';
@@ -38,6 +40,7 @@ final reviewRepoProvider = Provider((ref) => ReviewRepository());
 final shippingRepoProvider = Provider((ref) => ShippingRepository());
 final notificationRepoProvider = Provider((ref) => NotificationRepository());
 final bankSettingsRepoProvider = Provider((ref) => BankSettingsRepository());
+final adminContactRepoProvider = Provider((ref) => AdminContactRepository());
 final navIconRepoProvider = Provider((ref) => NavIconRepository());
 
 /// Icon tabbar tuỳ chỉnh — không cần đăng nhập, lỗi mạng tự trả về map rỗng (xem
@@ -169,6 +172,13 @@ final shippingFeeSettingsProvider =
 final bankAccountSettingsProvider =
     FutureProvider.autoDispose<BankAccountSettings>(
       (ref) => ref.watch(bankSettingsRepoProvider).get(),
+    );
+
+/// SĐT liên hệ admin/hỗ trợ (chỉnh ở app admin) — dùng cho nút "Liên hệ hỗ trợ" ở màn chi tiết
+/// cửa hàng mua hộ.
+final adminContactSettingsProvider =
+    FutureProvider.autoDispose<AdminContactSettings>(
+      (ref) => ref.watch(adminContactRepoProvider).get(),
     );
 
 /// Ngưỡng giá trị đơn để bắt buộc xác nhận OTP giao hàng (admin cấu hình toàn sàn) — đơn <=
