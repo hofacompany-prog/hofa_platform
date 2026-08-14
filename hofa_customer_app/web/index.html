@@ -23,8 +23,13 @@
   <!-- Trình duyệt trong app (Facebook/Messenger/Instagram/Zalo/TikTok/Zoom...) chặn nhiều thứ
        web cần (cài PWA, đăng nhập Google, đôi lúc cả camera/định vị) — phát hiện càng sớm càng
        tốt (trước cả lúc Flutter tải) và tự đẩy sang Chrome trên Android bằng intent://, vì
-       webview đó là 1 app riêng, chỉ intent mới thoát hẳn ra ngoài được. iOS không có cách ép
-       tương tự (WKWebView của các app này chặn hết), chỉ hiện được hướng dẫn cho khách tự mở.
+       webview đó là 1 app riêng, chỉ intent mới thoát hẳn ra ngoài được. iOS KHÔNG có cách ép
+       triệt để (Apple để app chủ (FB/Instagram...) tự quyết định có cho webview thoát ra hay
+       không, trang web không có quyền ép) — thử thêm scheme googlechrome:// (im lặng nếu máy
+       không cài Chrome/app chặn scheme, không gây lỗi hiển thị) và biến banner thành link bấm
+       được thật (target=_blank) vì 1 cú chạm THẬT của người dùng có cơ hội thoát ra Safari ở
+       những app không khoá gắt như FB/Instagram (Zalo/Messenger/Line đôi khi cho qua) — vẫn
+       phải giữ banner hướng dẫn thủ công làm phương án cuối vì không gì đảm bảo chắc chắn.
        Vẫn cho Flutter tải tiếp song song — banner là lớp phủ, không chặn hẳn app phòng trường
        hợp khách bấm bỏ qua vẫn dùng được các tính năng không cần thoát webview. -->
   <script>
@@ -33,9 +38,15 @@
       var isInApp = /FBAN|FBAV|FB_IAB|Instagram|Line\/|Zalo|MicroMessenger|TikTok|musical_ly/i.test(ua);
       if (!isInApp) return;
 
+      var url = location.href;
       var isIOS = /iPhone|iPad|iPod/i.test(ua);
-      if (!isIOS) {
-        var target = location.href.replace(/^https?:\/\//, '');
+      if (isIOS) {
+        // Best-effort — chỉ thoát được nếu máy có cài Chrome VÀ app chủ không chặn hẳn việc
+        // điều hướng sang custom scheme khác (nhiều app vẫn chặn, lúc đó lệnh này im lặng
+        // không làm gì, không có lỗi hiển thị).
+        location.href = 'googlechrome://' + url.replace(/^https?:\/\//, '');
+      } else {
+        var target = url.replace(/^https?:\/\//, '');
         location.href = 'intent://' + target + '#Intent;scheme=https;package=com.android.chrome;end';
       }
 
@@ -45,7 +56,9 @@
           'background:#1a1a1a;color:#fff;padding:12px 40px 12px 16px;' +
           'font:14px/1.5 -apple-system,Roboto,sans-serif;text-align:center;';
         bar.innerHTML = (isIOS
-          ? 'Nhấn <strong>···</strong> hoặc biểu tượng chia sẻ ở góc màn hình rồi chọn <strong>"Mở trong Safari"</strong> để dùng đầy đủ tính năng.'
+          ? 'Nhấn <a href="' + url + '" target="_blank" rel="noopener" style="color:#8fd3ff;' +
+            'text-decoration:underline;">vào đây để mở bằng Safari</a>, hoặc nhấn <strong>···</strong>' +
+            ' / biểu tượng chia sẻ ở góc màn hình rồi chọn <strong>"Mở trong Safari"</strong>.'
           : 'Đang mở trong trình duyệt của app — hãy chọn Chrome/trình duyệt mặc định để dùng đầy đủ tính năng.') +
           '<button style="position:absolute;right:8px;top:8px;bottom:8px;background:none;' +
           'border:none;color:#fff;font-size:18px;line-height:1;cursor:pointer;padding:0 8px;" ' +
