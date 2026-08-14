@@ -199,26 +199,30 @@ class _BranchHoursScreenState extends State<BranchHoursScreen> {
                       for (var i = 0; i < 7; i++)
                         Card(
                           elevation: 0,
+                          margin: const EdgeInsets.only(bottom: 6),
                           color: Theme.of(
                             context,
                           ).colorScheme.surfaceContainerLow,
                           child: Padding(
                             padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 4,
+                              horizontal: 8,
+                              vertical: 2,
                             ),
                             child: Row(
                               children: [
                                 SizedBox(
-                                  width: 110,
+                                  width: 68,
                                   child: Text(
                                     weekdayLabels[i]!,
                                     style: const TextStyle(
                                       fontWeight: FontWeight.w500,
+                                      fontSize: 13,
                                     ),
                                   ),
                                 ),
                                 Switch(
+                                  materialTapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
                                   value: _days[i].enabled,
                                   onChanged: (v) =>
                                       setState(() => _days[i].enabled = v),
@@ -226,24 +230,52 @@ class _BranchHoursScreenState extends State<BranchHoursScreen> {
                                 if (_days[i].enabled) ...[
                                   Expanded(
                                     child: TextButton(
+                                      style: TextButton.styleFrom(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 6,
+                                        ),
+                                        minimumSize: Size.zero,
+                                        tapTargetSize:
+                                            MaterialTapTargetSize.shrinkWrap,
+                                      ),
                                       onPressed: () =>
                                           _pickTime(i, isOpen: true),
-                                      child: Text(_fmt(_days[i].open)),
+                                      child: Text(
+                                        _fmt(_days[i].open),
+                                        style: const TextStyle(fontSize: 13),
+                                      ),
                                     ),
                                   ),
-                                  const Text('—'),
+                                  const Text(
+                                    '—',
+                                    style: TextStyle(fontSize: 12),
+                                  ),
                                   Expanded(
                                     child: TextButton(
+                                      style: TextButton.styleFrom(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 6,
+                                        ),
+                                        minimumSize: Size.zero,
+                                        tapTargetSize:
+                                            MaterialTapTargetSize.shrinkWrap,
+                                      ),
                                       onPressed: () =>
                                           _pickTime(i, isOpen: false),
-                                      child: Text(_fmt(_days[i].close)),
+                                      child: Text(
+                                        _fmt(_days[i].close),
+                                        style: const TextStyle(fontSize: 13),
+                                      ),
                                     ),
                                   ),
                                 ] else
                                   const Expanded(
                                     child: Text(
                                       'Đóng cửa',
-                                      style: TextStyle(color: Colors.black45),
+                                      style: TextStyle(
+                                        color: Colors.black45,
+                                        fontSize: 13,
+                                      ),
                                     ),
                                   ),
                               ],
