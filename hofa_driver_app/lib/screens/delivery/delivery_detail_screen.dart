@@ -13,6 +13,7 @@ import '../../providers/delivery_providers.dart';
 import '../../repositories/delivery_repository.dart';
 import '../../repositories/order_repository.dart';
 import '../../repositories/pickup_repository.dart';
+import '../../widgets/chat_badge_icon.dart';
 import '../../widgets/image_upload_field.dart';
 
 const _stageOrder = [
@@ -422,6 +423,26 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
                               icon: const Icon(Icons.call_outlined),
                               onPressed: () => _call(order.shipRecipientPhone),
                             ),
+                          if (order != null &&
+                              isChatWindowOpen(
+                                status: order.status,
+                                deliveredAt: order.deliveredAt,
+                                hoursAfterDelivered:
+                                    ref
+                                        .watch(chatSettingsProvider)
+                                        .valueOrNull
+                                        ?.hoursAfterDelivered ??
+                                    1,
+                              ))
+                            IconButton(
+                              icon: ChatBadgeIcon(
+                                orderId: order.id,
+                                channel: 'customer_driver',
+                                icon: Icons.chat_bubble_outline,
+                              ),
+                              onPressed: () =>
+                                  context.push('/orders/${order.id}/chat'),
+                            ),
                         ],
                       ),
                       if (order != null)
@@ -448,30 +469,6 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
               ],
               const SizedBox(height: 12),
               _PayoutBreakdownCard(delivery: delivery),
-              if (order != null)
-                Builder(
-                  builder: (context) {
-                    final chatSettings = ref
-                        .watch(chatSettingsProvider)
-                        .valueOrNull;
-                    final chatOpen = isChatWindowOpen(
-                      status: order.status,
-                      deliveredAt: order.deliveredAt,
-                      hoursAfterDelivered:
-                          chatSettings?.hoursAfterDelivered ?? 1,
-                    );
-                    if (!chatOpen) return const SizedBox();
-                    return Padding(
-                      padding: const EdgeInsets.only(top: 12),
-                      child: OutlinedButton.icon(
-                        icon: const Icon(Icons.chat_bubble_outline),
-                        label: const Text('Nhắn tin khách hàng'),
-                        onPressed: () =>
-                            context.push('/orders/${order.id}/chat'),
-                      ),
-                    );
-                  },
-                ),
               if (order != null && order.paymentMethod == 'cod')
                 Padding(
                   padding: const EdgeInsets.only(top: 8),

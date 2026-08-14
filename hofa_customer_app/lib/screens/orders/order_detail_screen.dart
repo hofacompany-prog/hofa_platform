@@ -11,6 +11,7 @@ import '../../models/delivery.dart';
 import '../../models/order.dart';
 import '../../models/review.dart';
 import '../../providers/app_providers.dart';
+import '../../widgets/chat_badge_icon.dart';
 import '../../widgets/driver_picker_dialog.dart';
 import 'orders_list_screen.dart' show orderStatusColor;
 
@@ -399,7 +400,11 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                         children: [
                           Expanded(
                             child: OutlinedButton.icon(
-                              icon: const Icon(Icons.storefront_outlined),
+                              icon: ChatBadgeIcon(
+                                orderId: o.id,
+                                channel: 'customer_merchant',
+                                icon: Icons.storefront_outlined,
+                              ),
                               label: const Text('Nhắn tin cửa hàng'),
                               onPressed: () =>
                                   context.push('/orders/${o.id}/chat/merchant'),
@@ -409,8 +414,10 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                             const SizedBox(width: 8),
                             Expanded(
                               child: OutlinedButton.icon(
-                                icon: const Icon(
-                                  Icons.delivery_dining_outlined,
+                                icon: ChatBadgeIcon(
+                                  orderId: o.id,
+                                  channel: 'customer_driver',
+                                  icon: Icons.delivery_dining_outlined,
                                 ),
                                 label: const Text('Nhắn tin tài xế'),
                                 onPressed: () =>

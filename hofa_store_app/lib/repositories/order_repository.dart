@@ -102,4 +102,13 @@ class OrderRepository {
         ? ChatSettings.fallback()
         : ChatSettings.fromJson(json as Map<String, dynamic>);
   }
+
+  /// {customer_driver: n, customer_merchant: n} — dùng hiện badge nhỏ ở nút nhắn tin, không
+  /// cần mở màn chat mới biết có tin mới.
+  Future<Map<String, int>> chatUnreadCounts(String orderId) async {
+    final json =
+        await _api.get('/orders/$orderId/messages/unread-counts')
+            as Map<String, dynamic>;
+    return json.map((k, v) => MapEntry(k, (v as num).toInt()));
+  }
 }

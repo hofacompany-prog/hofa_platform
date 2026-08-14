@@ -55,7 +55,43 @@ router.get('/orders/:orderId/messages', asyncHandler(async (req, res) => {
     'SELECT * FROM order_messages WHERE order_id = $1 AND channel = $2 ORDER BY created_at ASC',
     [order.id, channel]
   );
+
+  // Mở màn chat (gọi API này) coi như đã đọc hết tới hiện tại — cập nhật mốc để
+  // GET /orders/:orderId/messages/unread-counts tính đúng số CÒN chưa đọc lần sau.
+  await db.query(
+    `INSERT INTO order_message_reads (order_id, channel, user_id, last_read_at)
+     VALUES ($1, $2, $3, now())
+     ON CONFLICT (order_id, channel, user_id) DO UPDATE SET last_read_at = now()`,
+    [order.id, channel, req.ctx.userId]
+  );
+
   res.json({ ok: true, data: rows });
+}));
+
+/** Số tin nhắn CHƯA ĐỌC theo từng kênh — dùng hiện badge nhỏ ở nút nhắn tin trong chi tiết đơn,
+ * KHÔNG cần mở màn chat mới biết có tin mới. Kênh req.ctx không có quyền trả về 0 thay vì lỗi,
+ * để client gọi 1 lần cho cả 2 kênh mà không cần biết trước vai trò của mình. */
+router.get('/orders/:orderId/messages/unread-counts', asyncHandler(async (req, res) => {
+  const order = await requireOrderAccess(req.ctx, req.params.orderId);
+  const counts = {};
+  for (const channel of CHANNELS) {
+    try {
+      await requireChannelAccess(req.ctx, order, channel);
+    } catch (e) {
+      counts[channel] = 0;
+      continue;
+    }
+    const row = await db.queryOne(
+      `SELECT COUNT(*)::int AS n FROM order_messages m
+         LEFT JOIN order_message_reads r
+           ON r.order_id = m.order_id AND r.channel = m.channel AND r.user_id = $3
+        WHERE m.order_id = $1 AND m.channel = $2 AND m.sender_id != $3
+          AND m.created_at > COALESCE(r.last_read_at, '-infinity'::timestamptz)`,
+      [order.id, channel, req.ctx.userId]
+    );
+    counts[channel] = row.n;
+  }
+  res.json({ ok: true, data: counts });
 }));
 
 router.post('/orders/:orderId/messages', asyncHandler(async (req, res) => {

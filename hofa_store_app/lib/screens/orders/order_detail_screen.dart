@@ -13,6 +13,7 @@ import '../../models/prep_tier_settings.dart';
 import '../../providers/auth_provider.dart';
 import '../../repositories/merchant_repository.dart';
 import '../../repositories/order_repository.dart';
+import '../../widgets/chat_badge_icon.dart';
 import '../../widgets/rolling_countdown.dart';
 
 final _orderProvider = FutureProvider.autoDispose.family<Order, String>(
@@ -220,11 +221,6 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen>
 
   Future<void> _call(String phone) async {
     final uri = Uri(scheme: 'tel', path: phone);
-    if (await canLaunchUrl(uri)) await launchUrl(uri);
-  }
-
-  Future<void> _sms(String phone) async {
-    final uri = Uri(scheme: 'sms', path: phone);
     if (await canLaunchUrl(uri)) await launchUrl(uri);
   }
 
@@ -645,29 +641,6 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen>
                         );
                       },
                     ),
-                    Builder(
-                      builder: (context) {
-                        final chatSettings = ref
-                            .watch(chatSettingsProvider)
-                            .valueOrNull;
-                        final chatOpen = isChatWindowOpen(
-                          status: o.status,
-                          deliveredAt: o.deliveredAt,
-                          hoursAfterDelivered:
-                              chatSettings?.hoursAfterDelivered ?? 1,
-                        );
-                        if (!chatOpen) return const SizedBox();
-                        return Padding(
-                          padding: const EdgeInsets.only(top: 16),
-                          child: OutlinedButton.icon(
-                            icon: const Icon(Icons.chat_bubble_outline),
-                            label: const Text('Nhắn tin khách hàng'),
-                            onPressed: () =>
-                                context.push('/orders/${o.id}/chat'),
-                          ),
-                        );
-                      },
-                    ),
                     if (o.status == 'ready_for_pickup') ...[
                       const SizedBox(height: 16),
                       OutlinedButton.icon(
@@ -723,10 +696,25 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen>
             icon: const Icon(Icons.call_outlined),
             onPressed: () => _call(o.shipRecipientPhone),
           ),
-          IconButton(
-            tooltip: 'Nhắn tin',
-            icon: const Icon(Icons.sms_outlined),
-            onPressed: () => _sms(o.shipRecipientPhone),
+          Builder(
+            builder: (context) {
+              final chatSettings = ref.watch(chatSettingsProvider).valueOrNull;
+              final chatOpen = isChatWindowOpen(
+                status: o.status,
+                deliveredAt: o.deliveredAt,
+                hoursAfterDelivered: chatSettings?.hoursAfterDelivered ?? 1,
+              );
+              if (!chatOpen) return const SizedBox();
+              return IconButton(
+                tooltip: 'Nhắn tin',
+                icon: ChatBadgeIcon(
+                  orderId: o.id,
+                  channel: 'customer_merchant',
+                  icon: Icons.chat_bubble_outline,
+                ),
+                onPressed: () => context.push('/orders/${o.id}/chat'),
+              );
+            },
           ),
           if (canCancel)
             PopupMenuButton<void>(
