@@ -34,6 +34,11 @@ class Merchant {
   // > closed_hours), dùng để tô đúng màu lý do đóng cửa: đỏ = chủ cửa hàng đang tạm nghỉ, xám =
   // chỉ đơn thuần ngoài giờ hoạt động đã cấu hình.
   final String displayStatus;
+  // Toạ độ chi nhánh chính (is_main) — RIÊNG toạ độ được lộ ra dù các trường branches khác
+  // (địa chỉ chữ, SĐT) không có, chỉ để dùng cho nút "Xem vị trí quán" mở Google Maps. Null
+  // nếu cửa hàng chưa có chi nhánh nào có toạ độ.
+  final double? branchLatitude;
+  final double? branchLongitude;
 
   Merchant({
     required this.id,
@@ -56,6 +61,8 @@ class Merchant {
     this.displayStatus = 'open',
     this.distanceKm,
     this.beyondOwnRadius = false,
+    this.branchLatitude,
+    this.branchLongitude,
   });
 
   bool get isStandard => standardCertifiedAt != null;
@@ -89,5 +96,11 @@ class Merchant {
         ? num.tryParse('${json['distance_km']}')?.toDouble()
         : null,
     beyondOwnRadius: json['beyond_own_radius'] as bool? ?? false,
+    branchLatitude: json['branch_latitude'] != null
+        ? num.tryParse('${json['branch_latitude']}')?.toDouble()
+        : null,
+    branchLongitude: json['branch_longitude'] != null
+        ? num.tryParse('${json['branch_longitude']}')?.toDouble()
+        : null,
   );
 }

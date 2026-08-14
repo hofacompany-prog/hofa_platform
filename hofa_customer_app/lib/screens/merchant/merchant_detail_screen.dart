@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/geo.dart';
+import '../../core/maps_launcher.dart';
 import '../../models/category.dart';
 import '../../models/product.dart';
 import '../../providers/app_providers.dart';
@@ -287,6 +288,38 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
                                       : null,
                                 ),
                               ],
+                            ),
+                          ),
+                        if (merchant.branchLatitude != null &&
+                            merchant.branchLongitude != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: InkWell(
+                              borderRadius: BorderRadius.circular(6),
+                              onTap: () => launchDirections(
+                                merchant.branchLatitude!,
+                                merchant.branchLongitude!,
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.place_outlined,
+                                    size: 16,
+                                    color: theme.colorScheme.primary,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    'Xem vị trí quán',
+                                    style: TextStyle(
+                                      color: theme.colorScheme.primary,
+                                      decoration: TextDecoration.underline,
+                                      decorationColor:
+                                          theme.colorScheme.outline,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
                           ),
                         if (merchant.minOrderAmount > 0)

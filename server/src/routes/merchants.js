@@ -203,7 +203,10 @@ router.get('/merchants/:id', asyncHandler(async (req, res) => {
     SENSITIVE_MERCHANT_FIELDS.forEach((f) => delete row[f]);
     // Khách vẫn xem được sản phẩm của cửa hàng đang tạm đóng (chỉ không đặt hàng được, xem
     // POST /orders) — nên app khách cần biết trạng thái này để tự xám giao diện/khoá nút đặt,
-    // không lộ branches thật (địa chỉ/SĐT từng chi nhánh không cần thiết cho khách).
+    // không lộ branches thật (địa chỉ/SĐT từng chi nhánh không cần thiết cho khách) — RIÊNG toạ
+    // độ chi nhánh chính (is_main) vẫn lộ ra để màn chi tiết cửa hàng có nút "Xem vị trí quán"
+    // mở Google Maps (xem hofa_customer_app merchant_detail_screen.dart), không kèm địa chỉ chữ/
+    // SĐT vì 2 thứ đó vẫn không cần thiết cho khách.
     const status = await db.queryOne(
       `SELECT
          EXISTS (
@@ -216,10 +219,29 @@ router.get('/merchants/:id', asyncHandler(async (req, res) => {
                     WHEN COUNT(*) > 0 THEN 'closed_hours'
                   END
              FROM branches b WHERE b.merchant_id = $1 AND b.deleted_at IS NULL
-         ), 'open') AS display_status`,
+         ), 'open') AS display_status,
+         (
+           SELECT b.latitude FROM branches b WHERE b.merchant_id = $1 AND b.deleted_at IS NULL
+             AND b.latitude IS NOT NULL AND b.longitude IS NOT NULL
+            ORDER BY is_main DESC LIMIT 1
+         ) AS branch_latitude,
+         (
+           SELECT b.longitude FROM branches b WHERE b.merchant_id = $1 AND b.deleted_at IS NULL
+             AND b.latitude IS NOT NULL AND b.longitude IS NOT NULL
+            ORDER BY is_main DESC LIMIT 1
+         ) AS branch_longitude`,
       [req.params.id]
     );
-    return res.json({ ok: true, data: { ...row, has_open_branch: status.has_open_branch, display_status: status.display_status } });
+    return res.json({
+      ok: true,
+      data: {
+        ...row,
+        has_open_branch: status.has_open_branch,
+        display_status: status.display_status,
+        branch_latitude: status.branch_latitude,
+        branch_longitude: status.branch_longitude
+      }
+    });
   }
 
   const [owner, branches] = await Promise.all([
