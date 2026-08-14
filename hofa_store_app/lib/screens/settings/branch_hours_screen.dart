@@ -41,6 +41,11 @@ class _BranchHoursScreenState extends State<BranchHoursScreen> {
   bool _saving = false;
   String? _error;
 
+  // Ngày vừa chọn xong CẢ giờ mở lẫn giờ đóng — hiện danh sách các ngày khác ngay bên dưới
+  // để tick chọn áp dụng cùng khung giờ, thay vì hộp thoại riêng (đỡ che mất phần đang sửa).
+  int? _copyPromptDayIndex;
+  final Set<int> _copySelectedDays = {};
+
   @override
   void initState() {
     super.initState();
@@ -82,77 +87,34 @@ class _BranchHoursScreenState extends State<BranchHoursScreen> {
       initialTime: isOpen ? row.open : row.close,
     );
     if (picked == null) return;
-    setState(() => isOpen ? row.open = picked : row.close = picked);
-    // Chọn xong CẢ giờ mở lẫn giờ đóng cho 1 ngày (giờ đóng luôn chọn sau) — hỏi có muốn áp y
-    // hệt khung giờ này cho các ngày khác trong tuần không, đỡ phải gõ lại 7 lần.
-    if (!isOpen && mounted) await _offerCopyToOtherDays(dayIndex);
+    setState(() {
+      if (isOpen) {
+        row.open = picked;
+      } else {
+        row.close = picked;
+      }
+      // Chọn xong CẢ giờ mở lẫn giờ đóng cho 1 ngày (giờ đóng luôn chọn sau) — hiện danh sách
+      // các ngày khác ngay bên dưới ngày này để tick áp dụng cùng khung giờ, đỡ gõ lại 7 lần.
+      if (!isOpen) {
+        _copyPromptDayIndex = dayIndex;
+        _copySelectedDays.clear();
+      }
+    });
   }
 
-  Future<void> _offerCopyToOtherDays(int dayIndex) async {
-    final source = _days[dayIndex];
-    final otherDays = [
-      for (var i = 0; i < 7; i++)
-        if (i != dayIndex) i,
-    ];
-    final selected = <int>{};
-
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setInner) => AlertDialog(
-          title: const Text('Áp dụng giờ này cho ngày khác?'),
-          content: SizedBox(
-            width: 360,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '${_fmt(source.open)} — ${_fmt(source.close)}',
-                  style: const TextStyle(fontWeight: FontWeight.w500),
-                ),
-                const SizedBox(height: 8),
-                for (final i in otherDays)
-                  CheckboxListTile(
-                    contentPadding: EdgeInsets.zero,
-                    controlAffinity: ListTileControlAffinity.leading,
-                    title: Text(weekdayLabels[i]!),
-                    value: selected.contains(i),
-                    onChanged: (v) => setInner(() {
-                      if (v ?? false) {
-                        selected.add(i);
-                      } else {
-                        selected.remove(i);
-                      }
-                    }),
-                  ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('Bỏ qua'),
-            ),
-            FilledButton(
-              onPressed: selected.isEmpty
-                  ? null
-                  : () => Navigator.pop(context, true),
-              child: const Text('Áp dụng'),
-            ),
-          ],
-        ),
-      ),
-    );
-    if (ok != true || selected.isEmpty) return;
+  void _applyCopyToOtherDays() {
+    if (_copyPromptDayIndex == null || _copySelectedDays.isEmpty) return;
+    final source = _days[_copyPromptDayIndex!];
     setState(() {
-      for (final i in selected) {
+      for (final i in _copySelectedDays) {
         _days[i] = _DayRow(
           enabled: true,
           open: source.open,
           close: source.close,
         );
       }
+      _copyPromptDayIndex = null;
+      _copySelectedDays.clear();
     });
   }
 
@@ -182,6 +144,81 @@ class _BranchHoursScreenState extends State<BranchHoursScreen> {
     }
   }
 
+  /// Danh sách các ngày khác trong tuần, hiện ngay dưới ngày [dayIndex] vừa chọn xong giờ —
+  /// tick ngày nào thì "Áp dụng" sẽ copy y hệt khung giờ của [dayIndex] sang ngày đó.
+  Widget _buildCopyPanel(BuildContext context, int dayIndex) {
+    final source = _days[dayIndex];
+    final otherDays = [
+      for (var i = 0; i < 7; i++)
+        if (i != dayIndex) i,
+    ];
+    return Card(
+      elevation: 0,
+      margin: const EdgeInsets.only(bottom: 6),
+      color: Theme.of(
+        context,
+      ).colorScheme.primaryContainer.withValues(alpha: 0.3),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 8, 4, 4),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Áp dụng ${_fmt(source.open)} — ${_fmt(source.close)} cho ngày khác?',
+              style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
+            ),
+            Wrap(
+              children: [
+                for (final i in otherDays)
+                  SizedBox(
+                    width: 120,
+                    child: CheckboxListTile(
+                      contentPadding: EdgeInsets.zero,
+                      dense: true,
+                      controlAffinity: ListTileControlAffinity.leading,
+                      title: Text(
+                        weekdayLabels[i]!,
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                      value: _copySelectedDays.contains(i),
+                      onChanged: (v) => setState(() {
+                        if (v ?? false) {
+                          _copySelectedDays.add(i);
+                        } else {
+                          _copySelectedDays.remove(i);
+                        }
+                      }),
+                    ),
+                  ),
+              ],
+            ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextButton(
+                    onPressed: () => setState(() {
+                      _copyPromptDayIndex = null;
+                      _copySelectedDays.clear();
+                    }),
+                    child: const Text('Bỏ qua'),
+                  ),
+                  FilledButton(
+                    onPressed: _copySelectedDays.isEmpty
+                        ? null
+                        : _applyCopyToOtherDays,
+                    child: const Text('Áp dụng'),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -196,7 +233,7 @@ class _BranchHoursScreenState extends State<BranchHoursScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      for (var i = 0; i < 7; i++)
+                      for (var i = 0; i < 7; i++) ...[
                         Card(
                           elevation: 0,
                           margin: const EdgeInsets.only(bottom: 6),
@@ -282,6 +319,9 @@ class _BranchHoursScreenState extends State<BranchHoursScreen> {
                             ),
                           ),
                         ),
+                        if (_copyPromptDayIndex == i)
+                          _buildCopyPanel(context, i),
+                      ],
                       if (_error != null) ...[
                         const SizedBox(height: 16),
                         Text(
