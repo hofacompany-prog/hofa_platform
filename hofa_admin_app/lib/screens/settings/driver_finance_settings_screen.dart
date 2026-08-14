@@ -20,6 +20,7 @@ class _DriverFinanceSettingsScreenState
   final _rateCtrl = TextEditingController();
   final _vatCtrl = TextEditingController();
   final _pitCtrl = TextEditingController();
+  final _feeShareCtrl = TextEditingController();
   bool _initialized = false;
   bool _saving = false;
 
@@ -28,6 +29,7 @@ class _DriverFinanceSettingsScreenState
     _rateCtrl.dispose();
     _vatCtrl.dispose();
     _pitCtrl.dispose();
+    _feeShareCtrl.dispose();
     super.dispose();
   }
 
@@ -35,6 +37,7 @@ class _DriverFinanceSettingsScreenState
     _rateCtrl.text = _trimZero(s.driverFeeCommissionRate);
     _vatCtrl.text = _trimZero(s.vatRate);
     _pitCtrl.text = _trimZero(s.pitRate);
+    _feeShareCtrl.text = _trimZero(s.buyOnBehalfFeeShareRate);
   }
 
   String _trimZero(double v) =>
@@ -44,6 +47,7 @@ class _DriverFinanceSettingsScreenState
     final rate = double.tryParse(_rateCtrl.text.trim());
     final vat = double.tryParse(_vatCtrl.text.trim());
     final pit = double.tryParse(_pitCtrl.text.trim());
+    final feeShare = double.tryParse(_feeShareCtrl.text.trim());
     if (rate == null ||
         rate < 0 ||
         rate > 100 ||
@@ -52,7 +56,10 @@ class _DriverFinanceSettingsScreenState
         vat > 100 ||
         pit == null ||
         pit < 0 ||
-        pit > 100) {
+        pit > 100 ||
+        feeShare == null ||
+        feeShare < 0 ||
+        feeShare > 100) {
       _showError('Các tỷ lệ % phải từ 0 đến 100');
       return;
     }
@@ -67,6 +74,7 @@ class _DriverFinanceSettingsScreenState
               vatRate: vat,
               pitRate: pit,
               codDebtLimit: current.codDebtLimit,
+              buyOnBehalfFeeShareRate: feeShare,
             ),
           );
       ref.invalidate(driverFinanceSettingsProvider);
@@ -206,6 +214,43 @@ class _DriverFinanceSettingsScreenState
                               'Mặc định 0% — cùng cách tính với cửa hàng (trừ thẳng lên phí '
                               'giao, không lồng thuế trong thuế). Tài xế thấy rõ khoản trừ này ở '
                               'chi tiết chuyến giao và màn Thu nhập.',
+                              style: theme.textTheme.bodySmall,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Card(
+                      elevation: 0,
+                      color: theme.colorScheme.surfaceContainerLow,
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Chia sẻ phí mua hộ cho tài xế',
+                              style: theme.textTheme.titleSmall,
+                            ),
+                            const SizedBox(height: 8),
+                            TextField(
+                              controller: _feeShareCtrl,
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                    decimal: true,
+                                  ),
+                              decoration: const InputDecoration(
+                                suffixText: '%',
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Áp dụng CHUNG cho mọi tài xế — % của phí mua hộ (đã tính theo '
+                              'bậc riêng từng cửa hàng ở màn Chi tiết cửa hàng) tài xế được '
+                              'nhận thêm khi giao đơn mua hộ. Mặc định 0% — không cộng thêm '
+                              'gì. Cộng thẳng vào ví thu nhập, không trừ hoa hồng/thuế ở trên.',
                               style: theme.textTheme.bodySmall,
                             ),
                           ],

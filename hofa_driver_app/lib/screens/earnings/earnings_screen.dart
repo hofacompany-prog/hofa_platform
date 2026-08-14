@@ -404,7 +404,8 @@ class _EarningsScreenState extends ConsumerState<EarningsScreen> {
               ),
               if (earnings.today.commissionAmount > 0 ||
                   earnings.today.vatAmount > 0 ||
-                  earnings.today.pitAmount > 0) ...[
+                  earnings.today.pitAmount > 0 ||
+                  earnings.today.buyOnBehalfFeeShareAmount > 0) ...[
                 const SizedBox(height: 12),
                 Card(
                   elevation: 0,
@@ -446,6 +447,18 @@ class _EarningsScreenState extends ConsumerState<EarningsScreen> {
                           formatVnd(earnings.today.net),
                           bold: true,
                         ),
+                        // Riêng % phí mua hộ được chia (hofa-db/79_driver_buy_on_behalf_fee_share.sql)
+                        // — cộng thẳng ví thu nhập, không nằm trong "Thực nhận hôm nay" ở trên
+                        // (đó là tiền công chuyến giao, đã trừ hoa hồng/thuế).
+                        if (earnings.today.buyOnBehalfFeeShareAmount > 0) ...[
+                          const Divider(height: 1),
+                          _financeRow(
+                            context,
+                            'Phí mua hộ được chia',
+                            '+${formatVnd(earnings.today.buyOnBehalfFeeShareAmount)}',
+                            bold: true,
+                          ),
+                        ],
                       ],
                     ),
                   ),

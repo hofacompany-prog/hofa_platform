@@ -6,6 +6,9 @@ class RecentDelivery {
   final int vatAmount;
   final int pitAmount;
   final int driverPayout;
+  // % phí mua hộ được chia, chốt lúc giao xong — xem
+  // hofa-db/79_driver_buy_on_behalf_fee_share.sql.
+  final int buyOnBehalfFeeShareAmount;
   final DateTime? deliveredAt;
   final String orderCode;
   final bool isCod;
@@ -17,6 +20,7 @@ class RecentDelivery {
     this.vatAmount = 0,
     this.pitAmount = 0,
     this.driverPayout = 0,
+    this.buyOnBehalfFeeShareAmount = 0,
     this.deliveredAt,
     required this.orderCode,
     required this.isCod,
@@ -29,6 +33,8 @@ class RecentDelivery {
     vatAmount: (json['vat_amount'] as num?)?.toInt() ?? 0,
     pitAmount: (json['pit_amount'] as num?)?.toInt() ?? 0,
     driverPayout: (json['driver_payout'] as num?)?.toInt() ?? 0,
+    buyOnBehalfFeeShareAmount:
+        (json['buy_on_behalf_fee_share_amount'] as num?)?.toInt() ?? 0,
     deliveredAt: json['delivered_at'] != null
         ? DateTime.tryParse(json['delivered_at'] as String)
         : null,
@@ -46,6 +52,7 @@ class TodayEarnings {
   final int vatAmount;
   final int pitAmount;
   final int net;
+  final int buyOnBehalfFeeShareAmount;
 
   TodayEarnings({
     required this.gross,
@@ -53,6 +60,7 @@ class TodayEarnings {
     required this.vatAmount,
     required this.pitAmount,
     required this.net,
+    this.buyOnBehalfFeeShareAmount = 0,
   });
 
   factory TodayEarnings.fromJson(Map<String, dynamic>? json) => TodayEarnings(
@@ -61,6 +69,8 @@ class TodayEarnings {
     vatAmount: (json?['vat_amount'] as num?)?.toInt() ?? 0,
     pitAmount: (json?['pit_amount'] as num?)?.toInt() ?? 0,
     net: (json?['net'] as num?)?.toInt() ?? 0,
+    buyOnBehalfFeeShareAmount:
+        (json?['buy_on_behalf_fee_share_amount'] as num?)?.toInt() ?? 0,
   );
 }
 
@@ -143,6 +153,7 @@ const walletEntryTypeLabels = {
   'order_deducted': 'Trừ vốn đơn hàng',
   'order_payment_received': 'Tiền đơn hàng',
   'buy_on_behalf_reimbursement': 'Hoàn tiền mua hộ',
+  'buy_on_behalf_fee_share': 'Phí mua hộ được chia',
   'withdrawal': 'Rút tiền',
   'withdrawal_rejected': 'Hoàn tiền rút bị từ chối',
   'admin_adjustment': 'HOFA điều chỉnh',

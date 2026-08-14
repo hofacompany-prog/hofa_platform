@@ -131,6 +131,7 @@ router.get('/drivers/me/earnings', asyncHandler(async (req, res) => {
   const { limit } = pagination(req.query);
   const recent = await db.query(
     `SELECT d.driver_fee, d.commission_amount, d.vat_amount, d.pit_amount, d.driver_payout,
+            d.buy_on_behalf_fee_share_amount,
             d.delivered_at, o.order_code, o.payment_method,
             (o.payment_method = 'cod') AS is_cod, o.total_amount
        FROM deliveries d
@@ -146,7 +147,8 @@ router.get('/drivers/me/earnings', asyncHandler(async (req, res) => {
             COALESCE(SUM(commission_amount), 0)::bigint AS commission_amount,
             COALESCE(SUM(vat_amount), 0)::bigint AS vat_amount,
             COALESCE(SUM(pit_amount), 0)::bigint AS pit_amount,
-            COALESCE(SUM(driver_payout), 0)::bigint AS net
+            COALESCE(SUM(driver_payout), 0)::bigint AS net,
+            COALESCE(SUM(buy_on_behalf_fee_share_amount), 0)::bigint AS buy_on_behalf_fee_share_amount
        FROM deliveries
       WHERE driver_id = $1 AND status = 'delivered'
         AND (delivered_at AT TIME ZONE 'Asia/Ho_Chi_Minh')::date = (now() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date`,
@@ -159,7 +161,8 @@ router.get('/drivers/me/earnings', asyncHandler(async (req, res) => {
     commission_amount: Number(todayRow.commission_amount),
     vat_amount: Number(todayRow.vat_amount),
     pit_amount: Number(todayRow.pit_amount),
-    net: Number(todayRow.net)
+    net: Number(todayRow.net),
+    buy_on_behalf_fee_share_amount: Number(todayRow.buy_on_behalf_fee_share_amount)
   };
   res.json({ ok: true, data: { summary: driver, recent_deliveries: recent, today } });
 }));

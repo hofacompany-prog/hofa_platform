@@ -5,11 +5,15 @@ class DriverFinanceSettings {
   final double driverFeeCommissionRate;
   final double vatRate;
   final double pitRate;
+  // % phí mua hộ (đơn buy_on_behalf) tài xế được chia thêm, áp dụng chung mọi tài xế — xem
+  // hofa-db/79_driver_buy_on_behalf_fee_share.sql.
+  final double buyOnBehalfFeeShareRate;
 
   DriverFinanceSettings({
     required this.driverFeeCommissionRate,
     required this.vatRate,
     required this.pitRate,
+    this.buyOnBehalfFeeShareRate = 0,
   });
 
   factory DriverFinanceSettings.fromJson(Map<String, dynamic> json) =>
@@ -18,6 +22,8 @@ class DriverFinanceSettings {
             double.tryParse('${json['driver_fee_commission_rate']}') ?? 0,
         vatRate: double.tryParse('${json['vat_rate']}') ?? 0,
         pitRate: double.tryParse('${json['pit_rate']}') ?? 0,
+        buyOnBehalfFeeShareRate:
+            double.tryParse('${json['buy_on_behalf_fee_share_rate']}') ?? 0,
       );
 
   factory DriverFinanceSettings.fallback() =>

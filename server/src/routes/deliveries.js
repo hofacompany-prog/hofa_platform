@@ -61,7 +61,7 @@ router.get('/deliveries/mine', asyncHandler(async (req, res) => {
   if (req.query.status) { params.push(req.query.status); clauses.push(`d.status = $${params.length}`); }
   params.push(limit, offset);
   const rows = await db.query(
-    `SELECT d.*, b.name AS branch_name, m.name AS merchant_name, m.merchant_type
+    `SELECT d.*, b.name AS branch_name, m.name AS merchant_name, m.merchant_type, o.buy_on_behalf_fee
        FROM deliveries d
        JOIN orders o ON o.id = d.order_id
        JOIN branches b ON b.id = o.branch_id
@@ -76,7 +76,7 @@ router.get('/deliveries/mine', asyncHandler(async (req, res) => {
 router.get('/deliveries/:id', asyncHandler(async (req, res) => {
   await requireOwnDelivery(req.ctx, req.params.id);
   const delivery = await db.queryOne(
-    `SELECT d.*, b.name AS branch_name, m.name AS merchant_name, m.merchant_type
+    `SELECT d.*, b.name AS branch_name, m.name AS merchant_name, m.merchant_type, o.buy_on_behalf_fee
        FROM deliveries d
        JOIN orders o ON o.id = d.order_id
        JOIN branches b ON b.id = o.branch_id

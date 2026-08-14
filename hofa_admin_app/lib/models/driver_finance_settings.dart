@@ -7,6 +7,10 @@ class DriverFinanceSettings {
   final double vatRate;
   final double pitRate;
   final int codDebtLimit;
+  // % phí mua hộ (orders.buy_on_behalf_fee) tài xế được chia, áp dụng chung mọi tài xế — khác
+  // bậc TÍNH phí mua hộ (merchant_fee_tiers, cấu hình riêng từng cửa hàng). Xem
+  // hofa-db/79_driver_buy_on_behalf_fee_share.sql.
+  final double buyOnBehalfFeeShareRate;
 
   DriverFinanceSettings({
     this.id,
@@ -14,6 +18,7 @@ class DriverFinanceSettings {
     this.vatRate = 0,
     this.pitRate = 0,
     required this.codDebtLimit,
+    this.buyOnBehalfFeeShareRate = 0,
   });
 
   factory DriverFinanceSettings.fromJson(Map<String, dynamic> json) =>
@@ -25,6 +30,8 @@ class DriverFinanceSettings {
         vatRate: double.tryParse('${json['vat_rate']}') ?? 0,
         pitRate: double.tryParse('${json['pit_rate']}') ?? 0,
         codDebtLimit: (json['cod_debt_limit'] as num?)?.toInt() ?? 2000000,
+        buyOnBehalfFeeShareRate:
+            double.tryParse('${json['buy_on_behalf_fee_share_rate']}') ?? 0,
       );
 
   /// Mặc định dùng khi server chưa có dòng cấu hình nào (chưa từng chạy migration).
@@ -36,5 +43,6 @@ class DriverFinanceSettings {
     'vat_rate': vatRate,
     'pit_rate': pitRate,
     'cod_debt_limit': codDebtLimit,
+    'buy_on_behalf_fee_share_rate': buyOnBehalfFeeShareRate,
   };
 }

@@ -30,6 +30,11 @@ class Delivery {
   final int vatAmount;
   final int pitAmount;
   final int driverPayout;
+  // orders.buy_on_behalf_fee (phí mua hộ khách trả thêm, cả trước và sau khi giao) và số tiền
+  // tài xế thực nhận từ phí đó (chốt = 0 tới khi giao xong) — xem
+  // hofa-db/79_driver_buy_on_behalf_fee_share.sql.
+  final int buyOnBehalfFee;
+  final int buyOnBehalfFeeShareAmount;
   final DateTime? assignedAt;
   final DateTime? acceptDeadline;
   final DateTime? acceptedAt;
@@ -55,6 +60,8 @@ class Delivery {
     this.vatAmount = 0,
     this.pitAmount = 0,
     this.driverPayout = 0,
+    this.buyOnBehalfFee = 0,
+    this.buyOnBehalfFeeShareAmount = 0,
     this.assignedAt,
     this.acceptDeadline,
     this.acceptedAt,
@@ -90,6 +97,9 @@ class Delivery {
     vatAmount: (json['vat_amount'] as num?)?.toInt() ?? 0,
     pitAmount: (json['pit_amount'] as num?)?.toInt() ?? 0,
     driverPayout: (json['driver_payout'] as num?)?.toInt() ?? 0,
+    buyOnBehalfFee: (json['buy_on_behalf_fee'] as num?)?.toInt() ?? 0,
+    buyOnBehalfFeeShareAmount:
+        (json['buy_on_behalf_fee_share_amount'] as num?)?.toInt() ?? 0,
     assignedAt: json['assigned_at'] != null
         ? DateTime.tryParse(json['assigned_at'] as String)
         : null,

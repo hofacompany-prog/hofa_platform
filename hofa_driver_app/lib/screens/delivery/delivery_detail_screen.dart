@@ -688,6 +688,7 @@ class _PayoutBreakdownCard extends ConsumerWidget {
         vatAmount: delivery.vatAmount,
         pitAmount: delivery.pitAmount,
         payout: delivery.driverPayout,
+        buyOnBehalfFeeShare: delivery.buyOnBehalfFeeShareAmount,
       );
     }
 
@@ -700,6 +701,7 @@ class _PayoutBreakdownCard extends ConsumerWidget {
         vatAmount: 0,
         pitAmount: 0,
         payout: delivery.driverFee,
+        buyOnBehalfFeeShare: 0,
       ),
       error: (e, _) => _buildCard(
         context,
@@ -708,6 +710,7 @@ class _PayoutBreakdownCard extends ConsumerWidget {
         vatAmount: 0,
         pitAmount: 0,
         payout: delivery.driverFee,
+        buyOnBehalfFeeShare: 0,
       ),
       data: (settings) {
         final commissionAmount =
@@ -717,6 +720,10 @@ class _PayoutBreakdownCard extends ConsumerWidget {
         final pitAmount = (delivery.driverFee * settings.pitRate / 100).round();
         final payout =
             delivery.driverFee - commissionAmount - vatAmount - pitAmount;
+        final buyOnBehalfFeeShare = delivery.isBuyOnBehalf
+            ? (delivery.buyOnBehalfFee * settings.buyOnBehalfFeeShareRate / 100)
+                  .round()
+            : 0;
         return _buildCard(
           context,
           estimated: true,
@@ -724,6 +731,7 @@ class _PayoutBreakdownCard extends ConsumerWidget {
           vatAmount: vatAmount,
           pitAmount: pitAmount,
           payout: payout,
+          buyOnBehalfFeeShare: buyOnBehalfFeeShare,
         );
       },
     );
@@ -736,6 +744,7 @@ class _PayoutBreakdownCard extends ConsumerWidget {
     required int vatAmount,
     required int pitAmount,
     required int payout,
+    required int buyOnBehalfFeeShare,
   }) {
     final theme = Theme.of(context);
     final hasDeductions =
@@ -785,6 +794,36 @@ class _PayoutBreakdownCard extends ConsumerWidget {
                   style: theme.textTheme.bodySmall,
                 ),
               ),
+            // Riêng phần % phí mua hộ được chia (hofa-db/79_driver_buy_on_behalf_fee_share.sql)
+            // — cộng thẳng ví thu nhập, KHÔNG nằm trong "Bạn nhận được" ở trên (đó là tiền công
+            // chuyến giao, đã trừ hoa hồng/thuế) nên tách hẳn thành dòng riêng cho rõ.
+            if (delivery.isBuyOnBehalf && buyOnBehalfFeeShare > 0) ...[
+              const Divider(height: 16),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Phí mua hộ (bạn được chia)',
+                    style: theme.textTheme.bodyMedium,
+                  ),
+                  Text(
+                    '+${formatVnd(buyOnBehalfFeeShare)}',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                      color: theme.colorScheme.primary,
+                    ),
+                  ),
+                ],
+              ),
+              if (estimated)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Text(
+                    'Số cuối chốt lúc giao xong.',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ),
+            ],
           ],
         ),
       ),
