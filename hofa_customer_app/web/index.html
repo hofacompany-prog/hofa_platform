@@ -20,6 +20,42 @@
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="description" content="HOFA — Đặt hàng từ cửa hàng gần bạn, giao nhanh tận nơi.">
 
+  <!-- Trình duyệt trong app (Facebook/Messenger/Instagram/Zalo/TikTok/Zoom...) chặn nhiều thứ
+       web cần (cài PWA, đăng nhập Google, đôi lúc cả camera/định vị) — phát hiện càng sớm càng
+       tốt (trước cả lúc Flutter tải) và tự đẩy sang Chrome trên Android bằng intent://, vì
+       webview đó là 1 app riêng, chỉ intent mới thoát hẳn ra ngoài được. iOS không có cách ép
+       tương tự (WKWebView của các app này chặn hết), chỉ hiện được hướng dẫn cho khách tự mở.
+       Vẫn cho Flutter tải tiếp song song — banner là lớp phủ, không chặn hẳn app phòng trường
+       hợp khách bấm bỏ qua vẫn dùng được các tính năng không cần thoát webview. -->
+  <script>
+    (function () {
+      var ua = navigator.userAgent || '';
+      var isInApp = /FBAN|FBAV|FB_IAB|Instagram|Line\/|Zalo|MicroMessenger|TikTok|musical_ly/i.test(ua);
+      if (!isInApp) return;
+
+      var isIOS = /iPhone|iPad|iPod/i.test(ua);
+      if (!isIOS) {
+        var target = location.href.replace(/^https?:\/\//, '');
+        location.href = 'intent://' + target + '#Intent;scheme=https;package=com.android.chrome;end';
+      }
+
+      document.addEventListener('DOMContentLoaded', function () {
+        var bar = document.createElement('div');
+        bar.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:999999;' +
+          'background:#1a1a1a;color:#fff;padding:12px 40px 12px 16px;' +
+          'font:14px/1.5 -apple-system,Roboto,sans-serif;text-align:center;';
+        bar.innerHTML = (isIOS
+          ? 'Nhấn <strong>···</strong> hoặc biểu tượng chia sẻ ở góc màn hình rồi chọn <strong>"Mở trong Safari"</strong> để dùng đầy đủ tính năng.'
+          : 'Đang mở trong trình duyệt của app — hãy chọn Chrome/trình duyệt mặc định để dùng đầy đủ tính năng.') +
+          '<button style="position:absolute;right:8px;top:8px;bottom:8px;background:none;' +
+          'border:none;color:#fff;font-size:18px;line-height:1;cursor:pointer;padding:0 8px;" ' +
+          'aria-label="Đóng">×</button>';
+        bar.querySelector('button').onclick = function () { bar.remove(); };
+        document.body.appendChild(bar);
+      });
+    })();
+  </script>
+
   <!-- Màu thanh trạng thái/thanh địa chỉ trình duyệt khi cài PWA — khớp màu thương hiệu -->
   <meta name="theme-color" content="#85C100">
 
