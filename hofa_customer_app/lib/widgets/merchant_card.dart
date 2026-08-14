@@ -15,6 +15,14 @@ class MerchantCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final isClosed = !merchant.hasOpenBranch;
+    // Đỏ = chủ cửa hàng đang tạm nghỉ (chủ động tắt); xám = chỉ đơn thuần ngoài giờ hoạt động
+    // đã cấu hình, không phải tạm nghỉ — xem hofa-db/78_branch_operating_hours_gate.sql.
+    final closedColor = merchant.displayStatus == 'closed_hours'
+        ? Colors.grey
+        : theme.colorScheme.error;
+    final closedLabel = merchant.displayStatus == 'closed_hours'
+        ? 'Đóng cửa'
+        : 'Tạm nghỉ';
     return Opacity(
       opacity: isClosed ? 0.55 : 1,
       child: Card(
@@ -66,12 +74,12 @@ class MerchantCard extends StatelessWidget {
                                 vertical: 2,
                               ),
                               decoration: BoxDecoration(
-                                color: theme.colorScheme.error,
+                                color: closedColor,
                                 borderRadius: BorderRadius.circular(6),
                               ),
-                              child: const Text(
-                                'Đóng cửa',
-                                style: TextStyle(
+                              child: Text(
+                                closedLabel,
+                                style: const TextStyle(
                                   color: Colors.white,
                                   fontSize: 11,
                                   fontWeight: FontWeight.w600,

@@ -25,10 +25,15 @@ class Merchant {
   // 'quantity' hoặc 'value' — chỉ có ý nghĩa khi merchantType == 'buy_on_behalf', quyết
   // định bảng phí mua hộ (merchant_fee_tiers) tính ngưỡng theo gì.
   final String? buyOnBehalfFeeBasis;
-  // true nếu còn ít nhất 1 chi nhánh đang mở cửa (branches.is_open) — cửa hàng không còn chi
-  // nhánh nào mở thì khách vẫn xem được sản phẩm nhưng không đặt hàng được (server chặn thật
-  // ở POST /orders, đây chỉ để app tự xám giao diện/khoá nút trước khi khách bấm).
+  // true nếu còn ít nhất 1 chi nhánh đang mở cửa (branch_effective_status()='open' — kết hợp cả
+  // giờ hoạt động lẫn công tắc Tạm nghỉ, xem hofa-db/78_branch_operating_hours_gate.sql) — cửa
+  // hàng không còn chi nhánh nào mở thì khách vẫn xem được sản phẩm nhưng không đặt hàng được
+  // (server chặn thật ở POST /orders, đây chỉ để app tự xám giao diện/khoá nút trước khi bấm).
   final bool hasOpenBranch;
+  // 'open' | 'on_break' | 'closed_hours' — gộp trạng thái mọi chi nhánh (ưu tiên open > on_break
+  // > closed_hours), dùng để tô đúng màu lý do đóng cửa: đỏ = chủ cửa hàng đang tạm nghỉ, xám =
+  // chỉ đơn thuần ngoài giờ hoạt động đã cấu hình.
+  final String displayStatus;
 
   Merchant({
     required this.id,
@@ -48,6 +53,7 @@ class Merchant {
     this.standardCertifiedAt,
     this.buyOnBehalfFeeBasis,
     this.hasOpenBranch = true,
+    this.displayStatus = 'open',
     this.distanceKm,
     this.beyondOwnRadius = false,
   });
@@ -78,6 +84,7 @@ class Merchant {
         : null,
     buyOnBehalfFeeBasis: json['buy_on_behalf_fee_basis'] as String?,
     hasOpenBranch: json['has_open_branch'] as bool? ?? true,
+    displayStatus: json['display_status'] as String? ?? 'open',
     distanceKm: json['distance_km'] != null
         ? num.tryParse('${json['distance_km']}')?.toDouble()
         : null,

@@ -97,8 +97,16 @@ router.get('/merchants', asyncHandler(async (req, res) => {
     `SELECT m.*,
             EXISTS (
               SELECT 1 FROM branches b
-               WHERE b.merchant_id = m.id AND b.deleted_at IS NULL AND b.is_open = true
+               WHERE b.merchant_id = m.id AND b.deleted_at IS NULL AND branch_effective_status(b.id) = 'open'
             ) AS has_open_branch,
+            COALESCE((
+              SELECT CASE
+                       WHEN bool_or(branch_effective_status(b.id) = 'open') THEN 'open'
+                       WHEN bool_or(branch_effective_status(b.id) = 'on_break') THEN 'on_break'
+                       WHEN COUNT(*) > 0 THEN 'closed_hours'
+                     END
+                FROM branches b WHERE b.merchant_id = m.id AND b.deleted_at IS NULL
+            ), 'open') AS display_status,
             COALESCE((
               SELECT jsonb_agg(jsonb_build_object('id', mc.id, 'name', mc.name) ORDER BY mc.sort_order, mc.name)
                 FROM merchant_classification_links l
@@ -183,18 +191,31 @@ router.get('/merchants/:id', asyncHandler(async (req, res) => {
     // Khách vẫn xem được sản phẩm của cửa hàng đang tạm đóng (chỉ không đặt hàng được, xem
     // POST /orders) — nên app khách cần biết trạng thái này để tự xám giao diện/khoá nút đặt,
     // không lộ branches thật (địa chỉ/SĐT từng chi nhánh không cần thiết cho khách).
-    const hasOpenBranch = await db.queryOne(
-      `SELECT EXISTS (
-         SELECT 1 FROM branches WHERE merchant_id = $1 AND deleted_at IS NULL AND is_open = true
-       ) AS value`,
+    const status = await db.queryOne(
+      `SELECT
+         EXISTS (
+           SELECT 1 FROM branches b WHERE b.merchant_id = $1 AND b.deleted_at IS NULL AND branch_effective_status(b.id) = 'open'
+         ) AS has_open_branch,
+         COALESCE((
+           SELECT CASE
+                    WHEN bool_or(branch_effective_status(b.id) = 'open') THEN 'open'
+                    WHEN bool_or(branch_effective_status(b.id) = 'on_break') THEN 'on_break'
+                    WHEN COUNT(*) > 0 THEN 'closed_hours'
+                  END
+             FROM branches b WHERE b.merchant_id = $1 AND b.deleted_at IS NULL
+         ), 'open') AS display_status`,
       [req.params.id]
     );
-    return res.json({ ok: true, data: { ...row, has_open_branch: hasOpenBranch.value } });
+    return res.json({ ok: true, data: { ...row, has_open_branch: status.has_open_branch, display_status: status.display_status } });
   }
 
   const [owner, branches] = await Promise.all([
     db.queryOne('SELECT id, full_name, phone, email FROM users WHERE id = $1', [row.owner_id]),
-    db.query('SELECT * FROM branches WHERE merchant_id = $1 AND deleted_at IS NULL ORDER BY is_main DESC', [req.params.id])
+    db.query(
+      `SELECT b.*, branch_effective_status(b.id) AS status
+         FROM branches b WHERE b.merchant_id = $1 AND b.deleted_at IS NULL ORDER BY is_main DESC`,
+      [req.params.id]
+    )
   ]);
   res.json({ ok: true, data: { ...row, owner, branches } });
 }));
@@ -452,7 +473,8 @@ router.get('/merchants/:merchantId/finance/summary', asyncHandler(async (req, re
 
 router.get('/merchants/:merchantId/branches', asyncHandler(async (req, res) => {
   const rows = await db.query(
-    'SELECT * FROM branches WHERE merchant_id = $1 AND deleted_at IS NULL ORDER BY is_main DESC',
+    `SELECT b.*, branch_effective_status(b.id) AS status
+       FROM branches b WHERE b.merchant_id = $1 AND b.deleted_at IS NULL ORDER BY is_main DESC`,
     [req.params.merchantId]
   );
   res.json({ ok: true, data: rows });
@@ -463,7 +485,7 @@ router.get('/merchants/:merchantId/branches', asyncHandler(async (req, res) => {
  * (buy_on_behalf) — không có OTP ở bước lấy hàng, hiện danh sách cần mua thay vào đó. */
 router.get('/branches/:id', asyncHandler(async (req, res) => {
   const row = await db.queryOne(
-    `SELECT b.*, m.name AS merchant_name, m.merchant_type
+    `SELECT b.*, m.name AS merchant_name, m.merchant_type, branch_effective_status(b.id) AS status
        FROM branches b
        JOIN merchants m ON m.id = b.merchant_id
       WHERE b.id = $1 AND b.deleted_at IS NULL`,
@@ -491,13 +513,20 @@ router.patch('/branches/:id', asyncHandler(async (req, res) => {
   res.json({ ok: true, data: updated });
 }));
 
-/** Công tắc nhanh: hết hàng / nghỉ đột xuất thì tắt is_open. */
+/** Công tắc "Tạm nghỉ": tắt kèm break_until (hẹn giờ tự mở lại, null = vô thời hạn — tắt tay
+ * không hẹn giờ, hoặc hệ thống tự tắt do cửa hàng không xác nhận đơn kịp, xem
+ * order_detail_screen.dart _cancelDueToTimeout ở app Cửa hàng). Bật lại luôn xoá break_until,
+ * dù đang mở tay sớm hay hết hạn tự nhiên — xem hofa-db/78_branch_operating_hours_gate.sql. */
 router.patch('/branches/:id/toggle-open', asyncHandler(async (req, res) => {
   requireFields(req.body, ['is_open']);
   const branch = await db.queryOne('SELECT id, merchant_id FROM branches WHERE id = $1', [req.params.id]);
   if (!branch) throw new ApiError('NOT_FOUND', 'Không tìm thấy chi nhánh', 404);
   await requireMerchantAccess(req.ctx, branch.merchant_id);
-  const updated = await db.updateById('branches', req.params.id, { is_open: !!req.body.is_open });
+  const isOpen = !!req.body.is_open;
+  const updated = await db.updateById('branches', req.params.id, {
+    is_open: isOpen,
+    break_until: isOpen ? null : (req.body.break_until || null)
+  });
   res.json({ ok: true, data: updated });
 }));
 

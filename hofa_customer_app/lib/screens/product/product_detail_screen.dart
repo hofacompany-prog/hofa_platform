@@ -622,17 +622,28 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                         Padding(
                           padding: const EdgeInsets.only(bottom: 8),
                           child: Text(
-                            'Cửa hàng đang tạm đóng cửa, chưa thể đặt hàng lúc này.',
+                            // Đỏ = đang tạm nghỉ (chủ cửa hàng chủ động tắt); xám = chỉ đơn
+                            // thuần ngoài giờ hoạt động — xem
+                            // hofa-db/78_branch_operating_hours_gate.sql.
+                            merchant.displayStatus == 'closed_hours'
+                                ? 'Cửa hàng đang ngoài giờ hoạt động, chưa thể đặt hàng lúc này.'
+                                : 'Cửa hàng đang tạm nghỉ, chưa thể đặt hàng lúc này.',
                             textAlign: TextAlign.center,
                             style: theme.textTheme.bodySmall?.copyWith(
-                              color: theme.colorScheme.error,
+                              color: merchant.displayStatus == 'closed_hours'
+                                  ? Colors.grey
+                                  : theme.colorScheme.error,
                             ),
                           ),
                         ),
                       if (isClosed)
                         FilledButton(
                           onPressed: null,
-                          child: const Text('Cửa hàng đang đóng cửa'),
+                          child: Text(
+                            merchant.displayStatus == 'closed_hours'
+                                ? 'Ngoài giờ hoạt động'
+                                : 'Cửa hàng đang tạm nghỉ',
+                          ),
                         )
                       else
                         Row(

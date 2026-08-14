@@ -26,11 +26,18 @@ router.post('/orders', asyncHandler(async (req, res) => {
   }
 
   // Chặn thật ở server, không chỉ dựa vào UI app khách đã xám nút đặt hàng — khách vẫn có
-  // thể gọi thẳng API. Chi nhánh tạm đóng (is_open=false, công tắc ở màn Trang chủ store
-  // app) thì không tạo đơn mới được, dù vẫn xem được sản phẩm bình thường.
-  const branch = await db.queryOne('SELECT is_open FROM branches WHERE id = $1', [body.branch_id]);
-  if (!branch || !branch.is_open) {
-    throw new ApiError('BRANCH_CLOSED', 'Cửa hàng đang tạm đóng, chưa thể đặt hàng lúc này', 409);
+  // thể gọi thẳng API. Chi nhánh không nhận đơn được nếu đang "tạm nghỉ" (công tắc ở màn Trang
+  // chủ store app) HOẶC đang ngoài khung giờ hoạt động đã cấu hình (branch_hours) — kết hợp cả
+  // 2, tính live qua branch_effective_status(), xem hofa-db/78_branch_operating_hours_gate.sql.
+  const branch = await db.queryOne('SELECT branch_effective_status(id) AS status FROM branches WHERE id = $1', [body.branch_id]);
+  if (!branch) {
+    throw new ApiError('NOT_FOUND', 'Không tìm thấy chi nhánh', 404);
+  }
+  if (branch.status !== 'open') {
+    const message = branch.status === 'on_break'
+      ? 'Cửa hàng đang tạm nghỉ, chưa thể đặt hàng lúc này'
+      : 'Cửa hàng đang ngoài giờ hoạt động, chưa thể đặt hàng lúc này';
+    throw new ApiError('BRANCH_CLOSED', message, 409);
   }
 
   // Cửa hàng mua hộ bắt buộc thanh toán trước (chuyển khoản) — cửa hàng phải ứng tiền mua hộ

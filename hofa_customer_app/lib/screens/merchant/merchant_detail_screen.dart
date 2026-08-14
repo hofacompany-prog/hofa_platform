@@ -264,7 +264,9 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: theme.colorScheme.errorContainer,
+                    color: merchant.displayStatus == 'closed_hours'
+                        ? theme.colorScheme.surfaceContainerHighest
+                        : theme.colorScheme.errorContainer,
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Row(
@@ -272,14 +274,22 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
                       Icon(
                         Icons.storefront_outlined,
                         size: 18,
-                        color: theme.colorScheme.onErrorContainer,
+                        color: merchant.displayStatus == 'closed_hours'
+                            ? theme.colorScheme.onSurfaceVariant
+                            : theme.colorScheme.onErrorContainer,
                       ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
-                          'Cửa hàng đang tạm đóng cửa — bạn vẫn xem được sản phẩm nhưng chưa đặt hàng được lúc này.',
+                          // Đỏ = đang tạm nghỉ (chủ cửa hàng chủ động tắt); xám = chỉ đơn thuần
+                          // ngoài giờ hoạt động — xem hofa-db/78_branch_operating_hours_gate.sql.
+                          merchant.displayStatus == 'closed_hours'
+                              ? 'Cửa hàng đang ngoài giờ hoạt động — bạn vẫn xem được sản phẩm nhưng chưa đặt hàng được lúc này.'
+                              : 'Cửa hàng đang tạm nghỉ — bạn vẫn xem được sản phẩm nhưng chưa đặt hàng được lúc này.',
                           style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onErrorContainer,
+                            color: merchant.displayStatus == 'closed_hours'
+                                ? theme.colorScheme.onSurfaceVariant
+                                : theme.colorScheme.onErrorContainer,
                           ),
                         ),
                       ),

@@ -136,14 +136,23 @@ class MerchantRepository {
         as Map<String, dynamic>,
   );
 
-  Future<Branch> toggleBranchOpen(String branchId, bool isOpen) async =>
-      Branch.fromJson(
-        await _api.patch(
-              '/branches/$branchId/toggle-open',
-              body: {'is_open': isOpen},
-            )
-            as Map<String, dynamic>,
-      );
+  /// [breakUntil] chỉ có ý nghĩa khi [isOpen] = false — hẹn giờ tự mở lại (Tạm nghỉ). Bỏ trống
+  /// = tạm nghỉ vô thời hạn. Bật lại ([isOpen] = true) server luôn tự xoá break_until.
+  Future<Branch> toggleBranchOpen(
+    String branchId,
+    bool isOpen, {
+    DateTime? breakUntil,
+  }) async => Branch.fromJson(
+    await _api.patch(
+          '/branches/$branchId/toggle-open',
+          body: {
+            'is_open': isOpen,
+            if (!isOpen && breakUntil != null)
+              'break_until': breakUntil.toUtc().toIso8601String(),
+          },
+        )
+        as Map<String, dynamic>,
+  );
 
   Future<Branch> updateBranch(
     String branchId,

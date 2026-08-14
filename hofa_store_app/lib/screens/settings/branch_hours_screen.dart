@@ -16,7 +16,11 @@ class _DayRow {
 class BranchHoursScreen extends StatefulWidget {
   final String branchId;
   final String branchName;
-  const BranchHoursScreen({super.key, required this.branchId, required this.branchName});
+  const BranchHoursScreen({
+    super.key,
+    required this.branchId,
+    required this.branchName,
+  });
 
   @override
   State<BranchHoursScreen> createState() => _BranchHoursScreenState();
@@ -26,7 +30,11 @@ class _BranchHoursScreenState extends State<BranchHoursScreen> {
   final _repo = MerchantRepository();
   final _days = List.generate(
     7,
-    (i) => _DayRow(enabled: false, open: const TimeOfDay(hour: 8, minute: 0), close: const TimeOfDay(hour: 21, minute: 0)),
+    (i) => _DayRow(
+      enabled: false,
+      open: const TimeOfDay(hour: 8, minute: 0),
+      close: const TimeOfDay(hour: 21, minute: 0),
+    ),
   );
 
   bool _loading = true;
@@ -64,12 +72,88 @@ class _BranchHoursScreenState extends State<BranchHoursScreen> {
     return TimeOfDay(hour: h, minute: m);
   }
 
-  String _fmt(TimeOfDay t) => '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+  String _fmt(TimeOfDay t) =>
+      '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
 
-  Future<void> _pickTime(_DayRow row, {required bool isOpen}) async {
-    final picked = await showTimePicker(context: context, initialTime: isOpen ? row.open : row.close);
+  Future<void> _pickTime(int dayIndex, {required bool isOpen}) async {
+    final row = _days[dayIndex];
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: isOpen ? row.open : row.close,
+    );
     if (picked == null) return;
     setState(() => isOpen ? row.open = picked : row.close = picked);
+    // Chọn xong CẢ giờ mở lẫn giờ đóng cho 1 ngày (giờ đóng luôn chọn sau) — hỏi có muốn áp y
+    // hệt khung giờ này cho các ngày khác trong tuần không, đỡ phải gõ lại 7 lần.
+    if (!isOpen && mounted) await _offerCopyToOtherDays(dayIndex);
+  }
+
+  Future<void> _offerCopyToOtherDays(int dayIndex) async {
+    final source = _days[dayIndex];
+    final otherDays = [
+      for (var i = 0; i < 7; i++)
+        if (i != dayIndex) i,
+    ];
+    final selected = <int>{};
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setInner) => AlertDialog(
+          title: const Text('Áp dụng giờ này cho ngày khác?'),
+          content: SizedBox(
+            width: 360,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${_fmt(source.open)} — ${_fmt(source.close)}',
+                  style: const TextStyle(fontWeight: FontWeight.w500),
+                ),
+                const SizedBox(height: 8),
+                for (final i in otherDays)
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    controlAffinity: ListTileControlAffinity.leading,
+                    title: Text(weekdayLabels[i]!),
+                    value: selected.contains(i),
+                    onChanged: (v) => setInner(() {
+                      if (v ?? false) {
+                        selected.add(i);
+                      } else {
+                        selected.remove(i);
+                      }
+                    }),
+                  ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Bỏ qua'),
+            ),
+            FilledButton(
+              onPressed: selected.isEmpty
+                  ? null
+                  : () => Navigator.pop(context, true),
+              child: const Text('Áp dụng'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (ok != true || selected.isEmpty) return;
+    setState(() {
+      for (final i in selected) {
+        _days[i] = _DayRow(
+          enabled: true,
+          open: source.open,
+          close: source.close,
+        );
+      }
+    });
   }
 
   Future<void> _save() async {
@@ -80,7 +164,12 @@ class _BranchHoursScreenState extends State<BranchHoursScreen> {
     try {
       final hours = <BranchHour>[
         for (var i = 0; i < 7; i++)
-          if (_days[i].enabled) BranchHour(weekday: i, openTime: _fmt(_days[i].open), closeTime: _fmt(_days[i].close)),
+          if (_days[i].enabled)
+            BranchHour(
+              weekday: i,
+              openTime: _fmt(_days[i].open),
+              closeTime: _fmt(_days[i].close),
+            ),
       ];
       await _repo.setBranchHours(widget.branchId, hours);
       if (mounted) context.pop();
@@ -110,48 +199,77 @@ class _BranchHoursScreenState extends State<BranchHoursScreen> {
                       for (var i = 0; i < 7; i++)
                         Card(
                           elevation: 0,
-                          color: Theme.of(context).colorScheme.surfaceContainerLow,
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.surfaceContainerLow,
                           child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 4,
+                            ),
                             child: Row(
                               children: [
                                 SizedBox(
                                   width: 110,
-                                  child: Text(weekdayLabels[i]!, style: const TextStyle(fontWeight: FontWeight.w500)),
+                                  child: Text(
+                                    weekdayLabels[i]!,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
                                 ),
                                 Switch(
                                   value: _days[i].enabled,
-                                  onChanged: (v) => setState(() => _days[i].enabled = v),
+                                  onChanged: (v) =>
+                                      setState(() => _days[i].enabled = v),
                                 ),
                                 if (_days[i].enabled) ...[
                                   Expanded(
                                     child: TextButton(
-                                      onPressed: () => _pickTime(_days[i], isOpen: true),
+                                      onPressed: () =>
+                                          _pickTime(i, isOpen: true),
                                       child: Text(_fmt(_days[i].open)),
                                     ),
                                   ),
                                   const Text('—'),
                                   Expanded(
                                     child: TextButton(
-                                      onPressed: () => _pickTime(_days[i], isOpen: false),
+                                      onPressed: () =>
+                                          _pickTime(i, isOpen: false),
                                       child: Text(_fmt(_days[i].close)),
                                     ),
                                   ),
                                 ] else
-                                  const Expanded(child: Text('Đóng cửa', style: TextStyle(color: Colors.black45))),
+                                  const Expanded(
+                                    child: Text(
+                                      'Đóng cửa',
+                                      style: TextStyle(color: Colors.black45),
+                                    ),
+                                  ),
                               ],
                             ),
                           ),
                         ),
                       if (_error != null) ...[
                         const SizedBox(height: 16),
-                        Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                        Text(
+                          _error!,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                        ),
                       ],
                       const SizedBox(height: 24),
                       FilledButton(
                         onPressed: _saving ? null : _save,
                         child: _saving
-                            ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                            ? const SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
                             : const Text('Lưu'),
                       ),
                     ],

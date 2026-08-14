@@ -9,6 +9,7 @@ import '../../models/merchant_today_stats.dart';
 import '../../providers/auth_provider.dart';
 import '../../repositories/merchant_repository.dart';
 import '../../repositories/order_repository.dart';
+import '../../widgets/branch_break_dialogs.dart';
 import '../../widgets/notification_bell.dart';
 
 final _homeBranchesProvider = FutureProvider.autoDispose<List<Branch>>((
@@ -25,9 +26,18 @@ final _homeBranchesProvider = FutureProvider.autoDispose<List<Branch>>((
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
-  Future<void> _toggleOpen(WidgetRef ref, Branch branch) async {
+  Future<void> _toggleOpen(
+    WidgetRef ref,
+    Branch branch,
+    bool isOpen, {
+    DateTime? breakUntil,
+  }) async {
     try {
-      await MerchantRepository().toggleBranchOpen(branch.id, !branch.isOpen);
+      await MerchantRepository().toggleBranchOpen(
+        branch.id,
+        isOpen,
+        breakUntil: breakUntil,
+      );
       ref.invalidate(_homeBranchesProvider);
     } catch (_) {
       // Lỗi mạng tạm thời — người dùng vẫn có thể đổi lại ở màn Cài đặt, không chặn Trang chủ.
@@ -103,9 +113,14 @@ class HomeScreen extends ConsumerWidget {
                       child: _PreparingCard(
                         branch: mainBranch,
                         stats: statsAsync.valueOrNull,
-                        onToggleOpen: mainBranch == null
+                        onToggle: mainBranch == null
                             ? null
-                            : () => _toggleOpen(ref, mainBranch),
+                            : (isOpen, {breakUntil}) => _toggleOpen(
+                                ref,
+                                mainBranch,
+                                isOpen,
+                                breakUntil: breakUntil,
+                              ),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -186,12 +201,12 @@ class HomeScreen extends ConsumerWidget {
 class _PreparingCard extends StatefulWidget {
   final Branch? branch;
   final MerchantTodayStats? stats;
-  final VoidCallback? onToggleOpen;
+  final Future<void> Function(bool isOpen, {DateTime? breakUntil})? onToggle;
 
   const _PreparingCard({
     required this.branch,
     required this.stats,
-    required this.onToggleOpen,
+    required this.onToggle,
   });
 
   @override
@@ -235,17 +250,43 @@ class _PreparingCardState extends State<_PreparingCard> {
     }
   }
 
+  /// Tắt lúc đang mở (hoặc đang ngoài giờ) → bắt chọn thời lượng Tạm nghỉ trước khi lưu. Bật
+  /// lại lúc đang Tạm nghỉ → hỏi xác nhận mở lại sớm. Không tự đổi gì nếu người dùng Huỷ.
+  Future<void> _onSwitchChanged() async {
+    if (widget.onToggle == null) return;
+    final status = widget.branch?.status ?? 'open';
+    if (status == 'on_break') {
+      final ok = await confirmReopenNow(context);
+      if (ok) await widget.onToggle!(true);
+    } else {
+      final until = await pickBreakDuration(context);
+      if (until != null) await widget.onToggle!(false, breakUntil: until);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final isOpen = widget.branch?.isOpen ?? true;
-    // Tạm đóng: cửa hàng bị ẩn khỏi kết quả tìm kiếm/xám đi ở app khách, khách vẫn xem được
-    // sản phẩm nhưng không đặt hàng được (xem GET /merchants has_open_branch và POST /orders
-    // chặn tạo đơn khi chi nhánh đóng) — nền đỏ ở đây để chủ cửa hàng nhận ra ngay tình trạng
-    // này thay vì lỡ quên bật lại.
+    final status = widget.branch?.status ?? 'open';
+    final breakUntil = widget.branch?.breakUntil;
+    // Đỏ = đang Tạm nghỉ (chủ cửa hàng chủ động tắt); xám = ngoài giờ hoạt động đã cấu hình
+    // (branch_hours) nhưng không phải tạm nghỉ — để chủ cửa hàng phân biệt rõ 2 lý do đóng cửa.
+    final cardColor = switch (status) {
+      'on_break' => theme.colorScheme.error,
+      'closed_hours' => Colors.grey,
+      _ => theme.colorScheme.primary,
+    };
+    final statusText = switch (status) {
+      'on_break' =>
+        breakUntil != null
+            ? 'Tạm nghỉ đến ${formatBreakUntil(breakUntil)}'
+            : 'Tạm nghỉ',
+      'closed_hours' => 'Ngoài giờ hoạt động',
+      _ => 'Đang mở cửa',
+    };
     return Card(
       elevation: 0,
-      color: isOpen ? theme.colorScheme.primary : theme.colorScheme.error,
+      color: cardColor,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
@@ -260,7 +301,7 @@ class _PreparingCardState extends State<_PreparingCard> {
                 children: [
                   Expanded(
                     child: Text(
-                      isOpen ? 'Đang mở cửa' : 'Tạm đóng cửa',
+                      statusText,
                       style: theme.textTheme.labelLarge?.copyWith(
                         color: Colors.white,
                         fontWeight: FontWeight.w600,
@@ -268,10 +309,10 @@ class _PreparingCardState extends State<_PreparingCard> {
                     ),
                   ),
                   Switch(
-                    value: isOpen,
-                    onChanged: widget.onToggleOpen == null
+                    value: status != 'on_break',
+                    onChanged: widget.onToggle == null
                         ? null
-                        : (_) => widget.onToggleOpen!(),
+                        : (_) => _onSwitchChanged(),
                     activeThumbColor: Colors.white,
                     activeTrackColor: Colors.white.withValues(alpha: 0.4),
                     inactiveThumbColor: Colors.white,
