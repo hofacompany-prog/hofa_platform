@@ -9,6 +9,7 @@ import '../../providers/admin_providers.dart';
 import '../../widgets/full_screen_gallery_viewer.dart';
 import '../../widgets/image_upload_field.dart';
 import '../../widgets/multi_image_upload_field.dart';
+import '../../widgets/merchant_classification_picker.dart';
 import 'merchant_devices_card.dart';
 import 'merchant_fee_tiers_card.dart';
 import 'merchants_screen.dart' show merchantStatusLabels;
@@ -75,6 +76,7 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
     final taxCodeCtrl = TextEditingController(text: m.taxCode ?? '');
     final licenseCtrl = TextEditingController(text: m.businessLicenseNo ?? '');
     var merchantType = m.merchantType;
+    var classificationIds = m.classifications.map((c) => c.id).toSet();
     var logoUrl = m.logoUrl;
     var coverUrl = m.coverUrl;
     var legalDocUrls = List.of(m.legalDocUrls);
@@ -166,6 +168,20 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
                         .toList(),
                     onChanged: (v) =>
                         setInner(() => merchantType = v ?? merchantType),
+                  ),
+                  const SizedBox(height: 12),
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Phân loại cửa hàng',
+                      style: Theme.of(context).textTheme.labelLarge,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  MerchantClassificationPicker(
+                    selectedIds: classificationIds,
+                    onChanged: (next) =>
+                        setInner(() => classificationIds = next),
                   ),
                   const SizedBox(height: 12),
                   TextField(
@@ -362,8 +378,8 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
       return;
     }
 
-    await _run(
-      () => ref.read(adminRepoProvider).updateMerchant(m.id, {
+    await _run(() async {
+      await ref.read(adminRepoProvider).updateMerchant(m.id, {
         'name': nameCtrl.text.trim(),
         'description': descCtrl.text.trim(),
         'merchant_type': merchantType,
@@ -395,8 +411,11 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
         'business_license_no': licenseCtrl.text.trim().isEmpty
             ? null
             : licenseCtrl.text.trim(),
-      }),
-    );
+      });
+      await ref
+          .read(adminRepoProvider)
+          .setMerchantClassifications(m.id, classificationIds.toList());
+    });
   }
 
   Future<void> _editBranch(Branch b) async {

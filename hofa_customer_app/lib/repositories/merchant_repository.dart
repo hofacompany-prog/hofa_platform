@@ -1,5 +1,6 @@
 import '../core/api_client.dart';
 import '../models/merchant.dart';
+import '../models/merchant_classification.dart';
 import '../models/merchant_fee_tier.dart';
 import '../models/branch.dart';
 
@@ -16,6 +17,9 @@ class MerchantRepository {
     // 'distance' = sắp xếp "Gần tôi" (chỉ có tác dụng khi có lat/lng), null/khác = mặc định
     // (đánh giá cao trước, xem GET /merchants).
     String? sort,
+    // Lọc theo phân loại cửa hàng (Nhà hàng/Cà phê/...) — khớp NẾU CÓ ÍT NHẤT 1 phân loại
+    // trùng, xem hofa-db/71_merchant_classifications.sql.
+    Set<String>? classificationIds,
   }) async {
     final list =
         await _api.get(
@@ -28,11 +32,21 @@ class MerchantRepository {
                 if (lat != null && lng != null) 'lat': lat,
                 if (lat != null && lng != null) 'lng': lng,
                 if (sort != null) 'sort': sort,
+                if (classificationIds != null && classificationIds.isNotEmpty)
+                  'classification_ids': classificationIds.join(','),
               },
             )
             as List;
     return list
         .map((e) => Merchant.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Danh sách phân loại cửa hàng — viên nang lọc ở trang chủ.
+  Future<List<MerchantClassification>> merchantClassifications() async {
+    final list = await _api.get('/merchant-classifications') as List;
+    return list
+        .map((e) => MerchantClassification.fromJson(e as Map<String, dynamic>))
         .toList();
   }
 

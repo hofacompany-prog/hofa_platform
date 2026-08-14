@@ -1,3 +1,5 @@
+import 'merchant_classification.dart';
+
 List<String> _parseUrlList(dynamic raw) {
   if (raw is! List) return [];
   return raw.map((e) => e.toString()).toList();
@@ -34,6 +36,7 @@ class Merchant {
   /// null = chủ cửa hàng (full quyền); mảng (kể cả rỗng) = nhân viên, đúng danh sách quyền
   /// được cấp trong merchant_staff.permissions. Xem myPermissionsProvider.
   final List<String>? myPermissions;
+  final List<MerchantClassification> classifications;
 
   Merchant({
     required this.id,
@@ -61,6 +64,7 @@ class Merchant {
     required this.ratingAvg,
     required this.ratingCount,
     this.myPermissions,
+    this.classifications = const [],
   });
 
   factory Merchant.fromJson(Map<String, dynamic> json) => Merchant(
@@ -91,5 +95,13 @@ class Merchant {
     myPermissions: (json['my_permissions'] as List?)
         ?.map((e) => e.toString())
         .toList(),
+    classifications: json['classifications'] is List
+        ? (json['classifications'] as List)
+              .map(
+                (e) =>
+                    MerchantClassification.fromJson(e as Map<String, dynamic>),
+              )
+              .toList()
+        : const [],
   );
 }

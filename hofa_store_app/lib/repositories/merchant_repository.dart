@@ -1,6 +1,7 @@
 import '../core/api_client.dart';
 import '../models/bank.dart';
 import '../models/merchant.dart';
+import '../models/merchant_classification.dart';
 import '../models/merchant_today_stats.dart';
 import '../models/finance_summary.dart';
 import '../models/branch.dart';
@@ -56,6 +57,25 @@ class MerchantRepository {
       Merchant.fromJson(
         await _api.patch('/merchants/$id', body: data) as Map<String, dynamic>,
       );
+
+  /// Danh sách phân loại cửa hàng (Nhà hàng/Cà phê/Siêu thị mini...) admin quản lý.
+  Future<List<MerchantClassification>> merchantClassifications() async {
+    final list = await _api.get('/merchant-classifications') as List;
+    return list
+        .map((e) => MerchantClassification.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Ghi đè toàn bộ phân loại của cửa hàng hiện tại (xoá hết rồi gắn lại đúng danh sách mới).
+  Future<void> setMerchantClassifications(
+    String merchantId,
+    List<String> classificationIds,
+  ) async {
+    await _api.put(
+      '/merchants/$merchantId/classifications',
+      body: {'classification_ids': classificationIds},
+    );
+  }
 
   Future<MerchantTodayStats> todayStats(String merchantId) async =>
       MerchantTodayStats.fromJson(

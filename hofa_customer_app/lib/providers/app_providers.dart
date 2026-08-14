@@ -7,6 +7,7 @@ import '../models/category.dart';
 import '../models/delivery.dart';
 import '../models/app_notification.dart';
 import '../models/merchant.dart';
+import '../models/merchant_classification.dart';
 import '../models/merchant_fee_tier.dart';
 import '../models/order.dart';
 import '../models/product.dart';
@@ -87,6 +88,19 @@ final voucherMaxCountProvider = FutureProvider.autoDispose<int>(
 /// tự invalidate tay.
 final homeSortProvider = StateProvider.autoDispose<String?>((ref) => null);
 
+/// Danh sách phân loại cửa hàng (Nhà hàng/Cà phê/Siêu thị mini...) — viên nang lọc ở trang chủ,
+/// xem hofa-db/71_merchant_classifications.sql.
+final merchantClassificationsProvider =
+    FutureProvider.autoDispose<List<MerchantClassification>>(
+      (ref) => ref.watch(merchantRepoProvider).merchantClassifications(),
+    );
+
+/// Phân loại cửa hàng đang được chọn để lọc ở trang chủ — chọn được nhiều cùng lúc, khớp NẾU
+/// CÓ ÍT NHẤT 1 phân loại trùng (OR). watch trong merchantsPagedProvider bên dưới nên đổi giá
+/// trị tự tạo lại danh sách từ trang đầu.
+final selectedClassificationIdsProvider =
+    StateProvider.autoDispose<Set<String>>((ref) => {});
+
 /// Danh sách cửa hàng duyệt ở trang chủ — tải dần theo trang khi khách lướt xuống, không tải
 /// hết 1 lần (xem PaginatedListNotifier).
 final merchantsPagedProvider =
@@ -96,6 +110,7 @@ final merchantsPagedProvider =
     >((ref) {
       final coords = ref.watch(customerCoordsProvider);
       final sort = ref.watch(homeSortProvider);
+      final classificationIds = ref.watch(selectedClassificationIdsProvider);
       return PaginatedListNotifier<Merchant>(
         (limit, offset) => ref
             .read(merchantRepoProvider)
@@ -105,6 +120,7 @@ final merchantsPagedProvider =
               lat: coords?.$1,
               lng: coords?.$2,
               sort: sort,
+              classificationIds: classificationIds,
             ),
       );
     });

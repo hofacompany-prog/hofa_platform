@@ -4,11 +4,12 @@ import '../settings/order_code_screen.dart';
 import '../settings/auto_accept_settings_screen.dart';
 import '../settings/delivery_radius_settings_screen.dart';
 import '../finance/merchant_wallet_screen.dart';
+import 'merchant_classifications_tab.dart';
 
 /// Gom các mục trước đây tách riêng ở NavigationRail (Cửa hàng, Mã đơn hàng, Thông số cửa hàng,
-/// Bán kính giao hàng, Ví cửa hàng) vào 1 mục "Cửa hàng" duy nhất, mỗi màn là 1 tab con — giữ
-/// nguyên hoàn toàn từng màn, chỉ thêm 1 dải tab mỏng phía trên để chuyển qua lại (cùng pattern
-/// với DriverHubScreen).
+/// Bán kính giao hàng, Ví cửa hàng, Phân loại cửa hàng) vào 1 mục "Cửa hàng" duy nhất, mỗi màn
+/// là 1 tab con — giữ nguyên hoàn toàn từng màn, chỉ thêm 1 dải tab mỏng phía trên để chuyển qua
+/// lại (cùng pattern với DriverHubScreen).
 class MerchantHubScreen extends StatelessWidget {
   final int initialTab;
   const MerchantHubScreen({super.key, this.initialTab = 0});
@@ -17,8 +18,8 @@ class MerchantHubScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return DefaultTabController(
-      length: 5,
-      initialIndex: initialTab.clamp(0, 4),
+      length: 6,
+      initialIndex: initialTab.clamp(0, 5),
       child: Scaffold(
         body: Column(
           children: [
@@ -35,6 +36,7 @@ class MerchantHubScreen extends StatelessWidget {
                   Tab(text: 'Thông số cửa hàng'),
                   Tab(text: 'Bán kính giao hàng'),
                   Tab(text: 'Ví cửa hàng'),
+                  Tab(text: 'Phân loại cửa hàng'),
                 ],
               ),
             ),
@@ -46,6 +48,7 @@ class MerchantHubScreen extends StatelessWidget {
                   AutoAcceptSettingsScreen(),
                   DeliveryRadiusSettingsScreen(),
                   MerchantWalletScreen(),
+                  MerchantClassificationsTab(),
                 ],
               ),
             ),

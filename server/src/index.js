@@ -22,6 +22,7 @@ app.get('/health', (req, res) => res.json({ ok: true, data: { status: 'up' } }))
 app.use('/', require('./routes/admin'));
 app.use('/', require('./routes/users'));
 app.use('/', require('./routes/merchants'));
+app.use('/', require('./routes/merchant-classifications'));
 app.use('/', require('./routes/merchant-wallet'));
 app.use('/', require('./routes/products'));
 app.use('/', require('./routes/inventory'));

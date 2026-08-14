@@ -29,6 +29,7 @@ import '../models/driver_finance_settings.dart';
 import '../models/driver_wallet_summary.dart';
 import '../models/merchant_wallet_summary.dart';
 import '../models/merchant_wallet_request.dart';
+import '../models/merchant_classification.dart';
 import '../repositories/admin_repository.dart';
 import '../repositories/user_repository.dart';
 
@@ -141,6 +142,11 @@ final categoriesProvider = FutureProvider.autoDispose<List<Category>>(
 final banksProvider = FutureProvider.autoDispose<List<Bank>>(
   (ref) => ref.watch(adminRepoProvider).banks(),
 );
+
+final merchantClassificationsProvider =
+    FutureProvider.autoDispose<List<MerchantClassification>>(
+      (ref) => ref.watch(adminRepoProvider).merchantClassifications(),
+    );
 
 final navIconsProvider = FutureProvider.autoDispose<List<NavTabIcon>>(
   (ref) => ref.watch(adminRepoProvider).navIcons(),

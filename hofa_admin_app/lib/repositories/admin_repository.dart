@@ -29,6 +29,7 @@ import '../models/driver_finance_settings.dart';
 import '../models/driver_wallet_summary.dart';
 import '../models/merchant_wallet_summary.dart';
 import '../models/merchant_wallet_request.dart';
+import '../models/merchant_classification.dart';
 
 /// Gom mọi lời gọi API mà web admin cần. Tất cả endpoint ở đây đều yêu cầu
 /// role = 'admin' ở phía server (server/src/utils.js requireRole).
@@ -169,6 +170,49 @@ class AdminRepository {
 
   Future<void> deleteMerchant(String id) async {
     await _api.delete('/merchants/$id');
+  }
+
+  /// Ghi đè toàn bộ phân loại của 1 cửa hàng (xoá hết rồi gắn lại đúng danh sách [classificationIds]).
+  Future<void> setMerchantClassifications(
+    String merchantId,
+    List<String> classificationIds,
+  ) async {
+    await _api.put(
+      '/merchants/$merchantId/classifications',
+      body: {'classification_ids': classificationIds},
+    );
+  }
+
+  // ---- Phân loại cửa hàng (Nhà hàng/Cà phê/Siêu thị mini...) ----
+
+  Future<List<MerchantClassification>> merchantClassifications() async {
+    final list = await _api.get('/merchant-classifications') as List;
+    return list
+        .map((e) => MerchantClassification.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<MerchantClassification> createMerchantClassification({
+    required String name,
+    int? sortOrder,
+  }) async => MerchantClassification.fromJson(
+    await _api.post(
+          '/merchant-classifications',
+          body: {'name': name, if (sortOrder != null) 'sort_order': sortOrder},
+        )
+        as Map<String, dynamic>,
+  );
+
+  Future<MerchantClassification> updateMerchantClassification(
+    String id,
+    Map<String, dynamic> data,
+  ) async => MerchantClassification.fromJson(
+    await _api.patch('/merchant-classifications/$id', body: data)
+        as Map<String, dynamic>,
+  );
+
+  Future<void> deleteMerchantClassification(String id) async {
+    await _api.delete('/merchant-classifications/$id');
   }
 
   // ---- Thiết bị đăng nhập của cửa hàng (chủ + nhân viên) ----

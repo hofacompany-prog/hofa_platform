@@ -42,6 +42,17 @@ router.get('/merchants', asyncHandler(async (req, res) => {
   if (!isPrivileged) clauses.push(`status = 'active'`);
   if (req.query.merchant_type) { params.push(req.query.merchant_type); clauses.push(`merchant_type = $${params.length}`); }
   if (req.query.q) { params.push(`%${req.query.q}%`); clauses.push(`name ILIKE $${params.length}`); }
+  // Lọc theo phân loại cửa hàng (Nhà hàng/Cà phê/...) — chọn nhiều id cách nhau bằng dấu phẩy,
+  // khớp NẾU CÓ ÍT NHẤT 1 phân loại trùng (OR), xem hofa-db/71_merchant_classifications.sql.
+  if (req.query.classification_ids) {
+    const ids = String(req.query.classification_ids).split(',').filter(Boolean);
+    if (ids.length) {
+      params.push(ids);
+      clauses.push(
+        `EXISTS (SELECT 1 FROM merchant_classification_links l WHERE l.merchant_id = m.id AND l.classification_id = ANY($${params.length}::uuid[]))`
+      );
+    }
+  }
 
   // Khoảng cách từ chi nhánh gần nhất (ưu tiên chi nhánh đang mở) tới toạ độ khách đang xem —
   // chỉ tính khi client gửi kèm lat/lng (địa chỉ mặc định của khách, xem
@@ -88,6 +99,12 @@ router.get('/merchants', asyncHandler(async (req, res) => {
               SELECT 1 FROM branches b
                WHERE b.merchant_id = m.id AND b.deleted_at IS NULL AND b.is_open = true
             ) AS has_open_branch,
+            COALESCE((
+              SELECT jsonb_agg(jsonb_build_object('id', mc.id, 'name', mc.name) ORDER BY mc.sort_order, mc.name)
+                FROM merchant_classification_links l
+                JOIN merchant_classifications mc ON mc.id = l.classification_id
+               WHERE l.merchant_id = m.id
+            ), '[]'::jsonb) AS classifications,
             ${distanceSelect}
        FROM merchants m
        ${distanceJoin}
@@ -133,6 +150,14 @@ const SENSITIVE_MERCHANT_FIELDS = [
 router.get('/merchants/:id', asyncHandler(async (req, res) => {
   const row = await db.queryOne('SELECT * FROM merchants WHERE id = $1 AND deleted_at IS NULL', [req.params.id]);
   if (!row) throw new ApiError('NOT_FOUND', 'Không tìm thấy cửa hàng', 404);
+
+  row.classifications = await db.query(
+    `SELECT mc.id, mc.name FROM merchant_classification_links l
+       JOIN merchant_classifications mc ON mc.id = l.classification_id
+      WHERE l.merchant_id = $1
+      ORDER BY mc.sort_order, mc.name`,
+    [req.params.id]
+  );
 
   // Cùng cách tính với GET /merchants (danh sách) — xem haversineKmSql. Khác GET /merchants:
   // KHÔNG ẩn/404 dù vượt cả 2 mức bán kính — khách có thể vào thẳng trang này từ mục yêu thích/
@@ -233,6 +258,30 @@ router.patch('/merchants/:id', asyncHandler(async (req, res) => {
   const data = pickFields(req.body, MERCHANT_FIELDS);
   const updated = await db.updateById('merchants', req.params.id, data);
   res.json({ ok: true, data: updated });
+}));
+
+// Ghi đè toàn bộ phân loại cửa hàng — xoá hết rồi insert lại đúng danh sách mới, cùng pattern
+// PUT /branches/:id/hours, xem hofa-db/71_merchant_classifications.sql.
+router.put('/merchants/:id/classifications', asyncHandler(async (req, res) => {
+  await requireMerchantAccess(req.ctx, req.params.id);
+  requireFields(req.body, ['classification_ids']);
+  await db.query('DELETE FROM merchant_classification_links WHERE merchant_id = $1', [req.params.id]);
+  const ids = Array.isArray(req.body.classification_ids) ? req.body.classification_ids : [];
+  if (ids.length) {
+    const values = ids.map((_, i) => `($1, $${i + 2})`).join(', ');
+    await db.query(
+      `INSERT INTO merchant_classification_links (merchant_id, classification_id) VALUES ${values}`,
+      [req.params.id, ...ids]
+    );
+  }
+  const rows = await db.query(
+    `SELECT mc.id, mc.name FROM merchant_classification_links l
+       JOIN merchant_classifications mc ON mc.id = l.classification_id
+      WHERE l.merchant_id = $1
+      ORDER BY mc.sort_order, mc.name`,
+    [req.params.id]
+  );
+  res.json({ ok: true, data: rows });
 }));
 
 router.post('/merchants/:id/submit-for-review', asyncHandler(async (req, res) => {

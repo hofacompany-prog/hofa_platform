@@ -57,6 +57,9 @@ class _StoreProfileEditScreenState
   late String? _coverUrl = widget.merchant.coverUrl;
   late List<String> _legalDocUrls = List.of(widget.merchant.legalDocUrls);
   late List<String> _photoUrls = List.of(widget.merchant.photoUrls);
+  late final Set<String> _classificationIds = widget.merchant.classifications
+      .map((c) => c.id)
+      .toSet();
 
   Bank? _selectedBank;
   bool _bankPrefillAttempted = false;
@@ -123,6 +126,10 @@ class _StoreProfileEditScreenState
             ? null
             : _licenseCtrl.text.trim(),
       });
+      await _repo.setMerchantClassifications(
+        widget.merchant.id,
+        _classificationIds.toList(),
+      );
       ref.invalidate(myMerchantProvider);
       if (mounted) context.pop();
     } on ApiException catch (e) {
@@ -210,6 +217,48 @@ class _StoreProfileEditScreenState
                     border: OutlineInputBorder(),
                   ),
                   maxLines: 3,
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Phân loại cửa hàng',
+                  style: Theme.of(context).textTheme.labelLarge,
+                ),
+                const SizedBox(height: 8),
+                Consumer(
+                  builder: (context, ref, _) {
+                    final itemsAsync = ref.watch(
+                      merchantClassificationsProvider,
+                    );
+                    return itemsAsync.when(
+                      loading: () => const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 8),
+                        child: LinearProgressIndicator(),
+                      ),
+                      error: (e, _) =>
+                          Text('Không tải được danh sách phân loại: $e'),
+                      data: (items) {
+                        if (items.isEmpty) {
+                          return const Text('Chưa có phân loại nào.');
+                        }
+                        return Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: items.map((c) {
+                            final selected = _classificationIds.contains(c.id);
+                            return FilterChip(
+                              label: Text(c.name),
+                              selected: selected,
+                              onSelected: (v) => setState(() {
+                                v
+                                    ? _classificationIds.add(c.id)
+                                    : _classificationIds.remove(c.id);
+                              }),
+                            );
+                          }).toList(),
+                        );
+                      },
+                    );
+                  },
                 ),
                 const SizedBox(height: 12),
                 TextField(

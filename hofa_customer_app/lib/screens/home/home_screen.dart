@@ -102,6 +102,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final merchantsState = ref.watch(merchantsPagedProvider);
     final categoriesAsync = ref.watch(categoriesProvider);
     final homeSort = ref.watch(homeSortProvider);
+    final classificationsAsync = ref.watch(merchantClassificationsProvider);
+    final selectedClassificationIds = ref.watch(
+      selectedClassificationIdsProvider,
+    );
     final hasCoords = ref.watch(customerCoordsProvider) != null;
     final searchQuery = ref.watch(productSearchProvider);
     final searchedProductsAsync = ref.watch(searchedProductsProvider);
@@ -328,6 +332,39 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       selected: homeSort != 'distance',
                       onTap: () =>
                           ref.read(homeSortProvider.notifier).state = null,
+                    ),
+                    // Viên nang lọc theo phân loại cửa hàng (Nhà hàng/Cà phê/...) — chọn được
+                    // nhiều cùng lúc, chung 1 hàng cuộn ngang với "Gần tôi"/"Đánh giá" ở trên.
+                    ...classificationsAsync.maybeWhen(
+                      data: (items) => items
+                          .expand(
+                            (c) => [
+                              const SizedBox(width: 8),
+                              _filterChip(
+                                label: c.name,
+                                selected: selectedClassificationIds.contains(
+                                  c.id,
+                                ),
+                                onTap: () {
+                                  final next = Set<String>.from(
+                                    selectedClassificationIds,
+                                  );
+                                  selectedClassificationIds.contains(c.id)
+                                      ? next.remove(c.id)
+                                      : next.add(c.id);
+                                  ref
+                                          .read(
+                                            selectedClassificationIdsProvider
+                                                .notifier,
+                                          )
+                                          .state =
+                                      next;
+                                },
+                              ),
+                            ],
+                          )
+                          .toList(),
+                      orElse: () => const <Widget>[],
                     ),
                   ],
                 ),

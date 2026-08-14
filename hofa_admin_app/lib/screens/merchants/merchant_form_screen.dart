@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../models/bank.dart';
 import '../../providers/admin_providers.dart';
 import '../../widgets/image_upload_field.dart';
+import '../../widgets/merchant_classification_picker.dart';
 import 'location_picker_screen.dart';
 import 'merchant_detail_screen.dart' show merchantTypeLabels;
 
@@ -40,6 +41,7 @@ class _MerchantFormScreenState extends ConsumerState<MerchantFormScreen> {
   String? _pickedDistrict;
   bool _obscurePassword = true;
   Bank? _selectedBank;
+  Set<String> _selectedClassificationIds = {};
 
   @override
   void dispose() {
@@ -138,6 +140,14 @@ class _MerchantFormScreenState extends ConsumerState<MerchantFormScreen> {
         'is_main': true,
         'phone': _phoneCtrl.text.trim(),
       });
+      if (_selectedClassificationIds.isNotEmpty) {
+        await ref
+            .read(adminRepoProvider)
+            .setMerchantClassifications(
+              merchant.id,
+              _selectedClassificationIds.toList(),
+            );
+      }
       ref.invalidate(merchantsProvider);
       ref.invalidate(statsProvider);
       if (mounted) context.go('/merchants/${merchant.id}');
@@ -255,6 +265,14 @@ class _MerchantFormScreenState extends ConsumerState<MerchantFormScreen> {
                         .toList(),
                     onChanged: (v) =>
                         setState(() => _merchantType = v ?? _merchantType),
+                  ),
+                  const SizedBox(height: 12),
+                  Text('Phân loại cửa hàng', style: theme.textTheme.labelLarge),
+                  const SizedBox(height: 8),
+                  MerchantClassificationPicker(
+                    selectedIds: _selectedClassificationIds,
+                    onChanged: (next) =>
+                        setState(() => _selectedClassificationIds = next),
                   ),
                   const SizedBox(height: 12),
                   TextFormField(

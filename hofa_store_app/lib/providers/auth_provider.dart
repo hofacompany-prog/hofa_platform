@@ -4,6 +4,7 @@ import '../core/api_exception.dart';
 import '../models/user_profile.dart';
 import '../models/bank.dart';
 import '../models/merchant.dart';
+import '../models/merchant_classification.dart';
 import '../models/merchant_today_stats.dart';
 import '../models/finance_summary.dart';
 import '../models/product.dart';
@@ -95,6 +96,13 @@ final financeSummaryProvider = FutureProvider.autoDispose
 final banksProvider = FutureProvider.autoDispose<List<Bank>>(
   (ref) => _merchantRepo.banks(),
 );
+
+/// Danh sách phân loại cửa hàng (Nhà hàng/Cà phê/Siêu thị mini...) admin quản lý — cửa hàng
+/// tự chọn nhiều phân loại lúc sửa hồ sơ.
+final merchantClassificationsProvider =
+    FutureProvider.autoDispose<List<MerchantClassification>>(
+      (ref) => _merchantRepo.merchantClassifications(),
+    );
 
 /// Số dư ví thật (tab "Số tiền thu về" ở màn Tài chính) — null nếu chưa có cửa hàng.
 final merchantWalletBalanceProvider = FutureProvider.autoDispose<int?>((

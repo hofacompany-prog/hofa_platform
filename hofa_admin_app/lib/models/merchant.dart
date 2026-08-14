@@ -1,3 +1,5 @@
+import 'merchant_classification.dart';
+
 class MerchantOwner {
   final String id;
   final String fullName;
@@ -112,6 +114,7 @@ class Merchant {
   // Chỉ có khi gọi GET /merchants/:id với quyền admin/chủ (server nhúng sẵn).
   final MerchantOwner? owner;
   final List<Branch>? branches;
+  final List<MerchantClassification> classifications;
 
   Merchant({
     required this.id,
@@ -146,6 +149,7 @@ class Merchant {
     this.createdAt,
     this.owner,
     this.branches,
+    this.classifications = const [],
   });
 
   bool get isStandard => standardCertifiedAt != null;
@@ -197,5 +201,13 @@ class Merchant {
               .map((e) => Branch.fromJson(e as Map<String, dynamic>))
               .toList()
         : null,
+    classifications: json['classifications'] is List
+        ? (json['classifications'] as List)
+              .map(
+                (e) =>
+                    MerchantClassification.fromJson(e as Map<String, dynamic>),
+              )
+              .toList()
+        : const [],
   );
 }
