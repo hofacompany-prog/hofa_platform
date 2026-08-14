@@ -102,6 +102,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final merchantsState = ref.watch(merchantsPagedProvider);
     final categoriesAsync = ref.watch(categoriesProvider);
     final homeSort = ref.watch(homeSortProvider);
+    final ratingFilterSelected = ref.watch(ratingFilterSelectedProvider);
     final classificationsAsync = ref.watch(merchantClassificationsProvider);
     final selectedClassificationIds = ref.watch(
       selectedClassificationIdsProvider,
@@ -325,13 +326,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     ),
                     const SizedBox(width: 8),
                     // Đánh giá cao xuống thấp — mặc định server đã sắp xếp sẵn theo rating_avg
-                    // DESC (xem GET /merchants), chip này chỉ để quay lại đúng thứ tự đó sau
-                    // khi đã chọn "Gần tôi".
+                    // DESC (xem GET /merchants). Tick độc lập với "Gần tôi" (không phải radio) —
+                    // chỉ đổi trạng thái hiện của chính nó.
                     _filterChip(
                       label: 'Đánh giá',
-                      selected: homeSort != 'distance',
+                      selected: ratingFilterSelected,
                       onTap: () =>
-                          ref.read(homeSortProvider.notifier).state = null,
+                          ref
+                                  .read(ratingFilterSelectedProvider.notifier)
+                                  .state =
+                              !ratingFilterSelected,
                     ),
                     // Viên nang lọc theo phân loại cửa hàng (Nhà hàng/Cà phê/...) — chọn được
                     // nhiều cùng lúc, chung 1 hàng cuộn ngang với "Gần tôi"/"Đánh giá" ở trên.

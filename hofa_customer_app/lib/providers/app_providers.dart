@@ -88,6 +88,13 @@ final voucherMaxCountProvider = FutureProvider.autoDispose<int>(
 /// tự invalidate tay.
 final homeSortProvider = StateProvider.autoDispose<String?>((ref) => null);
 
+/// Trạng thái tick riêng của viên nang "Đánh giá" — ĐỘC LẬP với "Gần tôi" (không phải 2 lựa
+/// chọn loại trừ nhau kiểu radio), chỉ ảnh hưởng hiển thị viên nang, không đổi cách sắp xếp
+/// (server đã mặc định sắp theo rating_avg DESC khi homeSortProvider == null).
+final ratingFilterSelectedProvider = StateProvider.autoDispose<bool>(
+  (ref) => false,
+);
+
 /// Danh sách phân loại cửa hàng (Nhà hàng/Cà phê/Siêu thị mini...) — viên nang lọc ở trang chủ,
 /// xem hofa-db/71_merchant_classifications.sql.
 final merchantClassificationsProvider =
