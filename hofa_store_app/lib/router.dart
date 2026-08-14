@@ -16,6 +16,7 @@ import 'screens/products/product_form_screen.dart';
 import 'screens/toppings/topping_group_form_screen.dart';
 import 'screens/orders/orders_list_screen.dart';
 import 'screens/orders/order_detail_screen.dart';
+import 'screens/orders/chat_screen.dart';
 import 'screens/inventory/inventory_screen.dart';
 import 'screens/categories/categories_screen.dart';
 import 'screens/settings/branch_settings_screen.dart';
@@ -38,7 +39,9 @@ final routerProvider = Provider<GoRouter>((ref) {
     // web/firebase-messaging-sw.js), route đó vẫn bị initialLocation ghi đè ngay khi
     // GoRouter khởi tạo. Trên web, ưu tiên URL thật của trình duyệt lúc mở app; '/home' chỉ
     // còn là dự phòng khi URL rỗng/gốc hoặc trên mobile (không có khái niệm URL).
-    initialLocation: kIsWeb && Uri.base.path.length > 1 ? Uri.base.path : '/home',
+    initialLocation: kIsWeb && Uri.base.path.length > 1
+        ? Uri.base.path
+        : '/home',
     refreshListenable: GoRouterRefreshStream(
       Supabase.instance.client.auth.onAuthStateChange,
     ),
@@ -49,7 +52,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       // (appinstalled, xem PwaInstallService.wasInstalledPreviously) mà vẫn đang mở bằng trình
       // duyệt thường (chưa mở từ icon màn hình chính) thì cũng vào màn này — InstallPwaScreen
       // tự đổi sang thông báo "mở app ngoài màn hình" thay vì hỏi cài lại.
-      final needsInstall = !PwaInstallService.isStandalone() &&
+      final needsInstall =
+          !PwaInstallService.isStandalone() &&
           (PwaInstallService.wasInstalledPreviously() ||
               PwaInstallService.hasDeferredPrompt() ||
               PwaInstallService.isIOS());
@@ -81,7 +85,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
-      GoRoute(path: '/install-pwa', builder: (context, state) => const InstallPwaScreen()),
+      GoRoute(
+        path: '/install-pwa',
+        builder: (context, state) => const InstallPwaScreen(),
+      ),
       GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
       GoRoute(
         path: '/onboarding',
@@ -124,6 +131,13 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: '/orders/:id',
             builder: (context, state) =>
                 OrderDetailScreen(orderId: state.pathParameters['id']!),
+          ),
+          GoRoute(
+            // Truy cập CHỈ qua nút trong chi tiết đơn, không có hộp thư riêng — xem
+            // hofa-db/74_order_chat.sql.
+            path: '/orders/:id/chat',
+            builder: (context, state) =>
+                ChatScreen(orderId: state.pathParameters['id']!),
           ),
           GoRoute(
             path: '/inventory',

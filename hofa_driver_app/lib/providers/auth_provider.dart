@@ -7,11 +7,14 @@ import '../models/user_profile.dart';
 import '../models/driver.dart';
 import '../models/driver_finance_settings.dart';
 import '../models/otp_settings.dart';
+import '../models/chat_message.dart';
 import '../repositories/user_repository.dart';
 import '../repositories/driver_repository.dart';
+import '../repositories/order_repository.dart';
 
 final _userRepo = UserRepository();
 final _driverRepo = DriverRepository();
+final _orderRepo = OrderRepository();
 
 /// Phát lại mỗi khi trạng thái đăng nhập Supabase đổi (login/logout/token refresh).
 final authStateProvider = StreamProvider<AuthState>((ref) {
@@ -66,4 +69,9 @@ final driverFinanceSettingsProvider =
 /// ngưỡng này bỏ qua xác nhận OTP, xem hofa-db/73_otp_threshold_settings.sql.
 final otpSettingsProvider = FutureProvider.autoDispose<OtpSettings>(
   (ref) => _driverRepo.otpSettings(),
+);
+
+/// Số giờ mở nhắn tin thêm sau khi giao xong (admin cấu hình) — xem hofa-db/74_order_chat.sql.
+final chatSettingsProvider = FutureProvider.autoDispose<ChatSettings>(
+  (ref) => _orderRepo.chatSettings(),
 );

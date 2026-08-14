@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/format.dart';
 import '../../core/maps_launcher.dart';
 import '../../models/branch.dart';
+import '../../models/chat_message.dart';
 import '../../models/delivery.dart';
 import '../../models/order.dart' as model;
 import '../../providers/auth_provider.dart';
@@ -447,6 +448,30 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
               ],
               const SizedBox(height: 12),
               _PayoutBreakdownCard(delivery: delivery),
+              if (order != null)
+                Builder(
+                  builder: (context) {
+                    final chatSettings = ref
+                        .watch(chatSettingsProvider)
+                        .valueOrNull;
+                    final chatOpen = isChatWindowOpen(
+                      status: order.status,
+                      deliveredAt: order.deliveredAt,
+                      hoursAfterDelivered:
+                          chatSettings?.hoursAfterDelivered ?? 1,
+                    );
+                    if (!chatOpen) return const SizedBox();
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: OutlinedButton.icon(
+                        icon: const Icon(Icons.chat_bubble_outline),
+                        label: const Text('Nhắn tin khách hàng'),
+                        onPressed: () =>
+                            context.push('/orders/${order.id}/chat'),
+                      ),
+                    );
+                  },
+                ),
               if (order != null && order.paymentMethod == 'cod')
                 Padding(
                   padding: const EdgeInsets.only(top: 8),

@@ -43,6 +43,8 @@ app.use('/', require('./routes/order-settings'));
 app.use('/', require('./routes/auto-accept-settings'));
 app.use('/', require('./routes/driver-accept-settings'));
 app.use('/', require('./routes/otp-settings'));
+app.use('/', require('./routes/chat-settings'));
+app.use('/', require('./routes/order-messages'));
 app.use('/', require('./routes/bank-account-settings'));
 app.use('/', require('./routes/banks'));
 app.use('/', require('./routes/nav-icons'));

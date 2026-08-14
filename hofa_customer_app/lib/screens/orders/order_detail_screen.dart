@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/file_download.dart';
 import '../../core/format.dart';
 import '../../core/vietqr.dart';
+import '../../models/chat_message.dart';
 import '../../models/delivery.dart';
 import '../../models/order.dart';
 import '../../models/review.dart';
@@ -374,6 +375,50 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                             ],
                           ),
                         ),
+                      ),
+                    );
+                  },
+                ),
+                Builder(
+                  builder: (context) {
+                    final chatSettings = ref
+                        .watch(chatSettingsProvider)
+                        .valueOrNull;
+                    final chatOpen = isChatWindowOpen(
+                      status: o.status,
+                      deliveredAt: o.deliveredAt,
+                      hoursAfterDelivered:
+                          chatSettings?.hoursAfterDelivered ?? 1,
+                    );
+                    if (!chatOpen) return const SizedBox();
+                    final hasDriver =
+                        deliveryAsync.valueOrNull?.driverId != null;
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 12),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              icon: const Icon(Icons.storefront_outlined),
+                              label: const Text('Nhắn tin cửa hàng'),
+                              onPressed: () =>
+                                  context.push('/orders/${o.id}/chat/merchant'),
+                            ),
+                          ),
+                          if (hasDriver) ...[
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: OutlinedButton.icon(
+                                icon: const Icon(
+                                  Icons.delivery_dining_outlined,
+                                ),
+                                label: const Text('Nhắn tin tài xế'),
+                                onPressed: () =>
+                                    context.push('/orders/${o.id}/chat/driver'),
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     );
                   },

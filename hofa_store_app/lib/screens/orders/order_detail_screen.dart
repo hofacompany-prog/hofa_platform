@@ -6,6 +6,7 @@ import 'package:slide_to_act/slide_to_act.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/format.dart';
 import '../../models/branch.dart';
+import '../../models/chat_message.dart';
 import '../../models/delivery.dart';
 import '../../models/order.dart';
 import '../../models/prep_tier_settings.dart';
@@ -640,6 +641,29 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen>
                                 ],
                               ),
                             ),
+                          ),
+                        );
+                      },
+                    ),
+                    Builder(
+                      builder: (context) {
+                        final chatSettings = ref
+                            .watch(chatSettingsProvider)
+                            .valueOrNull;
+                        final chatOpen = isChatWindowOpen(
+                          status: o.status,
+                          deliveredAt: o.deliveredAt,
+                          hoursAfterDelivered:
+                              chatSettings?.hoursAfterDelivered ?? 1,
+                        );
+                        if (!chatOpen) return const SizedBox();
+                        return Padding(
+                          padding: const EdgeInsets.only(top: 16),
+                          child: OutlinedButton.icon(
+                            icon: const Icon(Icons.chat_bubble_outline),
+                            label: const Text('Nhắn tin khách hàng'),
+                            onPressed: () =>
+                                context.push('/orders/${o.id}/chat'),
                           ),
                         );
                       },

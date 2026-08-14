@@ -20,6 +20,8 @@ import 'models/preorder_schedule.dart';
 import 'models/buy_now_request.dart';
 import 'screens/orders/orders_list_screen.dart';
 import 'screens/orders/order_detail_screen.dart';
+import 'screens/orders/chat_screen.dart';
+import 'models/chat_message.dart';
 import 'screens/notifications/notifications_screen.dart';
 import 'screens/profile/profile_screen.dart';
 import 'screens/categories/all_categories_screen.dart';
@@ -165,6 +167,23 @@ final routerProvider = Provider<GoRouter>((ref) {
               autoPromptReview:
                   state.uri.queryParameters['status'] == 'delivered',
             ),
+          ),
+          GoRoute(
+            // :channel = 'driver' | 'merchant' — xem hofa-db/74_order_chat.sql. Truy cập CHỈ
+            // qua nút trong chi tiết đơn, không có hộp thư riêng.
+            path: '/orders/:id/chat/:channel',
+            builder: (context, state) {
+              final isDriver = state.pathParameters['channel'] == 'driver';
+              return ChatScreen(
+                orderId: state.pathParameters['id']!,
+                channel: isDriver
+                    ? ChatChannel.customerDriver
+                    : ChatChannel.customerMerchant,
+                title: isDriver
+                    ? 'Nhắn tin với tài xế'
+                    : 'Nhắn tin với cửa hàng',
+              );
+            },
           ),
           GoRoute(
             path: '/profile',

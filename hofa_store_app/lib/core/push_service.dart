@@ -81,10 +81,14 @@ class PushService {
     // này, điều hướng ngay sẽ bị handleData() âm thầm bỏ qua (context == null). Đợi 1 khung
     // hình đầu tiên vẽ xong (luôn sau runApp) rồi mới điều hướng.
     if (initial != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => handleData(initial.data));
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => handleData(initial.data),
+      );
     }
     if (kIsWeb) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _checkPendingDeepLink());
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _checkPendingDeepLink(),
+      );
       // App đang mở nền rồi bấm push: xem setPendingDeepLinkMessageHandler trong
       // pending_deep_link_web.dart để hiểu vì sao cần thêm kênh này ngoài lần đọc lúc khởi động.
       PendingDeepLink.onMessage(_checkPendingDeepLink);
@@ -226,6 +230,9 @@ class PushService {
       case 'order_auto_confirmed':
       case 'order_auto_cancelled':
         context.go('/orders/$orderId');
+        break;
+      case 'chat_message':
+        context.push('/orders/$orderId/chat');
         break;
     }
   }

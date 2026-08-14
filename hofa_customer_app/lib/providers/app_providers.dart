@@ -11,6 +11,7 @@ import '../models/merchant.dart';
 import '../models/merchant_classification.dart';
 import '../models/merchant_fee_tier.dart';
 import '../models/order.dart';
+import '../models/chat_message.dart';
 import '../models/otp_settings.dart';
 import '../models/product.dart';
 import '../models/review.dart';
@@ -318,6 +319,11 @@ final orderHistoryProvider = FutureProvider.autoDispose
     .family<List<OrderStatusEvent>, String>(
       (ref, id) => ref.watch(orderRepoProvider).history(id),
     );
+
+/// Số giờ mở nhắn tin thêm sau khi giao xong (admin cấu hình) — xem hofa-db/74_order_chat.sql.
+final chatSettingsProvider = FutureProvider.autoDispose<ChatSettings>(
+  (ref) => ref.watch(orderRepoProvider).chatSettings(),
+);
 
 final orderDeliveryProvider = FutureProvider.autoDispose
     .family<Delivery?, String>(

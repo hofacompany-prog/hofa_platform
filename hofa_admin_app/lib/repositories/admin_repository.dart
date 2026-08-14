@@ -27,6 +27,7 @@ import '../models/nav_tab_icon.dart';
 import '../models/icon_library.dart';
 import '../models/driver_finance_settings.dart';
 import '../models/otp_settings.dart';
+import '../models/chat_settings.dart';
 import '../models/driver_wallet_summary.dart';
 import '../models/merchant_wallet_summary.dart';
 import '../models/merchant_wallet_request.dart';
@@ -625,6 +626,21 @@ class AdminRepository {
   Future<OtpSettings> updateOtpSettings(OtpSettings settings) async =>
       OtpSettings.fromJson(
         await _api.patch('/otp-settings', body: settings.toJson())
+            as Map<String, dynamic>,
+      );
+
+  // ---- Nhắn tin trong đơn hàng ----
+
+  Future<ChatSettings> chatSettings() async {
+    final data = await _api.get('/chat-settings');
+    return data == null
+        ? ChatSettings.fallback()
+        : ChatSettings.fromJson(data as Map<String, dynamic>);
+  }
+
+  Future<ChatSettings> updateChatSettings(ChatSettings settings) async =>
+      ChatSettings.fromJson(
+        await _api.patch('/chat-settings', body: settings.toJson())
             as Map<String, dynamic>,
       );
 

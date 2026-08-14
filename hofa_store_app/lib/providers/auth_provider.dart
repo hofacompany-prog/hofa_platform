@@ -7,13 +7,16 @@ import '../models/merchant.dart';
 import '../models/merchant_classification.dart';
 import '../models/merchant_today_stats.dart';
 import '../models/otp_settings.dart';
+import '../models/chat_message.dart';
 import '../models/finance_summary.dart';
 import '../models/product.dart';
 import '../repositories/user_repository.dart';
 import '../repositories/merchant_repository.dart';
+import '../repositories/order_repository.dart';
 
 final _userRepo = UserRepository();
 final _merchantRepo = MerchantRepository();
+final _orderRepo = OrderRepository();
 
 /// Họ tên + SĐT vừa nhập lúc đăng ký (OTP xác nhận xong) — chỉ giữ tạm trong bộ nhớ để
 /// điền sẵn màn "Tạo cửa hàng" tiếp theo, KHÔNG ghi xuống database ở bước này. Hồ sơ
@@ -102,6 +105,11 @@ final banksProvider = FutureProvider.autoDispose<List<Bank>>(
 /// ngưỡng không cần hiện mã OTP, xem hofa-db/73_otp_threshold_settings.sql.
 final otpSettingsProvider = FutureProvider.autoDispose<OtpSettings>(
   (ref) => _merchantRepo.otpSettings(),
+);
+
+/// Số giờ mở nhắn tin thêm sau khi giao xong (admin cấu hình) — xem hofa-db/74_order_chat.sql.
+final chatSettingsProvider = FutureProvider.autoDispose<ChatSettings>(
+  (ref) => _orderRepo.chatSettings(),
 );
 
 /// Danh sách phân loại cửa hàng (Nhà hàng/Cà phê/Siêu thị mini...) admin quản lý — cửa hàng

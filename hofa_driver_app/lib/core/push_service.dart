@@ -73,10 +73,14 @@ class PushService {
     // này, điều hướng ngay sẽ bị handleData() âm thầm bỏ qua (context == null). Đợi 1 khung
     // hình đầu tiên vẽ xong (luôn sau runApp) rồi mới điều hướng.
     if (initial != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => handleData(initial.data));
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => handleData(initial.data),
+      );
     }
     if (kIsWeb) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _checkPendingDeepLink());
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _checkPendingDeepLink(),
+      );
       // App đang mở nền rồi bấm push: xem setPendingDeepLinkMessageHandler trong
       // pending_deep_link_web.dart để hiểu vì sao cần thêm kênh này ngoài lần đọc lúc khởi động.
       PendingDeepLink.onMessage(_checkPendingDeepLink);
@@ -156,6 +160,13 @@ class PushService {
     // Kết quả duyệt nạp/rút ví — mở màn Ví để tài xế thấy số dư mới.
     if (data['type'] == 'driver_wallet_update') {
       context.push('/earnings');
+      return;
+    }
+    // Tin nhắn mới từ khách — payload dùng order_id (không phải delivery_id), xem
+    // hofa-db/74_order_chat.sql.
+    if (data['type'] == 'chat_message') {
+      final orderId = data['order_id'] as String?;
+      if (orderId != null) context.push('/orders/$orderId/chat');
       return;
     }
     final deliveryId = data['delivery_id'] as String?;
