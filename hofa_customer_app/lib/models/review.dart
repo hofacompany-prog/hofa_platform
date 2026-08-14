@@ -8,6 +8,7 @@ class Review {
   final String? merchantReply;
   final String? customerName;
   final DateTime createdAt;
+  final List<String> mediaUrls;
 
   Review({
     required this.id,
@@ -19,17 +20,23 @@ class Review {
     this.merchantReply,
     this.customerName,
     required this.createdAt,
+    this.mediaUrls = const [],
   });
 
   factory Review.fromJson(Map<String, dynamic> json) => Review(
-        id: json['id'] as String,
-        orderId: json['order_id'] as String? ?? '',
-        targetType: json['target_type'] as String? ?? '',
-        targetId: json['target_id'] as String? ?? '',
-        rating: (json['rating'] as num?)?.toInt() ?? 0,
-        comment: json['comment'] as String?,
-        merchantReply: json['merchant_reply'] as String?,
-        customerName: json['customer_name'] as String?,
-        createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ?? DateTime.now(),
-      );
+    id: json['id'] as String,
+    orderId: json['order_id'] as String? ?? '',
+    targetType: json['target_type'] as String? ?? '',
+    targetId: json['target_id'] as String? ?? '',
+    rating: (json['rating'] as num?)?.toInt() ?? 0,
+    comment: json['comment'] as String?,
+    merchantReply: json['merchant_reply'] as String?,
+    customerName: json['customer_name'] as String?,
+    createdAt:
+        DateTime.tryParse(json['created_at']?.toString() ?? '') ??
+        DateTime.now(),
+    mediaUrls:
+        (json['media_urls'] as List?)?.map((e) => e.toString()).toList() ??
+        const [],
+  );
 }

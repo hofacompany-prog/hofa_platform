@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../core/cloudinary_uploader.dart';
 import '../../core/file_download.dart';
 import '../../core/format.dart';
 import '../../core/vietqr.dart';
@@ -13,6 +15,8 @@ import '../../models/review.dart';
 import '../../providers/app_providers.dart';
 import '../../widgets/chat_badge_icon.dart';
 import '../../widgets/driver_picker_dialog.dart';
+import '../../widgets/full_screen_gallery_viewer.dart';
+import '../../widgets/network_image_box.dart';
 import 'orders_list_screen.dart' show orderStatusColor;
 
 class OrderDetailScreen extends ConsumerStatefulWidget {
@@ -662,10 +666,14 @@ class _ReviewTargetTile extends ConsumerStatefulWidget {
   ConsumerState<_ReviewTargetTile> createState() => _ReviewTargetTileState();
 }
 
+const _kMaxReviewPhotos = 5;
+
 class _ReviewTargetTileState extends ConsumerState<_ReviewTargetTile> {
   late int _rating = widget.existing?.rating ?? 5;
   final _commentCtrl = TextEditingController();
   bool _submitting = false;
+  final List<String> _mediaUrls = [];
+  bool _uploadingPhoto = false;
 
   static const _typeLabels = {
     'merchant': 'Cửa hàng',
@@ -679,6 +687,33 @@ class _ReviewTargetTileState extends ConsumerState<_ReviewTargetTile> {
     super.dispose();
   }
 
+  Future<void> _pickPhotos() async {
+    final remaining = _kMaxReviewPhotos - _mediaUrls.length;
+    if (remaining <= 0) return;
+    final files = await ImagePicker().pickMultiImage(imageQuality: 80);
+    if (files.isEmpty) return;
+    setState(() => _uploadingPhoto = true);
+    try {
+      for (final file in files.take(remaining)) {
+        final bytes = await file.readAsBytes();
+        final url = await CloudinaryUploader().uploadImage(
+          bytes,
+          file.name,
+          folder: 'reviews',
+        );
+        if (mounted) setState(() => _mediaUrls.add(url));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Tải ảnh lỗi: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _uploadingPhoto = false);
+    }
+  }
+
   Future<void> _submit() async {
     setState(() => _submitting = true);
     try {
@@ -690,6 +725,7 @@ class _ReviewTargetTileState extends ConsumerState<_ReviewTargetTile> {
             targetId: widget.target.targetId,
             rating: _rating,
             comment: _commentCtrl.text.trim(),
+            mediaUrls: _mediaUrls,
           );
       ref.invalidate(orderReviewsProvider(widget.orderId));
       if (mounted) {
@@ -740,6 +776,34 @@ class _ReviewTargetTileState extends ConsumerState<_ReviewTargetTile> {
         if (existing != null) ...[
           if (existing.comment != null && existing.comment!.isNotEmpty)
             Text(existing.comment!),
+          if (existing.mediaUrls.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            SizedBox(
+              height: 56,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: existing.mediaUrls.length,
+                separatorBuilder: (_, _) => const SizedBox(width: 6),
+                itemBuilder: (context, i) => InkWell(
+                  borderRadius: BorderRadius.circular(6),
+                  onTap: () => FullScreenGalleryViewer.open(
+                    context,
+                    images: existing.mediaUrls,
+                    initialIndex: i,
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: NetworkImageBox(
+                      url: existing.mediaUrls[i],
+                      width: 56,
+                      height: 56,
+                      fallbackIcon: Icons.image_outlined,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
           Text(
             'Đã gửi đánh giá',
             style: theme.textTheme.bodySmall?.copyWith(
@@ -753,6 +817,83 @@ class _ReviewTargetTileState extends ConsumerState<_ReviewTargetTile> {
               labelText: 'Nhận xét (không bắt buộc)',
             ),
             maxLines: 2,
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 56,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              children: [
+                for (var i = 0; i < _mediaUrls.length; i++)
+                  Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    child: Stack(
+                      children: [
+                        InkWell(
+                          borderRadius: BorderRadius.circular(6),
+                          onTap: () => FullScreenGalleryViewer.open(
+                            context,
+                            images: _mediaUrls,
+                            initialIndex: i,
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(6),
+                            child: NetworkImageBox(
+                              url: _mediaUrls[i],
+                              width: 56,
+                              height: 56,
+                              fallbackIcon: Icons.image_outlined,
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          top: 2,
+                          right: 2,
+                          child: InkWell(
+                            onTap: () => setState(() => _mediaUrls.removeAt(i)),
+                            child: const CircleAvatar(
+                              radius: 9,
+                              backgroundColor: Colors.black54,
+                              child: Icon(
+                                Icons.close,
+                                size: 12,
+                                color: Colors.white,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                if (_mediaUrls.length < _kMaxReviewPhotos)
+                  InkWell(
+                    borderRadius: BorderRadius.circular(6),
+                    onTap: _uploadingPhoto ? null : _pickPhotos,
+                    child: Container(
+                      width: 56,
+                      height: 56,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: theme.colorScheme.outline),
+                      ),
+                      child: _uploadingPhoto
+                          ? const Center(
+                              child: SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              ),
+                            )
+                          : Icon(
+                              Icons.add_a_photo_outlined,
+                              color: theme.colorScheme.outline,
+                            ),
+                    ),
+                  ),
+              ],
+            ),
           ),
           const SizedBox(height: 8),
           Align(
