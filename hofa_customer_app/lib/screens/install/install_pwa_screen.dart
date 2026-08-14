@@ -161,10 +161,26 @@ class _InstallPwaScreenState extends State<InstallPwaScreen> {
                     ),
                   ),
                   const SizedBox(height: 28),
-                  const _InstallStep(
+                  _InstallStep(
                     icon: Icons.ios_share,
                     label: 'Nhấn Chia sẻ',
-                    note: '(Bấm trên trình duyệt, không phải ở đây!)',
+                    note: RichText(
+                      text: TextSpan(
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.outline,
+                        ),
+                        children: [
+                          const TextSpan(text: 'Bấm trên thanh trình duyệt — '),
+                          TextSpan(
+                            text: 'Không phải bấm ở đây!',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: theme.colorScheme.secondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 16),
                   const _InstallStep(
@@ -199,7 +215,7 @@ class _InstallPwaScreenState extends State<InstallPwaScreen> {
 class _InstallStep extends StatelessWidget {
   final IconData icon;
   final String label;
-  final String? note;
+  final Widget? note;
   const _InstallStep({required this.icon, required this.label, this.note});
 
   @override
@@ -228,15 +244,7 @@ class _InstallStep extends StatelessWidget {
                   fontWeight: FontWeight.w700,
                 ),
               ),
-              if (note != null) ...[
-                const SizedBox(height: 2),
-                Text(
-                  note!,
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.outline,
-                  ),
-                ),
-              ],
+              if (note != null) ...[const SizedBox(height: 2), note!],
             ],
           ),
         ),
