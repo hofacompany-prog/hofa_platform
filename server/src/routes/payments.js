@@ -36,6 +36,14 @@ router.post('/payments', asyncHandler(async (req, res) => {
     await requireMerchantAccess(req.ctx, order.merchant_id);
   }
 
+  // Đơn chuyển khoản tạo ra ở status 'pending_payment' (khác đơn COD vào thẳng 'placed' —
+  // xem POST /orders) nên KHÔNG được orderOffer.offerOrderToMerchant() báo lúc tạo đơn. Ghi
+  // nhớ trạng thái TRƯỚC khi ghi nhận thanh toán để biết đúng lúc nào record_payment (RPC, tự
+  // gọi update_order_status chuyển pending_payment -> placed) vừa "mở khoá" đơn — chỉ báo cửa
+  // hàng ở lần chuyển đó, tránh báo trùng "Đơn hàng mới!" mỗi lần ghi thêm thanh toán vào 1
+  // đơn đã placed từ trước (vd tài xế thu COD, ghi thanh toán từng phần).
+  const wasPendingPayment = order.status === 'pending_payment';
+
   const payment = await db.callRpc('record_payment', {
     p_order_id: req.body.order_id,
     p_method: req.body.method,
@@ -45,6 +53,11 @@ router.post('/payments', asyncHandler(async (req, res) => {
     p_collected_by: req.ctx.userId,
     p_gateway_response: req.body.gateway_response || null
   });
+  if (wasPendingPayment) {
+    orderOffer.offerOrderToMerchant(req.body.order_id).catch((err) => {
+      console.error('[orderOffer] Không báo được cửa hàng cho đơn chuyển khoản', req.body.order_id, err.message);
+    });
+  }
   orderOffer.dispatchBuyOnBehalfOrder(req.body.order_id).catch((err) => {
     console.error('[orderOffer] Không tự chuyển được đơn mua hộ sau khi ghi nhận thanh toán', req.body.order_id, err.message);
   });
