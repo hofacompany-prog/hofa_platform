@@ -9,6 +9,7 @@ import '../../repositories/merchant_repository.dart';
 import '../../widgets/app_version_text.dart';
 import '../../widgets/branch_break_dialogs.dart';
 import '../../widgets/nav_back_button.dart';
+import '../../widgets/stat_card.dart';
 
 final _branchesProvider = FutureProvider.autoDispose<List<Branch>>((ref) async {
   final merchant = await ref.watch(myMerchantProvider.future);
@@ -261,6 +262,14 @@ class BranchSettingsScreen extends ConsumerWidget {
                   'Tắt công tắc khi hết hàng hoặc nghỉ đột xuất — cửa hàng sẽ tạm ngừng nhận đơn mới.',
                   style: TextStyle(color: Colors.grey),
                 ),
+                if ((branchesAsync.valueOrNull?.isNotEmpty ?? false)) ...[
+                  const SizedBox(height: 16),
+                  StatCard(
+                    label: 'Tổng chi nhánh',
+                    value: '${branchesAsync.valueOrNull!.length}',
+                    icon: Icons.storefront_outlined,
+                  ),
+                ],
                 if (isOwner) ...[
                   const SizedBox(height: 24),
                   Text('Nhân viên', style: theme.textTheme.titleMedium),

@@ -6,6 +6,7 @@ import '../../models/category.dart';
 import '../../providers/admin_providers.dart';
 import '../../widgets/icon_picker_dialog.dart';
 import '../../widgets/icon_picker_field.dart';
+import '../../widgets/stat_card.dart';
 import '../../core/responsive.dart';
 
 /// Danh mục ngành hàng dùng chung cho cả sàn — tối đa 2 cấp (gốc và con), mỗi cấp đều
@@ -457,6 +458,12 @@ class _CategoriesScreenState extends ConsumerState<CategoriesScreen> {
                         ),
                 );
               }),
+              const SizedBox(height: 16),
+              StatCard(
+                label: 'Tổng danh mục',
+                value: '${all.length}',
+                icon: Icons.category_outlined,
+              ),
             ],
           );
         },

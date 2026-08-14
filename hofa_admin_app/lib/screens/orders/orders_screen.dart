@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../core/format.dart';
 import '../../models/order.dart';
 import '../../providers/admin_providers.dart';
+import '../../widgets/stat_card.dart';
 
 final _yyyyMMdd = DateFormat('yyyy-MM-dd');
 
@@ -124,9 +125,19 @@ class OrdersScreen extends ConsumerWidget {
                   return const Center(child: Text('Không có đơn nào'));
                 return ListView.separated(
                   padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
-                  itemCount: orders.length,
+                  itemCount: orders.length + 1,
                   separatorBuilder: (_, _) => const SizedBox(height: 8),
                   itemBuilder: (context, i) {
+                    if (i == orders.length) {
+                      return Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: StatCard(
+                          label: 'Tổng đơn (đang lọc)',
+                          value: '${orders.length}',
+                          icon: Icons.receipt_long_outlined,
+                        ),
+                      );
+                    }
                     final o = orders[i];
                     final color = statusColor(o.status, theme.colorScheme);
                     return Card(

@@ -584,9 +584,17 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
                           ),
                         )
                       : Column(
-                          children: items
-                              .map((n) => _NotificationCard(notification: n))
-                              .toList(),
+                          children: [
+                            ...items.map(
+                              (n) => _NotificationCard(notification: n),
+                            ),
+                            const SizedBox(height: 16),
+                            StatCard(
+                              label: 'Tổng thông báo đã gửi',
+                              value: '${items.length}',
+                              icon: Icons.history_outlined,
+                            ),
+                          ],
                         ),
                 ),
               ],
@@ -1441,6 +1449,12 @@ class _InboxTabState extends ConsumerState<_InboxTab> {
                                       n.id,
                                     ], confirmLabel: 'Xoá thông báo này?'),
                             ),
+                          ),
+                          const SizedBox(height: 16),
+                          StatCard(
+                            label: 'Tổng thông báo',
+                            value: '${items.length}',
+                            icon: Icons.mark_email_unread_outlined,
                           ),
                         ],
                       );

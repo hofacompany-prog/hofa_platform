@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/bank.dart';
 import '../../models/driver.dart';
 import '../../providers/admin_providers.dart';
+import '../../widgets/stat_card.dart';
 import '../../core/responsive.dart';
 
 const _vehicleTypeOptions = [
@@ -436,9 +437,19 @@ class _DriversScreenState extends ConsumerState<DriversScreen> {
                 }
                 return ListView.separated(
                   padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
-                  itemCount: list.length,
+                  itemCount: list.length + 1,
                   separatorBuilder: (_, _) => const SizedBox(height: 8),
                   itemBuilder: (context, i) {
+                    if (i == list.length) {
+                      return Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: StatCard(
+                          label: 'Tổng tài xế (đang lọc)',
+                          value: '${list.length}',
+                          icon: Icons.two_wheeler_outlined,
+                        ),
+                      );
+                    }
                     final d = list[i];
                     final verification = driverVerificationState(d);
                     final (statusIcon, statusColor) = switch (verification) {

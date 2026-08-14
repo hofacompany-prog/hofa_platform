@@ -100,34 +100,6 @@ class MerchantWalletScreen extends ConsumerWidget {
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
-        Text('Tổng quan', style: theme.textTheme.titleMedium),
-        const SizedBox(height: 12),
-        summaryAsync.when(
-          loading: () => const Center(
-            child: Padding(
-              padding: EdgeInsets.all(24),
-              child: CircularProgressIndicator(),
-            ),
-          ),
-          error: (e, _) => Text('Lỗi: $e'),
-          data: (s) => Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: [
-              _SummaryCard(
-                label: 'Tổng số dư cửa hàng',
-                value: formatVnd(s.totalBalance),
-                color: theme.colorScheme.primary,
-              ),
-              _SummaryCard(
-                label: 'Chờ rút',
-                value: formatVnd(s.pendingWithdrawals),
-                color: null,
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 24),
         Text('Từng cửa hàng', style: theme.textTheme.titleMedium),
         const SizedBox(height: 4),
         Text(
@@ -169,6 +141,34 @@ class MerchantWalletScreen extends ConsumerWidget {
               }).toList(),
             );
           },
+        ),
+        const SizedBox(height: 24),
+        Text('Tổng quan', style: theme.textTheme.titleMedium),
+        const SizedBox(height: 12),
+        summaryAsync.when(
+          loading: () => const Center(
+            child: Padding(
+              padding: EdgeInsets.all(24),
+              child: CircularProgressIndicator(),
+            ),
+          ),
+          error: (e, _) => Text('Lỗi: $e'),
+          data: (s) => Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              _SummaryCard(
+                label: 'Tổng số dư cửa hàng',
+                value: formatVnd(s.totalBalance),
+                color: theme.colorScheme.primary,
+              ),
+              _SummaryCard(
+                label: 'Chờ rút',
+                value: formatVnd(s.pendingWithdrawals),
+                color: null,
+              ),
+            ],
+          ),
         ),
       ],
     );

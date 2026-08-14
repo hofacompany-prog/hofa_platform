@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/format.dart';
 import '../../models/merchant.dart';
 import '../../providers/admin_providers.dart';
+import '../../widgets/stat_card.dart';
 import 'merchant_detail_screen.dart' show merchantTypeLabels;
 
 const merchantStatusLabels = {
@@ -239,9 +240,19 @@ class _MerchantsScreenState extends ConsumerState<MerchantsScreen> {
                 }
                 return ListView.separated(
                   padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
-                  itemCount: list.length,
+                  itemCount: list.length + 1,
                   separatorBuilder: (_, _) => const SizedBox(height: 8),
                   itemBuilder: (context, i) {
+                    if (i == list.length) {
+                      return Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: StatCard(
+                          label: 'Tổng cửa hàng (đang lọc)',
+                          value: '${list.length}',
+                          icon: Icons.storefront_outlined,
+                        ),
+                      );
+                    }
                     final m = list[i];
                     final color = _statusColor(m.status, theme.colorScheme);
                     // Chip + nút duyệt/từ chối gộp vào Wrap riêng dưới hàng tên — trước đây

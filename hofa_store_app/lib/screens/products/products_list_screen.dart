@@ -7,6 +7,7 @@ import '../../providers/auth_provider.dart';
 import '../../repositories/product_repository.dart';
 import '../../widgets/nav_back_button.dart';
 import '../../widgets/notification_bell.dart';
+import '../../widgets/stat_card.dart';
 
 final _productsProvider = FutureProvider.autoDispose<List<Product>>((
   ref,
@@ -596,6 +597,14 @@ class ProductsListScreen extends ConsumerWidget {
                 );
               },
             ),
+            if ((productsAsync.valueOrNull?.isNotEmpty ?? false)) ...[
+              const SizedBox(height: 16),
+              StatCard(
+                label: 'Tổng sản phẩm',
+                value: '${productsAsync.valueOrNull!.length}',
+                icon: Icons.inventory_2_outlined,
+              ),
+            ],
             const SizedBox(height: 24),
             const Divider(),
             const SizedBox(height: 8),
@@ -623,6 +632,14 @@ class ProductsListScreen extends ConsumerWidget {
                           .toList(),
                     ),
             ),
+            if ((toppingGroupsAsync.valueOrNull?.isNotEmpty ?? false)) ...[
+              const SizedBox(height: 16),
+              StatCard(
+                label: 'Tổng nhóm topping',
+                value: '${toppingGroupsAsync.valueOrNull!.length}',
+                icon: Icons.local_offer_outlined,
+              ),
+            ],
           ],
         ),
       ),

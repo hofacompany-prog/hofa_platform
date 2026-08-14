@@ -737,49 +737,6 @@ class _VouchersScreenState extends ConsumerState<VouchersScreen> {
                 ),
               const _MaxVouchersCard(),
               const SizedBox(height: 24),
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final columns = constraints.maxWidth > 900
-                      ? 4
-                      : constraints.maxWidth > 600
-                      ? 2
-                      : 1;
-                  return GridView.count(
-                    crossAxisCount: columns,
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    mainAxisSpacing: 16,
-                    crossAxisSpacing: 16,
-                    childAspectRatio: 2,
-                    children: [
-                      StatCard(
-                        label: 'Tổng voucher',
-                        value: '${all.length}',
-                        icon: Icons.confirmation_number_outlined,
-                      ),
-                      StatCard(
-                        label: 'Đang chạy',
-                        value: '$running',
-                        icon: Icons.play_circle_outline,
-                        accent: Colors.teal,
-                      ),
-                      StatCard(
-                        label: 'Cho khách chọn',
-                        value: '$publicCount',
-                        icon: Icons.checklist_outlined,
-                        accent: Colors.indigo,
-                      ),
-                      StatCard(
-                        label: 'Tổng lượt đã dùng',
-                        value: '$totalUsed',
-                        icon: Icons.local_activity_outlined,
-                        accent: Colors.orange,
-                      ),
-                    ],
-                  );
-                },
-              ),
-              const SizedBox(height: 24),
               Row(
                 children: [
                   Expanded(
@@ -971,6 +928,49 @@ class _VouchersScreenState extends ConsumerState<VouchersScreen> {
                     ),
                   ),
                 ),
+              const SizedBox(height: 16),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final columns = constraints.maxWidth > 900
+                      ? 4
+                      : constraints.maxWidth > 600
+                      ? 2
+                      : 1;
+                  return GridView.count(
+                    crossAxisCount: columns,
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    mainAxisSpacing: 16,
+                    crossAxisSpacing: 16,
+                    childAspectRatio: 2,
+                    children: [
+                      StatCard(
+                        label: 'Tổng voucher',
+                        value: '${all.length}',
+                        icon: Icons.confirmation_number_outlined,
+                      ),
+                      StatCard(
+                        label: 'Đang chạy',
+                        value: '$running',
+                        icon: Icons.play_circle_outline,
+                        accent: Colors.teal,
+                      ),
+                      StatCard(
+                        label: 'Cho khách chọn',
+                        value: '$publicCount',
+                        icon: Icons.checklist_outlined,
+                        accent: Colors.indigo,
+                      ),
+                      StatCard(
+                        label: 'Tổng lượt đã dùng',
+                        value: '$totalUsed',
+                        icon: Icons.local_activity_outlined,
+                        accent: Colors.orange,
+                      ),
+                    ],
+                  );
+                },
+              ),
             ],
           );
         },

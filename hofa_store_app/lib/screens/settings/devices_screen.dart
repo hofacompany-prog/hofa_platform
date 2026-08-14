@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/format.dart';
 import '../../models/user_device.dart';
 import '../../providers/device_providers.dart';
+import '../../widgets/stat_card.dart';
 
 /// Danh sách thiết bị đã đăng nhập tài khoản (bảng user_devices). "Gỡ thiết bị" xoá dòng này
 /// VÀ ép đăng xuất từ xa thật — server chặn ngay request kế tiếp của đúng thiết bị đó
@@ -62,9 +63,9 @@ class DevicesScreen extends ConsumerWidget {
       await ref.read(deviceRepoProvider).remove(device.id);
       ref.invalidate(devicesProvider);
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Đã gỡ thiết bị')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Đã gỡ thiết bị')));
       }
     } catch (e) {
       if (context.mounted) {
@@ -170,10 +171,11 @@ class DevicesScreen extends ConsumerWidget {
                               children: [
                                 CircleAvatar(
                                   radius: 22,
-                                  backgroundColor: (isCurrent
-                                          ? theme.colorScheme.primary
-                                          : theme.colorScheme.outline)
-                                      .withValues(alpha: 0.12),
+                                  backgroundColor:
+                                      (isCurrent
+                                              ? theme.colorScheme.primary
+                                              : theme.colorScheme.outline)
+                                          .withValues(alpha: 0.12),
                                   child: Icon(
                                     _platformIcon(d.platform),
                                     color: isCurrent
@@ -196,8 +198,7 @@ class DevicesScreen extends ConsumerWidget {
                                                   : 'Thiết bị không tên',
                                               style: theme.textTheme.titleSmall
                                                   ?.copyWith(
-                                                    fontWeight:
-                                                        FontWeight.w600,
+                                                    fontWeight: FontWeight.w600,
                                                   ),
                                               maxLines: 1,
                                               overflow: TextOverflow.ellipsis,
@@ -212,9 +213,8 @@ class DevicesScreen extends ConsumerWidget {
                                                     vertical: 3,
                                                   ),
                                               decoration: BoxDecoration(
-                                                color: theme
-                                                    .colorScheme
-                                                    .primary,
+                                                color:
+                                                    theme.colorScheme.primary,
                                                 borderRadius:
                                                     BorderRadius.circular(20),
                                               ),
@@ -242,8 +242,7 @@ class DevicesScreen extends ConsumerWidget {
                                             'Không rõ nền tảng',
                                         style: theme.textTheme.bodySmall
                                             ?.copyWith(
-                                              color:
-                                                  theme.colorScheme.outline,
+                                              color: theme.colorScheme.outline,
                                             ),
                                       ),
                                     ],
@@ -299,6 +298,14 @@ class DevicesScreen extends ConsumerWidget {
                       ),
                     );
                   }),
+                if (devices.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  StatCard(
+                    label: 'Tổng thiết bị',
+                    value: '${devices.length}',
+                    icon: Icons.devices_other_outlined,
+                  ),
+                ],
               ],
             );
           },

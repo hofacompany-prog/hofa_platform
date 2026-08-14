@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/iconify_client.dart';
 import '../../providers/admin_providers.dart';
+import '../../widgets/stat_card.dart';
 
 /// Bật/tắt thư viện icon Iconify (~200 thư viện mã nguồn mở trên GitHub) để dùng ở tab
 /// "Thư viện online" của popup chọn icon (màn Icon tabbar) — chỉ ảnh hưởng tới việc tìm kiếm
@@ -10,10 +11,12 @@ class IconLibraryManagerScreen extends ConsumerStatefulWidget {
   const IconLibraryManagerScreen({super.key});
 
   @override
-  ConsumerState<IconLibraryManagerScreen> createState() => _IconLibraryManagerScreenState();
+  ConsumerState<IconLibraryManagerScreen> createState() =>
+      _IconLibraryManagerScreenState();
 }
 
-class _IconLibraryManagerScreenState extends ConsumerState<IconLibraryManagerScreen> {
+class _IconLibraryManagerScreenState
+    extends ConsumerState<IconLibraryManagerScreen> {
   final _searchCtrl = TextEditingController();
   List<IconifyCollection>? _all;
   List<IconifyCollection> _filtered = const [];
@@ -52,7 +55,12 @@ class _IconLibraryManagerScreenState extends ConsumerState<IconLibraryManagerScr
     setState(() {
       _filtered = q.isEmpty
           ? all
-          : all.where((c) => c.name.toLowerCase().contains(q) || c.prefix.contains(q)).toList();
+          : all
+                .where(
+                  (c) =>
+                      c.name.toLowerCase().contains(q) || c.prefix.contains(q),
+                )
+                .toList();
     });
   }
 
@@ -67,7 +75,9 @@ class _IconLibraryManagerScreenState extends ConsumerState<IconLibraryManagerScr
       ref.invalidate(iconLibrariesProvider);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
       }
     } finally {
       if (mounted) setState(() => _busyPrefixes.remove(c.prefix));
@@ -78,7 +88,8 @@ class _IconLibraryManagerScreenState extends ConsumerState<IconLibraryManagerScr
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final enabledAsync = ref.watch(iconLibrariesProvider);
-    final enabledPrefixes = enabledAsync.valueOrNull?.map((e) => e.prefix).toSet() ?? {};
+    final enabledPrefixes =
+        enabledAsync.valueOrNull?.map((e) => e.prefix).toSet() ?? {};
 
     return Scaffold(
       appBar: AppBar(title: const Text('Quản lý thư viện icon')),
@@ -96,14 +107,17 @@ class _IconLibraryManagerScreenState extends ConsumerState<IconLibraryManagerScr
                     Text(
                       'Bật thư viện nào thì thư viện đó xuất hiện trong tìm kiếm ở tab '
                       '"Thư viện online" khi chọn icon.',
-                      style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.outline),
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.outline,
+                      ),
                     ),
                     const SizedBox(height: 12),
                     TextField(
                       controller: _searchCtrl,
                       autofocus: true,
                       decoration: const InputDecoration(
-                        hintText: 'Tìm thư viện theo tên, vd: material, tabler, fontawesome...',
+                        hintText:
+                            'Tìm thư viện theo tên, vd: material, tabler, fontawesome...',
                         prefixIcon: Icon(Icons.search),
                         border: OutlineInputBorder(),
                         isDense: true,
@@ -117,31 +131,43 @@ class _IconLibraryManagerScreenState extends ConsumerState<IconLibraryManagerScr
                 child: _error != null
                     ? Center(child: Text('Lỗi: $_error'))
                     : _all == null
-                        ? const Center(child: CircularProgressIndicator())
-                        : _filtered.isEmpty
-                            ? const Center(child: Text('Không tìm thấy thư viện nào'))
-                            : ListView.builder(
-                                itemCount: _filtered.length,
-                                itemBuilder: (context, i) {
-                                  final c = _filtered[i];
-                                  final enabled = enabledPrefixes.contains(c.prefix);
-                                  final busy = _busyPrefixes.contains(c.prefix);
-                                  return ListTile(
-                                    title: Text(c.name),
-                                    subtitle: Text('${c.prefix} · ${c.total} icon'),
-                                    trailing: busy
-                                        ? const SizedBox(
-                                            width: 20,
-                                            height: 20,
-                                            child: CircularProgressIndicator(strokeWidth: 2),
-                                          )
-                                        : Switch(
-                                            value: enabled,
-                                            onChanged: (v) => _toggle(c, v),
-                                          ),
-                                  );
-                                },
+                    ? const Center(child: CircularProgressIndicator())
+                    : _filtered.isEmpty
+                    ? const Center(child: Text('Không tìm thấy thư viện nào'))
+                    : ListView.builder(
+                        itemCount: _filtered.length + 1,
+                        itemBuilder: (context, i) {
+                          if (i == _filtered.length) {
+                            return Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child: StatCard(
+                                label: 'Tổng thư viện (đang lọc)',
+                                value: '${_filtered.length}',
+                                icon: Icons.collections_bookmark_outlined,
                               ),
+                            );
+                          }
+                          final c = _filtered[i];
+                          final enabled = enabledPrefixes.contains(c.prefix);
+                          final busy = _busyPrefixes.contains(c.prefix);
+                          return ListTile(
+                            title: Text(c.name),
+                            subtitle: Text('${c.prefix} · ${c.total} icon'),
+                            trailing: busy
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : Switch(
+                                    value: enabled,
+                                    onChanged: (v) => _toggle(c, v),
+                                  ),
+                          );
+                        },
+                      ),
               ),
             ],
           ),

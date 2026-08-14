@@ -4,6 +4,7 @@ import '../../models/category.dart';
 import '../../providers/auth_provider.dart';
 import '../../repositories/product_repository.dart';
 import '../../widgets/nav_back_button.dart';
+import '../../widgets/stat_card.dart';
 
 class _CategoriesData {
   final String merchantId;
@@ -318,6 +319,12 @@ class CategoriesScreen extends ConsumerWidget {
                   ),
                 ),
               ],
+              const SizedBox(height: 16),
+              StatCard(
+                label: 'Tổng danh mục',
+                value: '${data.merchantCategories.length}',
+                icon: Icons.category_outlined,
+              ),
             ],
           );
         },

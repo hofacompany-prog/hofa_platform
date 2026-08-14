@@ -115,39 +115,6 @@ class DriverWalletScreen extends ConsumerWidget {
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
-        Text('Tổng quan', style: theme.textTheme.titleMedium),
-        const SizedBox(height: 12),
-        summaryAsync.when(
-          loading: () => const Center(
-            child: Padding(
-              padding: EdgeInsets.all(24),
-              child: CircularProgressIndicator(),
-            ),
-          ),
-          error: (e, _) => Text('Lỗi: $e'),
-          data: (s) => Wrap(
-            spacing: 12,
-            runSpacing: 12,
-            children: [
-              _SummaryCard(
-                label: 'Tổng Ví trên',
-                value: formatVnd(s.codHeld),
-                color: theme.colorScheme.secondary,
-              ),
-              _SummaryCard(
-                label: 'Thu nhập tài xế',
-                value: formatVnd(s.earningTotal),
-                color: theme.colorScheme.primary,
-              ),
-              _SummaryCard(
-                label: 'Chờ rút',
-                value: formatVnd(s.pendingWithdrawals),
-                color: null,
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 24),
         Text('Từng tài xế', style: theme.textTheme.titleMedium),
         const SizedBox(height: 4),
         Text(
@@ -188,6 +155,39 @@ class DriverWalletScreen extends ConsumerWidget {
               }).toList(),
             );
           },
+        ),
+        const SizedBox(height: 24),
+        Text('Tổng quan', style: theme.textTheme.titleMedium),
+        const SizedBox(height: 12),
+        summaryAsync.when(
+          loading: () => const Center(
+            child: Padding(
+              padding: EdgeInsets.all(24),
+              child: CircularProgressIndicator(),
+            ),
+          ),
+          error: (e, _) => Text('Lỗi: $e'),
+          data: (s) => Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: [
+              _SummaryCard(
+                label: 'Tổng Ví trên',
+                value: formatVnd(s.codHeld),
+                color: theme.colorScheme.secondary,
+              ),
+              _SummaryCard(
+                label: 'Thu nhập tài xế',
+                value: formatVnd(s.earningTotal),
+                color: theme.colorScheme.primary,
+              ),
+              _SummaryCard(
+                label: 'Chờ rút',
+                value: formatVnd(s.pendingWithdrawals),
+                color: null,
+              ),
+            ],
+          ),
         ),
       ],
     );

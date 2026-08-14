@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/responsive.dart';
 import '../../models/merchant_classification.dart';
 import '../../providers/admin_providers.dart';
+import '../../widgets/stat_card.dart';
 
 /// Tab quản lý danh sách phân loại cửa hàng (Nhà hàng/Cà phê/Siêu thị mini...) — cửa hàng chọn
 /// nhiều phân loại cùng lúc lúc tạo/sửa, khách lọc theo phân loại ở trang chủ app Khách hàng.
@@ -187,6 +188,14 @@ class MerchantClassificationsTab extends ConsumerWidget {
                     );
                   },
                 ),
+                if ((itemsAsync.valueOrNull?.isNotEmpty ?? false)) ...[
+                  const SizedBox(height: 16),
+                  StatCard(
+                    label: 'Tổng phân loại',
+                    value: '${itemsAsync.valueOrNull!.length}',
+                    icon: Icons.sell_outlined,
+                  ),
+                ],
               ],
             ),
           ),

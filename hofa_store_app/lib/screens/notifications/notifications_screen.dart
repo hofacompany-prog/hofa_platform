@@ -4,6 +4,7 @@ import '../../core/format.dart';
 import '../../core/push_service.dart';
 import '../../models/app_notification.dart';
 import '../../providers/notification_providers.dart';
+import '../../widgets/stat_card.dart';
 
 /// Tab "Tất cả" trước, rồi tới các danh mục thật — order luôn do hệ thống tự gắn cho thông
 /// báo đơn hàng/chuyến giao, promotion/ad/system do admin tự chọn lúc gửi tay (màn "Thông
@@ -55,7 +56,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
       _invalidateAll();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
       }
     } finally {
       if (mounted) setState(() => _markingAll = false);
@@ -82,7 +85,13 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
           controller: _tabController,
           isScrollable: true,
           tabs: _tabCategories
-              .map((c) => Tab(text: c == null ? 'Tất cả' : notificationCategoryLabels[c] ?? c))
+              .map(
+                (c) => Tab(
+                  text: c == null
+                      ? 'Tất cả'
+                      : notificationCategoryLabels[c] ?? c,
+                ),
+              )
               .toList(),
         ),
         actions: [
@@ -103,15 +112,17 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
       body: TabBarView(
         controller: _tabController,
         children: _tabCategories
-            .map((category) => _NotificationList(
-                  category: category,
-                  onTap: _openNotification,
-                  onRefresh: () async {
-                    ref.invalidate(notificationsProvider(category));
-                    ref.invalidate(unreadNotificationCountProvider);
-                    ref.invalidate(unreadOrderCountProvider);
-                  },
-                ))
+            .map(
+              (category) => _NotificationList(
+                category: category,
+                onTap: _openNotification,
+                onRefresh: () async {
+                  ref.invalidate(notificationsProvider(category));
+                  ref.invalidate(unreadNotificationCountProvider);
+                  ref.invalidate(unreadOrderCountProvider);
+                },
+              ),
+            )
             .toList(),
       ),
     );
@@ -140,7 +151,10 @@ class _NotificationList extends ConsumerWidget {
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => ListView(
           children: [
-            Padding(padding: const EdgeInsets.all(24), child: Center(child: Text('Lỗi: $e'))),
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: Center(child: Text('Lỗi: $e')),
+            ),
           ],
         ),
         data: (items) {
@@ -151,11 +165,17 @@ class _NotificationList extends ConsumerWidget {
                   padding: const EdgeInsets.symmetric(vertical: 80),
                   child: Column(
                     children: [
-                      Icon(Icons.notifications_none, size: 56, color: theme.colorScheme.outline),
+                      Icon(
+                        Icons.notifications_none,
+                        size: 56,
+                        color: theme.colorScheme.outline,
+                      ),
                       const SizedBox(height: 12),
                       Text(
                         'Chưa có thông báo nào',
-                        style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.outline),
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.outline,
+                        ),
                       ),
                     ],
                   ),
@@ -165,38 +185,62 @@ class _NotificationList extends ConsumerWidget {
           }
           return ListView.separated(
             padding: const EdgeInsets.symmetric(vertical: 8),
-            itemCount: items.length,
+            itemCount: items.length + 1,
             separatorBuilder: (_, _) => const Divider(height: 1),
             itemBuilder: (context, i) {
+              if (i == items.length) {
+                return Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: StatCard(
+                    label: 'Tổng thông báo',
+                    value: '${items.length}',
+                    icon: Icons.notifications_outlined,
+                  ),
+                );
+              }
               final n = items[i];
               return Material(
-                color: n.isRead ? null : theme.colorScheme.primary.withValues(alpha: 0.05),
+                color: n.isRead
+                    ? null
+                    : theme.colorScheme.primary.withValues(alpha: 0.05),
                 child: ListTile(
                   onTap: () => onTap(n),
                   leading: Padding(
                     padding: const EdgeInsets.only(top: 4),
                     child: CircleAvatar(
                       radius: 5,
-                      backgroundColor: n.isRead ? Colors.transparent : theme.colorScheme.primary,
+                      backgroundColor: n.isRead
+                          ? Colors.transparent
+                          : theme.colorScheme.primary,
                     ),
                   ),
                   title: Text(
                     n.title,
-                    style: TextStyle(fontWeight: n.isRead ? FontWeight.normal : FontWeight.w700),
+                    style: TextStyle(
+                      fontWeight: n.isRead
+                          ? FontWeight.normal
+                          : FontWeight.w700,
+                    ),
                   ),
                   subtitle: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(n.body, maxLines: 3, overflow: TextOverflow.ellipsis),
+                      Text(
+                        n.body,
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                       const SizedBox(height: 4),
                       Row(
                         children: [
                           if (category == null) ...[
                             Chip(
                               visualDensity: VisualDensity.compact,
-                              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              materialTapTargetSize:
+                                  MaterialTapTargetSize.shrinkWrap,
                               label: Text(
-                                notificationCategoryLabels[n.category] ?? n.category,
+                                notificationCategoryLabels[n.category] ??
+                                    n.category,
                                 style: theme.textTheme.labelSmall,
                               ),
                             ),
@@ -204,7 +248,9 @@ class _NotificationList extends ConsumerWidget {
                           ],
                           Text(
                             formatDateTime(n.createdAt),
-                            style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline),
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.outline,
+                            ),
                           ),
                         ],
                       ),

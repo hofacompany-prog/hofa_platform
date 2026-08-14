@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/merchant.dart';
 import '../../providers/admin_providers.dart';
 import '../merchants/merchant_detail_screen.dart' show merchantTypeLabels;
+import '../../widgets/stat_card.dart';
 import '../../core/responsive.dart';
 
 /// Bảng hoa hồng + thuế suất của MỌI cửa hàng ở 1 chỗ — trước đây phải vào từng cửa hàng
@@ -241,7 +242,18 @@ class _FinanceSettingsScreenState extends ConsumerState<FinanceSettingsScreen> {
                 if (_typeFilter != 'all') {
                   return SingleChildScrollView(
                     padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
-                    child: _buildTable(filtered),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildTable(filtered),
+                        const SizedBox(height: 16),
+                        StatCard(
+                          label: 'Tổng cửa hàng (đang lọc)',
+                          value: '${filtered.length}',
+                          icon: Icons.storefront_outlined,
+                        ),
+                      ],
+                    ),
                   );
                 }
 
@@ -274,6 +286,11 @@ class _FinanceSettingsScreenState extends ConsumerState<FinanceSettingsScreen> {
                         _buildTable(byType[type]!),
                         const SizedBox(height: 20),
                       ],
+                      StatCard(
+                        label: 'Tổng cửa hàng (đang lọc)',
+                        value: '${filtered.length}',
+                        icon: Icons.storefront_outlined,
+                      ),
                     ],
                   ),
                 );

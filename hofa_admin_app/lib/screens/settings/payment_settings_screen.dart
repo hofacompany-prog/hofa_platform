@@ -9,6 +9,7 @@ import '../../models/driver_wallet_request.dart';
 import '../../models/merchant_wallet_request.dart';
 import '../../models/order.dart';
 import '../../providers/admin_providers.dart';
+import '../../widgets/stat_card.dart';
 import '../../core/responsive.dart';
 
 /// 6 tab dưới 1 màn "Thanh toán" — tách nhỏ để mỗi tab không bị quá tải:
@@ -403,6 +404,14 @@ class _PendingOrdersTab extends ConsumerWidget {
                   );
                 },
               ),
+              if ((pendingAsync.valueOrNull?.isNotEmpty ?? false)) ...[
+                const SizedBox(height: 16),
+                StatCard(
+                  label: 'Tổng đơn chờ thanh toán',
+                  value: '${pendingAsync.valueOrNull!.length}',
+                  icon: Icons.hourglass_empty_outlined,
+                ),
+              ],
             ],
           ),
         ),
@@ -555,6 +564,14 @@ class _WalletDepositsTab extends ConsumerWidget {
                   );
                 },
               ),
+              if ((depositsAsync.valueOrNull?.isNotEmpty ?? false)) ...[
+                const SizedBox(height: 16),
+                StatCard(
+                  label: 'Tổng yêu cầu nạp',
+                  value: '${depositsAsync.valueOrNull!.length}',
+                  icon: Icons.account_balance_wallet_outlined,
+                ),
+              ],
             ],
           ),
         ),
@@ -846,6 +863,14 @@ class _WalletWithdrawalsTab extends ConsumerWidget {
                   );
                 },
               ),
+              if ((withdrawalsAsync.valueOrNull?.isNotEmpty ?? false)) ...[
+                const SizedBox(height: 16),
+                StatCard(
+                  label: 'Tổng yêu cầu rút',
+                  value: '${withdrawalsAsync.valueOrNull!.length}',
+                  icon: Icons.account_balance_wallet_outlined,
+                ),
+              ],
             ],
           ),
         ),
@@ -1141,6 +1166,14 @@ class _MerchantWithdrawalsTab extends ConsumerWidget {
                   );
                 },
               ),
+              if ((withdrawalsAsync.valueOrNull?.isNotEmpty ?? false)) ...[
+                const SizedBox(height: 16),
+                StatCard(
+                  label: 'Tổng yêu cầu rút',
+                  value: '${withdrawalsAsync.valueOrNull!.length}',
+                  icon: Icons.account_balance_wallet_outlined,
+                ),
+              ],
             ],
           ),
         ),
@@ -1340,6 +1373,14 @@ class _BanksTab extends ConsumerWidget {
                     );
                   },
                 ),
+                if ((banksAsync.valueOrNull?.isNotEmpty ?? false)) ...[
+                  const SizedBox(height: 16),
+                  StatCard(
+                    label: 'Tổng ngân hàng',
+                    value: '${banksAsync.valueOrNull!.length}',
+                    icon: Icons.account_balance_outlined,
+                  ),
+                ],
               ],
             ),
           ),

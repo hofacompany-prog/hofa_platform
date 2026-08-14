@@ -9,6 +9,7 @@ import '../../providers/auth_provider.dart';
 import '../../repositories/merchant_repository.dart';
 import '../../repositories/order_repository.dart';
 import '../../widgets/nav_back_button.dart';
+import '../../widgets/stat_card.dart';
 
 final _financePeriodProvider = StateProvider.autoDispose<String>(
   (ref) => 'today',
@@ -368,6 +369,15 @@ class _TransactionsTab extends ConsumerWidget {
                 ),
               ),
             ],
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: StatCard(
+                label: 'Tổng giao dịch',
+                value: '${orders.length}',
+                icon: Icons.receipt_long_outlined,
+              ),
+            ),
           ],
         );
       },

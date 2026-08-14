@@ -563,27 +563,6 @@ class InventoryScreen extends ConsumerWidget {
                                   v,
                         ),
                       ),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _StatBox(
-                            icon: Icons.inventory_2_outlined,
-                            label: 'Sản phẩm đang theo dõi',
-                            value: '${data.items.length}',
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: _StatBox(
-                            icon: Icons.warning_amber_outlined,
-                            label: 'Sắp hết hàng',
-                            value: '$lowStockCount',
-                            accent: lowStockCount > 0 ? Colors.orange : null,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
                     TextField(
                       decoration: const InputDecoration(
                         hintText: 'Tìm theo tên sản phẩm...',
@@ -610,9 +589,33 @@ class InventoryScreen extends ConsumerWidget {
                       )
                     : ListView.separated(
                         padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                        itemCount: filtered.length,
+                        itemCount: filtered.length + 1,
                         separatorBuilder: (_, _) => const SizedBox(height: 8),
                         itemBuilder: (context, i) {
+                          if (i == filtered.length) {
+                            return Row(
+                              children: [
+                                Expanded(
+                                  child: _StatBox(
+                                    icon: Icons.inventory_2_outlined,
+                                    label: 'Sản phẩm đang theo dõi',
+                                    value: '${data.items.length}',
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: _StatBox(
+                                    icon: Icons.warning_amber_outlined,
+                                    label: 'Sắp hết hàng',
+                                    value: '$lowStockCount',
+                                    accent: lowStockCount > 0
+                                        ? Colors.orange
+                                        : null,
+                                  ),
+                                ),
+                              ],
+                            );
+                          }
                           final item = filtered[i];
                           final label =
                               data.variantLabels[item.variantId] ??

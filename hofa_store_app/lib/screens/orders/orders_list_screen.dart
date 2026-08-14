@@ -9,6 +9,7 @@ import '../../providers/notification_providers.dart';
 import '../../repositories/order_repository.dart';
 import '../../widgets/nav_back_button.dart';
 import '../../widgets/rolling_countdown.dart';
+import '../../widgets/stat_card.dart';
 
 /// Gom 12 trạng thái đơn (order_status, xem 01_schema.sql) lại còn 5 nhóm dễ hiểu cho cửa
 /// hàng — mỗi trạng thái thật thuộc đúng 1 nhóm. "Sắp tới" = đơn mới chưa xác nhận, "Đang
@@ -146,9 +147,16 @@ class OrdersListScreen extends ConsumerWidget {
                   onRefresh: () async => ref.invalidate(_ordersProvider),
                   child: ListView.separated(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                    itemCount: orders.length,
+                    itemCount: orders.length + 1,
                     separatorBuilder: (_, __) => const SizedBox(height: 8),
                     itemBuilder: (context, i) {
+                      if (i == orders.length) {
+                        return StatCard(
+                          label: 'Tổng đơn (đang lọc)',
+                          value: '${orders.length}',
+                          icon: Icons.receipt_long_outlined,
+                        );
+                      }
                       final o = orders[i];
                       final isUnread = unreadOrderIds.contains(o.id);
 

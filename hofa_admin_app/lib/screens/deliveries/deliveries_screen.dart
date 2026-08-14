@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/format.dart';
 import '../../models/admin_delivery.dart';
 import '../../providers/admin_providers.dart';
+import '../../widgets/stat_card.dart';
 import '../../core/responsive.dart';
 
 Color _statusColor(String status, ColorScheme scheme) => switch (status) {
@@ -273,9 +274,19 @@ class _DeliveriesScreenState extends ConsumerState<DeliveriesScreen> {
                   return const Center(child: Text('Không có chuyến nào'));
                 return ListView.separated(
                   padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
-                  itemCount: deliveries.length,
+                  itemCount: deliveries.length + 1,
                   separatorBuilder: (_, _) => const SizedBox(height: 8),
                   itemBuilder: (context, i) {
+                    if (i == deliveries.length) {
+                      return Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: StatCard(
+                          label: 'Tổng chuyến giao (đang lọc)',
+                          value: '${deliveries.length}',
+                          icon: Icons.local_shipping_outlined,
+                        ),
+                      );
+                    }
                     final d = deliveries[i];
                     final color = _statusColor(d.status, theme.colorScheme);
                     // Card tự dựng thay ListTile.trailing — trailing Row cứng (giá + chip +

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/merchant.dart';
 import '../../providers/admin_providers.dart';
+import '../../widgets/stat_card.dart';
 
 final _allMerchantsProvider = FutureProvider.autoDispose<List<Merchant>>(
   (ref) => ref.watch(adminRepoProvider).merchants(limit: 500),
@@ -241,6 +242,26 @@ class _FeaturedMerchantsScreenState
                         ),
                     ],
                   ),
+                ),
+                const SizedBox(height: 24),
+                Row(
+                  children: [
+                    Expanded(
+                      child: StatCard(
+                        label: 'Đang hiện ở trang chủ',
+                        value: '${featured.length}',
+                        icon: Icons.home_outlined,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: StatCard(
+                        label: 'Cửa hàng khác',
+                        value: '${others.length}',
+                        icon: Icons.storefront_outlined,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),

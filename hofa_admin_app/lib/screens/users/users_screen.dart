@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/user_profile.dart';
 import '../../providers/admin_providers.dart';
+import '../../widgets/stat_card.dart';
 
 const roleLabels = {
   'customer': 'Khách hàng',
@@ -181,9 +182,19 @@ class _UsersScreenState extends ConsumerState<UsersScreen> {
                   return const Center(child: Text('Không có người dùng nào'));
                 return ListView.separated(
                   padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
-                  itemCount: users.length,
+                  itemCount: users.length + 1,
                   separatorBuilder: (_, _) => const SizedBox(height: 8),
                   itemBuilder: (context, i) {
+                    if (i == users.length) {
+                      return Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: StatCard(
+                          label: 'Tổng người dùng (đang lọc)',
+                          value: '${users.length}',
+                          icon: Icons.people_outline,
+                        ),
+                      );
+                    }
                     final u = users[i];
                     final blocked = u.status != 'active';
                     return Card(

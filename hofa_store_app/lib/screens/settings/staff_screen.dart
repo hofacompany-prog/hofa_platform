@@ -4,6 +4,7 @@ import '../../models/staff_member.dart';
 import '../../providers/auth_provider.dart';
 import '../../repositories/merchant_repository.dart';
 import '../../widgets/nav_back_button.dart';
+import '../../widgets/stat_card.dart';
 
 final _staffProvider = FutureProvider.autoDispose<List<StaffMember>>((
   ref,
@@ -73,7 +74,8 @@ class StaffScreen extends ConsumerWidget {
                   TextField(
                     controller: positionCtrl,
                     decoration: const InputDecoration(
-                      labelText: 'Chức danh (VD: Thu ngân, Bếp — không bắt buộc)',
+                      labelText:
+                          'Chức danh (VD: Thu ngân, Bếp — không bắt buộc)',
                       border: OutlineInputBorder(),
                     ),
                   ),
@@ -98,7 +100,9 @@ class StaffScreen extends ConsumerWidget {
                     const SizedBox(height: 8),
                     Text(
                       error!,
-                      style: TextStyle(color: Theme.of(context).colorScheme.error),
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
                     ),
                   ],
                 ],
@@ -117,9 +121,12 @@ class StaffScreen extends ConsumerWidget {
                       final name = nameCtrl.text.trim();
                       final phone = phoneCtrl.text.trim();
                       final password = passwordCtrl.text.trim();
-                      if (name.isEmpty || phone.isEmpty || password.length < 6) {
+                      if (name.isEmpty ||
+                          phone.isEmpty ||
+                          password.length < 6) {
                         setInner(
-                          () => error = 'Nhập đủ họ tên, SĐT và mật khẩu (từ 6 ký tự)',
+                          () => error =
+                              'Nhập đủ họ tên, SĐT và mật khẩu (từ 6 ký tự)',
                         );
                         return;
                       }
@@ -211,7 +218,9 @@ class StaffScreen extends ConsumerWidget {
                     const SizedBox(height: 8),
                     Text(
                       error!,
-                      style: TextStyle(color: Theme.of(context).colorScheme.error),
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
                     ),
                   ],
                 ],
@@ -330,13 +339,27 @@ class StaffScreen extends ConsumerWidget {
               ? ListView(
                   padding: const EdgeInsets.all(24),
                   children: const [
-                    Center(child: Text('Chưa có nhân viên nào — bấm "Thêm nhân viên" bên dưới.')),
+                    Center(
+                      child: Text(
+                        'Chưa có nhân viên nào — bấm "Thêm nhân viên" bên dưới.',
+                      ),
+                    ),
                   ],
                 )
               : ListView.builder(
                   padding: const EdgeInsets.all(16),
-                  itemCount: staff.length,
+                  itemCount: staff.length + 1,
                   itemBuilder: (context, i) {
+                    if (i == staff.length) {
+                      return Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: StatCard(
+                          label: 'Tổng nhân viên',
+                          value: '${staff.length}',
+                          icon: Icons.badge_outlined,
+                        ),
+                      );
+                    }
                     final s = staff[i];
                     return Card(
                       margin: const EdgeInsets.only(bottom: 8),
@@ -346,7 +369,8 @@ class StaffScreen extends ConsumerWidget {
                         subtitle: Text(
                           [
                             s.phone,
-                            if (s.position != null && s.position!.isNotEmpty) s.position,
+                            if (s.position != null && s.position!.isNotEmpty)
+                              s.position,
                             '${s.permissions.length} quyền',
                           ].join(' · '),
                         ),
