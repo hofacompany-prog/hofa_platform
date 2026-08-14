@@ -43,6 +43,7 @@ router.post('/payments', asyncHandler(async (req, res) => {
   // hàng ở lần chuyển đó, tránh báo trùng "Đơn hàng mới!" mỗi lần ghi thêm thanh toán vào 1
   // đơn đã placed từ trước (vd tài xế thu COD, ghi thanh toán từng phần).
   const wasPendingPayment = order.status === 'pending_payment';
+  const merchant = await db.queryOne('SELECT merchant_type FROM merchants WHERE id = $1', [order.merchant_id]);
 
   const payment = await db.callRpc('record_payment', {
     p_order_id: req.body.order_id,
@@ -53,7 +54,9 @@ router.post('/payments', asyncHandler(async (req, res) => {
     p_collected_by: req.ctx.userId,
     p_gateway_response: req.body.gateway_response || null
   });
-  if (wasPendingPayment) {
+  // Cửa hàng mua hộ không xác nhận/chuẩn bị gì cả (đơn không qua cửa hàng) — không báo "Đơn
+  // hàng mới!", chỉ orderOffer.dispatchBuyOnBehalfOrder bên dưới lo chuyển thẳng cho tài xế.
+  if (wasPendingPayment && merchant?.merchant_type !== 'buy_on_behalf') {
     orderOffer.offerOrderToMerchant(req.body.order_id).catch((err) => {
       console.error('[orderOffer] Không báo được cửa hàng cho đơn chuyển khoản', req.body.order_id, err.message);
     });

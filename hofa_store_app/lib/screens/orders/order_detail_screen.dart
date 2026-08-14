@@ -251,8 +251,14 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen>
     final isPlaced = o.status == 'placed';
     final isPrepPhase = o.status == 'confirmed' || o.status == 'preparing';
     final canCancel = isPlaced || isPrepPhase;
+    // Cửa hàng mua hộ không xác nhận/chuẩn bị gì cả — đơn không qua cửa hàng, hệ thống tự
+    // chuyển thẳng cho tài xế (xem server/src/orderOffer.js dispatchBuyOnBehalfOrder). Không
+    // được chạy thanh trượt xác nhận/đếm giờ tự huỷ cho loại cửa hàng này.
+    final isBuyOnBehalf =
+        ref.watch(myMerchantProvider).valueOrNull?.merchantType ==
+        'buy_on_behalf';
 
-    if (isPlaced) {
+    if (isPlaced && !isBuyOnBehalf) {
       // Thời gian chuẩn bị mặc định đã được server chốt theo bậc (auto_accept_settings.
       // prep_default_*) ngay lúc tạo đơn, xem hofa-db/39_prep_time_tiers.sql — ổn định dù admin
       // có sửa Thông số sau đó, không tính lại ở client.
@@ -383,11 +389,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen>
                       ),
                     ),
                     const SizedBox(height: 12),
-                    if (ref
-                            .watch(myMerchantProvider)
-                            .valueOrNull
-                            ?.merchantType ==
-                        'buy_on_behalf') ...[
+                    if (isBuyOnBehalf) ...[
                       Container(
                         width: double.infinity,
                         padding: const EdgeInsets.all(12),
@@ -662,7 +664,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen>
             ),
           ),
         ),
-        if (isPlaced) _buildPlacedBottom(context, o),
+        if (isPlaced && !isBuyOnBehalf) _buildPlacedBottom(context, o),
         if (isPrepPhase) _buildPrepPhaseBottom(context, o),
       ],
     );
