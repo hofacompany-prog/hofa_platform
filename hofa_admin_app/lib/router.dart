@@ -20,6 +20,7 @@ import 'screens/deliveries/delivery_detail_screen.dart';
 import 'screens/catalog/categories_hub_screen.dart';
 import 'screens/settings/finance_hub_screen.dart';
 import 'screens/notifications/notifications_screen.dart';
+import 'screens/notifications/my_notifications_screen.dart';
 
 final adminNavigatorKey = GlobalKey<NavigatorState>();
 
@@ -130,6 +131,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/notifications',
             builder: (context, state) => const NotificationsScreen(),
+          ),
+          GoRoute(
+            path: '/my-notifications',
+            builder: (context, state) => const MyNotificationsScreen(),
           ),
         ],
       ),

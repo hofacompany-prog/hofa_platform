@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'core/env.dart';
+import 'core/push_service.dart';
 import 'core/pwa_version_service.dart';
 import 'router.dart';
 import 'widgets/app_background.dart';
@@ -13,6 +15,25 @@ Future<void> main() async {
     url: Env.supabaseUrl,
     publishableKey: Env.supabaseAnonKey,
   );
+
+  try {
+    await Firebase.initializeApp(
+      options: FirebaseOptions(
+        apiKey: Env.firebaseApiKey,
+        authDomain: Env.firebaseAuthDomain,
+        projectId: Env.firebaseProjectId,
+        storageBucket: Env.firebaseStorageBucket,
+        messagingSenderId: Env.firebaseMessagingSenderId,
+        appId: Env.firebaseAppId,
+      ),
+    );
+    await PushService.instance.init(adminNavigatorKey);
+  } catch (e) {
+    // Chưa cấu hình Firebase — app vẫn chạy bình thường, chỉ không nhận được push khi có
+    // việc cần xử lý (đơn chờ thanh toán, tài xế/cửa hàng yêu cầu nạp/rút ví...).
+    debugPrint('[push] Firebase chưa sẵn sàng, bỏ qua push notification: $e');
+  }
+
   runApp(const ProviderScope(child: HofaAdminApp()));
 }
 

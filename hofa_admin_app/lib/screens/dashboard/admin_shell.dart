@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../providers/admin_providers.dart';
 import '../../widgets/app_version_text.dart';
+import '../../widgets/notification_bell.dart';
 import '../../widgets/tab_icon.dart';
 
 class AdminShell extends ConsumerWidget {
@@ -105,7 +106,10 @@ class AdminShell extends ConsumerWidget {
 
     if (isMobile) {
       return Scaffold(
-        appBar: AppBar(title: Text(_items[selectedIndex].label)),
+        appBar: AppBar(
+          title: Text(_items[selectedIndex].label),
+          actions: const [NotificationBell(), SizedBox(width: 8)],
+        ),
         drawer: Drawer(
           child: SafeArea(
             child: Column(
@@ -225,6 +229,7 @@ class AdminShell extends ConsumerWidget {
                             style: theme.textTheme.bodySmall,
                           ),
                         ),
+                      const NotificationBell(),
                       IconButton(
                         tooltip: 'Đăng xuất',
                         icon: const Icon(Icons.logout),

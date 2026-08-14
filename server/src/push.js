@@ -293,6 +293,31 @@ async function notifyMerchantWallet(merchantId, kind, amount, reason) {
   await sendToUserIds(userIds, { title, body, category: 'system' });
 }
 
+/**
+ * Báo cho MỌI admin (role='admin') mỗi khi có việc cần admin xử lý tay — đơn chuyển khoản
+ * cần xác nhận đã nhận tiền, tài xế/cửa hàng yêu cầu nạp/rút ví (xem payment_settings_screen.dart
+ * ở web admin, 4 tab tương ứng). Cùng cấu trúc data với admin_broadcast (type + screen) để
+ * push_service.dart phía admin dùng lại được đúng cách điều hướng "bấm thông báo mở đúng màn".
+ * Không dùng sendBroadcastToRoles (hardcode type='admin_broadcast', dành cho admin GỬI đi) vì
+ * đây là thông báo HỆ THỐNG gửi ĐẾN admin — cần type riêng (admin_alert) để phân biệt.
+ */
+async function notifyAdmins({ title, body, kind, screen = '/finance?tab=3' }) {
+  const data = { type: 'admin_alert', kind, screen };
+  const admins = await db.query(`SELECT id FROM users WHERE role = 'admin' AND deleted_at IS NULL`);
+  const adminIds = admins.map((a) => a.id);
+  await saveNotifications(adminIds, { title, body, data, category: 'system' });
+
+  const devices = await db.query(
+    `SELECT DISTINCT d.push_token
+       FROM user_devices d
+       JOIN users u ON u.id = d.user_id
+      WHERE u.role = 'admin' AND u.deleted_at IS NULL AND d.push_token IS NOT NULL`
+  );
+  const tokens = devices.map((d) => d.push_token).filter(Boolean);
+  const { sent } = await sendToTokens(tokens, { title, body, data, badge: false });
+  return { sent, total: tokens.length };
+}
+
 /** Tự xoá các dòng hộp thư (bảng notifications) cũ hơn notification_settings.ttl_hours — bỏ
  * qua lặng lẽ nếu chưa cấu hình (ttl_hours NULL, mặc định) hoặc chưa có dòng settings nào.
  * Gọi định kỳ từ index.js, cùng kiểu sweepExpiredOffers (dispatch.js). */
@@ -313,6 +338,7 @@ module.exports = {
   notifyDriverRejected,
   notifyDriverWallet,
   notifyMerchantWallet,
+  notifyAdmins,
   sendBroadcastToRoles,
   resolveMerchantUserIds,
   sendToUserIds,

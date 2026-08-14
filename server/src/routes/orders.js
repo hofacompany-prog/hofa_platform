@@ -116,6 +116,16 @@ router.post('/orders', asyncHandler(async (req, res) => {
     orderOffer.offerOrderToMerchant(order.id).catch((err) => {
       console.error('[orderOffer] Không báo được cửa hàng cho đơn', order.id, err.message);
     });
+  } else if (order.status === 'pending_payment') {
+    // Đơn chuyển khoản — chờ admin xác nhận đã nhận tiền (_PendingOrdersTab ở web admin) trước
+    // khi cửa hàng được báo có đơn mới (xem POST /payments).
+    push.notifyAdmins({
+      title: 'Đơn cần xác nhận thanh toán',
+      body: `${order.order_code} · ${Number(order.total_amount).toLocaleString('vi-VN')}đ chuyển khoản`,
+      kind: 'order_pending_payment'
+    }).catch((err) => {
+      console.error('[push] Không báo được admin cho đơn chờ thanh toán', order.id, err.message);
+    });
   }
 
   res.status(201).json({ ok: true, data: order });

@@ -181,6 +181,13 @@ router.post('/drivers/me/wallet/deposits', asyncHandler(async (req, res) => {
     throw new ApiError('BAD_REQUEST', 'Số tiền nạp không hợp lệ', 400);
   }
   const created = await db.insertRow('driver_wallet_deposits', { driver_id: driver.id, amount });
+  push.notifyAdmins({
+    title: 'Tài xế yêu cầu nạp tiền',
+    body: `${req.ctx.profile?.full_name || 'Tài xế'} · ${amount.toLocaleString('vi-VN')}đ`,
+    kind: 'driver_wallet_deposit'
+  }).catch((err) => {
+    console.error('[push] Không báo được admin cho yêu cầu nạp tiền tài xế', driver.id, err.message);
+  });
   res.status(201).json({ ok: true, data: created });
 }));
 
@@ -200,6 +207,13 @@ router.post('/drivers/me/wallet/withdrawals', asyncHandler(async (req, res) => {
     throw new ApiError('BANK_INFO_REQUIRED', 'Cần cập nhật thông tin ngân hàng trước khi rút tiền', 400);
   }
   const created = await db.callRpc('request_driver_withdrawal', { p_driver_id: driver.id, p_amount: amount });
+  push.notifyAdmins({
+    title: 'Tài xế yêu cầu rút tiền',
+    body: `${req.ctx.profile?.full_name || 'Tài xế'} · ${amount.toLocaleString('vi-VN')}đ`,
+    kind: 'driver_wallet_withdrawal'
+  }).catch((err) => {
+    console.error('[push] Không báo được admin cho yêu cầu rút tiền tài xế', driver.id, err.message);
+  });
   res.status(201).json({ ok: true, data: created });
 }));
 

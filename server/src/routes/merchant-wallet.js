@@ -40,6 +40,14 @@ router.post('/merchants/:merchantId/wallet/withdrawals', asyncHandler(async (req
     p_merchant_id: req.params.merchantId,
     p_amount: amount
   });
+  const merchantName = await db.queryOne('SELECT name FROM merchants WHERE id = $1', [req.params.merchantId]);
+  push.notifyAdmins({
+    title: 'Cửa hàng yêu cầu rút tiền',
+    body: `${merchantName?.name || 'Cửa hàng'} · ${amount.toLocaleString('vi-VN')}đ`,
+    kind: 'merchant_wallet_withdrawal'
+  }).catch((err) => {
+    console.error('[push] Không báo được admin cho yêu cầu rút tiền cửa hàng', req.params.merchantId, err.message);
+  });
   res.status(201).json({ ok: true, data: created });
 }));
 
