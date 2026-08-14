@@ -10,6 +10,34 @@
     "orientation": "portrait-primary",
     "lang": "vi",
     "prefer_related_applications": false,
+    "shortcuts": [
+        {
+            "name": "Bật nhận đơn",
+            "short_name": "Bật nhận đơn",
+            "description": "Chuyển sang Online để nhận đơn ngay, không cần mở app",
+            "url": "/shortcut-online",
+            "icons": [
+                {
+                    "src": "icons/Icon-192.png",
+                    "sizes": "192x192",
+                    "type": "image/png"
+                }
+            ]
+        },
+        {
+            "name": "Tắt nhận đơn",
+            "short_name": "Tắt nhận đơn",
+            "description": "Chuyển sang Offline, tạm ngừng nhận đơn mới",
+            "url": "/shortcut-offline",
+            "icons": [
+                {
+                    "src": "icons/Icon-192.png",
+                    "sizes": "192x192",
+                    "type": "image/png"
+                }
+            ]
+        }
+    ],
     "icons": [
         {
             "src": "icons/Icon-192.png",

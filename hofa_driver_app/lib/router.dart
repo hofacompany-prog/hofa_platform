@@ -21,6 +21,7 @@ import 'screens/delivery/delivery_map_screen.dart';
 import 'screens/delivery/chat_screen.dart';
 import 'screens/offer/offer_screen.dart';
 import 'screens/notifications/notifications_screen.dart';
+import 'screens/shortcut/shortcut_status_screen.dart';
 
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
@@ -130,6 +131,16 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/wallet/history',
         builder: (context, state) => const WalletHistoryScreen(),
+      ),
+      // Đích của 2 shortcut PWA "Bật/Tắt nhận đơn" (bấm giữ icon app, xem web/manifest.json).
+      GoRoute(
+        path: '/shortcut-online',
+        builder: (context, state) => const ShortcutStatusScreen(goOnline: true),
+      ),
+      GoRoute(
+        path: '/shortcut-offline',
+        builder: (context, state) =>
+            const ShortcutStatusScreen(goOnline: false),
       ),
       ShellRoute(
         builder: (context, state, child) => DriverShell(child: child),
