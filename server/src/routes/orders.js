@@ -120,6 +120,17 @@ router.get('/orders/mine', asyncHandler(async (req, res) => {
   const clauses = ['customer_id = $1'];
   const params = [req.ctx.userId];
   if (req.query.status) { params.push(req.query.status); clauses.push(`status = $${params.length}`); }
+  // from/to: ngày dương lịch theo giờ Việt Nam (YYYY-MM-DD) — màn "Đơn hàng của tôi" bắt buộc
+  // chọn 1 trong 4 khoảng (Hôm nay/Hôm qua/Tuần qua/Tháng qua), không còn xem "tất cả" không
+  // giới hạn thời gian, cùng cách tính mốc ngày với /merchants/:merchantId/orders.
+  if (req.query.from) {
+    params.push(req.query.from);
+    clauses.push(`(created_at AT TIME ZONE 'Asia/Ho_Chi_Minh')::date >= $${params.length}::date`);
+  }
+  if (req.query.to) {
+    params.push(req.query.to);
+    clauses.push(`(created_at AT TIME ZONE 'Asia/Ho_Chi_Minh')::date <= $${params.length}::date`);
+  }
   params.push(limit, offset);
   const rows = await db.query(
     `SELECT * FROM orders WHERE ${clauses.join(' AND ')} ORDER BY created_at DESC, id DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
@@ -138,6 +149,16 @@ router.get('/admin/orders', asyncHandler(async (req, res) => {
   if (req.query.status) { params.push(req.query.status); clauses.push(`o.status = $${params.length}`); }
   if (req.query.merchant_id) { params.push(req.query.merchant_id); clauses.push(`o.merchant_id = $${params.length}`); }
   if (req.query.q) { params.push(`%${req.query.q}%`); clauses.push(`(o.order_code ILIKE $${params.length} OR o.ship_recipient_name ILIKE $${params.length})`); }
+  // from/to: ngày dương lịch theo giờ Việt Nam (YYYY-MM-DD) — ngoại lệ cho admin, không bắt
+  // buộc chọn (để trống = xem mọi đơn không giới hạn thời gian, khác app khách/cửa hàng).
+  if (req.query.from) {
+    params.push(req.query.from);
+    clauses.push(`(o.created_at AT TIME ZONE 'Asia/Ho_Chi_Minh')::date >= $${params.length}::date`);
+  }
+  if (req.query.to) {
+    params.push(req.query.to);
+    clauses.push(`(o.created_at AT TIME ZONE 'Asia/Ho_Chi_Minh')::date <= $${params.length}::date`);
+  }
   const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
   params.push(limit, offset);
   const rows = await db.query(

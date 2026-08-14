@@ -361,11 +361,15 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
     );
     if (ok != true) return;
 
-    // Có số tài khoản mà chưa chọn đúng ngân hàng trong dropdown (vd tên ngân hàng gõ tay
-    // trước đây không khớp tên nào trong danh sách banks) — chặn lưu để tránh lưu nhầm
-    // bank_bin=null trong khi vẫn còn số tài khoản, hoặc lưu nhầm sang ngân hàng khác dẫn tới
-    // QR chuyển khoản bị ngân hàng từ chối lúc rút tiền.
-    if (bankAccNoCtrl.text.trim().isNotEmpty && selectedBank == null) {
+    // Chỉ chặn lưu nếu admin THỰC SỰ vừa đổi số tài khoản mà chưa chọn đúng ngân hàng trong
+    // dropdown — không chặn nếu số tài khoản giữ nguyên như cũ (dữ liệu cũ nhập tay trước khi
+    // có tính năng mã BIN, tên ngân hàng không khớp danh sách banks hiện tại), nếu không mọi
+    // lần Lưu (kể cả chỉ đổi phân loại/mô tả, không đụng gì tới ngân hàng) đều bị chặn oan.
+    final bankAccNoChanged =
+        bankAccNoCtrl.text.trim() != (m.bankAccountNo ?? '').trim();
+    if (bankAccNoChanged &&
+        bankAccNoCtrl.text.trim().isNotEmpty &&
+        selectedBank == null) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -907,6 +911,14 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
                               'Loại cửa hàng',
                               merchantTypeLabels[m.merchantType] ??
                                   m.merchantType,
+                            ),
+                            _row(
+                              'Phân loại cửa hàng',
+                              m.classifications.isEmpty
+                                  ? '—'
+                                  : m.classifications
+                                        .map((c) => c.name)
+                                        .join(', '),
                             ),
                             _row('SĐT', m.phone ?? '—'),
                             _row('Email', m.email ?? '—'),

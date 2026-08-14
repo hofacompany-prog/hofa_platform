@@ -325,6 +325,10 @@ class AdminRepository {
   Future<List<Order>> orders({
     String? status,
     String? q,
+    // Ngoại lệ chỉ admin có — để trống thì xem mọi đơn không giới hạn thời gian (khác app
+    // khách/cửa hàng phải chọn 1 trong 4 khoảng nhanh), có giá trị thì lọc theo created_at.
+    String? from,
+    String? to,
     int limit = 100,
   }) async {
     final list =
@@ -334,6 +338,8 @@ class AdminRepository {
                 'limit': limit,
                 if (status != null) 'status': status,
                 if (q != null && q.isNotEmpty) 'q': q,
+                if (from != null) 'from': from,
+                if (to != null) 'to': to,
               },
             )
             as List;

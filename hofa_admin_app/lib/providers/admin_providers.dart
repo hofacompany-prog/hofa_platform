@@ -109,9 +109,19 @@ final orderStatusFilterProvider = StateProvider.autoDispose<String?>(
   (ref) => null,
 );
 
+/// Khoảng thời gian tuỳ chọn để lọc đơn hàng (YYYY-MM-DD) — ngoại lệ chỉ admin có, cả 2 để
+/// null (mặc định) thì xem mọi đơn không giới hạn thời gian, khác app khách/cửa hàng phải luôn
+/// chọn 1 trong 4 khoảng nhanh (Hôm nay/Hôm qua/Tuần qua/Tháng qua).
+final orderFromDateProvider = StateProvider.autoDispose<String?>((ref) => null);
+final orderToDateProvider = StateProvider.autoDispose<String?>((ref) => null);
+
 final ordersProvider = FutureProvider.autoDispose<List<Order>>((ref) {
   final status = ref.watch(orderStatusFilterProvider);
-  return ref.watch(adminRepoProvider).orders(status: status);
+  final from = ref.watch(orderFromDateProvider);
+  final to = ref.watch(orderToDateProvider);
+  return ref
+      .watch(adminRepoProvider)
+      .orders(status: status, from: from, to: to);
 });
 
 final orderDetailProvider = FutureProvider.autoDispose.family<Order, String>(

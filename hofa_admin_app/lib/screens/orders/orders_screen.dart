@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 import '../../core/format.dart';
 import '../../models/order.dart';
 import '../../providers/admin_providers.dart';
+
+final _yyyyMMdd = DateFormat('yyyy-MM-dd');
 
 Color statusColor(String status, ColorScheme scheme) => switch (status) {
   'completed' || 'delivered' => Colors.green,
@@ -15,16 +18,62 @@ Color statusColor(String status, ColorScheme scheme) => switch (status) {
 class OrdersScreen extends ConsumerWidget {
   const OrdersScreen({super.key});
 
+  /// Ngoại lệ chỉ admin có — app khách/cửa hàng bắt buộc chọn 1 trong 4 khoảng nhanh (Hôm nay/
+  /// Hôm qua/Tuần qua/Tháng qua), còn admin chọn khoảng ngày tuỳ ý để vẫn xem được TẤT CẢ đơn
+  /// (để trống from/to) hoặc thu hẹp theo đúng khoảng cần tra.
+  Future<void> _pickDateRange(BuildContext context, WidgetRef ref) async {
+    final from = ref.read(orderFromDateProvider);
+    final to = ref.read(orderToDateProvider);
+    final initial = from != null && to != null
+        ? DateTimeRange(start: DateTime.parse(from), end: DateTime.parse(to))
+        : null;
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2024, 1, 1),
+      lastDate: DateTime.now(),
+      initialDateRange: initial,
+      helpText: 'Chọn khoảng thời gian',
+    );
+    if (picked == null) return;
+    ref.read(orderFromDateProvider.notifier).state = _yyyyMMdd.format(
+      picked.start,
+    );
+    ref.read(orderToDateProvider.notifier).state = _yyyyMMdd.format(picked.end);
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final ordersAsync = ref.watch(ordersProvider);
     final statusFilter = ref.watch(orderStatusFilterProvider);
+    final fromDate = ref.watch(orderFromDateProvider);
+    final toDate = ref.watch(orderToDateProvider);
     final theme = Theme.of(context);
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Đơn hàng'),
         actions: [
+          if (fromDate != null && toDate != null)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: InputChip(
+                label: Text('$fromDate → $toDate'),
+                onDeleted: () {
+                  ref.read(orderFromDateProvider.notifier).state = null;
+                  ref.read(orderToDateProvider.notifier).state = null;
+                },
+                onPressed: () => _pickDateRange(context, ref),
+              ),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: OutlinedButton.icon(
+                onPressed: () => _pickDateRange(context, ref),
+                icon: const Icon(Icons.date_range_outlined),
+                label: const Text('Chọn khoảng thời gian'),
+              ),
+            ),
           IconButton(
             tooltip: 'Tải lại',
             icon: const Icon(Icons.refresh),

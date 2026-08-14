@@ -1,4 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../core/date_range_preset.dart';
 import '../core/paginated_list_notifier.dart';
 import '../models/address.dart';
 import '../models/bank_account_settings.dart';
@@ -274,16 +275,33 @@ final orderStatusFilterProvider = StateProvider.autoDispose<String?>(
   (ref) => null,
 );
 
+/// Khoảng thời gian đang chọn ở màn "Đơn hàng của tôi" — bắt buộc luôn có 1 giá trị (mặc định
+/// "Hôm nay"), không còn kiểu xem "tất cả" không giới hạn thời gian.
+final orderDateRangeProvider = StateProvider.autoDispose<DateRangePreset>(
+  (ref) => DateRangePreset.today,
+);
+
 /// Đơn hàng của khách — tải dần theo trang. family theo status: đổi bộ lọc trạng thái tự tạo
-/// notifier mới nên tự reset về trang đầu, không cần code riêng.
+/// notifier mới nên tự reset về trang đầu, không cần code riêng. Còn watch thêm
+/// orderDateRangeProvider bên trong nên đổi khoảng thời gian cũng tự tạo lại từ trang đầu.
 final myOrdersPagedProvider = StateNotifierProvider.autoDispose
-    .family<PaginatedListNotifier<Order>, PaginatedState<Order>, String?>(
-      (ref, status) => PaginatedListNotifier<Order>(
+    .family<PaginatedListNotifier<Order>, PaginatedState<Order>, String?>((
+      ref,
+      status,
+    ) {
+      final (from, to) = ref.watch(orderDateRangeProvider).toRange();
+      return PaginatedListNotifier<Order>(
         (limit, offset) => ref
             .read(orderRepoProvider)
-            .myOrders(status: status, limit: limit, offset: offset),
-      ),
-    );
+            .myOrders(
+              status: status,
+              from: from,
+              to: to,
+              limit: limit,
+              offset: offset,
+            ),
+      );
+    });
 
 final orderDetailProvider = FutureProvider.autoDispose.family<Order, String>(
   (ref, id) => ref.watch(orderRepoProvider).order(id),

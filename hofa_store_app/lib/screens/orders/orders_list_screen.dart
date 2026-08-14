@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/date_range_preset.dart';
 import '../../core/format.dart';
 import '../../models/order.dart';
 import '../../providers/auth_provider.dart';
@@ -40,10 +41,17 @@ final _selectedGroupProvider = StateProvider.autoDispose<String>(
   (ref) => _tabOrder.first,
 );
 
+/// Khoảng thời gian đang chọn — bắt buộc luôn có 1 giá trị (mặc định "Hôm nay"), không còn tải
+/// toàn bộ lịch sử đơn không giới hạn thời gian như trước.
+final _dateRangeProvider = StateProvider.autoDispose<DateRangePreset>(
+  (ref) => DateRangePreset.today,
+);
+
 final _ordersProvider = FutureProvider.autoDispose<List<Order>>((ref) async {
   final merchant = await ref.watch(myMerchantProvider.future);
   if (merchant == null) return [];
-  return OrderRepository().listForMerchant(merchant.id);
+  final (from, to) = ref.watch(_dateRangeProvider).toRange();
+  return OrderRepository().listForMerchant(merchant.id, from: from, to: to);
 });
 
 /// order_id của mọi thông báo danh mục "Đơn hàng" CHƯA ĐỌC — dùng để chấm đỏ đúng dòng đơn
@@ -68,6 +76,7 @@ class OrdersListScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final ordersAsync = ref.watch(_ordersProvider);
     final selectedGroup = ref.watch(_selectedGroupProvider);
+    final dateRange = ref.watch(_dateRangeProvider);
     final unreadOrderIds =
         ref.watch(_unreadOrderIdsProvider).valueOrNull ?? const <String>{};
 
@@ -78,6 +87,26 @@ class OrdersListScreen extends ConsumerWidget {
       ),
       body: Column(
         children: [
+          SizedBox(
+            height: 44,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              children: DateRangePreset.values
+                  .map(
+                    (p) => Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: ChoiceChip(
+                        label: Text(p.label),
+                        selected: dateRange == p,
+                        onSelected: (_) =>
+                            ref.read(_dateRangeProvider.notifier).state = p,
+                      ),
+                    ),
+                  )
+                  .toList(),
+            ),
+          ),
           SizedBox(
             height: 44,
             child: ListView(
