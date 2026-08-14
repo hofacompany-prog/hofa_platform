@@ -20,12 +20,35 @@ const SQLSTATE_MAP = {
   P0002: ['NOT_FOUND', 404]                // no_data_found
 };
 
+/**
+ * err.constraint/err.table CHỈ có khi Postgres tự chặn 1 ràng buộc THẬT (UNIQUE/FK/CHECK) qua
+ * libpq — khác hẳn RAISE EXCEPTION tay trong các hàm RPC (04_api_functions.sql...) đã viết sẵn
+ * message tiếng Việt và KHÔNG bao giờ có 2 field này. message tự sinh của Postgres luôn là
+ * tiếng Anh (vd "duplicate key value violates unique constraint..."), khó đọc với người không
+ * rành SQL — dịch sẵn ra tiếng Việt, vẫn giữ tên constraint để còn tra ngược ra cột/bảng nào.
+ */
+function friendlyConstraintMessage(err) {
+  switch (err.code) {
+    case '23505':
+      return `Dữ liệu bị trùng, đã tồn tại rồi${err.constraint ? ` (${err.constraint})` : ''}`;
+    case '23503':
+      return `Không thực hiện được — dữ liệu liên quan không tồn tại hoặc đang được dùng ở nơi khác${err.constraint ? ` (${err.constraint})` : ''}`;
+    case '23514':
+      return `Dữ liệu không hợp lệ, không đáp ứng điều kiện ràng buộc${err.constraint ? ` (${err.constraint})` : ''}`;
+    case '22P02':
+      return 'Định dạng dữ liệu không hợp lệ';
+    default:
+      return err.message;
+  }
+}
+
 function fromPgError(err) {
   if (!err || !err.code) return null;
   const mapped = SQLSTATE_MAP[err.code];
   if (!mapped) return null;
   const [code, status] = mapped;
-  return new ApiError(code, err.message, status);
+  const message = (err.constraint || err.table) ? friendlyConstraintMessage(err) : err.message;
+  return new ApiError(code, message, status);
 }
 
 module.exports = { ApiError, fromPgError };
