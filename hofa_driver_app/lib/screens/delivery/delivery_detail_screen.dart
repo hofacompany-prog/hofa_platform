@@ -463,6 +463,40 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
                   ),
                 ),
               ),
+              if (order?.customerNote != null &&
+                  order!.customerNote!.trim().isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.secondaryContainer.withValues(
+                        alpha: 0.5,
+                      ),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          Icons.info_outline,
+                          size: 18,
+                          color: theme.colorScheme.secondary,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            order.customerNote!,
+                            style: TextStyle(
+                              color: theme.colorScheme.secondary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               if (!delivery.isBuyOnBehalf && order != null) ...[
                 const SizedBox(height: 12),
                 _OrderItemsCard(order: order),
@@ -886,7 +920,8 @@ class _OrderItemsCard extends StatelessWidget {
                   children: [
                     Expanded(
                       child: Text(
-                        '${item.quantity}x ${item.productName}${item.variantName != null ? ' (${item.variantName})' : ''}',
+                        '${item.quantity}x ${item.productName}${item.variantName != null ? ' (${item.variantName})' : ''}'
+                        '${item.note != null && item.note!.isNotEmpty ? ' — ${item.note}' : ''}',
                       ),
                     ),
                     Text(formatVnd(item.lineTotal)),
