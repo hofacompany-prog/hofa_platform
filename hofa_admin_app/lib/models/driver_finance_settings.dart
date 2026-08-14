@@ -1,13 +1,18 @@
-/// Cấu hình tài chính tài xế toàn sàn — % HOFA cắt trên phí giao + hạn mức COD, xem
-/// hofa-db/62_driver_wallet_ledger.sql.
+/// Cấu hình tài chính tài xế toàn sàn — % HOFA cắt trên phí giao + thuế GTGT/TNCN (trừ thẳng
+/// lên driver_fee, cùng công thức merchants — xem hofa-db/72_driver_tax_rates.sql) + hạn mức
+/// COD, xem hofa-db/62_driver_wallet_ledger.sql.
 class DriverFinanceSettings {
   final String? id;
   final double driverFeeCommissionRate;
+  final double vatRate;
+  final double pitRate;
   final int codDebtLimit;
 
   DriverFinanceSettings({
     this.id,
     required this.driverFeeCommissionRate,
+    this.vatRate = 0,
+    this.pitRate = 0,
     required this.codDebtLimit,
   });
 
@@ -17,6 +22,8 @@ class DriverFinanceSettings {
         // NUMERIC ở Postgres về qua node-postgres là String, không phải num.
         driverFeeCommissionRate:
             double.tryParse('${json['driver_fee_commission_rate']}') ?? 0,
+        vatRate: double.tryParse('${json['vat_rate']}') ?? 0,
+        pitRate: double.tryParse('${json['pit_rate']}') ?? 0,
         codDebtLimit: (json['cod_debt_limit'] as num?)?.toInt() ?? 2000000,
       );
 
@@ -26,6 +33,8 @@ class DriverFinanceSettings {
 
   Map<String, dynamic> toJson() => {
     'driver_fee_commission_rate': driverFeeCommissionRate,
+    'vat_rate': vatRate,
+    'pit_rate': pitRate,
     'cod_debt_limit': codDebtLimit,
   };
 }

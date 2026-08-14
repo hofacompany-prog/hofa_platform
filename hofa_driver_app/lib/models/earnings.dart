@@ -1,5 +1,11 @@
 class RecentDelivery {
   final int driverFee;
+  // Chốt lúc giao xong — driverPayout = driverFee - commissionAmount - vatAmount - pitAmount,
+  // đúng bằng số tiền thực tế cộng vào ví. Xem hofa-db/72_driver_tax_rates.sql.
+  final int commissionAmount;
+  final int vatAmount;
+  final int pitAmount;
+  final int driverPayout;
   final DateTime? deliveredAt;
   final String orderCode;
   final bool isCod;
@@ -7,6 +13,10 @@ class RecentDelivery {
 
   RecentDelivery({
     required this.driverFee,
+    this.commissionAmount = 0,
+    this.vatAmount = 0,
+    this.pitAmount = 0,
+    this.driverPayout = 0,
     this.deliveredAt,
     required this.orderCode,
     required this.isCod,
@@ -15,12 +25,42 @@ class RecentDelivery {
 
   factory RecentDelivery.fromJson(Map<String, dynamic> json) => RecentDelivery(
     driverFee: (json['driver_fee'] as num?)?.toInt() ?? 0,
+    commissionAmount: (json['commission_amount'] as num?)?.toInt() ?? 0,
+    vatAmount: (json['vat_amount'] as num?)?.toInt() ?? 0,
+    pitAmount: (json['pit_amount'] as num?)?.toInt() ?? 0,
+    driverPayout: (json['driver_payout'] as num?)?.toInt() ?? 0,
     deliveredAt: json['delivered_at'] != null
         ? DateTime.tryParse(json['delivered_at'] as String)
         : null,
     orderCode: json['order_code'] as String? ?? '',
     isCod: json['is_cod'] as bool? ?? false,
     totalAmount: (json['total_amount'] as num?)?.toInt() ?? 0,
+  );
+}
+
+/// Tổng hôm nay (giờ Việt Nam) — chốt sẵn từ server, không tự cộng dồn phía Flutter, xem
+/// GET /drivers/me/earnings.
+class TodayEarnings {
+  final int gross;
+  final int commissionAmount;
+  final int vatAmount;
+  final int pitAmount;
+  final int net;
+
+  TodayEarnings({
+    required this.gross,
+    required this.commissionAmount,
+    required this.vatAmount,
+    required this.pitAmount,
+    required this.net,
+  });
+
+  factory TodayEarnings.fromJson(Map<String, dynamic>? json) => TodayEarnings(
+    gross: (json?['gross'] as num?)?.toInt() ?? 0,
+    commissionAmount: (json?['commission_amount'] as num?)?.toInt() ?? 0,
+    vatAmount: (json?['vat_amount'] as num?)?.toInt() ?? 0,
+    pitAmount: (json?['pit_amount'] as num?)?.toInt() ?? 0,
+    net: (json?['net'] as num?)?.toInt() ?? 0,
   );
 }
 
@@ -34,6 +74,7 @@ class Earnings {
   final num ratingAvg;
   final int ratingCount;
   final List<RecentDelivery> recentDeliveries;
+  final TodayEarnings today;
 
   Earnings({
     required this.codBalance,
@@ -42,25 +83,14 @@ class Earnings {
     required this.ratingAvg,
     required this.ratingCount,
     required this.recentDeliveries,
+    required this.today,
   });
-
-  int get todayTotal {
-    final now = DateTime.now();
-    return recentDeliveries
-        .where(
-          (d) =>
-              d.deliveredAt != null &&
-              d.deliveredAt!.year == now.year &&
-              d.deliveredAt!.month == now.month &&
-              d.deliveredAt!.day == now.day,
-        )
-        .fold(0, (sum, d) => sum + d.driverFee);
-  }
 
   factory Earnings.fromJson(Map<String, dynamic> json) {
     final summary = json['summary'] as Map<String, dynamic>? ?? {};
     final recent = json['recent_deliveries'] as List? ?? [];
     return Earnings(
+      today: TodayEarnings.fromJson(json['today'] as Map<String, dynamic>?),
       codBalance: (summary['cod_balance'] as num?)?.toInt() ?? 0,
       earningBalance: (summary['earning_balance'] as num?)?.toInt() ?? 0,
       totalDeliveries: (summary['total_deliveries'] as num?)?.toInt() ?? 0,

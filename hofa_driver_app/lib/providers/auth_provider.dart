@@ -5,6 +5,7 @@ import '../models/bank.dart';
 import '../models/bank_account_settings.dart';
 import '../models/user_profile.dart';
 import '../models/driver.dart';
+import '../models/driver_finance_settings.dart';
 import '../repositories/user_repository.dart';
 import '../repositories/driver_repository.dart';
 
@@ -22,7 +23,9 @@ final currentSessionProvider = Provider<Session?>((ref) {
 });
 
 /// Hồ sơ public.users — null nếu đã đăng nhập Supabase nhưng chưa gọi auth.syncProfile.
-final userProfileProvider = FutureProvider.autoDispose<UserProfile?>((ref) async {
+final userProfileProvider = FutureProvider.autoDispose<UserProfile?>((
+  ref,
+) async {
   final session = ref.watch(currentSessionProvider);
   if (session == null) return null;
   try {
@@ -41,9 +44,19 @@ final myDriverProvider = FutureProvider.autoDispose<Driver?>((ref) async {
 });
 
 /// Danh sách ngân hàng admin quản lý — dropdown lúc đăng ký/sửa hồ sơ.
-final banksProvider = FutureProvider.autoDispose<List<Bank>>((ref) => _driverRepo.banks());
+final banksProvider = FutureProvider.autoDispose<List<Bank>>(
+  (ref) => _driverRepo.banks(),
+);
 
 /// Tài khoản ngân hàng CỦA SÀN — dựng QR nạp tiền + đọc hạn mức rút tối thiểu ở màn Ví.
-final bankAccountSettingsProvider = FutureProvider.autoDispose<BankAccountSettings>(
-  (ref) => _driverRepo.bankAccountSettings(),
-);
+final bankAccountSettingsProvider =
+    FutureProvider.autoDispose<BankAccountSettings>(
+      (ref) => _driverRepo.bankAccountSettings(),
+    );
+
+/// % hoa hồng + thuế GTGT/TNCN trên phí giao (admin cấu hình toàn sàn) — dùng ước tính khoản
+/// trừ trước khi chuyến giao xong, xem hofa-db/72_driver_tax_rates.sql.
+final driverFinanceSettingsProvider =
+    FutureProvider.autoDispose<DriverFinanceSettings>(
+      (ref) => _driverRepo.financeSettings(),
+    );

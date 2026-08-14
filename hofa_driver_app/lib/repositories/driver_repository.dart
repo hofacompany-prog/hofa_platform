@@ -3,6 +3,7 @@ import '../core/api_exception.dart';
 import '../models/bank.dart';
 import '../models/bank_account_settings.dart';
 import '../models/driver.dart';
+import '../models/driver_finance_settings.dart';
 import '../models/earnings.dart';
 
 class DriverRepository {
@@ -122,6 +123,15 @@ class DriverRepository {
     await _api.get('/drivers/me/earnings', query: {'limit': limit})
         as Map<String, dynamic>,
   );
+
+  /// Dùng để ước tính khoản trừ hoa hồng/thuế trước khi chuyến giao xong — xem
+  /// hofa-db/72_driver_tax_rates.sql.
+  Future<DriverFinanceSettings> financeSettings() async {
+    final json = await _api.get('/driver-finance-settings');
+    return json == null
+        ? DriverFinanceSettings.fallback()
+        : DriverFinanceSettings.fromJson(json as Map<String, dynamic>);
+  }
 
   /// Danh sách ngân hàng admin quản lý — dropdown lúc đăng ký/sửa hồ sơ.
   Future<List<Bank>> banks() async {

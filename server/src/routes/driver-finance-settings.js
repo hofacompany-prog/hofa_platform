@@ -3,7 +3,7 @@ const db = require('../db');
 const asyncHandler = require('../asyncHandler');
 const { pickFields, requireRole } = require('../utils');
 
-const FIELDS = ['driver_fee_commission_rate', 'cod_debt_limit'];
+const FIELDS = ['driver_fee_commission_rate', 'vat_rate', 'pit_rate', 'cod_debt_limit'];
 
 /** Chỉ giữ 1 dòng đang áp dụng — dòng mới nhất theo updated_at. */
 async function currentSettings() {

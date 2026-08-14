@@ -5,7 +5,9 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/format.dart';
 import '../../core/maps_launcher.dart';
 import '../../models/branch.dart';
+import '../../models/delivery.dart';
 import '../../models/order.dart' as model;
+import '../../providers/auth_provider.dart';
 import '../../providers/delivery_providers.dart';
 import '../../repositories/delivery_repository.dart';
 import '../../repositories/order_repository.dart';
@@ -428,25 +430,7 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
                 _OrderItemsCard(order: order),
               ],
               const SizedBox(height: 12),
-              Card(
-                elevation: 0,
-                color: theme.colorScheme.surfaceContainerLow,
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text('Bạn nhận được', style: theme.textTheme.bodyMedium),
-                      Text(
-                        formatVnd(delivery.driverFee),
-                        style: theme.textTheme.titleMedium?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+              _PayoutBreakdownCard(delivery: delivery),
               if (order != null && order.paymentMethod == 'cod')
                 Padding(
                   padding: const EdgeInsets.only(top: 8),
@@ -641,6 +625,143 @@ class _ActionArea extends StatelessWidget {
         return const SizedBox();
     }
   }
+}
+
+/// Số tiền tài xế thực nhận cho chuyến này, kèm breakdown hoa hồng/thuế GTGT/TNCN (cùng cách
+/// hiển thị với "Tài chính" ở app cửa hàng) — xem hofa-db/72_driver_tax_rates.sql. Chuyến ĐÃ
+/// giao xong dùng số CHỐT thật (delivery.commissionAmount/vatAmount/pitAmount/driverPayout);
+/// chuyến chưa giao xong chỉ ƯỚC TÍNH theo cấu hình hiện tại (số cuối có thể khác nếu admin đổi
+/// tỷ lệ trước lúc giao xong).
+class _PayoutBreakdownCard extends ConsumerWidget {
+  final Delivery delivery;
+  const _PayoutBreakdownCard({required this.delivery});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isFinal = delivery.status == 'delivered';
+
+    if (isFinal) {
+      return _buildCard(
+        context,
+        estimated: false,
+        commissionAmount: delivery.commissionAmount,
+        vatAmount: delivery.vatAmount,
+        pitAmount: delivery.pitAmount,
+        payout: delivery.driverPayout,
+      );
+    }
+
+    final settingsAsync = ref.watch(driverFinanceSettingsProvider);
+    return settingsAsync.when(
+      loading: () => _buildCard(
+        context,
+        estimated: true,
+        commissionAmount: 0,
+        vatAmount: 0,
+        pitAmount: 0,
+        payout: delivery.driverFee,
+      ),
+      error: (e, _) => _buildCard(
+        context,
+        estimated: true,
+        commissionAmount: 0,
+        vatAmount: 0,
+        pitAmount: 0,
+        payout: delivery.driverFee,
+      ),
+      data: (settings) {
+        final commissionAmount =
+            (delivery.driverFee * settings.driverFeeCommissionRate / 100)
+                .round();
+        final vatAmount = (delivery.driverFee * settings.vatRate / 100).round();
+        final pitAmount = (delivery.driverFee * settings.pitRate / 100).round();
+        final payout =
+            delivery.driverFee - commissionAmount - vatAmount - pitAmount;
+        return _buildCard(
+          context,
+          estimated: true,
+          commissionAmount: commissionAmount,
+          vatAmount: vatAmount,
+          pitAmount: pitAmount,
+          payout: payout,
+        );
+      },
+    );
+  }
+
+  Widget _buildCard(
+    BuildContext context, {
+    required bool estimated,
+    required int commissionAmount,
+    required int vatAmount,
+    required int pitAmount,
+    required int payout,
+  }) {
+    final theme = Theme.of(context);
+    final hasDeductions =
+        commissionAmount > 0 || vatAmount > 0 || pitAmount > 0;
+    return Card(
+      elevation: 0,
+      color: theme.colorScheme.surfaceContainerLow,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (hasDeductions) ...[
+              _payoutRow(context, 'Phí giao', formatVnd(delivery.driverFee)),
+              if (commissionAmount > 0)
+                _payoutRow(
+                  context,
+                  'Hoa hồng',
+                  '-${formatVnd(commissionAmount)}',
+                ),
+              if (vatAmount > 0)
+                _payoutRow(context, 'Thuế GTGT', '-${formatVnd(vatAmount)}'),
+              if (pitAmount > 0)
+                _payoutRow(context, 'Thuế TNCN', '-${formatVnd(pitAmount)}'),
+              const Divider(height: 16),
+            ],
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  estimated ? 'Dự kiến nhận được' : 'Bạn nhận được',
+                  style: theme.textTheme.bodyMedium,
+                ),
+                Text(
+                  formatVnd(payout),
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            if (estimated)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  'Số cuối chốt lúc giao xong.',
+                  style: theme.textTheme.bodySmall,
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _payoutRow(BuildContext context, String label, String value) =>
+      Padding(
+        padding: const EdgeInsets.symmetric(vertical: 2),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(label, style: Theme.of(context).textTheme.bodySmall),
+            Text(value, style: Theme.of(context).textTheme.bodySmall),
+          ],
+        ),
+      );
 }
 
 /// Mã đơn + danh sách món + tổng tiền — cho đơn thường (khác đơn mua hộ, đã có

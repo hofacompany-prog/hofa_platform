@@ -18,17 +18,23 @@ class DriverFinanceSettingsScreen extends ConsumerStatefulWidget {
 class _DriverFinanceSettingsScreenState
     extends ConsumerState<DriverFinanceSettingsScreen> {
   final _rateCtrl = TextEditingController();
+  final _vatCtrl = TextEditingController();
+  final _pitCtrl = TextEditingController();
   bool _initialized = false;
   bool _saving = false;
 
   @override
   void dispose() {
     _rateCtrl.dispose();
+    _vatCtrl.dispose();
+    _pitCtrl.dispose();
     super.dispose();
   }
 
   void _fillFrom(DriverFinanceSettings s) {
     _rateCtrl.text = _trimZero(s.driverFeeCommissionRate);
+    _vatCtrl.text = _trimZero(s.vatRate);
+    _pitCtrl.text = _trimZero(s.pitRate);
   }
 
   String _trimZero(double v) =>
@@ -36,8 +42,18 @@ class _DriverFinanceSettingsScreenState
 
   Future<void> _save(DriverFinanceSettings current) async {
     final rate = double.tryParse(_rateCtrl.text.trim());
-    if (rate == null || rate < 0 || rate > 100) {
-      _showError('Tỷ lệ % phải từ 0 đến 100');
+    final vat = double.tryParse(_vatCtrl.text.trim());
+    final pit = double.tryParse(_pitCtrl.text.trim());
+    if (rate == null ||
+        rate < 0 ||
+        rate > 100 ||
+        vat == null ||
+        vat < 0 ||
+        vat > 100 ||
+        pit == null ||
+        pit < 0 ||
+        pit > 100) {
+      _showError('Các tỷ lệ % phải từ 0 đến 100');
       return;
     }
     setState(() => _saving = true);
@@ -48,6 +64,8 @@ class _DriverFinanceSettingsScreenState
             DriverFinanceSettings(
               id: current.id,
               driverFeeCommissionRate: rate,
+              vatRate: vat,
+              pitRate: pit,
               codDebtLimit: current.codDebtLimit,
             ),
           );
@@ -130,6 +148,64 @@ class _DriverFinanceSettingsScreenState
                             Text(
                               'Mặc định 0% — tài xế nhận nguyên phí giao. Đặt khác 0 thì tài xế '
                               'chỉ nhận phần còn lại sau khi trừ % này.',
+                              style: theme.textTheme.bodySmall,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Card(
+                      elevation: 0,
+                      color: theme.colorScheme.surfaceContainerLow,
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Thuế suất trên phí giao',
+                              style: theme.textTheme.titleSmall,
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: TextField(
+                                    controller: _vatCtrl,
+                                    keyboardType:
+                                        const TextInputType.numberWithOptions(
+                                          decimal: true,
+                                        ),
+                                    decoration: const InputDecoration(
+                                      labelText: 'Thuế GTGT',
+                                      suffixText: '%',
+                                      border: OutlineInputBorder(),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: TextField(
+                                    controller: _pitCtrl,
+                                    keyboardType:
+                                        const TextInputType.numberWithOptions(
+                                          decimal: true,
+                                        ),
+                                    decoration: const InputDecoration(
+                                      labelText: 'Thuế TNCN',
+                                      suffixText: '%',
+                                      border: OutlineInputBorder(),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Mặc định 0% — cùng cách tính với cửa hàng (trừ thẳng lên phí '
+                              'giao, không lồng thuế trong thuế). Tài xế thấy rõ khoản trừ này ở '
+                              'chi tiết chuyến giao và màn Thu nhập.',
                               style: theme.textTheme.bodySmall,
                             ),
                           ],

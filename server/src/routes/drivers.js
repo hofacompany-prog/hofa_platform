@@ -130,7 +130,8 @@ router.get('/drivers/me/earnings', asyncHandler(async (req, res) => {
   );
   const { limit } = pagination(req.query);
   const recent = await db.query(
-    `SELECT d.driver_fee, d.delivered_at, o.order_code, o.payment_method,
+    `SELECT d.driver_fee, d.commission_amount, d.vat_amount, d.pit_amount, d.driver_payout,
+            d.delivered_at, o.order_code, o.payment_method,
             (o.payment_method = 'cod') AS is_cod, o.total_amount
        FROM deliveries d
        JOIN orders o ON o.id = d.order_id
@@ -138,7 +139,29 @@ router.get('/drivers/me/earnings', asyncHandler(async (req, res) => {
       ORDER BY d.delivered_at DESC LIMIT $2`,
     [driver.id, limit]
   );
-  res.json({ ok: true, data: { summary: driver, recent_deliveries: recent } });
+  // Tổng hôm nay (giờ Việt Nam) — hoa hồng/thuế GTGT/TNCN trừ thẳng lên driver_fee, cùng công
+  // thức merchant_payout (hofa-db/67), xem hofa-db/72_driver_tax_rates.sql.
+  const todayRow = await db.queryOne(
+    `SELECT COALESCE(SUM(driver_fee), 0)::bigint AS gross,
+            COALESCE(SUM(commission_amount), 0)::bigint AS commission_amount,
+            COALESCE(SUM(vat_amount), 0)::bigint AS vat_amount,
+            COALESCE(SUM(pit_amount), 0)::bigint AS pit_amount,
+            COALESCE(SUM(driver_payout), 0)::bigint AS net
+       FROM deliveries
+      WHERE driver_id = $1 AND status = 'delivered'
+        AND (delivered_at AT TIME ZONE 'Asia/Ho_Chi_Minh')::date = (now() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date`,
+    [driver.id]
+  );
+  // ::bigint về qua node-postgres là string — Number() để JSON trả số thật, khớp cách
+  // /merchants/:merchantId/finance/summary làm với SUM(...)::bigint.
+  const today = {
+    gross: Number(todayRow.gross),
+    commission_amount: Number(todayRow.commission_amount),
+    vat_amount: Number(todayRow.vat_amount),
+    pit_amount: Number(todayRow.pit_amount),
+    net: Number(todayRow.net)
+  };
+  res.json({ ok: true, data: { summary: driver, recent_deliveries: recent, today } });
 }));
 
 // ---- Ví tài xế: nạp/rút tiền ----

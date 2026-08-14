@@ -390,7 +390,7 @@ class _EarningsScreenState extends ConsumerState<EarningsScreen> {
                   Expanded(
                     child: _StatCard(
                       label: 'Hôm nay',
-                      value: formatVnd(earnings.todayTotal),
+                      value: formatVnd(earnings.today.net),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -402,6 +402,55 @@ class _EarningsScreenState extends ConsumerState<EarningsScreen> {
                   ),
                 ],
               ),
+              if (earnings.today.commissionAmount > 0 ||
+                  earnings.today.vatAmount > 0 ||
+                  earnings.today.pitAmount > 0) ...[
+                const SizedBox(height: 12),
+                Card(
+                  elevation: 0,
+                  color: theme.colorScheme.surfaceContainerLow,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 4,
+                    ),
+                    child: Column(
+                      children: [
+                        _financeRow(
+                          context,
+                          'Phí giao hôm nay',
+                          formatVnd(earnings.today.gross),
+                        ),
+                        if (earnings.today.commissionAmount > 0)
+                          _financeRow(
+                            context,
+                            'Hoa hồng',
+                            '-${formatVnd(earnings.today.commissionAmount)}',
+                          ),
+                        if (earnings.today.vatAmount > 0)
+                          _financeRow(
+                            context,
+                            'Thuế GTGT',
+                            '-${formatVnd(earnings.today.vatAmount)}',
+                          ),
+                        if (earnings.today.pitAmount > 0)
+                          _financeRow(
+                            context,
+                            'Thuế TNCN',
+                            '-${formatVnd(earnings.today.pitAmount)}',
+                          ),
+                        const Divider(height: 1),
+                        _financeRow(
+                          context,
+                          'Thực nhận hôm nay',
+                          formatVnd(earnings.today.net),
+                          bold: true,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
               const SizedBox(height: 12),
               _StatCard(
                 label: 'Đánh giá',
@@ -420,7 +469,9 @@ class _EarningsScreenState extends ConsumerState<EarningsScreen> {
                   (d) => Card(
                     child: ListTile(
                       leading: const Icon(Icons.local_shipping_outlined),
-                      title: Text('${d.orderCode} · ${formatVnd(d.driverFee)}'),
+                      title: Text(
+                        '${d.orderCode} · ${formatVnd(d.driverPayout)}',
+                      ),
                       subtitle: Text(
                         d.deliveredAt != null
                             ? formatDateTime(d.deliveredAt!)
@@ -432,6 +483,27 @@ class _EarningsScreenState extends ConsumerState<EarningsScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _financeRow(
+    BuildContext context,
+    String label,
+    String value, {
+    bool bold = false,
+  }) {
+    final style = TextStyle(
+      fontWeight: bold ? FontWeight.bold : FontWeight.normal,
+    );
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: style),
+          Text(value, style: style),
+        ],
       ),
     );
   }
