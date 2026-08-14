@@ -264,7 +264,7 @@ async function sweepExpiredOffers() {
 async function sweepDriverSearch() {
   const settings = await currentDriverDispatchSettings();
   const stuck = await db.query(
-    `SELECT o.id, o.order_code, o.total_amount, o.driver_search_attempts
+    `SELECT o.id, o.order_code, o.total_amount, o.driver_search_attempts, d.declined_driver_ids
        FROM orders o
        LEFT JOIN deliveries d ON d.order_id = o.id
       WHERE o.status = 'ready_for_pickup'
@@ -278,7 +278,12 @@ async function sweepDriverSearch() {
 
   const results = [];
   for (const row of stuck) {
-    const assigned = await offerToNearestDriver(row.id);
+    // Loại các tài xế đã TỪ CHỐI chính đơn này ở lần gán trước — không mời lại người đã từ
+    // chối, giống hệt reassignAfterDecline (declined_driver_ids chỉ tồn tại nếu đã từng có
+    // deliveries row cho đơn này, chưa từng gán ai thì mảng rỗng).
+    const assigned = await offerToNearestDriver(row.id, {
+      excludeDriverIds: row.declined_driver_ids || []
+    });
     if (assigned) {
       results.push({ orderId: row.id, assigned: true });
       continue;
