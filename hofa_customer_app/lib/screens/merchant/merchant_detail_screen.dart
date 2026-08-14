@@ -265,61 +265,64 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
                             Text('${merchant.avgPrepMinutes} phút'),
                           ],
                         ),
-                        if (merchant.distanceKm != null)
+                        if (merchant.distanceKm != null ||
+                            (merchant.branchLatitude != null &&
+                                merchant.branchLongitude != null))
                           Padding(
                             padding: const EdgeInsets.only(top: 4),
                             child: Row(
                               children: [
-                                Icon(
-                                  Icons.place_outlined,
-                                  size: 16,
-                                  color: merchant.beyondOwnRadius
-                                      ? theme.colorScheme.secondary
-                                      : theme.colorScheme.outline,
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  formatDistanceKm(merchant.distanceKm!),
-                                  style: merchant.beyondOwnRadius
-                                      ? theme.textTheme.bodyMedium?.copyWith(
-                                          color: theme.colorScheme.secondary,
-                                          fontWeight: FontWeight.w600,
-                                        )
-                                      : null,
-                                ),
-                              ],
-                            ),
-                          ),
-                        if (merchant.branchLatitude != null &&
-                            merchant.branchLongitude != null)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 4),
-                            child: InkWell(
-                              borderRadius: BorderRadius.circular(6),
-                              onTap: () => launchDirections(
-                                merchant.branchLatitude!,
-                                merchant.branchLongitude!,
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
+                                if (merchant.distanceKm != null) ...[
                                   Icon(
                                     Icons.place_outlined,
                                     size: 16,
-                                    color: theme.colorScheme.primary,
+                                    color: merchant.beyondOwnRadius
+                                        ? theme.colorScheme.secondary
+                                        : theme.colorScheme.outline,
                                   ),
                                   const SizedBox(width: 4),
                                   Text(
-                                    'Xem vị trí quán',
-                                    style: TextStyle(
-                                      color: theme.colorScheme.primary,
-                                      decoration: TextDecoration.underline,
-                                      decorationColor:
-                                          theme.colorScheme.outline,
-                                    ),
+                                    formatDistanceKm(merchant.distanceKm!),
+                                    style: merchant.beyondOwnRadius
+                                        ? theme.textTheme.bodyMedium?.copyWith(
+                                            color: theme.colorScheme.secondary,
+                                            fontWeight: FontWeight.w600,
+                                          )
+                                        : null,
                                   ),
                                 ],
-                              ),
+                                const Spacer(),
+                                if (merchant.branchLatitude != null &&
+                                    merchant.branchLongitude != null)
+                                  InkWell(
+                                    borderRadius: BorderRadius.circular(6),
+                                    onTap: () => launchDirections(
+                                      merchant.branchLatitude!,
+                                      merchant.branchLongitude!,
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          Icons.place_outlined,
+                                          size: 16,
+                                          color: theme.colorScheme.primary,
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          'Xem vị trí quán',
+                                          style: TextStyle(
+                                            color: theme.colorScheme.primary,
+                                            decoration:
+                                                TextDecoration.underline,
+                                            decorationColor:
+                                                theme.colorScheme.outline,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                              ],
                             ),
                           ),
                         if (merchant.minOrderAmount > 0)
