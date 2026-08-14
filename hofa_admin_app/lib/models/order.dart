@@ -18,14 +18,14 @@ class OrderItem {
   });
 
   factory OrderItem.fromJson(Map<String, dynamic> json) => OrderItem(
-        id: json['id'] as String,
-        productName: json['product_name'] as String? ?? '',
-        variantName: json['variant_name'] as String?,
-        unitPrice: (json['unit_price'] as num?)?.toInt() ?? 0,
-        quantity: (json['quantity'] as num?)?.toInt() ?? 0,
-        lineTotal: (json['line_total'] as num?)?.toInt() ?? 0,
-        note: json['note'] as String?,
-      );
+    id: json['id'] as String,
+    productName: json['product_name'] as String? ?? '',
+    variantName: json['variant_name'] as String?,
+    unitPrice: (json['unit_price'] as num?)?.toInt() ?? 0,
+    quantity: (json['quantity'] as num?)?.toInt() ?? 0,
+    lineTotal: (json['line_total'] as num?)?.toInt() ?? 0,
+    note: json['note'] as String?,
+  );
 }
 
 class Order {
@@ -49,6 +49,10 @@ class Order {
   // Chỉ có khi gọi GET /admin/orders (server join sẵn để hiển thị thẳng trong bảng)
   final String? merchantName;
   final String? customerName;
+  // Quét tìm tài xế (xem server/src/dispatch.js#sweepDriverSearch) — driverSearchAlertedAt
+  // có giá trị nghĩa là đang chờ admin quyết định huỷ đơn hay quét tiếp.
+  final int driverSearchAttempts;
+  final DateTime? driverSearchAlertedAt;
 
   Order({
     required this.id,
@@ -70,29 +74,42 @@ class Order {
     required this.items,
     this.merchantName,
     this.customerName,
+    this.driverSearchAttempts = 0,
+    this.driverSearchAlertedAt,
   });
 
   factory Order.fromJson(Map<String, dynamic> json) => Order(
-        id: json['id'] as String,
-        orderCode: json['order_code'] as String? ?? '',
-        merchantId: json['merchant_id'] as String,
-        branchId: json['branch_id'] as String,
-        status: json['status'] as String,
-        shipRecipientName: json['ship_recipient_name'] as String? ?? '',
-        shipRecipientPhone: json['ship_recipient_phone'] as String? ?? '',
-        shipLine1: json['ship_line1'] as String? ?? '',
-        shipProvince: json['ship_province'] as String? ?? '',
-        subtotal: (json['subtotal'] as num?)?.toInt() ?? 0,
-        deliveryFee: (json['delivery_fee'] as num?)?.toInt() ?? 0,
-        discountAmount: (json['discount_amount'] as num?)?.toInt() ?? 0,
-        totalAmount: (json['total_amount'] as num?)?.toInt() ?? 0,
-        paymentMethod: json['payment_method'] as String? ?? 'cod',
-        paymentStatus: json['payment_status'] as String? ?? 'pending',
-        createdAt: DateTime.tryParse(json['created_at']?.toString() ?? '') ?? DateTime.now(),
-        items: (json['items'] as List?)?.map((e) => OrderItem.fromJson(e as Map<String, dynamic>)).toList() ?? [],
-        merchantName: json['merchant_name'] as String?,
-        customerName: json['customer_name'] as String?,
-      );
+    id: json['id'] as String,
+    orderCode: json['order_code'] as String? ?? '',
+    merchantId: json['merchant_id'] as String,
+    branchId: json['branch_id'] as String,
+    status: json['status'] as String,
+    shipRecipientName: json['ship_recipient_name'] as String? ?? '',
+    shipRecipientPhone: json['ship_recipient_phone'] as String? ?? '',
+    shipLine1: json['ship_line1'] as String? ?? '',
+    shipProvince: json['ship_province'] as String? ?? '',
+    subtotal: (json['subtotal'] as num?)?.toInt() ?? 0,
+    deliveryFee: (json['delivery_fee'] as num?)?.toInt() ?? 0,
+    discountAmount: (json['discount_amount'] as num?)?.toInt() ?? 0,
+    totalAmount: (json['total_amount'] as num?)?.toInt() ?? 0,
+    paymentMethod: json['payment_method'] as String? ?? 'cod',
+    paymentStatus: json['payment_status'] as String? ?? 'pending',
+    createdAt:
+        DateTime.tryParse(json['created_at']?.toString() ?? '') ??
+        DateTime.now(),
+    items:
+        (json['items'] as List?)
+            ?.map((e) => OrderItem.fromJson(e as Map<String, dynamic>))
+            .toList() ??
+        [],
+    merchantName: json['merchant_name'] as String?,
+    customerName: json['customer_name'] as String?,
+    driverSearchAttempts:
+        (json['driver_search_attempts'] as num?)?.toInt() ?? 0,
+    driverSearchAlertedAt: json['driver_search_alerted_at'] != null
+        ? DateTime.tryParse(json['driver_search_alerted_at'].toString())
+        : null,
+  );
 }
 
 /// Nhãn tiếng Việt + màu cho từng trạng thái — khớp enum order_status trong 01_schema.sql
@@ -114,6 +131,16 @@ const orderStatusLabels = {
 /// Admin được ép chuyển sang bất kỳ trạng thái nào (p_force = true trong RPC update_order_status),
 /// nên ở web admin ta cho chọn tự do thay vì cố định bước kế tiếp như bên app cửa hàng.
 const allOrderStatuses = [
-  'pending_payment', 'placed', 'confirmed', 'preparing', 'ready_for_pickup',
-  'assigned', 'picked_up', 'delivering', 'delivered', 'completed', 'cancelled', 'refunded',
+  'pending_payment',
+  'placed',
+  'confirmed',
+  'preparing',
+  'ready_for_pickup',
+  'assigned',
+  'picked_up',
+  'delivering',
+  'delivered',
+  'completed',
+  'cancelled',
+  'refunded',
 ];

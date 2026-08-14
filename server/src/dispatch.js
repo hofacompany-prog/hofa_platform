@@ -35,6 +35,13 @@ async function currentDriverAcceptSettings() {
   return row || { auto_accept_sweep_seconds: 8, manual_accept_sweep_seconds: 25 };
 }
 
+/** Chỉ giữ 1 dòng đang áp dụng — dòng mới nhất theo updated_at. Fallback 60s/10 lần nếu chưa
+ * từng chạy migration hofa-db/82_driver_dispatch_retry_settings.sql. */
+async function currentDriverDispatchSettings() {
+  const row = await db.queryOne('SELECT * FROM driver_dispatch_settings ORDER BY updated_at DESC LIMIT 1');
+  return row || { rescan_interval_seconds: 60, max_rescan_attempts: 10 };
+}
+
 /** [minViTrenBalance] — tài xế phải có Ví trên (wallet='cod', xem hofa-db/69_driver_wallet_vi_
  * tren.sql) ĐỦ LỚN HƠN giá trị đơn mới được nhận, áp dụng cho MỌI loại đơn (không riêng COD) —
  * coi như tiền vốn tối thiểu trước khi chạy đơn. Tài xế chưa đủ (kể cả tài xế mới, số dư 0)
@@ -122,6 +129,13 @@ async function assignDriverAndNotify(order, driver, distanceKm) {
     p_eta_minutes: etaMinutes,
     p_driver_fee: driverFee
   });
+  // Gán được rồi — xoá mọi dấu vết đang "chờ quét tìm tài xế" của sweepDriverSearch (nếu đơn
+  // này từng bị kẹt), không riêng gì lúc chính sweep đó gán được.
+  await db.query(
+    `UPDATE orders SET driver_search_attempts = 0, driver_search_last_attempt_at = NULL,
+       driver_search_alerted_at = NULL WHERE id = $1`,
+    [order.id]
+  );
 
   const settings = await currentDriverAcceptSettings();
   const windowSeconds = driver.auto_accept ? settings.auto_accept_sweep_seconds : settings.manual_accept_sweep_seconds;
@@ -235,6 +249,67 @@ async function sweepExpiredOffers() {
   return { swept: expired.length, results };
 }
 
+/**
+ * Quét lại các đơn ĐANG CHỜ TÀI XẾ mà lần gán gần nhất không tìm được ai (offerToNearestDriver
+ * trả về null lúc chuyển ready_for_pickup, hoặc reassignAfterDecline cũng không tìm được ai
+ * thay thế) — gọi định kỳ từ setInterval (index.js), tần suất quét Node cố định (15s) nhưng chỉ
+ * THẬT SỰ thử gán lại cho 1 đơn khi đã đủ driver_dispatch_settings.rescan_interval_seconds kể
+ * từ lần thử trước, theo đúng nhịp admin cấu hình. Chỉ áp dụng đơn "để hệ thống tự tìm"
+ * (selected_driver_id IS NULL) — đơn mua hộ khách CHỌN TAY tài xế có luồng riêng
+ * (repickNeeded báo khách tự chọn lại, không phải admin quyết định). Sau
+ * max_rescan_attempts lần liên tiếp không tìm được ai, báo admin (notifyAdmins) quyết định
+ * huỷ đơn hay quét tiếp — trong lúc chờ admin phản hồi (driver_search_alerted_at có giá trị),
+ * sweep bỏ qua đơn đó, không tự quét thêm nữa.
+ */
+async function sweepDriverSearch() {
+  const settings = await currentDriverDispatchSettings();
+  const stuck = await db.query(
+    `SELECT o.id, o.order_code, o.total_amount, o.driver_search_attempts
+       FROM orders o
+       LEFT JOIN deliveries d ON d.order_id = o.id
+      WHERE o.status = 'ready_for_pickup'
+        AND o.selected_driver_id IS NULL
+        AND o.driver_search_alerted_at IS NULL
+        AND (d.id IS NULL OR (d.status = 'pending' AND d.driver_id IS NULL))
+        AND (o.driver_search_last_attempt_at IS NULL
+             OR o.driver_search_last_attempt_at < now() - ($1 || ' seconds')::interval)`,
+    [settings.rescan_interval_seconds]
+  );
+
+  const results = [];
+  for (const row of stuck) {
+    const assigned = await offerToNearestDriver(row.id);
+    if (assigned) {
+      results.push({ orderId: row.id, assigned: true });
+      continue;
+    }
+
+    const attempts = row.driver_search_attempts + 1;
+    if (attempts >= settings.max_rescan_attempts) {
+      await db.query(
+        `UPDATE orders SET driver_search_attempts = $2, driver_search_last_attempt_at = now(),
+           driver_search_alerted_at = now() WHERE id = $1`,
+        [row.id, attempts]
+      );
+      await push.notifyAdmins({
+        title: 'Chưa tìm được tài xế',
+        body: `${row.order_code} · ${Number(row.total_amount).toLocaleString('vi-VN')}đ — đã quét ${attempts} lần không có tài xế nào nhận`,
+        kind: 'driver_search_stuck',
+        screen: `/orders/${row.id}`
+      }).catch((err) => {
+        console.error('[push] Không báo được admin cho đơn kẹt tìm tài xế', row.id, err.message);
+      });
+    } else {
+      await db.query(
+        `UPDATE orders SET driver_search_attempts = $2, driver_search_last_attempt_at = now() WHERE id = $1`,
+        [row.id, attempts]
+      );
+    }
+    results.push({ orderId: row.id, assigned: false, attempts });
+  }
+  return { checked: stuck.length, results };
+}
+
 module.exports = {
   offerToNearestDriver,
   offerToSpecificDriver,
@@ -242,5 +317,6 @@ module.exports = {
   repickNeeded,
   autoAcceptExpiredOffer,
   sweepExpiredOffers,
+  sweepDriverSearch,
   computeDriverFee
 };

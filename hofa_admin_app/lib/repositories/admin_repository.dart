@@ -19,6 +19,7 @@ import '../models/voucher_amount_tier.dart';
 import '../models/order_settings.dart';
 import '../models/auto_accept_settings.dart';
 import '../models/driver_accept_settings.dart';
+import '../models/driver_dispatch_settings.dart';
 import '../models/bank_account_settings.dart';
 import '../models/admin_notification.dart';
 import '../models/notification_inbox_item.dart';
@@ -821,6 +822,28 @@ class AdminRepository {
     DriverAcceptSettings settings,
   ) async => DriverAcceptSettings.fromJson(
     await _api.patch('/driver-accept-settings', body: settings.toJson())
+        as Map<String, dynamic>,
+  );
+
+  // ---- Thông số quét tìm tài xế khi chưa có ai nhận ----
+
+  Future<DriverDispatchSettings> driverDispatchSettings() async {
+    final data = await _api.get('/driver-dispatch-settings');
+    return data == null
+        ? DriverDispatchSettings.fallback()
+        : DriverDispatchSettings.fromJson(data as Map<String, dynamic>);
+  }
+
+  Future<DriverDispatchSettings> updateDriverDispatchSettings(
+    DriverDispatchSettings settings,
+  ) async => DriverDispatchSettings.fromJson(
+    await _api.patch('/driver-dispatch-settings', body: settings.toJson())
+        as Map<String, dynamic>,
+  );
+
+  /// Admin chọn "Quét tiếp" cho 1 đơn đang kẹt chờ tài xế — reset lại từ đầu chu kỳ quét.
+  Future<Order> continueDriverSearch(String orderId) async => Order.fromJson(
+    await _api.post('/admin/orders/$orderId/driver-search/continue')
         as Map<String, dynamic>,
   );
 

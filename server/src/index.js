@@ -42,6 +42,7 @@ app.use('/', require('./routes/delivery-radius-settings'));
 app.use('/', require('./routes/order-settings'));
 app.use('/', require('./routes/auto-accept-settings'));
 app.use('/', require('./routes/driver-accept-settings'));
+app.use('/', require('./routes/driver-dispatch-settings'));
 app.use('/', require('./routes/otp-settings'));
 app.use('/', require('./routes/chat-settings'));
 app.use('/', require('./routes/order-messages'));
@@ -93,3 +94,11 @@ setInterval(() => {
 setInterval(() => {
   orderOffer.sweepDuePreorders().catch((e) => console.error('[sweep-due-preorders]', e));
 }, 30_000);
+
+// Tự quét lại các đơn đang chờ tài xế mà lần gán gần nhất không tìm được ai (xem
+// dispatch.sweepDriverSearch) — quét Node mỗi 15s nhưng chỉ thật sự thử gán lại 1 đơn khi đã
+// đủ driver_dispatch_settings.rescan_interval_seconds, đủ mịn để đúng nhịp admin cấu hình
+// (mặc định 60s) mà không cần khởi động lại interval mỗi lần đổi cấu hình.
+setInterval(() => {
+  dispatch.sweepDriverSearch().catch((e) => console.error('[sweep-driver-search]', e));
+}, 15_000);

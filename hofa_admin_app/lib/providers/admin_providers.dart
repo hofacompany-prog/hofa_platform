@@ -21,6 +21,7 @@ import '../models/voucher_amount_tier.dart';
 import '../models/order_settings.dart';
 import '../models/auto_accept_settings.dart';
 import '../models/driver_accept_settings.dart';
+import '../models/driver_dispatch_settings.dart';
 import '../models/bank_account_settings.dart';
 import '../models/admin_notification.dart';
 import '../models/notification_settings.dart';
@@ -266,6 +267,11 @@ final autoAcceptSettingsProvider =
 final driverAcceptSettingsProvider =
     FutureProvider.autoDispose<DriverAcceptSettings>(
       (ref) => ref.watch(adminRepoProvider).driverAcceptSettings(),
+    );
+
+final driverDispatchSettingsProvider =
+    FutureProvider.autoDispose<DriverDispatchSettings>(
+      (ref) => ref.watch(adminRepoProvider).driverDispatchSettings(),
     );
 
 final bankAccountSettingsProvider =

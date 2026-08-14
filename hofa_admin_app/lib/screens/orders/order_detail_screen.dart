@@ -92,6 +92,78 @@ class _AdminOrderDetailScreenState
     }
   }
 
+  /// Đơn đang kẹt chờ tài xế (đã báo qua notifyAdmins, xem
+  /// dispatch.js#sweepDriverSearch) — chọn quét tiếp thì reset về 0 lần, sweep tự thử lại
+  /// từ chu kỳ kế tiếp.
+  Future<void> _continueDriverSearch(Order o) async {
+    setState(() => _busy = true);
+    try {
+      await ref.read(adminRepoProvider).continueDriverSearch(o.id);
+      ref.invalidate(orderDetailProvider(widget.orderId));
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Đã cho quét tiếp')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _cancelForNoDriver(Order o) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Huỷ đơn?'),
+        content: Text(
+          'Đơn ${o.orderCode} sẽ chuyển sang trạng thái "Đã huỷ" vì không tìm được tài xế nào '
+          'nhận sau ${o.driverSearchAttempts} lần quét.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Đóng'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Huỷ đơn'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+
+    setState(() => _busy = true);
+    try {
+      await ref
+          .read(adminRepoProvider)
+          .updateOrderStatus(
+            o.id,
+            'cancelled',
+            note:
+                'Admin huỷ — không tìm được tài xế sau ${o.driverSearchAttempts} lần quét',
+          );
+      ref.invalidate(orderDetailProvider(widget.orderId));
+      ref.invalidate(ordersProvider);
+      ref.invalidate(statsProvider);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _deleteDialog(Order o) async {
     final ok = await showDialog<bool>(
       context: context,
@@ -188,6 +260,60 @@ class _AdminOrderDetailScreenState
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     if (_busy) const LinearProgressIndicator(),
+                    if (o.driverSearchAlertedAt != null) ...[
+                      Card(
+                        elevation: 0,
+                        color: theme.colorScheme.errorContainer.withValues(
+                          alpha: 0.5,
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.error_outline,
+                                    color: theme.colorScheme.error,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      'Chưa tìm được tài xế sau ${o.driverSearchAttempts} lần quét',
+                                      style: theme.textTheme.titleSmall
+                                          ?.copyWith(
+                                            color: theme.colorScheme.error,
+                                          ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.end,
+                                children: [
+                                  OutlinedButton(
+                                    onPressed: _busy
+                                        ? null
+                                        : () => _cancelForNoDriver(o),
+                                    child: const Text('Huỷ đơn'),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  FilledButton(
+                                    onPressed: _busy
+                                        ? null
+                                        : () => _continueDriverSearch(o),
+                                    child: const Text('Quét tiếp'),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
                     Card(
                       elevation: 0,
                       color: theme.colorScheme.surfaceContainerLow,
