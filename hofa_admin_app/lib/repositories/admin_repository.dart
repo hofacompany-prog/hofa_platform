@@ -260,6 +260,19 @@ class AdminRepository {
         .toList();
   }
 
+  Future<List<BranchHour>> setBranchHours(
+    String branchId,
+    List<BranchHour> hours,
+  ) async {
+    final list = await _api.put(
+      '/branches/$branchId/hours',
+      body: {'hours': hours.map((h) => h.toJson()).toList()},
+    ) as List;
+    return list
+        .map((e) => BranchHour.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
   // ---- Bậc phí mua hộ (merchant_type = 'buy_on_behalf') ----
 
   Future<List<MerchantFeeTier>> merchantFeeTiers(String merchantId) async {

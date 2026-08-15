@@ -8,7 +8,22 @@ const ROOT_FOLDER_ID = '1Bn2kqF4Fa1ForhEUXkxjAiaX7ZtlMPti';
 // Điền đúng URL server thật (KHÔNG có dấu / cuối) và secret đã đặt ở biến môi trường
 // GAS_SYNC_SECRET trên server — 2 giá trị này PHẢI khớp nhau, server từ chối nếu sai/thiếu.
 const GAS_SYNC_API_BASE_URL = 'https://hofa-platform.onrender.com';
-const GAS_SYNC_SECRET = 'dán-đúng-GAS_SYNC_SECRET-đã-đặt-trên-server-vào-đây';
+const GAS_SYNC_SECRET = '069cfbcbd0219c755f74a2fcd75d97c2';
+
+// weekday 0=Chủ nhật..6=Thứ bảy — khớp đúng branch_hours.weekday thật (hofa-db/01_schema.sql) và
+// đúng thứ tự app Cửa hàng đang dùng (hofa_store_app/lib/models/branch_hours.dart).
+const WEEKDAY_LABELS_VN = ['Chủ nhật', 'Thứ hai', 'Thứ ba', 'Thứ tư', 'Thứ năm', 'Thứ sáu', 'Thứ bảy'];
+
+/** {weekday: "HH:MM-HH:MM"} từ mảng [{weekday,open_time,close_time}] — cắt giây nếu có (Postgres
+ *  trả TIME kèm giây, sheet/form chỉ dùng HH:MM). Dùng cả cho diff lẫn đổ dữ liệu vào form. */
+function hoursByWeekday_(arr) {
+  const map = {};
+  (arr || []).forEach(function (h) {
+    if (h.weekday === null || h.weekday === undefined) return;
+    map[h.weekday] = String(h.open_time || '').slice(0, 5) + '-' + String(h.close_time || '').slice(0, 5);
+  });
+  return map;
+}
 
 // ---- Sheet MERCHANT ----
 // Rút gọn tối đa — form CHỈ dành cho cửa hàng MUA HỘ (merchant_type='buy_on_behalf' luôn cố
@@ -33,6 +48,23 @@ const STORE_LATITUDE_COLUMN = 6;         // 6 - Vĩ độ → branches.latitude 
 const STORE_LONGITUDE_COLUMN = 7;        // 7 - Kinh độ → branches.longitude (*, input số)
 const STORE_FOLDER_LINK_COLUMN = 8;      // 8 - Link thư mục (tự quản lý, không phải field API)
 const STORE_SYSTEM_ID_COLUMN = 9;        // 9 - ID hệ thống (merchants.id, server tự ghi sau khi đồng bộ)
+// Thêm CUỐI CÙNG (không chen giữa) để không phải dời lại Link thư mục/ID hệ thống — tránh lặp
+// lại rắc rối lệch cột đã gặp. 1 cột DUY NHẤT lưu JSON — form vẽ UI 7 ngày (Chủ nhật..Thứ bảy,
+// giống hệt màn "Giờ mở cửa" app Cửa hàng: mỗi ngày 1 công tắc bật/tắt + 2 ô chọn giờ, có nút áp
+// dụng nhanh 1 khung giờ cho nhiều ngày cùng lúc) — KHÔNG sửa tay trực tiếp trong ô sheet.
+// Dạng JSON: [{"weekday":1,"open_time":"08:00","close_time":"21:00"}, ...] — chỉ chứa NGÀY BẬT,
+// weekday 0=Chủ nhật..6=Thứ bảy (khớp branch_hours.weekday thật). Để trống/[] = mở 24/7 (0 dòng
+// branch_hours), xem hofa-db/78_branch_operating_hours_gate.sql.
+const STORE_HOURS_COLUMN = 10;           // 10 - Giờ hoạt động (JSON) → branch_hours (weekday/open_time/close_time)
+// Tự điền khi tải "Ảnh đại diện" lên rồi bấm "💾 Lưu" (xem uploadImageToCloudinary) — link
+// Cloudinary công khai, KHÁC hẳn link Drive ở cột 8 (Drive không hotlink ổn định cho app hiển
+// thị công khai). Không gõ tay trong sheet.
+const STORE_LOGO_URL_COLUMN = 11;        // 11 - Ảnh đại diện (URL) → merchants.logo_url
+// Chọn qua checkbox nhiều lựa chọn trong form (danh sách lấy từ GET /merchant-classifications,
+// admin quản lý — xem hofa-db/71_merchant_classifications.sql), lưu dạng tên cách nhau bằng dấu
+// phẩy. Tên không khớp phân loại nào đang có trong hệ thống sẽ bị bỏ qua lặng lẽ lúc đồng bộ.
+const STORE_CLASSIFICATION_COLUMN = 12;  // 12 - Phân loại → merchant_classifications (nhiều-nhiều)
+const STORE_LAST_COLUMN = STORE_CLASSIFICATION_COLUMN;
 
 // Cả tool này chỉ tạo cửa hàng mua hộ — không có cột chọn trong sheet, cố định khi đẩy API sau
 // này (chưa có code đẩy API trong bản này, chỉ đang quản lý dữ liệu qua Sheet/Drive).
@@ -61,7 +93,10 @@ const STORE_HEADERS = [
   'Vĩ độ',               // 6 — branches.latitude (*)
   'Kinh độ',             // 7 — branches.longitude (*)
   'Link thư mục',        // 8 — tự quản lý, không gửi API
-  'ID hệ thống'          // 9 — merchants.id, server tự ghi khi đồng bộ, không gõ tay
+  'ID hệ thống',         // 9 — merchants.id, server tự ghi khi đồng bộ, không gõ tay
+  'Giờ hoạt động',       // 10 — branch_hours (JSON), sửa qua form, không gõ tay trong sheet
+  'Ảnh đại diện (URL)',  // 11 — merchants.logo_url, server (Cloudinary) tự ghi khi tải ảnh, không gõ tay
+  'Phân loại'            // 12 — merchant_classifications, chọn qua checkbox trong form, không gõ tay
 ];
 
 // 3 thư mục con tự tạo bên trong thư mục Drive của mỗi cửa hàng.
@@ -188,12 +223,13 @@ function onOpen() {
     .addItem('Đồng bộ CSDL', 'openDbSyncManager')
     .addSeparator()
     .addItem('⚠️ Sắp xếp lại cột MERCHANT (chạy 1 lần)', 'migrateStoreColumnsToApiLayout_v1')
+    .addItem('🔧 Chỉ sửa lại dòng tiêu đề MERCHANT (không đụng dữ liệu)', 'fixStoreHeaderRowOnly_v1')
     .addItem('⚠️ Sắp xếp lại cột PRODUCT (chạy 1 lần)', 'migrateProductColumnsToApiLayout_v1')
     .addToUi();
 }
 
 /** CHẠY 1 LẦN DUY NHẤT để ghi dòng tiêu đề (row 1) sheet MERCHANT theo đúng STORE_HEADERS hiện
- *  tại (9 cột — thêm Địa chỉ, Tỉnh/Thành phố, ID hệ thống so với layout trước). AN TOÀN với 2
+ *  tại (10 cột — Địa chỉ/Tỉnh thành/ID hệ thống/Giờ hoạt động thêm dần qua các lần). AN TOÀN với 2
  *  layout cũ có thể gặp: layout NGAY TRƯỚC lần sắp xếp này (Vĩ độ cột 4, Link thư mục cột 6)
  *  hoặc layout RẤT CŨ (Vĩ độ cột 4, Link thư mục cột H=8, bản đầu tiên của tool) — tự đọc đúng
  *  dữ liệu Vĩ độ/Kinh độ/Link thư mục đang có TRƯỚC khi ghi đè, rồi dời sang đúng cột mới, không
@@ -201,12 +237,44 @@ function onOpen() {
  *  đã có sẵn (dữ liệu này chưa từng tồn tại trước đây) — bắt buộc điền tay trước khi đồng bộ lên
  *  hệ thống thật (branches.line1/province NOT NULL). Tự nhận biết nếu sheet ĐÃ đúng layout mới
  *  để không chạy nhầm lần 2 gây xáo trộn. */
+/** Chỉ ghi lại ĐÚNG chữ dòng tiêu đề (row 1) theo STORE_HEADERS hiện tại — KHÔNG đụng dữ liệu
+ *  bất kỳ dòng nào. Dùng khi migrateStoreColumnsToApiLayout_v1() đã từng chạy và dữ liệu Vĩ độ/
+ *  Kinh độ/Link thư mục đã nằm đúng cột mới rồi, nhưng dòng tiêu đề vẫn còn chữ cũ/sai (vd do so
+ *  khớp chữ tiêu đề bị lệch 1 ký tự ở lần chạy trước — an toàn tuyệt đối vì không viết gì vào
+ *  dữ liệu, chỉ đúng 1 dòng đầu tiên). */
+function fixStoreHeaderRowOnly_v1() {
+  const ui = SpreadsheetApp.getUi();
+  const sheet = getStoreSheet_();
+  const confirm = ui.alert(
+    'Ghi lại dòng tiêu đề MERCHANT?',
+    'Chỉ viết lại ĐÚNG chữ dòng 1 (STT, Tên cửa hàng, Mô tả, Địa chỉ, Tỉnh/Thành phố, Vĩ độ, ' +
+      'Kinh độ, Link thư mục, ID hệ thống, Giờ hoạt động, Ảnh đại diện (URL), Phân loại) — ' +
+      'KHÔNG đụng bất kỳ dữ liệu dòng nào khác, chỉ thêm cột trống mới nếu sheet chưa đủ ' +
+      STORE_HEADERS.length + ' cột. Dùng khi dữ liệu đã đúng cột nhưng tiêu đề vẫn sai/cũ/thiếu ' +
+      'cột. Tiếp tục?',
+    ui.ButtonSet.YES_NO
+  );
+  if (confirm !== ui.Button.YES) return;
+
+  if (sheet.getMaxColumns() < STORE_HEADERS.length) {
+    sheet.insertColumnsAfter(sheet.getMaxColumns(), STORE_HEADERS.length - sheet.getMaxColumns());
+  }
+  sheet.getRange(STORE_HEADER_ROW, 1, 1, STORE_HEADERS.length).setValues([STORE_HEADERS]);
+
+  const extraCols = sheet.getLastColumn() - STORE_HEADERS.length;
+  if (extraCols > 0) sheet.deleteColumns(STORE_HEADERS.length + 1, extraCols);
+
+  ui.alert('Xong! Dòng tiêu đề MERCHANT đã đúng lại — mở lại form kiểm tra.');
+}
+
 function migrateStoreColumnsToApiLayout_v1() {
   const ui = SpreadsheetApp.getUi();
   const sheet = getStoreSheet_();
 
   const currentHeaders = sheet.getRange(STORE_HEADER_ROW, 1, 1, Math.max(sheet.getLastColumn(), STORE_HEADERS.length)).getValues()[0];
-  if (currentHeaders[STORE_FOLDER_LINK_COLUMN - 1] === 'Link thư mục' && currentHeaders[STORE_SYSTEM_ID_COLUMN - 1] === 'ID hệ thống') {
+  if (currentHeaders[STORE_FOLDER_LINK_COLUMN - 1] === 'Link thư mục' &&
+      currentHeaders[STORE_SYSTEM_ID_COLUMN - 1] === 'ID hệ thống' &&
+      currentHeaders[STORE_HOURS_COLUMN - 1] === 'Giờ hoạt động') {
     ui.alert('Sheet MERCHANT đã ở layout mới rồi, không cần chạy lại.');
     return;
   }
@@ -617,7 +685,7 @@ function getStoreSheet_() {
  *  cột trả về ở đây, theo đúng thứ tự. */
 function getStoreHeaders() {
   const sheet = getStoreSheet_();
-  const lastCol = Math.max(sheet.getLastColumn(), STORE_SYSTEM_ID_COLUMN);
+  const lastCol = Math.max(sheet.getLastColumn(), STORE_LAST_COLUMN);
   return sheet.getRange(STORE_HEADER_ROW, 1, 1, lastCol).getValues()[0];
 }
 
@@ -640,7 +708,7 @@ function listStores() {
 /** Toàn bộ giá trị 1 dòng cửa hàng, theo đúng thứ tự cột trả về từ getStoreHeaders(). */
 function getStoreRow(row) {
   const sheet = getStoreSheet_();
-  const lastCol = Math.max(sheet.getLastColumn(), STORE_SYSTEM_ID_COLUMN);
+  const lastCol = Math.max(sheet.getLastColumn(), STORE_LAST_COLUMN);
   return sheet.getRange(row, 1, 1, lastCol).getValues()[0];
 }
 
@@ -966,9 +1034,66 @@ function gasApiRequest_(method, path, payload) {
   return body.data;
 }
 
+/** Danh sách phân loại cửa hàng admin đang quản lý (GET /merchant-classifications, endpoint
+ *  công khai, không cần secret nhưng vẫn gọi qua gasApiRequest_ cho gọn — server không kiểm tra
+ *  header này ở route đó) — cho form vẽ checkbox chọn nhiều. Trả về [] nếu lỗi (không throw,
+ *  form vẫn mở được, chỉ là chưa chọn được phân loại). */
+function getMerchantClassificationOptions() {
+  try {
+    return gasApiRequest_('get', '/merchant-classifications', null) || [];
+  } catch (e) {
+    return [];
+  }
+}
+
+/** Upload 1 ảnh lên Cloudinary — để hiển thị được trên app Khách/Cửa hàng (khác Drive: Drive
+ *  không hotlink ổn định cho ảnh hiển thị công khai trong app, chỉ hợp quản lý ảnh nội bộ).
+ *  Ký request qua POST /gas-sync/cloudinary-signature (bảo vệ bằng GAS_SYNC_SECRET, không phải
+ *  JWT), rồi tự POST file thẳng lên Cloudinary bằng UrlFetchApp dạng multipart — server không
+ *  proxy file nhị phân qua, chỉ ký. Trả về secure_url (string), throw Error nếu lỗi.
+ *  cloudinaryFolder: 'merchants' (ảnh đại diện) hoặc 'products' (ảnh sản phẩm) — khớp
+ *  ALLOWED_FOLDERS phía server (server/src/routes/gasSync.js). */
+function uploadImageToCloudinary(base64Data, mimeType, fileName, cloudinaryFolder) {
+  const sig = gasApiRequest_('post', '/gas-sync/cloudinary-signature', { folder: cloudinaryFolder });
+  const bytes = Utilities.base64Decode(base64Data);
+  const blob = Utilities.newBlob(bytes, mimeType, fileName);
+  const resp = UrlFetchApp.fetch('https://api.cloudinary.com/v1_1/' + sig.cloud_name + '/image/upload', {
+    method: 'post',
+    payload: {
+      file: blob,
+      api_key: sig.api_key,
+      timestamp: String(sig.timestamp),
+      signature: sig.signature,
+      folder: sig.folder
+    },
+    muteHttpExceptions: true
+  });
+  const code = resp.getResponseCode();
+  let data = null;
+  try { data = JSON.parse(resp.getContentText()); } catch (e) { /* data vẫn null, xử lý ở dưới */ }
+  if (code >= 400 || !data || !data.secure_url) {
+    const msg = data && data.error ? data.error.message : ('Lỗi HTTP ' + code);
+    throw new Error('Tải ảnh lên Cloudinary thất bại: ' + msg);
+  }
+  return data.secure_url;
+}
+
 /** Gom dữ liệu 1 cửa hàng từ 4 sheet MERCHANT/TOPPING/PRODUCT/VARIANT thành đúng cấu trúc
  *  POST /gas-sync/apply cần — CHƯA gửi đi, chỉ đọc từ sheet. Mỗi mục kèm "row" (vị trí dòng
  *  thật trong sheet) để gasSyncApply() biết ghi ID hệ thống trả về vào đúng chỗ. */
+/** Đọc JSON giờ hoạt động từ cột "Giờ hoạt động" — [] nếu trống/không parse được (không throw,
+ *  coi như mở 24/7, giống hành vi 0 dòng branch_hours). */
+function parseStoreHoursJson_(raw) {
+  const text = String(raw || '').trim();
+  if (!text) return [];
+  try {
+    const arr = JSON.parse(text);
+    return Array.isArray(arr) ? arr : [];
+  } catch (e) {
+    return [];
+  }
+}
+
 function gasSyncBuildPayloadForStore_(storeName) {
   const storeEntry = listStores().filter(function (s) { return s.name === storeName; })[0];
   if (!storeEntry) throw new Error('Không tìm thấy cửa hàng "' + storeName + '" trong sheet MERCHANT');
@@ -982,7 +1107,11 @@ function gasSyncBuildPayloadForStore_(storeName) {
     address_line1: sv[STORE_ADDRESS_COLUMN - 1] || '',
     province: sv[STORE_PROVINCE_COLUMN - 1] || '',
     latitude: sv[STORE_LATITUDE_COLUMN - 1] === '' ? null : Number(sv[STORE_LATITUDE_COLUMN - 1]),
-    longitude: sv[STORE_LONGITUDE_COLUMN - 1] === '' ? null : Number(sv[STORE_LONGITUDE_COLUMN - 1])
+    longitude: sv[STORE_LONGITUDE_COLUMN - 1] === '' ? null : Number(sv[STORE_LONGITUDE_COLUMN - 1]),
+    hours: parseStoreHoursJson_(sv[STORE_HOURS_COLUMN - 1]),
+    logo_url: sv[STORE_LOGO_URL_COLUMN - 1] || '',
+    classification_names: String(sv[STORE_CLASSIFICATION_COLUMN - 1] || '')
+      .split(',').map(function (s) { return s.trim(); }).filter(Boolean)
   };
 
   // Nhóm topping — sheet TOPPING phẳng (1 dòng = 1 topping), gộp lại theo Tên nhóm.
@@ -1077,20 +1206,37 @@ function diffMerchant_(lines, snapshot, payload) {
     lines.push('🆕 CỬA HÀNG MỚI: "' + payload.merchant.name + '" (chưa có trên Database)');
     lines.push(fieldCompareRow_('Tên', '', payload.merchant.name));
     lines.push(fieldCompareRow_('Mô tả', '', payload.merchant.description));
+    lines.push(fieldCompareRow_('Ảnh đại diện', '', payload.merchant.logo_url));
+    lines.push(fieldCompareRow_('Phân loại', '', payload.merchant.classification_names.join(', ')));
     lines.push(fieldCompareRow_('Địa chỉ', '', payload.merchant.address_line1));
     lines.push(fieldCompareRow_('Tỉnh/Thành phố', '', payload.merchant.province));
     lines.push(fieldCompareRow_('Vĩ độ', '', payload.merchant.latitude));
     lines.push(fieldCompareRow_('Kinh độ', '', payload.merchant.longitude));
+    const newHoursMap = hoursByWeekday_(payload.merchant.hours);
+    WEEKDAY_LABELS_VN.forEach(function (label, wd) {
+      lines.push(fieldCompareRow_(label, '', newHoursMap[wd] || 'Đóng cửa'));
+    });
     return;
   }
   lines.push('📋 CỬA HÀNG "' + oldM.name + '" (id ' + oldM.id + '):');
   lines.push(fieldCompareRow_('Tên', oldM.name, payload.merchant.name));
   lines.push(fieldCompareRow_('Mô tả', oldM.description, payload.merchant.description));
+  lines.push(fieldCompareRow_('Ảnh đại diện', oldM.logo_url, payload.merchant.logo_url));
+  lines.push(fieldCompareRow_(
+    'Phân loại',
+    (oldM.classifications || []).slice().sort().join(', '),
+    payload.merchant.classification_names.slice().sort().join(', ')
+  ));
   if (oldB) {
     lines.push(fieldCompareRow_('Địa chỉ', oldB.line1, payload.merchant.address_line1));
     lines.push(fieldCompareRow_('Tỉnh/Thành phố', oldB.province, payload.merchant.province));
     lines.push(fieldCompareRow_('Vĩ độ', oldB.latitude, payload.merchant.latitude));
     lines.push(fieldCompareRow_('Kinh độ', oldB.longitude, payload.merchant.longitude));
+    const oldHoursMap = hoursByWeekday_(oldB.hours);
+    const newHoursMap = hoursByWeekday_(payload.merchant.hours);
+    WEEKDAY_LABELS_VN.forEach(function (label, wd) {
+      lines.push(fieldCompareRow_(label, oldHoursMap[wd] || 'Đóng cửa', newHoursMap[wd] || 'Đóng cửa'));
+    });
   } else {
     lines.push('   ≠ Chi nhánh chính — Sheet: ' + payload.merchant.address_line1 + ', ' + payload.merchant.province + ' | Database: (chưa có)');
   }
@@ -1253,7 +1399,10 @@ function gasSyncApply(storeName) {
       address_line1: payload.merchant.address_line1,
       province: payload.merchant.province,
       latitude: payload.merchant.latitude,
-      longitude: payload.merchant.longitude
+      longitude: payload.merchant.longitude,
+      hours: payload.merchant.hours,
+      logo_url: payload.merchant.logo_url,
+      classification_names: payload.merchant.classification_names
     },
     topping_groups: payload.topping_groups.map(function (g) {
       return {
@@ -1350,6 +1499,41 @@ function gasSyncDeleteOrphanedMerchants(list) {
 
 
 /** ============================================================================================
+ *  ĐỊA CHỈ ↔ TOẠ ĐỘ (Nominatim/OpenStreetMap) — nút "📍 Chọn vị trí ngay đây" + "🗺️ Tìm trên bản đồ"
+ *  ============================================================================================ */
+
+/** Dò địa chỉ/tỉnh thành từ Vĩ độ+Kinh độ qua Nominatim (OpenStreetMap, MIỄN PHÍ, không cần API
+ *  key — cùng lựa chọn đã dùng cho app Khách vì Google Maps tính phí, xem ghi chú dự án). Gọi từ
+ *  server (UrlFetchApp) chứ không gọi thẳng từ trình duyệt vì trang HTML của dialog/web app chạy
+ *  trong iframe sandbox (script.googleusercontent.com), fetch() thẳng dễ bị chặn CORS. Trả về
+ *  {address, province} hoặc {address:'', province:''} nếu không dò được (không throw — nút bấm
+ *  vị trí vẫn phải điền được Vĩ độ/Kinh độ dù phần địa chỉ dò lỗi). */
+function reverseGeocodeLatLng(lat, lng) {
+  try {
+    const url = 'https://nominatim.openstreetmap.org/reverse?format=json&lat=' + encodeURIComponent(lat) +
+      '&lon=' + encodeURIComponent(lng) + '&accept-language=vi&zoom=18&addressdetails=1';
+    const resp = UrlFetchApp.fetch(url, {
+      method: 'get',
+      headers: { 'User-Agent': 'HOFA-GAS-StoreTool/1.0 (noreply@hofa.com.vn)' },
+      muteHttpExceptions: true
+    });
+    if (resp.getResponseCode() >= 400) return { address: '', province: '' };
+    const data = JSON.parse(resp.getContentText());
+    const a = data.address || {};
+
+    const streetPart = [a.house_number, a.road].filter(Boolean).join(' ');
+    const wardPart = a.suburb || a.quarter || a.neighbourhood || a.village || a.town || '';
+    const address = [streetPart, wardPart].filter(Boolean).join(', ') || (data.display_name || '');
+
+    const province = a.state || a.city || a.county || '';
+
+    return { address: address, province: province };
+  } catch (e) {
+    return { address: '', province: '' };
+  }
+}
+
+/** ============================================================================================
  *  GIAO DIỆN — FORM QUẢN LÝ CỬA HÀNG
  *  ============================================================================================ */
 
@@ -1365,8 +1549,11 @@ function buildStoreManagerHtml_(idPrefix) {
   #${idPrefix}root .row { display: flex; gap: 10px; align-items: flex-end; }
   #${idPrefix}root .row > div { flex: 1; }
   #${idPrefix}root button { padding: 7px 14px; margin: 10px 6px 0 0; cursor: pointer; }
-  #${idPrefix}root .photo-buttons button { background: #eef; }
+  #${idPrefix}root .photo-tabbar { display: flex; gap: 6px; margin-top: 10px; }
+  #${idPrefix}root .photo-tabbar button { flex: 1; margin: 0; background: #eef; }
+  #${idPrefix}root .photo-tabbar button.photo-tab-active { background: #85C100; color: #fff; }
   #${idPrefix}root .photo-panel { display: none; border: 1px solid #ccc; border-radius: 6px; padding: 10px; margin-top: 10px; background: #fafafa; }
+  #${idPrefix}root .photo-panel.photo-panel-active { display: block; }
   #${idPrefix}root .grid { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
   #${idPrefix}root .thumb { position: relative; width: 88px; height: 88px; }
   #${idPrefix}root .thumb img { width: 100%; height: 100%; object-fit: cover; border-radius: 4px; border: 1px solid #ddd; cursor: pointer; }
@@ -1374,6 +1561,17 @@ function buildStoreManagerHtml_(idPrefix) {
   #${idPrefix}msg { color: #0a7d1f; font-weight: bold; margin-top: 8px; min-height: 18px; }
   #${idPrefix}err { color: #c0392b; font-weight: bold; }
   #${idPrefix}linkArea a { display: inline-block; margin-top: 3px; }
+  #${idPrefix}hoursArea { margin-top: 3px; border: 1px solid #ddd; border-radius: 6px; padding: 8px 10px; }
+  #${idPrefix}hoursArea .hoursRow { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
+  #${idPrefix}hoursArea .hoursRow input[type=checkbox] { width: auto; margin: 0; }
+  #${idPrefix}hoursArea .hoursLabel { width: 82px; flex: 0 0 auto; font-weight: normal; }
+  #${idPrefix}hoursArea input[type=time] { width: auto; padding: 4px; margin: 0; box-sizing: border-box; }
+  #${idPrefix}hoursArea .hoursBulkRow { display: flex; align-items: center; gap: 8px; margin-top: 8px; padding-top: 8px; border-top: 1px dashed #ccc; flex-wrap: wrap; }
+  #${idPrefix}hoursArea .hoursBulkRow button { margin: 0; padding: 5px 10px; }
+  #${idPrefix}hoursArea .hoursHint { font-size: 11px; color: #888; margin-top: 6px; }
+  #${idPrefix}mapPasteRow { display: flex; gap: 8px; margin-top: 8px; }
+  #${idPrefix}mapPasteRow input[type=text] { flex: 1; margin-top: 0; }
+  #${idPrefix}mapPasteRow button { margin: 0; }
 </style>
 
 <div id="${idPrefix}root">
@@ -1390,20 +1588,44 @@ function buildStoreManagerHtml_(idPrefix) {
   <div id="${idPrefix}formArea"></div>
 
   <div class="photo-buttons">
-    <button id="${idPrefix}btnAvatar">Ảnh đại diện</button>
-    <button id="${idPrefix}btnStorePhotos">Ảnh quán</button>
-    <button id="${idPrefix}btnProductPhotos">Ảnh sản phẩm</button>
     <button id="${idPrefix}btnHereLoc">📍 Chọn vị trí ngay đây</button>
     <button id="${idPrefix}btnMaps">Tìm vị trí trên Google Maps</button>
   </div>
 
-  <div id="${idPrefix}photoPanel" class="photo-panel">
-    <div id="${idPrefix}photoPanelTitle" style="font-weight: bold;"></div>
+  <div id="${idPrefix}mapPasteRow">
+    <input type="text" id="${idPrefix}mapPasteInput" placeholder="Dán toạ độ vừa sao chép từ Google Maps vào đây...">
+    <button id="${idPrefix}btnMapPasteConfirm">✅ Xác nhận</button>
+  </div>
+
+  <div class="photo-tabbar">
+    <button id="${idPrefix}photoTabBtnAvatar" class="photo-tab-active">Ảnh đại diện</button>
+    <button id="${idPrefix}photoTabBtnStore">Ảnh quán</button>
+    <button id="${idPrefix}photoTabBtnProduct">Ảnh sản phẩm</button>
+  </div>
+
+  <div id="${idPrefix}photoPanelAvatar" class="photo-panel photo-panel-active">
+    <div style="color:#888; font-size:12px;">Chỉ 1 ảnh — tải ảnh mới sẽ tự thay ảnh cũ.</div>
     <div style="margin-top: 8px;">
-      <input type="file" id="${idPrefix}photoFile" accept="image/*">
-      <button id="${idPrefix}btnUploadPhoto">Tải ảnh lên</button>
+      <input type="file" id="${idPrefix}avatarFile" accept="image/*">
+      <button id="${idPrefix}btnUploadAvatar">Tải ảnh lên</button>
     </div>
-    <div id="${idPrefix}photoGrid" class="grid"></div>
+    <div id="${idPrefix}avatarGrid" class="grid"></div>
+  </div>
+
+  <div id="${idPrefix}photoPanelStore" class="photo-panel">
+    <div style="margin-top: 8px;">
+      <input type="file" id="${idPrefix}storePhotoFile" accept="image/*" multiple>
+      <button id="${idPrefix}btnUploadStorePhoto">Tải ảnh lên</button>
+    </div>
+    <div id="${idPrefix}storePhotoGrid" class="grid"></div>
+  </div>
+
+  <div id="${idPrefix}photoPanelProduct" class="photo-panel">
+    <div style="margin-top: 8px;">
+      <input type="file" id="${idPrefix}productPhotoFile" accept="image/*" multiple>
+      <button id="${idPrefix}btnUploadProductPhoto">Tải ảnh lên</button>
+    </div>
+    <div id="${idPrefix}productPhotoGrid" class="grid"></div>
   </div>
 
   <div>
@@ -1422,10 +1644,15 @@ function buildStoreManagerHtml_(idPrefix) {
   var headers = [];
   var stores = [];
   var currentRow = null;
-  var currentSubfolder = null;
-  var replaceOnUpload = false;
+  var PHOTO_TABS = [
+    { subfolder: '${SUBFOLDER_AVATAR}', replace: true, cloudinaryFolder: 'merchants', tabBtn: 'photoTabBtnAvatar', panel: 'photoPanelAvatar', fileInput: 'avatarFile', uploadBtn: 'btnUploadAvatar', grid: 'avatarGrid' },
+    { subfolder: '${SUBFOLDER_STORE_PHOTOS}', replace: false, cloudinaryFolder: null, tabBtn: 'photoTabBtnStore', panel: 'photoPanelStore', fileInput: 'storePhotoFile', uploadBtn: 'btnUploadStorePhoto', grid: 'storePhotoGrid' },
+    { subfolder: '${SUBFOLDER_MENU_PHOTOS}', replace: false, cloudinaryFolder: null, tabBtn: 'photoTabBtnProduct', panel: 'photoPanelProduct', fileInput: 'productPhotoFile', uploadBtn: 'btnUploadProductPhoto', grid: 'productPhotoGrid' }
+  ];
+  var activePhotoTab = PHOTO_TABS[0];
   var currentStt = '';
   var currentSystemId = '';
+  var currentLogoUrl = '';
   var STT_IDX = ${STORE_STT_COLUMN - 1};
   var NAME_IDX = ${STORE_NAME_COLUMN - 1};
   var ADDRESS_IDX = ${STORE_ADDRESS_COLUMN - 1};
@@ -1434,6 +1661,12 @@ function buildStoreManagerHtml_(idPrefix) {
   var LNG_IDX = ${STORE_LONGITUDE_COLUMN - 1};
   var LINK_IDX = ${STORE_FOLDER_LINK_COLUMN - 1};
   var SYSTEM_ID_IDX = ${STORE_SYSTEM_ID_COLUMN - 1};
+  var HOURS_IDX = ${STORE_HOURS_COLUMN - 1};
+  var LOGO_URL_IDX = ${STORE_LOGO_URL_COLUMN - 1};
+  var CLASSIFICATION_IDX = ${STORE_CLASSIFICATION_COLUMN - 1};
+  var classificationOptions = [];
+  var currentClassificationNames = [];
+  var WEEKDAY_LABELS = ${JSON.stringify(WEEKDAY_LABELS_VN)};
   var EXPECTED_HEADERS = ${JSON.stringify(STORE_HEADERS)};
   var DESC_MAX_CHARS = ${STORE_DESCRIPTION_MAX_CHARS};
   var MAX_PHOTO_BYTES = ${PHOTO_MAX_BYTES};
@@ -1463,6 +1696,14 @@ function buildStoreManagerHtml_(idPrefix) {
       renderForm(new Array(headers.length).fill(''));
       loadStores();
     }).withFailureHandler(showErr).getStoreHeaders();
+
+    // Danh sách phân loại (GET /merchant-classifications, admin quản lý) tải song song, có thể
+    // về sau renderForm lần đầu — vẽ lại đúng khung phân loại khi có, giữ nguyên lựa chọn đang
+    // hiện (currentClassificationNames) để không mất tick đã chọn.
+    google.script.run.withSuccessHandler(function (opts) {
+      classificationOptions = opts || [];
+      renderClassificationEditor(currentClassificationNames);
+    }).withFailureHandler(function () {}).getMerchantClassificationOptions();
   }
 
   function loadStores() {
@@ -1487,19 +1728,20 @@ function buildStoreManagerHtml_(idPrefix) {
   $('btnNew').addEventListener('click', newStore);
   $('btnSave').addEventListener('click', saveStore);
   $('btnDelete').addEventListener('click', removeStore);
-  $('btnAvatar').addEventListener('click', function () { openPhotoPanel('${SUBFOLDER_AVATAR}', true); });
-  $('btnStorePhotos').addEventListener('click', function () { openPhotoPanel('${SUBFOLDER_STORE_PHOTOS}', false); });
-  $('btnProductPhotos').addEventListener('click', function () { openPhotoPanel('${SUBFOLDER_MENU_PHOTOS}', false); });
   $('btnHereLoc').addEventListener('click', useCurrentLocation);
   $('btnMaps').addEventListener('click', openMaps);
-  $('btnUploadPhoto').addEventListener('click', uploadPhoto);
+  $('btnMapPasteConfirm').addEventListener('click', mapPasteConfirm);
+  PHOTO_TABS.forEach(function (t) {
+    $(t.tabBtn).addEventListener('click', function () { switchPhotoTab(t); });
+    $(t.uploadBtn).addEventListener('click', function () { uploadPhotoFor(t); });
+  });
   init();
 
   function onSelectStore() {
     var row = $('storeSelect').value;
     if (!row) { newStore(); return; }
     currentRow = parseInt(row, 10);
-    $('photoPanel').style.display = 'none';
+    resetPhotoTabs();
     google.script.run.withSuccessHandler(renderForm).withFailureHandler(showErr).getStoreRow(currentRow);
   }
 
@@ -1507,7 +1749,7 @@ function buildStoreManagerHtml_(idPrefix) {
     currentRow = null;
     currentStt = '';
     $('storeSelect').value = '';
-    $('photoPanel').style.display = 'none';
+    resetPhotoTabs();
     renderForm(new Array(headers.length).fill(''));
     google.script.run.withSuccessHandler(function (stt) {
       currentStt = ''; // vẫn để trống — CHỈ hiện xem trước, số thật chốt lúc bấm Lưu để
@@ -1522,6 +1764,7 @@ function buildStoreManagerHtml_(idPrefix) {
     area.innerHTML = '';
     currentStt = values[STT_IDX] || '';
     currentSystemId = values[SYSTEM_ID_IDX] || '';
+    currentLogoUrl = values[LOGO_URL_IDX] || '';
     var REQUIRED_IDX = [NAME_IDX, ADDRESS_IDX, PROVINCE_IDX, LAT_IDX, LNG_IDX];
     headers.forEach(function (h, i) {
       var label = document.createElement('label');
@@ -1554,6 +1797,33 @@ function buildStoreManagerHtml_(idPrefix) {
           ? 'Đã đồng bộ — ID: ' + currentSystemId
           : 'Chưa đồng bộ lên hệ thống thật — sang tab "Đồng bộ CSDL" để đẩy lên';
         area.appendChild(idDiv);
+      } else if (i === HOURS_IDX) {
+        var hoursDiv = document.createElement('div');
+        hoursDiv.id = PFX + 'hoursArea';
+        area.appendChild(hoursDiv);
+        renderHoursEditor(parseHoursJson(values[i]));
+      } else if (i === LOGO_URL_IDX) {
+        var logoDiv = document.createElement('div');
+        logoDiv.id = PFX + 'logoUrlArea';
+        if (currentLogoUrl) {
+          var logoImg = document.createElement('img');
+          logoImg.src = currentLogoUrl;
+          logoImg.style.cssText = 'width:56px;height:56px;object-fit:cover;border-radius:4px;border:1px solid #ccc;vertical-align:middle;margin-right:8px;';
+          logoDiv.appendChild(logoImg);
+          var logoLink = document.createElement('a');
+          logoLink.href = currentLogoUrl; logoLink.target = '_blank'; logoLink.textContent = 'Xem ảnh gốc';
+          logoDiv.appendChild(logoLink);
+        } else {
+          logoDiv.textContent = 'Chưa có — tự điền khi tải ảnh ở tab "Ảnh đại diện" bên dưới';
+          logoDiv.style.color = '#888';
+        }
+        area.appendChild(logoDiv);
+      } else if (i === CLASSIFICATION_IDX) {
+        var classDiv = document.createElement('div');
+        classDiv.id = PFX + 'classificationArea';
+        area.appendChild(classDiv);
+        currentClassificationNames = String(values[i] || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+        renderClassificationEditor(currentClassificationNames);
       } else if (h === 'Mô tả') {
         var textarea = document.createElement('textarea');
         textarea.id = PFX + 'f' + i;
@@ -1586,6 +1856,149 @@ function buildStoreManagerHtml_(idPrefix) {
         area.appendChild(input);
       }
     });
+    loadPhotoGridFor(activePhotoTab);
+  }
+
+  function parseHoursJson(raw) {
+    if (!raw) return [];
+    try {
+      var arr = JSON.parse(raw);
+      return Array.isArray(arr) ? arr : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  function renderHoursEditor(hoursArr) {
+    var container = $('hoursArea');
+    if (!container) return;
+    container.innerHTML = '';
+    var byWeekday = {};
+    hoursArr.forEach(function (h) { byWeekday[h.weekday] = h; });
+
+    WEEKDAY_LABELS.forEach(function (label, wd) {
+      var row = document.createElement('div');
+      row.className = 'hoursRow';
+      var cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.id = PFX + 'hoursEnable' + wd;
+      cb.checked = !!byWeekday[wd];
+      var lbl = document.createElement('span');
+      lbl.className = 'hoursLabel';
+      lbl.textContent = label;
+      var openInput = document.createElement('input');
+      openInput.type = 'time';
+      openInput.id = PFX + 'hoursOpen' + wd;
+      openInput.value = byWeekday[wd] ? String(byWeekday[wd].open_time).slice(0, 5) : '08:00';
+      openInput.disabled = !cb.checked;
+      var dash = document.createElement('span');
+      dash.textContent = '—';
+      var closeInput = document.createElement('input');
+      closeInput.type = 'time';
+      closeInput.id = PFX + 'hoursClose' + wd;
+      closeInput.value = byWeekday[wd] ? String(byWeekday[wd].close_time).slice(0, 5) : '21:00';
+      closeInput.disabled = !cb.checked;
+      cb.addEventListener('change', function () {
+        openInput.disabled = !cb.checked;
+        closeInput.disabled = !cb.checked;
+      });
+      row.appendChild(cb);
+      row.appendChild(lbl);
+      row.appendChild(openInput);
+      row.appendChild(dash);
+      row.appendChild(closeInput);
+      container.appendChild(row);
+    });
+
+    var bulkRow = document.createElement('div');
+    bulkRow.className = 'hoursBulkRow';
+    var bulkLabel = document.createElement('span');
+    bulkLabel.textContent = 'Áp dụng nhanh cho các ngày đã tick:';
+    var bulkOpen = document.createElement('input');
+    bulkOpen.type = 'time'; bulkOpen.id = PFX + 'hoursBulkOpen'; bulkOpen.value = '08:00';
+    var bulkDash = document.createElement('span'); bulkDash.textContent = '—';
+    var bulkClose = document.createElement('input');
+    bulkClose.type = 'time'; bulkClose.id = PFX + 'hoursBulkClose'; bulkClose.value = '21:00';
+    var bulkBtn = document.createElement('button');
+    bulkBtn.type = 'button';
+    bulkBtn.textContent = 'Áp dụng';
+    bulkBtn.addEventListener('click', function () {
+      var open = $('hoursBulkOpen').value;
+      var close = $('hoursBulkClose').value;
+      if (!open || !close) { showErr('Chọn đủ giờ mở/đóng ở khung "Áp dụng nhanh" trước'); return; }
+      WEEKDAY_LABELS.forEach(function (label, wd) {
+        var cbEl = $('hoursEnable' + wd);
+        if (cbEl && cbEl.checked) {
+          $('hoursOpen' + wd).value = open;
+          $('hoursClose' + wd).value = close;
+        }
+      });
+      showMsg('Đã áp dụng ' + open + '—' + close + ' cho các ngày đã tick — nhớ bấm Lưu.');
+    });
+    bulkRow.appendChild(bulkLabel);
+    bulkRow.appendChild(bulkOpen);
+    bulkRow.appendChild(bulkDash);
+    bulkRow.appendChild(bulkClose);
+    bulkRow.appendChild(bulkBtn);
+    container.appendChild(bulkRow);
+
+    var hint = document.createElement('div');
+    hint.className = 'hoursHint';
+    hint.textContent = 'Tick ngày đang mở cửa rồi chọn giờ riêng cho ngày đó, hoặc điền khung "Áp dụng nhanh" ở dưới rồi bấm Áp dụng để copy cùng 1 giờ cho các ngày đã tick. Không tick ngày nào = mở 24/7 tất cả các ngày.';
+    container.appendChild(hint);
+  }
+
+  function collectHoursFromEditor() {
+    var result = [];
+    WEEKDAY_LABELS.forEach(function (label, wd) {
+      var cbEl = $('hoursEnable' + wd);
+      if (cbEl && cbEl.checked) {
+        var openEl = $('hoursOpen' + wd);
+        var closeEl = $('hoursClose' + wd);
+        if (openEl.value && closeEl.value) {
+          result.push({ weekday: wd, open_time: openEl.value, close_time: closeEl.value });
+        }
+      }
+    });
+    return result;
+  }
+
+  /** Danh sách phân loại đang có (từ classificationOptions, GET /merchant-classifications) —
+   *  vẽ 1 checkbox mỗi phân loại, tick sẵn theo selectedNames đang lưu ở cột Phân loại. Chưa
+   *  tải xong danh sách (classificationOptions rỗng lúc mới mở form) thì hiện gợi ý chờ, tự vẽ
+   *  lại khi tải xong (xem init()). */
+  function renderClassificationEditor(selectedNames) {
+    var container = $('classificationArea');
+    if (!container) return;
+    container.innerHTML = '';
+    if (!classificationOptions.length) {
+      var waiting = document.createElement('div');
+      waiting.style.color = '#888';
+      waiting.textContent = 'Đang tải danh sách phân loại…';
+      container.appendChild(waiting);
+      return;
+    }
+    classificationOptions.forEach(function (opt) {
+      var label = document.createElement('label');
+      label.style.cssText = 'display:flex; align-items:center; gap:6px; font-weight:normal; margin:4px 0;';
+      var cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.style.width = 'auto';
+      cb.value = opt.name;
+      cb.checked = selectedNames.indexOf(opt.name) !== -1;
+      label.appendChild(cb);
+      label.appendChild(document.createTextNode(opt.name));
+      container.appendChild(label);
+    });
+  }
+
+  function collectClassificationsFromEditor() {
+    var container = $('classificationArea');
+    if (!container) return [];
+    var checkboxes = container.querySelectorAll('input[type=checkbox]:checked');
+    var names = [];
+    for (var i = 0; i < checkboxes.length; i++) names.push(checkboxes[i].value);
+    return names;
   }
 
   function collectValues() {
@@ -1593,6 +2006,14 @@ function buildStoreManagerHtml_(idPrefix) {
       if (i === STT_IDX) return currentStt;
       if (i === LINK_IDX) return '';
       if (i === SYSTEM_ID_IDX) return currentSystemId;
+      if (i === LOGO_URL_IDX) return currentLogoUrl;
+      if (i === HOURS_IDX) {
+        var hours = collectHoursFromEditor();
+        return hours.length ? JSON.stringify(hours) : '';
+      }
+      if (i === CLASSIFICATION_IDX) {
+        return collectClassificationsFromEditor().join(', ');
+      }
       var el = $('f' + i);
       if (!el) return '';
       if (NUMBER_IDX.indexOf(i) !== -1) {
@@ -1641,7 +2062,18 @@ function buildStoreManagerHtml_(idPrefix) {
         }
         if ($('f' + LAT_IDX)) $('f' + LAT_IDX).value = lat;
         if ($('f' + LNG_IDX)) $('f' + LNG_IDX).value = lng;
-        showMsg('Đã điền Vĩ độ/Kinh độ theo vị trí hiện tại — nhớ bấm Lưu.');
+        showMsg('Đã điền Vĩ độ/Kinh độ — đang dò Địa chỉ/Tỉnh thành phố…');
+        google.script.run.withSuccessHandler(function (r) {
+          if (r && r.address && $('f' + ADDRESS_IDX)) $('f' + ADDRESS_IDX).value = r.address;
+          if (r && r.province && $('f' + PROVINCE_IDX)) $('f' + PROVINCE_IDX).value = r.province;
+          showMsg(
+            r && (r.address || r.province)
+              ? 'Đã điền Vĩ độ/Kinh độ/Địa chỉ/Tỉnh thành phố — kiểm tra lại rồi bấm Lưu.'
+              : 'Đã điền Vĩ độ/Kinh độ — không dò được Địa chỉ/Tỉnh thành phố tự động, tự gõ tay giúp mình.'
+          );
+        }).withFailureHandler(function () {
+          showMsg('Đã điền Vĩ độ/Kinh độ — không dò được Địa chỉ/Tỉnh thành phố tự động, tự gõ tay giúp mình.');
+        }).reverseGeocodeLatLng(lat, lng);
       },
       function (err) {
         var msg = err && err.code === 1
@@ -1654,8 +2086,8 @@ function buildStoreManagerHtml_(idPrefix) {
   }
 
   /** Mở Google Maps tìm theo tên cửa hàng (nếu đã có toạ độ thì tìm thẳng theo toạ độ, chính
-   *  xác hơn) — chỉ để tham khảo lấy Vĩ độ/Kinh độ, không tự điền lại vào form (Google Maps
-   *  không cho web ngoài đọc toạ độ chọn tay qua link thường). */
+   *  xác hơn) — dùng để xem đúng vị trí rồi chuột phải chọn "Sao chép toạ độ" bên đó, quay lại
+   *  dán vào ô bên dưới + bấm "✅ Xác nhận" để tự điền. */
   function openMaps() {
     var lat = $('f' + LAT_IDX) ? $('f' + LAT_IDX).value : '';
     var lng = $('f' + LNG_IDX) ? $('f' + LNG_IDX).value : '';
@@ -1664,22 +2096,84 @@ function buildStoreManagerHtml_(idPrefix) {
     window.open('https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(query), '_blank');
   }
 
-  function openPhotoPanel(subfolder, replaceFlag) {
-    var nameEl = $('f' + NAME_IDX);
-    var storeName = nameEl ? nameEl.value.trim() : '';
-    if (!storeName) { showErr('Nhập Tên cửa hàng (và Lưu, nếu là quán mới) trước khi quản lý ảnh'); return; }
-    currentSubfolder = subfolder;
-    replaceOnUpload = replaceFlag;
-    $('photoPanelTitle').textContent =
-      subfolder + (replaceFlag ? ' (chỉ 1 ảnh — tải ảnh mới sẽ tự thay ảnh cũ)' : '');
-    $('photoPanel').style.display = 'block';
-    loadPhotoGrid();
+  /** Tách toạ độ (lat,lng) từ nội dung dán vào — LỌC SẠCH mọi ký tự thừa trước (ngoặc, độ °,
+   *  chữ N/E, khoảng trắng lạ...), chỉ giữ số/dấu chấm/dấu phẩy/dấu trừ, rồi CẮT THẲNG theo dấu
+   *  phẩy đầu tiên (dạng Google Maps "Sao chép toạ độ" luôn là "vĩ độ, kinh độ", vd
+   *  "10.781024482796337, 106.94970051971518", kể cả khi dán kèm ngoặc/ký tự lạ như
+   *  "(10.78, 106.94)" hay "10.78°N, 106.94°E") rồi ép 2 nửa thành số — không dùng regex kiểm
+   *  tra định dạng (từng lỗi khó hiểu ở môi trường thật dù test Node.js luôn đúng, lọc + cắt
+   *  bằng indexOf()/slice() đơn giản hơn nhiều nên chắc chắn hơn). Trả về {lat,lng} hoặc null
+   *  nếu không tách được 2 số. */
+  function extractLatLngFromPastedText_(text) {
+    var clean = String(text || '')
+      .replace(/[\uFF0C]/g, ',')
+      .replace(/[^0-9.,\-]/g, '')
+      .trim();
+    var idx = clean.indexOf(',');
+    if (idx === -1) return null;
+    var lat = Number(clean.slice(0, idx));
+    var lng = Number(clean.slice(idx + 1));
+    if (isNaN(lat) || isNaN(lng)) return null;
+    return { lat: lat, lng: lng };
   }
 
-  function loadPhotoGrid() {
-    var storeName = $('f' + NAME_IDX).value.trim();
+  /** Bấm "✅ Xác nhận" cạnh ô dán — tách toạ độ (lat,lng) từ nội dung vừa dán (đã sao chép trực
+   *  tiếp bên Google Maps), điền vào Vĩ độ/Kinh độ, rồi tự dò ngược Địa chỉ/Tỉnh thành phố (dùng
+   *  chung reverseGeocodeLatLng với nút "📍 Chọn vị trí ngay đây"). */
+  function mapPasteConfirm() {
+    var raw = $('mapPasteInput').value.trim();
+    if (!raw) { showErr('Dán toạ độ vừa sao chép từ Google Maps vào ô trước'); return; }
+    var pos = extractLatLngFromPastedText_(raw);
+    if (!pos) {
+      showErr(
+        'Không tìm thấy toạ độ trong nội dung đã dán — bên Google Maps, chuột phải đúng vị trí ' +
+        'chọn "Sao chép toạ độ" rồi dán lại vào đây.'
+      );
+      return;
+    }
+
+    if ($('f' + LAT_IDX)) $('f' + LAT_IDX).value = pos.lat;
+    if ($('f' + LNG_IDX)) $('f' + LNG_IDX).value = pos.lng;
+    showMsg('Đã điền Vĩ độ/Kinh độ — đang dò Địa chỉ/Tỉnh thành phố…');
+    google.script.run.withSuccessHandler(function (r) {
+      if (r && r.address && $('f' + ADDRESS_IDX)) $('f' + ADDRESS_IDX).value = r.address;
+      if (r && r.province && $('f' + PROVINCE_IDX)) $('f' + PROVINCE_IDX).value = r.province;
+      $('mapPasteInput').value = '';
+      showMsg(
+        r && (r.address || r.province)
+          ? 'Đã điền Vĩ độ/Kinh độ/Địa chỉ/Tỉnh thành phố — kiểm tra lại rồi bấm Lưu.'
+          : 'Đã điền Vĩ độ/Kinh độ — không dò được Địa chỉ/Tỉnh thành phố tự động, tự gõ tay giúp mình.'
+      );
+    }).withFailureHandler(function () {
+      $('mapPasteInput').value = '';
+      showMsg('Đã điền Vĩ độ/Kinh độ — không dò được Địa chỉ/Tỉnh thành phố tự động, tự gõ tay giúp mình.');
+    }).reverseGeocodeLatLng(pos.lat, pos.lng);
+  }
+
+  /** Chuyển tab ảnh (Ảnh đại diện/Ảnh quán/Ảnh sản phẩm) — mỗi tab giữ input file + grid
+   *  riêng, không dùng chung 1 panel nữa nên chuyển qua lại không mất trạng thái đang chọn ở
+   *  tab kia. */
+  function switchPhotoTab(tab) {
+    activePhotoTab = tab;
+    PHOTO_TABS.forEach(function (t) {
+      var active = t === tab;
+      $(t.panel).classList.toggle('photo-panel-active', active);
+      $(t.tabBtn).classList.toggle('photo-tab-active', active);
+    });
+    loadPhotoGridFor(tab);
+  }
+
+  function resetPhotoTabs() {
+    PHOTO_TABS.forEach(function (t) { $(t.grid).innerHTML = ''; });
+    switchPhotoTab(PHOTO_TABS[0]);
+  }
+
+  function loadPhotoGridFor(tab) {
+    var nameEl = $('f' + NAME_IDX);
+    var storeName = nameEl ? nameEl.value.trim() : '';
+    if (!storeName) { $(tab.grid).innerHTML = ''; return; }
     google.script.run.withSuccessHandler(function (images) {
-      var grid = $('photoGrid');
+      var grid = $(tab.grid);
       grid.innerHTML = '';
       images.forEach(function (img) {
         var thumb = document.createElement('div');
@@ -1692,40 +2186,93 @@ function buildStoreManagerHtml_(idPrefix) {
         del.className = 'del';
         del.textContent = '×';
         del.title = 'Xoá ảnh';
-        del.onclick = function () { removePhoto(img.id); };
+        del.onclick = function () { removePhoto(tab, img.id); };
         thumb.appendChild(del);
         grid.appendChild(thumb);
       });
-    }).withFailureHandler(showErr).listImagesInStoreSubfolder(storeName, currentSubfolder);
+    }).withFailureHandler(showErr).listImagesInStoreSubfolder(storeName, tab.subfolder);
   }
 
-  function uploadPhoto() {
-    var fileInput = $('photoFile');
-    var storeName = $('f' + NAME_IDX).value.trim();
-    if (!fileInput.files.length) { showErr('Chọn 1 ảnh trước'); return; }
-    var file = fileInput.files[0];
-    if (file.size > MAX_PHOTO_BYTES) {
-      showErr('Ảnh "' + file.name + '" nặng ' + (file.size / 1024).toFixed(0) +
+  /** Ảnh quán/Ảnh sản phẩm cho chọn NHIỀU ảnh cùng lúc (input file có "multiple") — tải TUẦN TỰ
+   *  từng ảnh một (không tải song song, tránh vượt giới hạn gọi đồng thời của Apps Script), báo
+   *  tiến độ theo từng ảnh, chỉ làm mới lưới ảnh 1 lần sau khi xong hết. Ảnh đại diện vẫn chỉ
+   *  chọn được 1 ảnh (input không có "multiple") nên vòng lặp này chỉ chạy đúng 1 vòng. */
+  function uploadPhotoFor(tab) {
+    var fileInput = $(tab.fileInput);
+    var nameEl = $('f' + NAME_IDX);
+    var storeName = nameEl ? nameEl.value.trim() : '';
+    if (!storeName) { showErr('Nhập Tên cửa hàng (và Lưu, nếu là quán mới) trước khi quản lý ảnh'); return; }
+    if (!fileInput.files.length) { showErr('Chọn ít nhất 1 ảnh trước'); return; }
+    var files = Array.prototype.slice.call(fileInput.files);
+    var oversized = files.filter(function (f) { return f.size > MAX_PHOTO_BYTES; });
+    if (oversized.length) {
+      showErr('Ảnh "' + oversized[0].name + '" nặng ' + (oversized[0].size / 1024).toFixed(0) +
         'KB, vượt quá ' + (MAX_PHOTO_BYTES / 1024) + 'KB cho phép — chọn ảnh nhẹ hơn hoặc nén lại trước khi tải lên.');
-      fileInput.value = '';
       return;
     }
+    uploadFilesSequentially_(tab, storeName, files, 0, [], fileInput);
+  }
+
+  function uploadFilesSequentially_(tab, storeName, files, index, errors, fileInput) {
+    if (index >= files.length) {
+      fileInput.value = '';
+      loadPhotoGridFor(tab);
+      if (errors.length) {
+        showErr('Đã tải ' + (files.length - errors.length) + '/' + files.length + ' ảnh — lỗi: ' + errors.join('; '));
+      } else {
+        showMsg('Đã tải xong ' + files.length + ' ảnh.');
+      }
+      return;
+    }
+    var file = files[index];
+    showMsg('Đang tải ảnh ' + (index + 1) + '/' + files.length + ' ("' + file.name + '")…');
     var reader = new FileReader();
     reader.onload = function () {
       var base64 = reader.result.split(',')[1];
       google.script.run.withSuccessHandler(function () {
-        showMsg('Đã tải ảnh lên');
-        fileInput.value = '';
-        loadPhotoGrid();
-      }).withFailureHandler(showErr)
-        .uploadImageToStoreSubfolder(storeName, currentSubfolder, file.name, file.type, base64, replaceOnUpload);
+        if (tab.cloudinaryFolder) {
+          uploadToCloudinaryAndContinue_(tab, storeName, files, index, errors, fileInput, file, base64);
+        } else {
+          uploadFilesSequentially_(tab, storeName, files, index + 1, errors, fileInput);
+        }
+      }).withFailureHandler(function (e) {
+        errors.push(file.name + ': ' + (e && e.message ? e.message : e));
+        uploadFilesSequentially_(tab, storeName, files, index + 1, errors, fileInput);
+      }).uploadImageToStoreSubfolder(storeName, tab.subfolder, file.name, file.type, base64, tab.replace);
     };
     reader.readAsDataURL(file);
   }
 
-  function removePhoto(fileId) {
+  /** Sau khi ảnh đã tải xong lên Drive (thư mục nội bộ), với tab có cloudinaryFolder (hiện chỉ
+   *  Ảnh đại diện) tải THÊM 1 lần nữa lên Cloudinary để có link công khai hiển thị được trên app
+   *  (merchants.logo_url) — điền vào form (currentLogoUrl, ghi thật vào sheet khi bấm "💾 Lưu"
+   *  như mọi trường khác, xem collectValues()). Lỗi ở bước Cloudinary không chặn các ảnh còn lại
+   *  (ảnh vẫn đã lưu được trên Drive, chỉ là chưa có link công khai). */
+  function uploadToCloudinaryAndContinue_(tab, storeName, files, index, errors, fileInput, file, base64) {
+    google.script.run.withSuccessHandler(function (url) {
+      currentLogoUrl = url;
+      showMsg('Đã tải ảnh lên Cloudinary — nhớ bấm "💾 Lưu" để ghi lại link ảnh đại diện.');
+      var logoArea = $('logoUrlArea');
+      if (logoArea) {
+        logoArea.innerHTML = '';
+        var logoImg = document.createElement('img');
+        logoImg.src = url;
+        logoImg.style.cssText = 'width:56px;height:56px;object-fit:cover;border-radius:4px;border:1px solid #ccc;vertical-align:middle;margin-right:8px;';
+        logoArea.appendChild(logoImg);
+        var logoLink = document.createElement('a');
+        logoLink.href = url; logoLink.target = '_blank'; logoLink.textContent = 'Xem ảnh gốc';
+        logoArea.appendChild(logoLink);
+      }
+      uploadFilesSequentially_(tab, storeName, files, index + 1, errors, fileInput);
+    }).withFailureHandler(function (e) {
+      errors.push(file.name + ' (Cloudinary): ' + (e && e.message ? e.message : e));
+      uploadFilesSequentially_(tab, storeName, files, index + 1, errors, fileInput);
+    }).uploadImageToCloudinary(base64, file.type, file.name, tab.cloudinaryFolder);
+  }
+
+  function removePhoto(tab, fileId) {
     if (!confirm('Xoá ảnh này?')) return;
-    google.script.run.withSuccessHandler(loadPhotoGrid).withFailureHandler(showErr).deleteImage(fileId);
+    google.script.run.withSuccessHandler(function () { loadPhotoGridFor(tab); }).withFailureHandler(showErr).deleteImage(fileId);
   }
 })();
 </script>
@@ -1792,6 +2339,14 @@ function buildProductManagerHtml_(idPrefix) {
     <input type="text" id="${idPrefix}pImgUrl" placeholder="Chưa chọn ảnh" readonly>
     <button id="${idPrefix}btnPickImage">Chọn ảnh từ Ảnh menu</button>
   </div>
+  <div class="imgRow" style="margin-top:6px;">
+    <input type="file" id="${idPrefix}pImgUploadFile" accept="image/*">
+    <button id="${idPrefix}btnUploadProductImage">📤 Tải ảnh mới lên</button>
+  </div>
+  <div style="color:#888; font-size:12px; margin-top:2px;">
+    Tải ảnh mới lên Cloudinary để hiển thị trên app (khuyên dùng) — hoặc "Chọn ảnh từ Ảnh menu"
+    nếu ảnh đã tải sẵn bên tab Cửa hàng &gt; Ảnh sản phẩm trước đó.
+  </div>
 
   <div id="${idPrefix}imagePickerPanel" class="photo-panel">
     <div>Bấm vào 1 ảnh để chọn — ảnh lấy từ đúng thư mục "${SUBFOLDER_MENU_PHOTOS}" của quán đang chọn.</div>
@@ -1827,6 +2382,7 @@ function buildProductManagerHtml_(idPrefix) {
   var SYSTEM_ID_IDX = ${PRODUCT_SYSTEM_ID_COLUMN - 1};
   var EDITABLE_COLUMN_COUNT = ${PRODUCT_SYSTEM_ID_COLUMN - 1};
   var STATUS_OPTIONS = ${JSON.stringify(PRODUCT_STATUS_OPTIONS)};
+  var MAX_PHOTO_BYTES = ${PHOTO_MAX_BYTES};
 
   function showMsg(t) { $('msg').innerText = t; $('err').innerText = ''; }
   function showErr(e) { $('err').innerText = 'Lỗi: ' + (e && e.message ? e.message : e); $('msg').innerText = ''; }
@@ -1856,6 +2412,7 @@ function buildProductManagerHtml_(idPrefix) {
   $('btnSaveProduct').addEventListener('click', saveProduct);
   $('btnDeleteProduct').addEventListener('click', removeProduct);
   $('btnPickImage').addEventListener('click', openImagePicker);
+  $('btnUploadProductImage').addEventListener('click', uploadProductImageToCloudinary);
   init();
 
   function onSelectStore() {
@@ -2007,6 +2564,33 @@ function buildProductManagerHtml_(idPrefix) {
     $('pImgUrl').value = img.url;
     updateImgPreview(img.url);
     $('imagePickerPanel').style.display = 'none';
+  }
+
+  /** Tải ảnh sản phẩm mới thẳng lên Cloudinary (folder 'products') — điền luôn vào pImgUrl, KHÔNG
+   *  qua Drive như "Chọn ảnh từ Ảnh menu" (đó là ảnh đã có sẵn trong thư mục nội bộ của quán,
+   *  không phải link công khai — Drive không hotlink ổn định cho ảnh hiển thị công khai). */
+  function uploadProductImageToCloudinary() {
+    var fileInput = $('pImgUploadFile');
+    if (!fileInput.files.length) { showErr('Chọn 1 ảnh trước'); return; }
+    var file = fileInput.files[0];
+    if (file.size > MAX_PHOTO_BYTES) {
+      showErr('Ảnh "' + file.name + '" nặng ' + (file.size / 1024).toFixed(0) +
+        'KB, vượt quá ' + (MAX_PHOTO_BYTES / 1024) + 'KB cho phép — chọn ảnh nhẹ hơn hoặc nén lại trước khi tải lên.');
+      fileInput.value = '';
+      return;
+    }
+    showMsg('Đang tải ảnh lên Cloudinary…');
+    var reader = new FileReader();
+    reader.onload = function () {
+      var base64 = reader.result.split(',')[1];
+      google.script.run.withSuccessHandler(function (url) {
+        $('pImgUrl').value = url;
+        updateImgPreview(url);
+        fileInput.value = '';
+        showMsg('Đã tải ảnh lên — nhớ bấm "💾 Lưu sản phẩm" để ghi lại.');
+      }).withFailureHandler(showErr).uploadImageToCloudinary(base64, file.type, file.name, 'products');
+    };
+    reader.readAsDataURL(file);
   }
 })();
 </script>

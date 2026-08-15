@@ -11,6 +11,9 @@ class BranchHour {
         openTime: (json['open_time'] as String).substring(0, 5),
         closeTime: (json['close_time'] as String).substring(0, 5),
       );
+
+  Map<String, dynamic> toJson() =>
+      {'weekday': weekday, 'open_time': openTime, 'close_time': closeTime};
 }
 
 const weekdayLabels = {

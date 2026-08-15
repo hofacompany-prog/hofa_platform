@@ -1,4 +1,5 @@
 const router = require('express').Router();
+const crypto = require('crypto');
 const db = require('../db');
 const config = require('../config');
 const asyncHandler = require('../asyncHandler');
@@ -88,6 +89,35 @@ router.delete('/gas-sync/merchants/:id', asyncHandler(async (req, res) => {
   res.json({ ok: true, data: deleted });
 }));
 
+/** Ký request upload ảnh lên Cloudinary cho GAS — cùng cách ký với POST /uploads/cloudinary-
+ * signature (uploads.js) nhưng bảo vệ bằng x-gas-sync-secret thay vì JWT (Apps Script không có
+ * session Supabase để requireAuth). GAS tự POST file thẳng lên Cloudinary bằng chữ ký này, server
+ * không proxy file nhị phân. */
+router.post('/gas-sync/cloudinary-signature', asyncHandler(async (req, res) => {
+  requireGasSecret(req);
+  if (!config.cloudinaryCloudName || !config.cloudinaryApiKey || !config.cloudinaryApiSecret) {
+    throw new ApiError('NOT_CONFIGURED', 'Cloudinary chưa được cấu hình trên server', 500);
+  }
+  const ALLOWED_FOLDERS = ['merchants', 'products'];
+  const folder = ALLOWED_FOLDERS.includes(req.body.folder) ? req.body.folder : 'products';
+  const timestamp = Math.round(Date.now() / 1000);
+  const paramsToSign = `folder=hofa/${folder}&timestamp=${timestamp}`;
+  const signature = crypto
+    .createHash('sha1')
+    .update(paramsToSign + config.cloudinaryApiSecret)
+    .digest('hex');
+  res.json({
+    ok: true,
+    data: {
+      signature,
+      timestamp,
+      folder: `hofa/${folder}`,
+      api_key: config.cloudinaryApiKey,
+      cloud_name: config.cloudinaryCloudName
+    }
+  });
+}));
+
 /** Toàn bộ dữ liệu hiện có của 1 cửa hàng (do GAS quản lý) — dùng để GAS so sánh với sheet
  * trước khi đồng bộ (hiện danh sách thay đổi cho người dùng xác nhận). merchant_id trống +
  * name có giá trị = cửa hàng CHƯA từng đồng bộ, chỉ trả về cảnh báo trùng tên (nếu có), mọi
@@ -116,10 +146,27 @@ router.get('/gas-sync/snapshot', asyncHandler(async (req, res) => {
     return;
   }
 
+  // Phân loại hiện có (tên) — GAS so với STORE_CLASSIFICATION_COLUMN của sheet để hiện diff.
+  const classificationRows = await db.query(
+    `SELECT mc.name FROM merchant_classification_links l
+       JOIN merchant_classifications mc ON mc.id = l.classification_id
+      WHERE l.merchant_id = $1 ORDER BY mc.sort_order, mc.name`,
+    [merchant.id]
+  );
+  merchant.classifications = classificationRows.map((r) => r.name);
+
   const branch = await db.queryOne(
     'SELECT * FROM branches WHERE merchant_id = $1 AND is_main = true AND deleted_at IS NULL',
     [merchant.id]
   );
+  if (branch) {
+    // Toàn bộ tuần hiện có, để GAS so diff theo từng ngày — [] = branch_hours 0 dòng = "luôn
+    // mở", xem hofa-db/78_branch_operating_hours_gate.sql.
+    branch.hours = await db.query(
+      'SELECT weekday, open_time, close_time FROM branch_hours WHERE branch_id = $1 ORDER BY weekday',
+      [branch.id]
+    );
+  }
 
   const products = await db.query(
     'SELECT * FROM products WHERE merchant_id = $1 AND deleted_at IS NULL ORDER BY created_at',
@@ -205,7 +252,8 @@ router.post('/gas-sync/apply', asyncHandler(async (req, res) => {
     merchant = await requireGasMerchant(body.merchant.id);
     merchant = await db.updateById('merchants', merchant.id, {
       name: body.merchant.name,
-      description: body.merchant.description || null
+      description: body.merchant.description || null,
+      logo_url: body.merchant.logo_url || null
     });
   } else {
     if (!config.gasSyncOwnerId) throw new ApiError('BAD_REQUEST', 'Server chưa cấu hình GAS_SYNC_OWNER_ID, không tạo được cửa hàng mới', 400);
@@ -222,12 +270,33 @@ router.post('/gas-sync/apply', asyncHandler(async (req, res) => {
       name: body.merchant.name,
       slug: await uniqueMerchantSlug(body.merchant.name),
       description: body.merchant.description || null,
+      logo_url: body.merchant.logo_url || null,
       merchant_type: 'buy_on_behalf',
       status: 'active',
       is_gas_synced: true
     });
   }
   result.merchant = { id: merchant.id };
+
+  // ---- Phân loại cửa hàng (merchant_classifications, nhiều-nhiều — full-replace theo tên,
+  // cùng pattern branch_hours: xoá hết rồi insert lại đúng danh sách mới). Tên không khớp bất
+  // kỳ phân loại nào đang có trong hệ thống (admin quản lý) sẽ bị bỏ qua lặng lẽ — không tự tạo
+  // phân loại mới qua đường GAS. */
+  const classificationNames = Array.isArray(body.merchant.classification_names) ? body.merchant.classification_names : [];
+  await db.query('DELETE FROM merchant_classification_links WHERE merchant_id = $1', [merchant.id]);
+  if (classificationNames.length) {
+    const matched = await db.query(
+      'SELECT id FROM merchant_classifications WHERE lower(name) = ANY($1::text[])',
+      [classificationNames.map((n) => String(n).trim().toLowerCase())]
+    );
+    if (matched.length) {
+      const values = matched.map((r, i) => `($1, $${i + 2})`).join(', ');
+      await db.query(
+        `INSERT INTO merchant_classification_links (merchant_id, classification_id) VALUES ${values}`,
+        [merchant.id, ...matched.map((r) => r.id)]
+      );
+    }
+  }
 
   // ---- Chi nhánh chính (branches.line1/province/latitude/longitude NOT NULL) ----
   const lat = body.merchant.latitude === '' || body.merchant.latitude == null ? null : Number(body.merchant.latitude);
@@ -249,10 +318,31 @@ router.post('/gas-sync/apply', asyncHandler(async (req, res) => {
     'SELECT id FROM branches WHERE merchant_id = $1 AND is_main = true AND deleted_at IS NULL',
     [merchant.id]
   );
+  let branchId;
   if (existingBranch) {
     await db.updateById('branches', existingBranch.id, branchData);
+    branchId = existingBranch.id;
   } else {
-    await db.insertRow('branches', { ...branchData, merchant_id: merchant.id });
+    const createdBranch = await db.insertRow('branches', { ...branchData, merchant_id: merchant.id });
+    branchId = createdBranch.id;
+  }
+
+  // ---- Giờ hoạt động (branch_hours) — thay toàn bộ tuần bằng body.merchant.hours (danh sách
+  // {weekday, open_time, close_time}, chỉ chứa NGÀY BẬT — cùng shape với PUT /branches/:id/hours
+  // thật, xem hofa_store_app/lib/screens/settings/branch_hours_screen.dart). Rỗng/thiếu = xoá
+  // hết = "luôn mở" theo branch_effective_status(), xem hofa-db/78_branch_operating_hours_gate.sql.
+  await db.query('DELETE FROM branch_hours WHERE branch_id = $1', [branchId]);
+  const hours = Array.isArray(body.merchant.hours) ? body.merchant.hours : [];
+  if (hours.length) {
+    await db.insertRows(
+      'branch_hours',
+      hours.map((h) => ({
+        branch_id: branchId,
+        weekday: h.weekday,
+        open_time: h.open_time,
+        close_time: h.close_time
+      }))
+    );
   }
 
   // ---- Nhóm topping + topping (thư viện dùng chung của cửa hàng, xem topping_groups) ----

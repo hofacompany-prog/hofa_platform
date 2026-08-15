@@ -562,56 +562,178 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
     );
   }
 
+  TimeOfDay? _parseHourTime(String s) {
+    final parts = s.split(':');
+    if (parts.length < 2) return null;
+    final h = int.tryParse(parts[0]);
+    final m = int.tryParse(parts[1]);
+    if (h == null || m == null) return null;
+    return TimeOfDay(hour: h, minute: m);
+  }
+
+  String _fmtHourTime(TimeOfDay t) =>
+      '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+
+  /// Sửa giờ mở cửa từng ngày trong tuần cho 1 chi nhánh — cùng luồng dữ liệu
+  /// (GET/PUT /branches/:id/hours) và cách gõ (công tắc bật/tắt + chọn giờ mở/đóng riêng từng
+  /// ngày) với màn hình Cửa hàng tự sửa (hofa_store_app/lib/screens/settings/branch_hours_screen.dart),
+  /// chỉ khác ở chỗ admin dùng dialog thay vì màn hình riêng cho gọn.
   Future<void> _viewBranchHours(Branch b) async {
-    List<BranchHour>? hours;
-    String? error;
+    List<BranchHour>? existing;
+    String? loadError;
     try {
-      hours = await ref.read(adminRepoProvider).branchHours(b.id);
+      existing = await ref.read(adminRepoProvider).branchHours(b.id);
     } catch (e) {
-      error = '$e';
+      loadError = '$e';
     }
     if (!mounted) return;
+    if (loadError != null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Lỗi: $loadError')));
+      return;
+    }
+
+    final enabled = List<bool>.filled(7, false);
+    final openTimes = List<TimeOfDay>.filled(
+      7,
+      const TimeOfDay(hour: 8, minute: 0),
+    );
+    final closeTimes = List<TimeOfDay>.filled(
+      7,
+      const TimeOfDay(hour: 21, minute: 0),
+    );
+    for (final h in existing!) {
+      final o = _parseHourTime(h.openTime);
+      final c = _parseHourTime(h.closeTime);
+      if (o == null || c == null) continue;
+      enabled[h.weekday] = true;
+      openTimes[h.weekday] = o;
+      closeTimes[h.weekday] = c;
+    }
+
+    var saving = false;
+    String? saveError;
+
     await showDialog<void>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Giờ mở cửa — ${b.name}'),
-        content: SizedBox(
-          width: dialogWidth(context, 320),
-          child: error != null
-              ? Text('Lỗi: $error')
-              : (hours!.isEmpty
-                    ? const Text('Chưa thiết lập giờ mở cửa cố định.')
-                    : Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: hours
-                            .map(
-                              (h) => Padding(
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 4,
-                                ),
-                                child: Row(
-                                  children: [
-                                    SizedBox(
-                                      width: 110,
-                                      child: Text(
-                                        weekdayLabels[h.weekday] ??
-                                            '${h.weekday}',
-                                      ),
-                                    ),
-                                    Text('${h.openTime} — ${h.closeTime}'),
-                                  ],
-                                ),
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setInner) {
+          Future<void> pickTime(int i, {required bool isOpen}) async {
+            final picked = await showTimePicker(
+              context: dialogContext,
+              initialTime: isOpen ? openTimes[i] : closeTimes[i],
+            );
+            if (picked == null) return;
+            setInner(() {
+              if (isOpen) {
+                openTimes[i] = picked;
+              } else {
+                closeTimes[i] = picked;
+              }
+            });
+          }
+
+          return AlertDialog(
+            title: Text('Giờ mở cửa — ${b.name}'),
+            content: SizedBox(
+              width: dialogWidth(context, 380),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (var i = 0; i < 7; i++)
+                      Row(
+                        children: [
+                          SizedBox(width: 88, child: Text(weekdayLabels[i]!)),
+                          Switch(
+                            value: enabled[i],
+                            onChanged: (v) => setInner(() => enabled[i] = v),
+                          ),
+                          if (enabled[i]) ...[
+                            Expanded(
+                              child: TextButton(
+                                onPressed: () => pickTime(i, isOpen: true),
+                                child: Text(_fmtHourTime(openTimes[i])),
                               ),
-                            )
-                            .toList(),
-                      )),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Đóng'),
-          ),
-        ],
+                            ),
+                            const Text('—'),
+                            Expanded(
+                              child: TextButton(
+                                onPressed: () => pickTime(i, isOpen: false),
+                                child: Text(_fmtHourTime(closeTimes[i])),
+                              ),
+                            ),
+                          ] else
+                            const Expanded(
+                              child: Text(
+                                'Đóng cửa',
+                                style: TextStyle(color: Colors.black45),
+                              ),
+                            ),
+                        ],
+                      ),
+                    if (saveError != null) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        'Lỗi: $saveError',
+                        style: TextStyle(
+                          color: Theme.of(dialogContext).colorScheme.error,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: saving ? null : () => Navigator.pop(dialogContext),
+                child: const Text('Đóng'),
+              ),
+              FilledButton(
+                onPressed: saving
+                    ? null
+                    : () async {
+                        setInner(() {
+                          saving = true;
+                          saveError = null;
+                        });
+                        try {
+                          final hours = <BranchHour>[
+                            for (var i = 0; i < 7; i++)
+                              if (enabled[i])
+                                BranchHour(
+                                  weekday: i,
+                                  openTime: _fmtHourTime(openTimes[i]),
+                                  closeTime: _fmtHourTime(closeTimes[i]),
+                                ),
+                          ];
+                          await ref
+                              .read(adminRepoProvider)
+                              .setBranchHours(b.id, hours);
+                          if (dialogContext.mounted) {
+                            Navigator.pop(dialogContext);
+                          }
+                        } catch (e) {
+                          setInner(() {
+                            saveError = '$e';
+                            saving = false;
+                          });
+                        }
+                      },
+                child: saving
+                    ? const SizedBox(
+                        height: 18,
+                        width: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Lưu'),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
