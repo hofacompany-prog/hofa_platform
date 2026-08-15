@@ -129,6 +129,10 @@ class _EarningsScreenState extends ConsumerState<EarningsScreen> {
   }
 
   Future<void> _withdraw(int earningBalance) async {
+    final settings = await ref.read(driverFinanceSettingsProvider.future);
+    final minWithdrawal = settings.minWithdrawalAmount;
+    if (!mounted) return;
+
     final amountCtrl = TextEditingController();
     final ok = await showDialog<bool>(
       context: context,
@@ -139,6 +143,10 @@ class _EarningsScreenState extends ConsumerState<EarningsScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('Số dư khả dụng: ${formatVnd(earningBalance)}'),
+            if (minWithdrawal > 0) ...[
+              const SizedBox(height: 4),
+              Text('Rút tối thiểu: ${formatVnd(minWithdrawal)}'),
+            ],
             const SizedBox(height: 12),
             TextField(
               controller: amountCtrl,
@@ -164,6 +172,14 @@ class _EarningsScreenState extends ConsumerState<EarningsScreen> {
     );
     final amount = int.tryParse(amountCtrl.text.trim());
     if (ok != true || amount == null || amount <= 0 || !mounted) return;
+    if (amount < minWithdrawal) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Số tiền rút tối thiểu là ${formatVnd(minWithdrawal)}'),
+        ),
+      );
+      return;
+    }
 
     try {
       await _driverRepo.createWithdrawal(amount);

@@ -21,6 +21,7 @@ class _DriverFinanceSettingsScreenState
   final _vatCtrl = TextEditingController();
   final _pitCtrl = TextEditingController();
   final _feeShareCtrl = TextEditingController();
+  final _minWithdrawalCtrl = TextEditingController();
   bool _initialized = false;
   bool _saving = false;
 
@@ -30,6 +31,7 @@ class _DriverFinanceSettingsScreenState
     _vatCtrl.dispose();
     _pitCtrl.dispose();
     _feeShareCtrl.dispose();
+    _minWithdrawalCtrl.dispose();
     super.dispose();
   }
 
@@ -38,6 +40,7 @@ class _DriverFinanceSettingsScreenState
     _vatCtrl.text = _trimZero(s.vatRate);
     _pitCtrl.text = _trimZero(s.pitRate);
     _feeShareCtrl.text = _trimZero(s.buyOnBehalfFeeShareRate);
+    _minWithdrawalCtrl.text = s.minWithdrawalAmount.toString();
   }
 
   String _trimZero(double v) =>
@@ -48,6 +51,7 @@ class _DriverFinanceSettingsScreenState
     final vat = double.tryParse(_vatCtrl.text.trim());
     final pit = double.tryParse(_pitCtrl.text.trim());
     final feeShare = double.tryParse(_feeShareCtrl.text.trim());
+    final minWithdrawal = int.tryParse(_minWithdrawalCtrl.text.trim());
     if (rate == null ||
         rate < 0 ||
         rate > 100 ||
@@ -63,6 +67,10 @@ class _DriverFinanceSettingsScreenState
       _showError('Các tỷ lệ % phải từ 0 đến 100');
       return;
     }
+    if (minWithdrawal == null || minWithdrawal < 0) {
+      _showError('Số tiền rút tối thiểu phải là số nguyên từ 0 trở lên');
+      return;
+    }
     setState(() => _saving = true);
     try {
       final saved = await ref
@@ -75,6 +83,7 @@ class _DriverFinanceSettingsScreenState
               pitRate: pit,
               codDebtLimit: current.codDebtLimit,
               buyOnBehalfFeeShareRate: feeShare,
+              minWithdrawalAmount: minWithdrawal,
             ),
           );
       ref.invalidate(driverFinanceSettingsProvider);
@@ -251,6 +260,38 @@ class _DriverFinanceSettingsScreenState
                               'bậc riêng từng cửa hàng ở màn Chi tiết cửa hàng) tài xế được '
                               'nhận thêm khi giao đơn mua hộ. Mặc định 0% — không cộng thêm '
                               'gì. Cộng thẳng vào ví thu nhập, không trừ hoa hồng/thuế ở trên.',
+                              style: theme.textTheme.bodySmall,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Card(
+                      elevation: 0,
+                      color: theme.colorScheme.surfaceContainerLow,
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Số tiền rút tối thiểu / lần',
+                              style: theme.textTheme.titleSmall,
+                            ),
+                            const SizedBox(height: 8),
+                            TextField(
+                              controller: _minWithdrawalCtrl,
+                              keyboardType: TextInputType.number,
+                              decoration: const InputDecoration(
+                                suffixText: 'đ',
+                                border: OutlineInputBorder(),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Mặc định 0đ — không giới hạn. Đặt khác 0 để chặn tài xế gửi yêu '
+                              'cầu rút số tiền vặt (vd 1-2đ), làm phình danh sách chờ duyệt.',
                               style: theme.textTheme.bodySmall,
                             ),
                           ],
