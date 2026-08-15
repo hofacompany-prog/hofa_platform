@@ -20,6 +20,98 @@
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="description" content="HOFA — Nhận đơn, giao hàng, theo dõi thu nhập cho tài xế.">
 
+  <!-- Trình duyệt trong app (Facebook/Messenger/Instagram/Zalo/TikTok/Zoom...) chặn nhiều thứ
+       web cần (cài PWA, đăng nhập Google, đôi lúc cả camera/định vị) — phát hiện càng sớm càng
+       tốt (trước cả lúc Flutter tải) và tự đẩy sang Chrome trên Android bằng intent://, vì
+       webview đó là 1 app riêng, chỉ intent mới thoát hẳn ra ngoài được. iOS KHÔNG có cách ép
+       triệt để (Apple để app chủ (FB/Instagram...) tự quyết định có cho webview thoát ra hay
+       không, trang web không có quyền ép) — thử thêm scheme googlechrome:// (im lặng nếu máy
+       không cài Chrome/app chặn scheme, không gây lỗi hiển thị) rồi luôn hiện thêm popup có nút
+       "Mở bằng trình duyệt" là link target=_blank bấm được thật, vì 1 cú chạm THẬT của người
+       dùng có cơ hội thoát ra Safari ở những app không khoá gắt (Zalo/Messenger/Line đôi khi
+       cho qua) — vẫn giữ hướng dẫn thủ công bên dưới làm phương án cuối vì không gì đảm bảo
+       chắc chắn 100%. Vẫn cho Flutter tải tiếp song song, popup không chặn hẳn app (có nút
+       "Để sau") phòng trường hợp khách muốn tiếp tục dùng tạm trong webview. Màu/bo góc theo
+       đúng design system app (xanh #85C100, bo góc 12-16px, phẳng — xem CLAUDE.md). -->
+  <script>
+    (function () {
+      var ua = navigator.userAgent || '';
+      var isInApp = /FBAN|FBAV|FB_IAB|Instagram|Line\/|Zalo|MicroMessenger|TikTok|musical_ly/i.test(ua);
+      if (!isInApp) return;
+
+      var url = location.href;
+      var isIOS = /iPhone|iPad|iPod/i.test(ua);
+      if (isIOS) {
+        // Best-effort — chỉ thoát được nếu máy có cài Chrome VÀ app chủ không chặn hẳn việc
+        // điều hướng sang custom scheme khác (nhiều app vẫn chặn, lúc đó lệnh này im lặng
+        // không làm gì, không có lỗi hiển thị).
+        location.href = 'googlechrome://' + url.replace(/^https?:\/\//, '');
+      } else {
+        var target = url.replace(/^https?:\/\//, '');
+        location.href = 'intent://' + target + '#Intent;scheme=https;package=com.android.chrome;end';
+      }
+
+      document.addEventListener('DOMContentLoaded', function () {
+        var overlay = document.createElement('div');
+        overlay.style.cssText = 'position:fixed;inset:0;z-index:999999;' +
+          'background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;' +
+          'padding:24px;font-family:-apple-system,Roboto,sans-serif;';
+
+        var card = document.createElement('div');
+        card.style.cssText = 'background:#fff;color:#1a1a1a;border-radius:16px;' +
+          'padding:24px 20px;max-width:320px;width:100%;text-align:center;';
+
+        var icon = document.createElement('div');
+        icon.style.cssText = 'width:48px;height:48px;border-radius:50%;margin:0 auto 12px;' +
+          'background:#EAF5D2;display:flex;align-items:center;justify-content:center;font-size:24px;';
+        icon.textContent = '🌐';
+
+        var title = document.createElement('div');
+        title.style.cssText = 'font-size:16px;font-weight:700;margin-bottom:6px;';
+        title.textContent = 'Mở bằng trình duyệt';
+
+        var body = document.createElement('div');
+        body.style.cssText = 'font-size:14px;line-height:1.5;color:#555;margin-bottom:18px;';
+        body.textContent = 'Trình duyệt trong app này chặn 1 số tính năng (cài ứng dụng, ' +
+          'đăng nhập Google...) — mở bằng trình duyệt thật để dùng đầy đủ.';
+
+        var openLink = document.createElement('a');
+        openLink.href = url;
+        openLink.target = '_blank';
+        openLink.rel = 'noopener';
+        openLink.textContent = 'Mở bằng trình duyệt';
+        openLink.style.cssText = 'display:block;background:#85C100;color:#fff;font-weight:600;' +
+          'font-size:15px;padding:12px;border-radius:10px;text-decoration:none;margin-bottom:8px;';
+
+        var laterBtn = document.createElement('button');
+        laterBtn.textContent = 'Để sau';
+        laterBtn.style.cssText = 'display:block;width:100%;background:none;border:none;' +
+          'color:#888;font-size:14px;padding:8px;cursor:pointer;';
+        laterBtn.onclick = function () { overlay.remove(); };
+
+        var hint = document.createElement('div');
+        hint.style.cssText = 'font-size:12px;color:#999;line-height:1.5;margin-top:8px;' +
+          'padding-top:12px;border-top:1px solid #eee;';
+        hint.innerHTML = isIOS
+          ? 'Nếu nút trên không mở được, nhấn <strong>···</strong> hoặc biểu tượng chia sẻ ở góc ' +
+            'màn hình rồi chọn <strong>"Mở trong Safari"</strong>.'
+          : 'Nếu nút trên không mở được, chọn menu của app rồi tìm mục "Mở bằng trình duyệt khác".';
+
+        card.appendChild(icon);
+        card.appendChild(title);
+        card.appendChild(body);
+        card.appendChild(openLink);
+        card.appendChild(laterBtn);
+        card.appendChild(hint);
+        overlay.appendChild(card);
+        overlay.addEventListener('click', function (e) {
+          if (e.target === overlay) overlay.remove();
+        });
+        document.body.appendChild(overlay);
+      });
+    })();
+  </script>
+
   <!-- Màu thanh trạng thái/thanh địa chỉ trình duyệt khi cài PWA — khớp màu thương hiệu -->
   <meta name="theme-color" content="#85C100">
 
