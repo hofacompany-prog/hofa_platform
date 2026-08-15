@@ -11,6 +11,7 @@ import 'screens/merchants/merchant_hub_screen.dart';
 import 'screens/merchants/merchant_form_screen.dart';
 import 'screens/merchants/merchant_detail_screen.dart';
 import 'screens/merchants/featured_merchants_screen.dart';
+import 'screens/merchants/branch_hours_screen.dart';
 import 'screens/orders/orders_screen.dart';
 import 'screens/orders/order_detail_screen.dart';
 import 'screens/users/users_screen.dart';
@@ -83,6 +84,13 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: '/merchants/:id',
             builder: (context, state) =>
                 MerchantDetailScreen(merchantId: state.pathParameters['id']!),
+          ),
+          GoRoute(
+            path: '/merchants/:id/branches/:branchId/hours',
+            builder: (context, state) => BranchHoursScreen(
+              merchantId: state.pathParameters['id']!,
+              branchId: state.pathParameters['branchId']!,
+            ),
           ),
           GoRoute(
             path: '/orders',
