@@ -56,6 +56,7 @@ app.use('/', require('./routes/admin-notifications'));
 app.use('/', require('./routes/notifications'));
 app.use('/', require('./routes/notification-settings'));
 app.use('/', require('./routes/uploads'));
+app.use('/', require('./routes/gasSync'));
 
 app.use((req, res) => {
   res.status(404).json({ ok: false, error: { code: 'NOT_FOUND', message: 'Không có route này' } });

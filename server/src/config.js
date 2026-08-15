@@ -29,5 +29,12 @@ module.exports = {
   // Không dùng required() — server vẫn phải chạy được khi chưa cấu hình Firebase,
   // chỉ việc gửi push cho tài xế sẽ tự bỏ qua (xem push.js) tới khi được cấu hình.
   firebaseServiceAccountJson: process.env.FIREBASE_SERVICE_ACCOUNT_JSON || null,
-  internalSweepSecret: process.env.INTERNAL_SWEEP_SECRET || null
+  internalSweepSecret: process.env.INTERNAL_SWEEP_SECRET || null,
+  // Bảo vệ nhóm endpoint /gas-sync/* (server/src/routes/gasSync.js) — công cụ Google Apps Script
+  // nhập liệu cửa hàng mua hộ (gas/store_folder_sync.gs) không có session Supabase nên không
+  // xác thực bằng JWT được, dùng chung 1 secret như internalSweepSecret ở trên.
+  gasSyncSecret: process.env.GAS_SYNC_SECRET || null,
+  // users.id sẽ đứng tên owner_id cho MỌI cửa hàng mới tạo qua GAS sync (merchants.owner_id
+  // NOT NULL, cửa hàng mua hộ không có chủ tự đăng nhập nên gán cố định 1 tài khoản có sẵn).
+  gasSyncOwnerId: process.env.GAS_SYNC_OWNER_ID || null
 };
