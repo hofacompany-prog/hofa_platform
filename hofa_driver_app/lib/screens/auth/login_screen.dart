@@ -106,7 +106,20 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             children: [
               Text.rich(
                 TextSpan(
-                  style: DefaultTextStyle.of(context).style,
+                  // Đọc thẳng từ Theme thay vì DefaultTextStyle.of(context) (ambient, có thể bị
+                  // 1 ancestor nào đó ghi đè bất ngờ) — cứng cỡ chữ/font/màu đen, không phụ thuộc
+                  // widget cha, để chắc chắn hiện đúng cỡ thường, không đậm, không gạch chân.
+                  style:
+                      Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Colors.black,
+                        fontWeight: FontWeight.normal,
+                        decoration: TextDecoration.none,
+                      ) ??
+                      const TextStyle(
+                        fontSize: 14,
+                        color: Colors.black,
+                        decoration: TextDecoration.none,
+                      ),
                   children: [
                     const TextSpan(text: 'Mật khẩu sẽ được reset về '),
                     TextSpan(
@@ -114,6 +127,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         color: Theme.of(context).colorScheme.secondary,
+                        decoration: TextDecoration.none,
                       ),
                     ),
                     const TextSpan(
