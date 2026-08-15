@@ -253,7 +253,8 @@ router.post('/gas-sync/apply', asyncHandler(async (req, res) => {
     merchant = await db.updateById('merchants', merchant.id, {
       name: body.merchant.name,
       description: body.merchant.description || null,
-      logo_url: body.merchant.logo_url || null
+      logo_url: body.merchant.logo_url || null,
+      cover_url: body.merchant.cover_url || null
     });
   } else {
     if (!config.gasSyncOwnerId) throw new ApiError('BAD_REQUEST', 'Server chưa cấu hình GAS_SYNC_OWNER_ID, không tạo được cửa hàng mới', 400);
@@ -271,6 +272,7 @@ router.post('/gas-sync/apply', asyncHandler(async (req, res) => {
       slug: await uniqueMerchantSlug(body.merchant.name),
       description: body.merchant.description || null,
       logo_url: body.merchant.logo_url || null,
+      cover_url: body.merchant.cover_url || null,
       merchant_type: 'buy_on_behalf',
       status: 'active',
       is_gas_synced: true

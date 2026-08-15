@@ -64,7 +64,11 @@ const STORE_LOGO_URL_COLUMN = 11;        // 11 - Ảnh đại diện (URL) → m
 // admin quản lý — xem hofa-db/71_merchant_classifications.sql), lưu dạng tên cách nhau bằng dấu
 // phẩy. Tên không khớp phân loại nào đang có trong hệ thống sẽ bị bỏ qua lặng lẽ lúc đồng bộ.
 const STORE_CLASSIFICATION_COLUMN = 12;  // 12 - Phân loại → merchant_classifications (nhiều-nhiều)
-const STORE_LAST_COLUMN = STORE_CLASSIFICATION_COLUMN;
+// Tự điền khi tải ảnh ở tab "Ảnh quán" lên rồi bấm "💾 Lưu" — tab đó cho chọn NHIỀU ảnh cùng
+// lúc (lưu hết vào Drive để xem lại), nhưng merchants.cover_url chỉ nhận 1 ảnh nên LUÔN LÀ ẢNH
+// TẢI LÊN GẦN NHẤT trong tab đó (tải ảnh mới sẽ tự ghi đè cột này, không cộng dồn).
+const STORE_COVER_URL_COLUMN = 13;       // 13 - Ảnh quán (URL) → merchants.cover_url
+const STORE_LAST_COLUMN = STORE_COVER_URL_COLUMN;
 
 // Cả tool này chỉ tạo cửa hàng mua hộ — không có cột chọn trong sheet, cố định khi đẩy API sau
 // này (chưa có code đẩy API trong bản này, chỉ đang quản lý dữ liệu qua Sheet/Drive).
@@ -96,7 +100,8 @@ const STORE_HEADERS = [
   'ID hệ thống',         // 9 — merchants.id, server tự ghi khi đồng bộ, không gõ tay
   'Giờ hoạt động',       // 10 — branch_hours (JSON), sửa qua form, không gõ tay trong sheet
   'Ảnh đại diện (URL)',  // 11 — merchants.logo_url, server (Cloudinary) tự ghi khi tải ảnh, không gõ tay
-  'Phân loại'            // 12 — merchant_classifications, chọn qua checkbox trong form, không gõ tay
+  'Phân loại',           // 12 — merchant_classifications, chọn qua checkbox trong form, không gõ tay
+  'Ảnh quán (URL)'       // 13 — merchants.cover_url, server (Cloudinary) tự ghi khi tải ảnh, không gõ tay
 ];
 
 // 3 thư mục con tự tạo bên trong thư mục Drive của mỗi cửa hàng.
@@ -248,7 +253,8 @@ function fixStoreHeaderRowOnly_v1() {
   const confirm = ui.alert(
     'Ghi lại dòng tiêu đề MERCHANT?',
     'Chỉ viết lại ĐÚNG chữ dòng 1 (STT, Tên cửa hàng, Mô tả, Địa chỉ, Tỉnh/Thành phố, Vĩ độ, ' +
-      'Kinh độ, Link thư mục, ID hệ thống, Giờ hoạt động, Ảnh đại diện (URL), Phân loại) — ' +
+      'Kinh độ, Link thư mục, ID hệ thống, Giờ hoạt động, Ảnh đại diện (URL), Phân loại, ' +
+      'Ảnh quán (URL)) — ' +
       'KHÔNG đụng bất kỳ dữ liệu dòng nào khác, chỉ thêm cột trống mới nếu sheet chưa đủ ' +
       STORE_HEADERS.length + ' cột. Dùng khi dữ liệu đã đúng cột nhưng tiêu đề vẫn sai/cũ/thiếu ' +
       'cột. Tiếp tục?',
@@ -787,12 +793,16 @@ function deleteStore(row) {
  *  phẩm (luôn mở đúng thư mục "Ảnh menu" của quán đang chọn).
  *  ============================================================================================ */
 
+/** cloudinaryUrl lấy từ description của file Drive (setDescription() lúc upload, xem
+ *  uploadImageToStoreSubfolder) — rỗng nếu ảnh cũ tải lên trước khi có tính năng Cloudinary,
+ *  hoặc lúc tải bị lỗi Cloudinary (vẫn lưu Drive bình thường, không chặn). */
 function toImageInfo_(file) {
   return {
     id: file.getId(),
     name: file.getName(),
     url: 'https://drive.google.com/uc?export=view&id=' + file.getId(),
-    thumbnailUrl: 'https://drive.google.com/thumbnail?id=' + file.getId() + '&sz=w300'
+    thumbnailUrl: 'https://drive.google.com/thumbnail?id=' + file.getId() + '&sz=w300',
+    cloudinaryUrl: file.getDescription() || ''
   };
 }
 
@@ -810,14 +820,27 @@ function listImagesInStoreSubfolder(storeName, subfolderName) {
 /** Tải 1 ảnh (base64 lấy từ thẻ input file phía trình duyệt) lên đúng thư mục con của quán.
  *  replaceExisting = true (dùng cho Avatar) sẽ chuyển hết ảnh cũ trong thư mục vào Thùng rác
  *  trước khi thêm ảnh mới — đảm bảo thư mục Avatar LUÔN CHỈ CÓ ĐÚNG 1 ẢNH. Chặn ảnh quá
- *  PHOTO_MAX_BYTES — form đã chặn từ phía trình duyệt rồi, đây là lớp phòng thủ thứ 2. */
-function uploadImageToStoreSubfolder(storeName, subfolderName, fileName, mimeType, base64Data, replaceExisting) {
+ *  PHOTO_MAX_BYTES — form đã chặn từ phía trình duyệt rồi, đây là lớp phòng thủ thứ 2.
+ *  cloudinaryFolder (nếu có): tải THÊM 1 bản lên Cloudinary (folder 'merchants'/'products'),
+ *  rồi ghi secure_url vào description của file Drive — để listImagesInStoreSubfolder/toImageInfo_
+ *  đọc lại được link công khai này sau (vd lúc "Chọn ảnh từ Ảnh menu" bên form Sản phẩm). Lỗi ở
+ *  bước Cloudinary KHÔNG chặn lưu Drive — ảnh vẫn lưu được, chỉ là chưa có link công khai. */
+function uploadImageToStoreSubfolder(storeName, subfolderName, fileName, mimeType, base64Data, replaceExisting, cloudinaryFolder) {
   const bytes = Utilities.base64Decode(base64Data);
   if (bytes.length > PHOTO_MAX_BYTES) {
     throw new Error(
       'Ảnh "' + fileName + '" nặng ' + Math.round(bytes.length / 1024) +
       'KB, vượt quá ' + (PHOTO_MAX_BYTES / 1024) + 'KB cho phép.'
     );
+  }
+
+  let cloudinaryUrl = '';
+  if (cloudinaryFolder) {
+    try {
+      cloudinaryUrl = uploadImageToCloudinary(base64Data, mimeType, fileName, cloudinaryFolder);
+    } catch (e) {
+      // Bỏ qua — vẫn tiếp tục lưu Drive bình thường phía dưới.
+    }
   }
 
   const structure = ensureStoreFolderStructure_(storeName);
@@ -829,7 +852,9 @@ function uploadImageToStoreSubfolder(storeName, subfolderName, fileName, mimeTyp
   }
 
   const blob = Utilities.newBlob(bytes, mimeType, fileName);
-  return toImageInfo_(sub.createFile(blob));
+  const file = sub.createFile(blob);
+  if (cloudinaryUrl) file.setDescription(cloudinaryUrl);
+  return toImageInfo_(file);
 }
 
 /** Xoá (chuyển vào Thùng rác) 1 ảnh theo File ID — dùng chung cho mọi thư mục con. */
@@ -1111,7 +1136,8 @@ function gasSyncBuildPayloadForStore_(storeName) {
     hours: parseStoreHoursJson_(sv[STORE_HOURS_COLUMN - 1]),
     logo_url: sv[STORE_LOGO_URL_COLUMN - 1] || '',
     classification_names: String(sv[STORE_CLASSIFICATION_COLUMN - 1] || '')
-      .split(',').map(function (s) { return s.trim(); }).filter(Boolean)
+      .split(',').map(function (s) { return s.trim(); }).filter(Boolean),
+    cover_url: sv[STORE_COVER_URL_COLUMN - 1] || ''
   };
 
   // Nhóm topping — sheet TOPPING phẳng (1 dòng = 1 topping), gộp lại theo Tên nhóm.
@@ -1207,6 +1233,7 @@ function diffMerchant_(lines, snapshot, payload) {
     lines.push(fieldCompareRow_('Tên', '', payload.merchant.name));
     lines.push(fieldCompareRow_('Mô tả', '', payload.merchant.description));
     lines.push(fieldCompareRow_('Ảnh đại diện', '', payload.merchant.logo_url));
+    lines.push(fieldCompareRow_('Ảnh quán', '', payload.merchant.cover_url));
     lines.push(fieldCompareRow_('Phân loại', '', payload.merchant.classification_names.join(', ')));
     lines.push(fieldCompareRow_('Địa chỉ', '', payload.merchant.address_line1));
     lines.push(fieldCompareRow_('Tỉnh/Thành phố', '', payload.merchant.province));
@@ -1222,6 +1249,7 @@ function diffMerchant_(lines, snapshot, payload) {
   lines.push(fieldCompareRow_('Tên', oldM.name, payload.merchant.name));
   lines.push(fieldCompareRow_('Mô tả', oldM.description, payload.merchant.description));
   lines.push(fieldCompareRow_('Ảnh đại diện', oldM.logo_url, payload.merchant.logo_url));
+  lines.push(fieldCompareRow_('Ảnh quán', oldM.cover_url, payload.merchant.cover_url));
   lines.push(fieldCompareRow_(
     'Phân loại',
     (oldM.classifications || []).slice().sort().join(', '),
@@ -1402,7 +1430,8 @@ function gasSyncApply(storeName) {
       longitude: payload.merchant.longitude,
       hours: payload.merchant.hours,
       logo_url: payload.merchant.logo_url,
-      classification_names: payload.merchant.classification_names
+      classification_names: payload.merchant.classification_names,
+      cover_url: payload.merchant.cover_url
     },
     topping_groups: payload.topping_groups.map(function (g) {
       return {
@@ -1646,13 +1675,14 @@ function buildStoreManagerHtml_(idPrefix) {
   var currentRow = null;
   var PHOTO_TABS = [
     { subfolder: '${SUBFOLDER_AVATAR}', replace: true, cloudinaryFolder: 'merchants', tabBtn: 'photoTabBtnAvatar', panel: 'photoPanelAvatar', fileInput: 'avatarFile', uploadBtn: 'btnUploadAvatar', grid: 'avatarGrid' },
-    { subfolder: '${SUBFOLDER_STORE_PHOTOS}', replace: false, cloudinaryFolder: null, tabBtn: 'photoTabBtnStore', panel: 'photoPanelStore', fileInput: 'storePhotoFile', uploadBtn: 'btnUploadStorePhoto', grid: 'storePhotoGrid' },
-    { subfolder: '${SUBFOLDER_MENU_PHOTOS}', replace: false, cloudinaryFolder: null, tabBtn: 'photoTabBtnProduct', panel: 'photoPanelProduct', fileInput: 'productPhotoFile', uploadBtn: 'btnUploadProductPhoto', grid: 'productPhotoGrid' }
+    { subfolder: '${SUBFOLDER_STORE_PHOTOS}', replace: false, cloudinaryFolder: 'merchants', tabBtn: 'photoTabBtnStore', panel: 'photoPanelStore', fileInput: 'storePhotoFile', uploadBtn: 'btnUploadStorePhoto', grid: 'storePhotoGrid' },
+    { subfolder: '${SUBFOLDER_MENU_PHOTOS}', replace: false, cloudinaryFolder: 'products', tabBtn: 'photoTabBtnProduct', panel: 'photoPanelProduct', fileInput: 'productPhotoFile', uploadBtn: 'btnUploadProductPhoto', grid: 'productPhotoGrid' }
   ];
   var activePhotoTab = PHOTO_TABS[0];
   var currentStt = '';
   var currentSystemId = '';
   var currentLogoUrl = '';
+  var currentCoverUrl = '';
   var STT_IDX = ${STORE_STT_COLUMN - 1};
   var NAME_IDX = ${STORE_NAME_COLUMN - 1};
   var ADDRESS_IDX = ${STORE_ADDRESS_COLUMN - 1};
@@ -1664,6 +1694,7 @@ function buildStoreManagerHtml_(idPrefix) {
   var HOURS_IDX = ${STORE_HOURS_COLUMN - 1};
   var LOGO_URL_IDX = ${STORE_LOGO_URL_COLUMN - 1};
   var CLASSIFICATION_IDX = ${STORE_CLASSIFICATION_COLUMN - 1};
+  var COVER_URL_IDX = ${STORE_COVER_URL_COLUMN - 1};
   var classificationOptions = [];
   var currentClassificationNames = [];
   var WEEKDAY_LABELS = ${JSON.stringify(WEEKDAY_LABELS_VN)};
@@ -1765,6 +1796,7 @@ function buildStoreManagerHtml_(idPrefix) {
     currentStt = values[STT_IDX] || '';
     currentSystemId = values[SYSTEM_ID_IDX] || '';
     currentLogoUrl = values[LOGO_URL_IDX] || '';
+    currentCoverUrl = values[COVER_URL_IDX] || '';
     var REQUIRED_IDX = [NAME_IDX, ADDRESS_IDX, PROVINCE_IDX, LAT_IDX, LNG_IDX];
     headers.forEach(function (h, i) {
       var label = document.createElement('label');
@@ -1805,19 +1837,13 @@ function buildStoreManagerHtml_(idPrefix) {
       } else if (i === LOGO_URL_IDX) {
         var logoDiv = document.createElement('div');
         logoDiv.id = PFX + 'logoUrlArea';
-        if (currentLogoUrl) {
-          var logoImg = document.createElement('img');
-          logoImg.src = currentLogoUrl;
-          logoImg.style.cssText = 'width:56px;height:56px;object-fit:cover;border-radius:4px;border:1px solid #ccc;vertical-align:middle;margin-right:8px;';
-          logoDiv.appendChild(logoImg);
-          var logoLink = document.createElement('a');
-          logoLink.href = currentLogoUrl; logoLink.target = '_blank'; logoLink.textContent = 'Xem ảnh gốc';
-          logoDiv.appendChild(logoLink);
-        } else {
-          logoDiv.textContent = 'Chưa có — tự điền khi tải ảnh ở tab "Ảnh đại diện" bên dưới';
-          logoDiv.style.color = '#888';
-        }
         area.appendChild(logoDiv);
+        renderLogoPreview_();
+      } else if (i === COVER_URL_IDX) {
+        var coverDiv = document.createElement('div');
+        coverDiv.id = PFX + 'coverUrlArea';
+        area.appendChild(coverDiv);
+        renderCoverPreview_();
       } else if (i === CLASSIFICATION_IDX) {
         var classDiv = document.createElement('div');
         classDiv.id = PFX + 'classificationArea';
@@ -1963,6 +1989,35 @@ function buildStoreManagerHtml_(idPrefix) {
     return result;
   }
 
+  /** Vẽ lại khung xem trước 1 ảnh + link gốc (dùng chung cho Ảnh đại diện/Ảnh quán) — gọi lại
+   *  mỗi khi giá trị URL thay đổi (renderForm lúc mở form, hoặc ngay sau khi tải ảnh mới lên
+   *  Cloudinary xong) để khung luôn khớp đúng currentLogoUrl/currentCoverUrl hiện tại. */
+  function renderImageUrlPreview_(areaId, url, emptyHintText) {
+    var container = $(areaId);
+    if (!container) return;
+    container.innerHTML = '';
+    if (url) {
+      var img = document.createElement('img');
+      img.src = url;
+      img.style.cssText = 'width:56px;height:56px;object-fit:cover;border-radius:4px;border:1px solid #ccc;vertical-align:middle;margin-right:8px;';
+      container.appendChild(img);
+      var link = document.createElement('a');
+      link.href = url; link.target = '_blank'; link.textContent = 'Xem ảnh gốc';
+      container.appendChild(link);
+    } else {
+      container.textContent = emptyHintText;
+      container.style.color = '#888';
+    }
+  }
+
+  function renderLogoPreview_() {
+    renderImageUrlPreview_('logoUrlArea', currentLogoUrl, 'Chưa có — tự điền khi tải ảnh ở tab "Ảnh đại diện" bên dưới');
+  }
+
+  function renderCoverPreview_() {
+    renderImageUrlPreview_('coverUrlArea', currentCoverUrl, 'Chưa có — tự điền khi tải ảnh ở tab "Ảnh quán" bên dưới');
+  }
+
   /** Danh sách phân loại đang có (từ classificationOptions, GET /merchant-classifications) —
    *  vẽ 1 checkbox mỗi phân loại, tick sẵn theo selectedNames đang lưu ở cột Phân loại. Chưa
    *  tải xong danh sách (classificationOptions rỗng lúc mới mở form) thì hiện gợi ý chờ, tự vẽ
@@ -2007,6 +2062,7 @@ function buildStoreManagerHtml_(idPrefix) {
       if (i === LINK_IDX) return '';
       if (i === SYSTEM_ID_IDX) return currentSystemId;
       if (i === LOGO_URL_IDX) return currentLogoUrl;
+      if (i === COVER_URL_IDX) return currentCoverUrl;
       if (i === HOURS_IDX) {
         var hours = collectHoursFromEditor();
         return hours.length ? JSON.stringify(hours) : '';
@@ -2220,7 +2276,7 @@ function buildStoreManagerHtml_(idPrefix) {
       if (errors.length) {
         showErr('Đã tải ' + (files.length - errors.length) + '/' + files.length + ' ảnh — lỗi: ' + errors.join('; '));
       } else {
-        showMsg('Đã tải xong ' + files.length + ' ảnh.');
+        showMsg('Đã tải xong ' + files.length + ' ảnh' + (tab.cloudinaryFolder ? ' — nhớ bấm "💾 Lưu" để ghi lại link ảnh.' : '.'));
       }
       return;
     }
@@ -2229,45 +2285,33 @@ function buildStoreManagerHtml_(idPrefix) {
     var reader = new FileReader();
     reader.onload = function () {
       var base64 = reader.result.split(',')[1];
-      google.script.run.withSuccessHandler(function () {
-        if (tab.cloudinaryFolder) {
-          uploadToCloudinaryAndContinue_(tab, storeName, files, index, errors, fileInput, file, base64);
-        } else {
-          uploadFilesSequentially_(tab, storeName, files, index + 1, errors, fileInput);
-        }
+      // 1 lệnh gọi duy nhất — server tự lưu Drive + (nếu tab.cloudinaryFolder) tải thêm lên
+      // Cloudinary rồi trả kèm cloudinaryUrl, xem uploadImageToStoreSubfolder.
+      google.script.run.withSuccessHandler(function (info) {
+        applyUploadedImageUrl_(tab, info);
+        uploadFilesSequentially_(tab, storeName, files, index + 1, errors, fileInput);
       }).withFailureHandler(function (e) {
         errors.push(file.name + ': ' + (e && e.message ? e.message : e));
         uploadFilesSequentially_(tab, storeName, files, index + 1, errors, fileInput);
-      }).uploadImageToStoreSubfolder(storeName, tab.subfolder, file.name, file.type, base64, tab.replace);
+      }).uploadImageToStoreSubfolder(storeName, tab.subfolder, file.name, file.type, base64, tab.replace, tab.cloudinaryFolder);
     };
     reader.readAsDataURL(file);
   }
 
-  /** Sau khi ảnh đã tải xong lên Drive (thư mục nội bộ), với tab có cloudinaryFolder (hiện chỉ
-   *  Ảnh đại diện) tải THÊM 1 lần nữa lên Cloudinary để có link công khai hiển thị được trên app
-   *  (merchants.logo_url) — điền vào form (currentLogoUrl, ghi thật vào sheet khi bấm "💾 Lưu"
-   *  như mọi trường khác, xem collectValues()). Lỗi ở bước Cloudinary không chặn các ảnh còn lại
-   *  (ảnh vẫn đã lưu được trên Drive, chỉ là chưa có link công khai). */
-  function uploadToCloudinaryAndContinue_(tab, storeName, files, index, errors, fileInput, file, base64) {
-    google.script.run.withSuccessHandler(function (url) {
-      currentLogoUrl = url;
-      showMsg('Đã tải ảnh lên Cloudinary — nhớ bấm "💾 Lưu" để ghi lại link ảnh đại diện.');
-      var logoArea = $('logoUrlArea');
-      if (logoArea) {
-        logoArea.innerHTML = '';
-        var logoImg = document.createElement('img');
-        logoImg.src = url;
-        logoImg.style.cssText = 'width:56px;height:56px;object-fit:cover;border-radius:4px;border:1px solid #ccc;vertical-align:middle;margin-right:8px;';
-        logoArea.appendChild(logoImg);
-        var logoLink = document.createElement('a');
-        logoLink.href = url; logoLink.target = '_blank'; logoLink.textContent = 'Xem ảnh gốc';
-        logoArea.appendChild(logoLink);
-      }
-      uploadFilesSequentially_(tab, storeName, files, index + 1, errors, fileInput);
-    }).withFailureHandler(function (e) {
-      errors.push(file.name + ' (Cloudinary): ' + (e && e.message ? e.message : e));
-      uploadFilesSequentially_(tab, storeName, files, index + 1, errors, fileInput);
-    }).uploadImageToCloudinary(base64, file.type, file.name, tab.cloudinaryFolder);
+  /** Ảnh đại diện/Ảnh quán có field cấp cửa hàng (logo_url/cover_url) cần cập nhật ngay lúc tải
+   *  xong để người dùng thấy được, ghi thật vào sheet khi bấm "💾 Lưu" như mọi trường khác (xem
+   *  collectValues()). Ảnh sản phẩm không có field cấp cửa hàng nào — cloudinaryUrl của nó chỉ
+   *  nằm trong description file Drive (server đã ghi sẵn), lúc "Chọn ảnh từ Ảnh menu" bên form
+   *  Sản phẩm sẽ tự đọc lại đúng link đó (xem pickImage trong buildProductManagerHtml_). */
+  function applyUploadedImageUrl_(tab, info) {
+    if (!info || !info.cloudinaryUrl) return;
+    if (tab.subfolder === '${SUBFOLDER_AVATAR}') {
+      currentLogoUrl = info.cloudinaryUrl;
+      renderLogoPreview_();
+    } else if (tab.subfolder === '${SUBFOLDER_STORE_PHOTOS}') {
+      currentCoverUrl = info.cloudinaryUrl;
+      renderCoverPreview_();
+    }
   }
 
   function removePhoto(tab, fileId) {
@@ -2561,8 +2605,12 @@ function buildProductManagerHtml_(idPrefix) {
 
   function pickImage(idx) {
     var img = currentImages[idx];
-    $('pImgUrl').value = img.url;
-    updateImgPreview(img.url);
+    // Ưu tiên link Cloudinary (công khai, app hiển thị được) nếu ảnh đã tải qua tab Cửa hàng >
+    // Ảnh sản phẩm sau khi có tính năng này — ảnh cũ tải trước đó chưa có thì dùng tạm link
+    // Drive (img.url) như trước.
+    var url = img.cloudinaryUrl || img.url;
+    $('pImgUrl').value = url;
+    updateImgPreview(url);
     $('imagePickerPanel').style.display = 'none';
   }
 
