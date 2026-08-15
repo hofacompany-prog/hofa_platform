@@ -65,10 +65,12 @@ const STORE_LOGO_URL_COLUMN = 11;        // 11 - Ảnh đại diện (URL) → m
 // phẩy. Tên không khớp phân loại nào đang có trong hệ thống sẽ bị bỏ qua lặng lẽ lúc đồng bộ.
 const STORE_CLASSIFICATION_COLUMN = 12;  // 12 - Phân loại → merchant_classifications (nhiều-nhiều)
 // Tự điền khi tải ảnh ở tab "Ảnh quán" lên rồi bấm "💾 Lưu" — tab đó cho chọn NHIỀU ảnh cùng
-// lúc (lưu hết vào Drive để xem lại), nhưng merchants.cover_url chỉ nhận 1 ảnh nên LUÔN LÀ ẢNH
-// TẢI LÊN GẦN NHẤT trong tab đó (tải ảnh mới sẽ tự ghi đè cột này, không cộng dồn).
-const STORE_COVER_URL_COLUMN = 13;       // 13 - Ảnh quán (URL) → merchants.cover_url
-const STORE_LAST_COLUMN = STORE_COVER_URL_COLUMN;
+// lúc, mỗi ảnh tải lên Cloudinary xong được CỘNG DỒN vào đây (không ghi đè) dưới dạng JSON
+// mảng chuỗi, khớp thẳng merchants.photo_urls (jsonb) — ĐÂY MỚI LÀ ảnh thật hiện ở màn "chi
+// tiết cửa hàng" bên app Khách (khác merchants.cover_url — cột KHÔNG được app nào hiển thị,
+// không dùng ở form này nữa).
+const STORE_PHOTO_URLS_COLUMN = 13;      // 13 - Ảnh quán (URL, nhiều ảnh - JSON) → merchants.photo_urls
+const STORE_LAST_COLUMN = STORE_PHOTO_URLS_COLUMN;
 
 // Cả tool này chỉ tạo cửa hàng mua hộ — không có cột chọn trong sheet, cố định khi đẩy API sau
 // này (chưa có code đẩy API trong bản này, chỉ đang quản lý dữ liệu qua Sheet/Drive).
@@ -101,7 +103,7 @@ const STORE_HEADERS = [
   'Giờ hoạt động',       // 10 — branch_hours (JSON), sửa qua form, không gõ tay trong sheet
   'Ảnh đại diện (URL)',  // 11 — merchants.logo_url, server (Cloudinary) tự ghi khi tải ảnh, không gõ tay
   'Phân loại',           // 12 — merchant_classifications, chọn qua checkbox trong form, không gõ tay
-  'Ảnh quán (URL)'       // 13 — merchants.cover_url, server (Cloudinary) tự ghi khi tải ảnh, không gõ tay
+  'Ảnh quán (URL, nhiều ảnh)' // 13 — merchants.photo_urls (JSON), server (Cloudinary) tự ghi khi tải ảnh, không gõ tay
 ];
 
 // 3 thư mục con tự tạo bên trong thư mục Drive của mỗi cửa hàng.
@@ -254,7 +256,7 @@ function fixStoreHeaderRowOnly_v1() {
     'Ghi lại dòng tiêu đề MERCHANT?',
     'Chỉ viết lại ĐÚNG chữ dòng 1 (STT, Tên cửa hàng, Mô tả, Địa chỉ, Tỉnh/Thành phố, Vĩ độ, ' +
       'Kinh độ, Link thư mục, ID hệ thống, Giờ hoạt động, Ảnh đại diện (URL), Phân loại, ' +
-      'Ảnh quán (URL)) — ' +
+      'Ảnh quán (URL, nhiều ảnh)) — ' +
       'KHÔNG đụng bất kỳ dữ liệu dòng nào khác, chỉ thêm cột trống mới nếu sheet chưa đủ ' +
       STORE_HEADERS.length + ' cột. Dùng khi dữ liệu đã đúng cột nhưng tiêu đề vẫn sai/cũ/thiếu ' +
       'cột. Tiếp tục?',
@@ -1103,6 +1105,24 @@ function uploadImageToCloudinary(base64Data, mimeType, fileName, cloudinaryFolde
   return data.secure_url;
 }
 
+/** Tải 1 ảnh ĐÃ CÓ SẴN trên Drive (thư mục "Ảnh menu") lên Cloudinary — dùng lúc chủ cửa hàng
+ *  bấm "Chọn ảnh từ Ảnh menu" cho 1 sản phẩm cụ thể bên form Sản phẩm (xem pickImage trong
+ *  buildProductManagerHtml_). Ảnh sản phẩm CHỈ lưu Drive lúc tải lên ở form Cửa hàng (xem
+ *  PHOTO_TABS, cloudinaryFolder rỗng cho tab "Ảnh sản phẩm") — tới đây, lúc THẬT SỰ được 1 sản
+ *  phẩm dùng tới, mới tải lên Cloudinary để có link công khai hiển thị trên app. Ghi cache lại
+ *  vào description file Drive (setDescription, giống uploadImageToStoreSubfolder) để lần sau
+ *  chọn lại đúng ảnh này (cho sản phẩm khác) không phải tải lên Cloudinary lần 2. */
+function uploadDriveImageToCloudinary(fileId, cloudinaryFolder) {
+  const file = DriveApp.getFileById(fileId);
+  const cached = file.getDescription();
+  if (cached) return cached;
+  const blob = file.getBlob();
+  const base64 = Utilities.base64Encode(blob.getBytes());
+  const url = uploadImageToCloudinary(base64, blob.getContentType(), file.getName(), cloudinaryFolder);
+  file.setDescription(url);
+  return url;
+}
+
 /** Gom dữ liệu 1 cửa hàng từ 4 sheet MERCHANT/TOPPING/PRODUCT/VARIANT thành đúng cấu trúc
  *  POST /gas-sync/apply cần — CHƯA gửi đi, chỉ đọc từ sheet. Mỗi mục kèm "row" (vị trí dòng
  *  thật trong sheet) để gasSyncApply() biết ghi ID hệ thống trả về vào đúng chỗ. */
@@ -1114,6 +1134,19 @@ function parseStoreHoursJson_(raw) {
   try {
     const arr = JSON.parse(text);
     return Array.isArray(arr) ? arr : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+/** Đọc JSON mảng URL từ cột "Ảnh quán" — [] nếu trống/không parse được. Dùng chung format với
+ *  parseStoreHoursJson_ (cùng kiểu lỗi im lặng, coi như chưa có ảnh thay vì chặn đồng bộ). */
+function parseStorePhotoUrlsJson_(raw) {
+  const text = String(raw || '').trim();
+  if (!text) return [];
+  try {
+    const arr = JSON.parse(text);
+    return Array.isArray(arr) ? arr.filter(Boolean) : [];
   } catch (e) {
     return [];
   }
@@ -1137,7 +1170,7 @@ function gasSyncBuildPayloadForStore_(storeName) {
     logo_url: sv[STORE_LOGO_URL_COLUMN - 1] || '',
     classification_names: String(sv[STORE_CLASSIFICATION_COLUMN - 1] || '')
       .split(',').map(function (s) { return s.trim(); }).filter(Boolean),
-    cover_url: sv[STORE_COVER_URL_COLUMN - 1] || ''
+    photo_urls: parseStorePhotoUrlsJson_(sv[STORE_PHOTO_URLS_COLUMN - 1])
   };
 
   // Nhóm topping — sheet TOPPING phẳng (1 dòng = 1 topping), gộp lại theo Tên nhóm.
@@ -1233,7 +1266,7 @@ function diffMerchant_(lines, snapshot, payload) {
     lines.push(fieldCompareRow_('Tên', '', payload.merchant.name));
     lines.push(fieldCompareRow_('Mô tả', '', payload.merchant.description));
     lines.push(fieldCompareRow_('Ảnh đại diện', '', payload.merchant.logo_url));
-    lines.push(fieldCompareRow_('Ảnh quán', '', payload.merchant.cover_url));
+    lines.push(fieldCompareRow_('Ảnh quán', '', payload.merchant.photo_urls.join(', ')));
     lines.push(fieldCompareRow_('Phân loại', '', payload.merchant.classification_names.join(', ')));
     lines.push(fieldCompareRow_('Địa chỉ', '', payload.merchant.address_line1));
     lines.push(fieldCompareRow_('Tỉnh/Thành phố', '', payload.merchant.province));
@@ -1249,7 +1282,11 @@ function diffMerchant_(lines, snapshot, payload) {
   lines.push(fieldCompareRow_('Tên', oldM.name, payload.merchant.name));
   lines.push(fieldCompareRow_('Mô tả', oldM.description, payload.merchant.description));
   lines.push(fieldCompareRow_('Ảnh đại diện', oldM.logo_url, payload.merchant.logo_url));
-  lines.push(fieldCompareRow_('Ảnh quán', oldM.cover_url, payload.merchant.cover_url));
+  lines.push(fieldCompareRow_(
+    'Ảnh quán',
+    (oldM.photo_urls || []).join(', '),
+    payload.merchant.photo_urls.join(', ')
+  ));
   lines.push(fieldCompareRow_(
     'Phân loại',
     (oldM.classifications || []).slice().sort().join(', '),
@@ -1431,7 +1468,7 @@ function gasSyncApply(storeName) {
       hours: payload.merchant.hours,
       logo_url: payload.merchant.logo_url,
       classification_names: payload.merchant.classification_names,
-      cover_url: payload.merchant.cover_url
+      photo_urls: payload.merchant.photo_urls
     },
     topping_groups: payload.topping_groups.map(function (g) {
       return {
@@ -1642,6 +1679,7 @@ function buildStoreManagerHtml_(idPrefix) {
   </div>
 
   <div id="${idPrefix}photoPanelStore" class="photo-panel">
+    <div style="color:#888; font-size:12px;">Chọn được nhiều ảnh — đây là ảnh THẬT hiện ở màn "chi tiết cửa hàng" khách xem, nhớ bấm "💾 Lưu" sau khi tải xong.</div>
     <div style="margin-top: 8px;">
       <input type="file" id="${idPrefix}storePhotoFile" accept="image/*" multiple>
       <button id="${idPrefix}btnUploadStorePhoto">Tải ảnh lên</button>
@@ -1650,6 +1688,7 @@ function buildStoreManagerHtml_(idPrefix) {
   </div>
 
   <div id="${idPrefix}photoPanelProduct" class="photo-panel">
+    <div style="color:#888; font-size:12px;">Chỉ lưu tạm ở đây (chưa hiển thị trên app) — sang tab Sản phẩm, chọn ảnh cho từng sản phẩm thì mới thật sự tải lên và hiển thị.</div>
     <div style="margin-top: 8px;">
       <input type="file" id="${idPrefix}productPhotoFile" accept="image/*" multiple>
       <button id="${idPrefix}btnUploadProductPhoto">Tải ảnh lên</button>
@@ -1676,13 +1715,17 @@ function buildStoreManagerHtml_(idPrefix) {
   var PHOTO_TABS = [
     { subfolder: '${SUBFOLDER_AVATAR}', replace: true, cloudinaryFolder: 'merchants', tabBtn: 'photoTabBtnAvatar', panel: 'photoPanelAvatar', fileInput: 'avatarFile', uploadBtn: 'btnUploadAvatar', grid: 'avatarGrid' },
     { subfolder: '${SUBFOLDER_STORE_PHOTOS}', replace: false, cloudinaryFolder: 'merchants', tabBtn: 'photoTabBtnStore', panel: 'photoPanelStore', fileInput: 'storePhotoFile', uploadBtn: 'btnUploadStorePhoto', grid: 'storePhotoGrid' },
-    { subfolder: '${SUBFOLDER_MENU_PHOTOS}', replace: false, cloudinaryFolder: 'products', tabBtn: 'photoTabBtnProduct', panel: 'photoPanelProduct', fileInput: 'productPhotoFile', uploadBtn: 'btnUploadProductPhoto', grid: 'productPhotoGrid' }
+    // KHÔNG tự tải lên Cloudinary ở đây (cloudinaryFolder rỗng) — ảnh sản phẩm chỉ lưu tạm
+    // Drive lúc này, chỉ tải lên Cloudinary lúc THẬT SỰ được chọn cho 1 sản phẩm cụ thể bên
+    // form Sản phẩm (xem uploadDriveImageToCloudinary + pickImage trong buildProductManagerHtml_)
+    // — tránh tải lên Cloudinary những ảnh không dùng tới sản phẩm nào.
+    { subfolder: '${SUBFOLDER_MENU_PHOTOS}', replace: false, cloudinaryFolder: '', tabBtn: 'photoTabBtnProduct', panel: 'photoPanelProduct', fileInput: 'productPhotoFile', uploadBtn: 'btnUploadProductPhoto', grid: 'productPhotoGrid' }
   ];
   var activePhotoTab = PHOTO_TABS[0];
   var currentStt = '';
   var currentSystemId = '';
   var currentLogoUrl = '';
-  var currentCoverUrl = '';
+  var currentPhotoUrls = [];
   var STT_IDX = ${STORE_STT_COLUMN - 1};
   var NAME_IDX = ${STORE_NAME_COLUMN - 1};
   var ADDRESS_IDX = ${STORE_ADDRESS_COLUMN - 1};
@@ -1694,7 +1737,7 @@ function buildStoreManagerHtml_(idPrefix) {
   var HOURS_IDX = ${STORE_HOURS_COLUMN - 1};
   var LOGO_URL_IDX = ${STORE_LOGO_URL_COLUMN - 1};
   var CLASSIFICATION_IDX = ${STORE_CLASSIFICATION_COLUMN - 1};
-  var COVER_URL_IDX = ${STORE_COVER_URL_COLUMN - 1};
+  var PHOTO_URLS_IDX = ${STORE_PHOTO_URLS_COLUMN - 1};
   var classificationOptions = [];
   var currentClassificationNames = [];
   var WEEKDAY_LABELS = ${JSON.stringify(WEEKDAY_LABELS_VN)};
@@ -1796,7 +1839,7 @@ function buildStoreManagerHtml_(idPrefix) {
     currentStt = values[STT_IDX] || '';
     currentSystemId = values[SYSTEM_ID_IDX] || '';
     currentLogoUrl = values[LOGO_URL_IDX] || '';
-    currentCoverUrl = values[COVER_URL_IDX] || '';
+    currentPhotoUrls = parsePhotoUrlsJsonClient_(values[PHOTO_URLS_IDX]);
     var REQUIRED_IDX = [NAME_IDX, ADDRESS_IDX, PROVINCE_IDX, LAT_IDX, LNG_IDX];
     headers.forEach(function (h, i) {
       var label = document.createElement('label');
@@ -1839,11 +1882,11 @@ function buildStoreManagerHtml_(idPrefix) {
         logoDiv.id = PFX + 'logoUrlArea';
         area.appendChild(logoDiv);
         renderLogoPreview_();
-      } else if (i === COVER_URL_IDX) {
-        var coverDiv = document.createElement('div');
-        coverDiv.id = PFX + 'coverUrlArea';
-        area.appendChild(coverDiv);
-        renderCoverPreview_();
+      } else if (i === PHOTO_URLS_IDX) {
+        var photoUrlsDiv = document.createElement('div');
+        photoUrlsDiv.id = PFX + 'photoUrlsArea';
+        area.appendChild(photoUrlsDiv);
+        renderPhotoUrlsPreview_();
       } else if (i === CLASSIFICATION_IDX) {
         var classDiv = document.createElement('div');
         classDiv.id = PFX + 'classificationArea';
@@ -1883,6 +1926,7 @@ function buildStoreManagerHtml_(idPrefix) {
       }
     });
     loadPhotoGridFor(activePhotoTab);
+    refreshPhotoUrls_();
   }
 
   function parseHoursJson(raw) {
@@ -1989,9 +2033,9 @@ function buildStoreManagerHtml_(idPrefix) {
     return result;
   }
 
-  /** Vẽ lại khung xem trước 1 ảnh + link gốc (dùng chung cho Ảnh đại diện/Ảnh quán) — gọi lại
-   *  mỗi khi giá trị URL thay đổi (renderForm lúc mở form, hoặc ngay sau khi tải ảnh mới lên
-   *  Cloudinary xong) để khung luôn khớp đúng currentLogoUrl/currentCoverUrl hiện tại. */
+  /** Vẽ lại khung xem trước 1 ảnh + link gốc (dùng cho Ảnh đại diện, LUÔN đúng 1 ảnh) — gọi lại
+   *  mỗi khi currentLogoUrl thay đổi (renderForm lúc mở form, hoặc ngay sau khi tải ảnh mới lên
+   *  Cloudinary xong). */
   function renderImageUrlPreview_(areaId, url, emptyHintText) {
     var container = $(areaId);
     if (!container) return;
@@ -2014,8 +2058,43 @@ function buildStoreManagerHtml_(idPrefix) {
     renderImageUrlPreview_('logoUrlArea', currentLogoUrl, 'Chưa có — tự điền khi tải ảnh ở tab "Ảnh đại diện" bên dưới');
   }
 
-  function renderCoverPreview_() {
-    renderImageUrlPreview_('coverUrlArea', currentCoverUrl, 'Chưa có — tự điền khi tải ảnh ở tab "Ảnh quán" bên dưới');
+  function parsePhotoUrlsJsonClient_(raw) {
+    if (!raw) return [];
+    try {
+      var arr = JSON.parse(raw);
+      return Array.isArray(arr) ? arr.filter(Boolean) : [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  /** Ảnh quán cho NHIỀU ảnh (khác Ảnh đại diện) — khung này chỉ hiện SỐ LƯỢNG + gợi ý, ảnh thật
+   *  xem trực tiếp ở lưới trong tab "Ảnh quán" bên dưới (tránh vẽ trùng 2 lưới ảnh cùng lúc). */
+  function renderPhotoUrlsPreview_() {
+    var container = $('photoUrlsArea');
+    if (!container) return;
+    container.innerHTML = '';
+    if (currentPhotoUrls.length) {
+      container.textContent = 'Đã có ' + currentPhotoUrls.length + ' ảnh — xem/quản lý ở tab "Ảnh quán" bên dưới.';
+      container.style.color = '';
+    } else {
+      container.textContent = 'Chưa có — tự điền khi tải ảnh ở tab "Ảnh quán" bên dưới';
+      container.style.color = '#888';
+    }
+  }
+
+  /** Đọc lại đúng danh sách link Cloudinary hiện có trong thư mục "Ảnh quán" của quán đang chọn
+   *  (nguồn dữ liệu THẬT — currentPhotoUrls chỉ là bản lưu cache trong sheet, có thể lệch nếu
+   *  ảnh bị xoá/thêm ở phiên làm việc khác) — gọi lại sau mỗi lần tải lên/xoá ảnh ở tab đó, và
+   *  mỗi lần renderForm (chọn quán khác/mở quán mới). */
+  function refreshPhotoUrls_() {
+    var nameEl = $('f' + NAME_IDX);
+    var storeName = nameEl ? nameEl.value.trim() : '';
+    if (!storeName) { currentPhotoUrls = []; renderPhotoUrlsPreview_(); return; }
+    google.script.run.withSuccessHandler(function (images) {
+      currentPhotoUrls = images.map(function (im) { return im.cloudinaryUrl; }).filter(Boolean);
+      renderPhotoUrlsPreview_();
+    }).withFailureHandler(function () {}).listImagesInStoreSubfolder(storeName, '${SUBFOLDER_STORE_PHOTOS}');
   }
 
   /** Danh sách phân loại đang có (từ classificationOptions, GET /merchant-classifications) —
@@ -2062,7 +2141,7 @@ function buildStoreManagerHtml_(idPrefix) {
       if (i === LINK_IDX) return '';
       if (i === SYSTEM_ID_IDX) return currentSystemId;
       if (i === LOGO_URL_IDX) return currentLogoUrl;
-      if (i === COVER_URL_IDX) return currentCoverUrl;
+      if (i === PHOTO_URLS_IDX) return JSON.stringify(currentPhotoUrls);
       if (i === HOURS_IDX) {
         var hours = collectHoursFromEditor();
         return hours.length ? JSON.stringify(hours) : '';
@@ -2298,25 +2377,29 @@ function buildStoreManagerHtml_(idPrefix) {
     reader.readAsDataURL(file);
   }
 
-  /** Ảnh đại diện/Ảnh quán có field cấp cửa hàng (logo_url/cover_url) cần cập nhật ngay lúc tải
-   *  xong để người dùng thấy được, ghi thật vào sheet khi bấm "💾 Lưu" như mọi trường khác (xem
-   *  collectValues()). Ảnh sản phẩm không có field cấp cửa hàng nào — cloudinaryUrl của nó chỉ
-   *  nằm trong description file Drive (server đã ghi sẵn), lúc "Chọn ảnh từ Ảnh menu" bên form
-   *  Sản phẩm sẽ tự đọc lại đúng link đó (xem pickImage trong buildProductManagerHtml_). */
+  /** Ảnh đại diện (1 ảnh, field logo_url) cập nhật ngay lúc tải xong để người dùng thấy được,
+   *  ghi thật vào sheet khi bấm "💾 Lưu" như mọi trường khác (xem collectValues()). Ảnh quán
+   *  (nhiều ảnh, field photo_urls) CỘNG DỒN thay vì ghi đè — xem refreshPhotoUrls_(). Ảnh sản
+   *  phẩm KHÔNG tải Cloudinary ở đây nữa (cloudinaryFolder rỗng ở PHOTO_TABS, xem
+   *  uploadDriveImageToCloudinary + pickImage trong buildProductManagerHtml_ — chỉ tải lúc thật
+   *  sự được chọn cho 1 sản phẩm). */
   function applyUploadedImageUrl_(tab, info) {
     if (!info || !info.cloudinaryUrl) return;
     if (tab.subfolder === '${SUBFOLDER_AVATAR}') {
       currentLogoUrl = info.cloudinaryUrl;
       renderLogoPreview_();
     } else if (tab.subfolder === '${SUBFOLDER_STORE_PHOTOS}') {
-      currentCoverUrl = info.cloudinaryUrl;
-      renderCoverPreview_();
+      currentPhotoUrls.push(info.cloudinaryUrl);
+      renderPhotoUrlsPreview_();
     }
   }
 
   function removePhoto(tab, fileId) {
     if (!confirm('Xoá ảnh này?')) return;
-    google.script.run.withSuccessHandler(function () { loadPhotoGridFor(tab); }).withFailureHandler(showErr).deleteImage(fileId);
+    google.script.run.withSuccessHandler(function () {
+      loadPhotoGridFor(tab);
+      if (tab.subfolder === '${SUBFOLDER_STORE_PHOTOS}') refreshPhotoUrls_();
+    }).withFailureHandler(showErr).deleteImage(fileId);
   }
 })();
 </script>
@@ -2603,15 +2686,26 @@ function buildProductManagerHtml_(idPrefix) {
     }).withFailureHandler(showErr).listImagesInStoreSubfolder(currentStore, '${SUBFOLDER_MENU_PHOTOS}');
   }
 
+  /** Ảnh trong "Ảnh menu" chỉ mới lưu Drive (chưa lên Cloudinary — xem PHOTO_TABS bên
+   *  buildStoreManagerHtml_) — tới lúc CHỌN ảnh này cho 1 sản phẩm cụ thể mới thật sự tải lên
+   *  Cloudinary (uploadDriveImageToCloudinary tự cache vào description file Drive, chọn lại
+   *  ảnh này lần sau — kể cả cho sản phẩm khác — sẽ không tải lên Cloudinary lần 2). */
   function pickImage(idx) {
     var img = currentImages[idx];
-    // Ưu tiên link Cloudinary (công khai, app hiển thị được) nếu ảnh đã tải qua tab Cửa hàng >
-    // Ảnh sản phẩm sau khi có tính năng này — ảnh cũ tải trước đó chưa có thì dùng tạm link
-    // Drive (img.url) như trước.
-    var url = img.cloudinaryUrl || img.url;
-    $('pImgUrl').value = url;
-    updateImgPreview(url);
-    $('imagePickerPanel').style.display = 'none';
+    if (img.cloudinaryUrl) {
+      $('pImgUrl').value = img.cloudinaryUrl;
+      updateImgPreview(img.cloudinaryUrl);
+      $('imagePickerPanel').style.display = 'none';
+      return;
+    }
+    showMsg('Đang tải ảnh lên Cloudinary…');
+    google.script.run.withSuccessHandler(function (url) {
+      img.cloudinaryUrl = url;
+      $('pImgUrl').value = url;
+      updateImgPreview(url);
+      $('imagePickerPanel').style.display = 'none';
+      showMsg('Đã chọn ảnh — nhớ bấm "💾 Lưu sản phẩm" để ghi lại.');
+    }).withFailureHandler(showErr).uploadDriveImageToCloudinary(img.id, 'products');
   }
 
   /** Tải ảnh sản phẩm mới thẳng lên Cloudinary (folder 'products') — điền luôn vào pImgUrl, KHÔNG
