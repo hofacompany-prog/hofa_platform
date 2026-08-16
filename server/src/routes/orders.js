@@ -123,6 +123,17 @@ router.post('/orders', asyncHandler(async (req, res) => {
     orderOffer.offerOrderToMerchant(order.id).catch((err) => {
       console.error('[orderOffer] Không báo được cửa hàng cho đơn', order.id, err.message);
     });
+    // Báo cả admin mỗi khi có đơn mới — không chỉ chủ cửa hàng — để admin theo dõi được sát
+    // sao mọi đơn phát sinh trên sàn, không riêng các đơn cần admin can thiệp tay (chuyển
+    // khoản chờ xác nhận, tìm tài xế bị kẹt...). screen trỏ thẳng vào đúng đơn.
+    push.notifyAdmins({
+      title: 'Đơn hàng mới',
+      body: `${order.order_code} · ${Number(order.total_amount).toLocaleString('vi-VN')}đ`,
+      kind: 'new_order',
+      screen: `/orders/${order.id}`
+    }).catch((err) => {
+      console.error('[push] Không báo được admin cho đơn mới', order.id, err.message);
+    });
   } else if (order.status === 'pending_payment') {
     // Đơn chuyển khoản — chờ admin xác nhận đã nhận tiền (_PendingOrdersTab ở web admin) trước
     // khi cửa hàng được báo có đơn mới (xem POST /payments).
