@@ -323,7 +323,11 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                         if (o.buyOnBehalfFee > 0)
                           _row('Phí mua hộ', formatVnd(o.buyOnBehalfFee)),
                         if (o.discountAmount > 0)
-                          _row('Giảm giá', '-${formatVnd(o.discountAmount)}'),
+                          _row(
+                            'Giảm giá',
+                            '-${formatVnd(o.discountAmount)}',
+                            color: theme.colorScheme.secondary,
+                          ),
                         _row('Tổng cộng', formatVnd(o.totalAmount), bold: true),
                         const SizedBox(height: 4),
                         Text(
@@ -536,22 +540,29 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
     );
   }
 
-  Widget _row(String label, String value, {bool bold = false}) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 3),
-    child: Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(
-          label,
-          style: bold ? const TextStyle(fontWeight: FontWeight.bold) : null,
+  Widget _row(String label, String value, {bool bold = false, Color? color}) =>
+      Padding(
+        padding: const EdgeInsets.symmetric(vertical: 3),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                fontWeight: bold ? FontWeight.bold : null,
+                color: color,
+              ),
+            ),
+            Text(
+              value,
+              style: TextStyle(
+                fontWeight: bold ? FontWeight.bold : null,
+                color: color,
+              ),
+            ),
+          ],
         ),
-        Text(
-          value,
-          style: bold ? const TextStyle(fontWeight: FontWeight.bold) : null,
-        ),
-      ],
-    ),
-  );
+      );
 }
 
 class _ReviewTarget {

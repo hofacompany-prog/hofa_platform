@@ -210,28 +210,35 @@ class _AdminOrderDetailScreenState
     }
   }
 
-  Widget _row(String label, String value, {bool bold = false}) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 3),
-    child: Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(
-          label,
-          style: bold ? const TextStyle(fontWeight: FontWeight.bold) : null,
+  Widget _row(String label, String value, {bool bold = false, Color? color}) =>
+      Padding(
+        padding: const EdgeInsets.symmetric(vertical: 3),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              label,
+              style: TextStyle(
+                fontWeight: bold ? FontWeight.bold : null,
+                color: color,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                value,
+                textAlign: TextAlign.right,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontWeight: bold ? FontWeight.bold : null,
+                  color: color,
+                ),
+              ),
+            ),
+          ],
         ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(
-            value,
-            textAlign: TextAlign.right,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: bold ? const TextStyle(fontWeight: FontWeight.bold) : null,
-          ),
-        ),
-      ],
-    ),
-  );
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -396,6 +403,7 @@ class _AdminOrderDetailScreenState
                               _row(
                                 'Giảm giá',
                                 '-${formatVnd(o.discountAmount)}',
+                                color: theme.colorScheme.secondary,
                               ),
                             _row(
                               'Tổng cộng',

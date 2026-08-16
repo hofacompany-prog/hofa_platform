@@ -160,6 +160,7 @@ class _VoucherTile extends StatelessWidget {
                     Text(
                       voucher.code,
                       style: theme.textTheme.titleSmall?.copyWith(
+                        color: theme.colorScheme.secondary,
                         fontWeight: FontWeight.bold,
                         letterSpacing: 0.5,
                       ),
@@ -168,7 +169,7 @@ class _VoucherTile extends StatelessWidget {
                     Text(
                       voucher.discountLabel(formatVnd),
                       style: TextStyle(
-                        color: theme.colorScheme.primary,
+                        color: theme.colorScheme.secondary,
                         fontWeight: FontWeight.w600,
                       ),
                     ),

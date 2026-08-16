@@ -832,6 +832,7 @@ class _VouchersScreenState extends ConsumerState<VouchersScreen> {
                                       v.code,
                                       style: theme.textTheme.titleMedium
                                           ?.copyWith(
+                                            color: theme.colorScheme.secondary,
                                             fontWeight: FontWeight.bold,
                                             letterSpacing: 0.5,
                                           ),
@@ -893,7 +894,7 @@ class _VouchersScreenState extends ConsumerState<VouchersScreen> {
                                 Text(
                                   v.discountLabel(formatVnd: formatVnd),
                                   style: TextStyle(
-                                    color: theme.colorScheme.primary,
+                                    color: theme.colorScheme.secondary,
                                     fontWeight: FontWeight.w600,
                                   ),
                                 ),

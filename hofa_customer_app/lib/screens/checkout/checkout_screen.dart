@@ -908,7 +908,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     child: Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: theme.colorScheme.primary.withValues(
+                        color: theme.colorScheme.secondary.withValues(
                           alpha: 0.08,
                         ),
                         borderRadius: BorderRadius.circular(8),
@@ -917,7 +917,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                         children: [
                           Icon(
                             Icons.local_offer,
-                            color: theme.colorScheme.primary,
+                            color: theme.colorScheme.secondary,
                             size: 20,
                           ),
                           const SizedBox(width: 8),
@@ -925,7 +925,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                             child: Text(
                               'Mã "${v.code}" — giảm ${formatVnd(v.discount)}',
                               style: TextStyle(
-                                color: theme.colorScheme.primary,
+                                color: theme.colorScheme.secondary,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
@@ -1305,8 +1305,14 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text('Giảm giá'),
-                          Text('-${formatVnd(_voucherDiscount)}'),
+                          Text(
+                            'Giảm giá',
+                            style: TextStyle(color: theme.colorScheme.secondary),
+                          ),
+                          Text(
+                            '-${formatVnd(_voucherDiscount)}',
+                            style: TextStyle(color: theme.colorScheme.secondary),
+                          ),
                         ],
                       ),
                     ),
