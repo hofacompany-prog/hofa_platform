@@ -54,6 +54,7 @@ class StatCard extends StatelessWidget {
               value,
               style: theme.textTheme.headlineSmall?.copyWith(
                 fontWeight: FontWeight.bold,
+                fontFeatures: const [FontFeature.tabularFigures()],
               ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,

@@ -183,6 +183,10 @@ class OrdersScreen extends ConsumerWidget {
                                     label: Text(
                                       orderStatusLabels[o.status] ?? o.status,
                                     ),
+                                    labelStyle: TextStyle(
+                                      color: color,
+                                      fontWeight: FontWeight.w600,
+                                    ),
                                     backgroundColor: color.withValues(
                                       alpha: 0.12,
                                     ),

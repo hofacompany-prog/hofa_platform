@@ -5,6 +5,7 @@ import '../../core/format.dart';
 import '../../models/order.dart';
 import '../../providers/admin_providers.dart';
 import '../../widgets/stat_card.dart';
+import '../orders/orders_screen.dart' show statusColor;
 
 class DashboardScreen extends ConsumerWidget {
   const DashboardScreen({super.key});
@@ -119,8 +120,12 @@ class DashboardScreen extends ConsumerWidget {
                           )
                         : Column(
                             children: s.recentOrders
-                                .map(
-                                  (o) => InkWell(
+                                .map((o) {
+                                  final color = statusColor(
+                                    o.status,
+                                    theme.colorScheme,
+                                  );
+                                  return InkWell(
                                     onTap: () => context.go('/orders/${o.id}'),
                                     child: Padding(
                                       padding: const EdgeInsets.symmetric(
@@ -161,6 +166,17 @@ class DashboardScreen extends ConsumerWidget {
                                                   orderStatusLabels[o.status] ??
                                                       o.status,
                                                 ),
+                                                labelStyle: TextStyle(
+                                                  color: color,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                                backgroundColor: color
+                                                    .withValues(alpha: 0.12),
+                                                side: BorderSide(
+                                                  color: color.withValues(
+                                                    alpha: 0.4,
+                                                  ),
+                                                ),
                                                 visualDensity:
                                                     VisualDensity.compact,
                                               ),
@@ -169,8 +185,8 @@ class DashboardScreen extends ConsumerWidget {
                                         ],
                                       ),
                                     ),
-                                  ),
-                                )
+                                  );
+                                })
                                 .toList(),
                           ),
                   ),
