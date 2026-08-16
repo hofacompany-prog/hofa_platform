@@ -439,8 +439,15 @@ router.post('/gas-sync/apply', asyncHandler(async (req, res) => {
       }
 
       // Topping đã đồng bộ trước đó (có id thật trong nhóm này) nhưng KHÔNG còn trong lần gửi
-      // này — bị xoá khỏi sheet TOPPING → xoá thật luôn (giống DELETE /toppings/:id).
-      const incomingToppingIds = new Set((g.toppings || []).filter((t) => t.id).map((t) => t.id));
+      // này — bị xoá khỏi sheet TOPPING → xoá thật luôn (giống DELETE /toppings/:id). Gộp CẢ 2
+      // nguồn ID: id có sẵn trong payload (topping cũ — giữ lại dù lỡ lưu lỗi round này, không
+      // phải do bị xoá khỏi sheet) VÀ id vừa tạo mới thành công (item.toppings — topping mới
+      // KHÔNG có id trong payload, chỉ dùng riêng payload thì bị coi là "mồ côi" và xoá ngay sau
+      // khi vừa tạo).
+      const incomingToppingIds = new Set([
+        ...(g.toppings || []).filter((t) => t.id).map((t) => t.id),
+        ...item.toppings.filter((t) => t.id).map((t) => t.id)
+      ]);
       const existingToppings = await db.query('SELECT id FROM product_toppings WHERE group_id = $1', [group.id]);
       for (const et of existingToppings) {
         if (!incomingToppingIds.has(et.id)) {
@@ -456,9 +463,15 @@ router.post('/gas-sync/apply', asyncHandler(async (req, res) => {
 
   // Nhóm topping đã đồng bộ trước đó nhưng KHÔNG còn trong lần gửi này — bị xoá khỏi sheet
   // TOPPING → xoá thật luôn (giống DELETE /topping-groups/:id, CASCADE tự xoá topping/liên kết
-  // sản phẩm con của nhóm đó).
+  // sản phẩm con của nhóm đó). Gộp CẢ 2 nguồn ID: id có sẵn trong payload (nhóm cũ — giữ lại dù
+  // lỡ lưu lỗi round này) VÀ id vừa tạo mới thành công (result.topping_groups — nhóm mới KHÔNG
+  // có id trong payload, chỉ dùng riêng payload thì bị xoá ngay sau khi vừa tạo, để lại
+  // product_topping_group_links trỏ vào 1 group_id không còn tồn tại — lỗi FK).
   {
-    const incomingGroupIds = new Set((body.topping_groups || []).filter((g) => g.id).map((g) => g.id));
+    const incomingGroupIds = new Set([
+      ...(body.topping_groups || []).filter((g) => g.id).map((g) => g.id),
+      ...result.topping_groups.filter((g) => g.id).map((g) => g.id)
+    ]);
     const existingGroups = await db.query('SELECT id FROM topping_groups WHERE merchant_id = $1', [merchant.id]);
     for (const eg of existingGroups) {
       if (!incomingGroupIds.has(eg.id)) {
@@ -547,8 +560,14 @@ router.post('/gas-sync/apply', asyncHandler(async (req, res) => {
       // app admin, vốn chỉ tắt is_active vì UI đó cần giữ lại để còn bật lại — công cụ GAS này
       // coi sheet là nguồn dữ liệu duy nhất nên xoá dứt điểm). An toàn vì order_items.variant_id
       // là ON DELETE SET NULL (order_items đã tự chụp sẵn product_name/variant_name/unit_price
-      // lúc đặt hàng, không cần variant gốc còn tồn tại để hiển thị đơn cũ).
-      const incomingVariantIds = new Set((p.variants || []).filter((v) => v.id).map((v) => v.id));
+      // lúc đặt hàng, không cần variant gốc còn tồn tại để hiển thị đơn cũ). Gộp CẢ 2 nguồn ID:
+      // id có sẵn trong payload (biến thể cũ — giữ lại dù lỡ lưu lỗi round này) VÀ id vừa tạo
+      // mới thành công (item.variants — biến thể mới KHÔNG có id trong payload, chỉ dùng riêng
+      // payload thì bị coi là "mồ côi" và xoá ngay sau khi vừa tạo).
+      const incomingVariantIds = new Set([
+        ...(p.variants || []).filter((v) => v.id).map((v) => v.id),
+        ...item.variants.filter((v) => v.id).map((v) => v.id)
+      ]);
       const existingVariants = await db.query('SELECT id FROM product_variants WHERE product_id = $1', [product.id]);
       for (const ev of existingVariants) {
         if (!incomingVariantIds.has(ev.id)) {
@@ -564,9 +583,15 @@ router.post('/gas-sync/apply', asyncHandler(async (req, res) => {
 
   // Sản phẩm đã đồng bộ trước đó nhưng KHÔNG còn trong lần gửi này — bị xoá khỏi sheet PRODUCT
   // → xoá mềm luôn (giống DELETE /products/:id: deleted_at + status=archived, KHÔNG đụng biến
-  // thể của sản phẩm đó, đúng y hệt hành vi route thật).
+  // thể của sản phẩm đó, đúng y hệt hành vi route thật). Gộp CẢ 2 nguồn ID: id có sẵn trong
+  // payload (sản phẩm cũ — giữ lại dù lỡ lưu lỗi round này) VÀ id vừa tạo mới thành công
+  // (result.products — sản phẩm mới KHÔNG có id trong payload, chỉ dùng riêng payload thì bị
+  // xoá mềm ngay sau khi vừa tạo).
   {
-    const incomingProductIds = new Set((body.products || []).filter((p) => p.id).map((p) => p.id));
+    const incomingProductIds = new Set([
+      ...(body.products || []).filter((p) => p.id).map((p) => p.id),
+      ...result.products.filter((p) => p.id).map((p) => p.id)
+    ]);
     const existingProducts = await db.query('SELECT id FROM products WHERE merchant_id = $1 AND deleted_at IS NULL', [merchant.id]);
     for (const ep of existingProducts) {
       if (!incomingProductIds.has(ep.id)) {
