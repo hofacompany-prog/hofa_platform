@@ -274,6 +274,20 @@ class AdminRepository {
     await _api.patch('/branches/$branchId', body: data) as Map<String, dynamic>,
   );
 
+  /// Công tắc "Tạm nghỉ" — [isOpen]=false đóng tay VÔ THỜI HẠN (break_until=null), true mở
+  /// lại (luôn xoá break_until dù đang đóng tay hay từng hẹn giờ). Xem
+  /// PATCH /branches/:id/toggle-open, hofa-db/78_branch_operating_hours_gate.sql.
+  Future<Branch> toggleBranchOpen(
+    String branchId, {
+    required bool isOpen,
+  }) async => Branch.fromJson(
+    await _api.patch(
+          '/branches/$branchId/toggle-open',
+          body: {'is_open': isOpen},
+        )
+        as Map<String, dynamic>,
+  );
+
   Future<List<BranchHour>> branchHours(String branchId) async {
     final list = await _api.get('/branches/$branchId/hours') as List;
     return list

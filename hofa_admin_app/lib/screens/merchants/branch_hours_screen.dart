@@ -11,6 +11,10 @@ class _DayRow {
   _DayRow({required this.enabled, required this.open, required this.close});
 }
 
+/// closed/open24 ưu tiên trước, ghi đè hẳn is_open + branch_hours — custom (theo giờ hoạt
+/// động từng ngày, hành vi gốc của màn này) chỉ áp dụng khi không chọn 2 cái trên.
+enum _HoursMode { closed, open24, custom }
+
 /// Giờ mở cửa từng ngày trong tuần cho 1 chi nhánh — cùng giao diện/luồng dữ liệu (GET/PUT
 /// /branches/:id/hours) với màn hình Cửa hàng tự sửa
 /// (hofa_store_app/lib/screens/settings/branch_hours_screen.dart): mỗi ngày 1 công tắc bật/tắt +
@@ -47,6 +51,26 @@ class _BranchHoursScreenState extends ConsumerState<BranchHoursScreen> {
   // tick chọn áp dụng cùng khung giờ, thay vì hộp thoại riêng.
   int? _copyPromptDayIndex;
   final Set<int> _copySelectedDays = {};
+
+  _HoursMode _mode = _HoursMode.custom;
+  bool _modeInitialized = false;
+
+  /// Chỉ chạy ĐÚNG 1 LẦN sau khi cả giờ hoạt động (_load) lẫn is_open của chi nhánh
+  /// (merchantDetailProvider) đã có — suy ra đúng chế độ đang áp dụng THẬT SỰ, không phải
+  /// đoán mù: is_open=false → đang đóng cửa tay; is_open=true + chưa tick ngày nào → đang mở
+  /// 24 giờ (0 dòng branch_hours, xem hofa-db/78_branch_operating_hours_gate.sql); còn lại →
+  /// theo giờ hoạt động tuỳ chỉnh như trước.
+  void _initModeIfNeeded(bool branchIsOpen) {
+    if (_modeInitialized) return;
+    _modeInitialized = true;
+    if (!branchIsOpen) {
+      _mode = _HoursMode.closed;
+    } else if (!_days.any((d) => d.enabled)) {
+      _mode = _HoursMode.open24;
+    } else {
+      _mode = _HoursMode.custom;
+    }
+  }
 
   @override
   void initState() {
@@ -111,7 +135,11 @@ class _BranchHoursScreenState extends ConsumerState<BranchHoursScreen> {
     final source = _days[_copyPromptDayIndex!];
     setState(() {
       for (final i in _copySelectedDays) {
-        _days[i] = _DayRow(enabled: true, open: source.open, close: source.close);
+        _days[i] = _DayRow(
+          enabled: true,
+          open: source.open,
+          close: source.close,
+        );
       }
       _copyPromptDayIndex = null;
       _copySelectedDays.clear();
@@ -124,16 +152,36 @@ class _BranchHoursScreenState extends ConsumerState<BranchHoursScreen> {
       _error = null;
     });
     try {
-      final hours = <BranchHour>[
-        for (var i = 0; i < 7; i++)
-          if (_days[i].enabled)
-            BranchHour(
-              weekday: i,
-              openTime: _fmt(_days[i].open),
-              closeTime: _fmt(_days[i].close),
-            ),
-      ];
-      await ref.read(adminRepoProvider).setBranchHours(widget.branchId, hours);
+      final repo = ref.read(adminRepoProvider);
+      if (_mode == _HoursMode.closed) {
+        // Ưu tiên trước giờ hoạt động — is_open=false, break_until=null (đóng tay vô thời
+        // hạn, xem PATCH /branches/:id/toggle-open). KHÔNG đụng branch_hours, giữ nguyên cấu
+        // hình theo ngày đang có để mở lại "Theo giờ hoạt động" sau vẫn còn y nguyên.
+        await repo.toggleBranchOpen(widget.branchId, isOpen: false);
+      } else if (_mode == _HoursMode.open24) {
+        // Ưu tiên trước giờ hoạt động — is_open=true + xoá hết branch_hours (0 dòng = mở
+        // 24/7, xem hofa-db/78_branch_operating_hours_gate.sql). Không xoá _days ở local
+        // state, chỉ không gửi lên, để còn quay lại "Theo giờ hoạt động" mà không mất cấu
+        // hình cũ.
+        await repo.toggleBranchOpen(widget.branchId, isOpen: true);
+        await repo.setBranchHours(widget.branchId, const []);
+      } else {
+        // Giữ y nguyên hành vi gốc — chỉ thêm đảm bảo is_open=true (phòng trước đó đang ở
+        // chế độ "Đóng cửa" rồi đổi sang đây, không thì lưu giờ xong quán vẫn bị đánh dấu
+        // đóng).
+        await repo.toggleBranchOpen(widget.branchId, isOpen: true);
+        final hours = <BranchHour>[
+          for (var i = 0; i < 7; i++)
+            if (_days[i].enabled)
+              BranchHour(
+                weekday: i,
+                openTime: _fmt(_days[i].open),
+                closeTime: _fmt(_days[i].close),
+              ),
+        ];
+        await repo.setBranchHours(widget.branchId, hours);
+      }
+      ref.invalidate(merchantDetailProvider(widget.merchantId));
       if (mounted) context.pop();
     } catch (e) {
       setState(() => _error = 'Có lỗi xảy ra: $e');
@@ -230,6 +278,17 @@ class _BranchHoursScreenState extends ConsumerState<BranchHoursScreen> {
       },
       orElse: () => null,
     );
+    final branchIsOpen = merchantAsync.maybeWhen(
+      data: (m) {
+        final branches = m.branches ?? const [];
+        for (final b in branches) {
+          if (b.id == widget.branchId) return b.isOpen;
+        }
+        return true;
+      },
+      orElse: () => true,
+    );
+    if (!_loading) _initModeIfNeeded(branchIsOpen);
 
     return Scaffold(
       appBar: AppBar(
@@ -245,95 +304,156 @@ class _BranchHoursScreenState extends ConsumerState<BranchHoursScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      for (var i = 0; i < 7; i++) ...[
-                        Card(
-                          elevation: 0,
-                          margin: const EdgeInsets.only(bottom: 6),
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.surfaceContainerLow,
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 2,
+                      Row(
+                        children: [
+                          Expanded(
+                            child: ChoiceChip(
+                              label: const Text('🌐 Hoạt động 24 giờ'),
+                              selected: _mode == _HoursMode.open24,
+                              onSelected: (v) => setState(
+                                () => _mode = v
+                                    ? _HoursMode.open24
+                                    : _HoursMode.custom,
+                              ),
                             ),
-                            child: Row(
-                              children: [
-                                SizedBox(
-                                  width: 68,
-                                  child: Text(
-                                    weekdayLabels[i]!,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w500,
-                                      fontSize: 13,
-                                    ),
-                                  ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: ChoiceChip(
+                              label: const Text('🔒 Đóng cửa'),
+                              selected: _mode == _HoursMode.closed,
+                              selectedColor: Theme.of(
+                                context,
+                              ).colorScheme.errorContainer,
+                              onSelected: (v) => setState(
+                                () => _mode = v
+                                    ? _HoursMode.closed
+                                    : _HoursMode.custom,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      if (_mode == _HoursMode.open24)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 16),
+                          child: Text(
+                            'Cửa hàng sẽ luôn mở, không giới hạn theo khung giờ nào.',
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: Colors.black54),
+                          ),
+                        )
+                      else if (_mode == _HoursMode.closed)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 16),
+                          child: Text(
+                            'Cửa hàng sẽ đóng cho đến khi bạn đổi lại ở đây.',
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: Theme.of(context).colorScheme.error,
                                 ),
-                                Switch(
-                                  materialTapTargetSize:
-                                      MaterialTapTargetSize.shrinkWrap,
-                                  value: _days[i].enabled,
-                                  onChanged: (v) =>
-                                      setState(() => _days[i].enabled = v),
-                                ),
-                                if (_days[i].enabled) ...[
-                                  Expanded(
-                                    child: TextButton(
-                                      style: TextButton.styleFrom(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 6,
-                                        ),
-                                        minimumSize: Size.zero,
-                                        tapTargetSize:
-                                            MaterialTapTargetSize.shrinkWrap,
-                                      ),
-                                      onPressed: () =>
-                                          _pickTime(i, isOpen: true),
-                                      child: Text(
-                                        _fmt(_days[i].open),
-                                        style: const TextStyle(fontSize: 13),
-                                      ),
-                                    ),
-                                  ),
-                                  const Text(
-                                    '—',
-                                    style: TextStyle(fontSize: 12),
-                                  ),
-                                  Expanded(
-                                    child: TextButton(
-                                      style: TextButton.styleFrom(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 6,
-                                        ),
-                                        minimumSize: Size.zero,
-                                        tapTargetSize:
-                                            MaterialTapTargetSize.shrinkWrap,
-                                      ),
-                                      onPressed: () =>
-                                          _pickTime(i, isOpen: false),
-                                      child: Text(
-                                        _fmt(_days[i].close),
-                                        style: const TextStyle(fontSize: 13),
-                                      ),
-                                    ),
-                                  ),
-                                ] else
-                                  const Expanded(
+                          ),
+                        )
+                      else
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Text(
+                            'Theo giờ hoạt động từng ngày bên dưới:',
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: Colors.black54),
+                          ),
+                        ),
+                      if (_mode == _HoursMode.custom)
+                        for (var i = 0; i < 7; i++) ...[
+                          Card(
+                            elevation: 0,
+                            margin: const EdgeInsets.only(bottom: 6),
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.surfaceContainerLow,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
+                              child: Row(
+                                children: [
+                                  SizedBox(
+                                    width: 68,
                                     child: Text(
-                                      'Đóng cửa',
-                                      style: TextStyle(
-                                        color: Colors.black45,
+                                      weekdayLabels[i]!,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w500,
                                         fontSize: 13,
                                       ),
                                     ),
                                   ),
-                              ],
+                                  Switch(
+                                    materialTapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
+                                    value: _days[i].enabled,
+                                    onChanged: (v) =>
+                                        setState(() => _days[i].enabled = v),
+                                  ),
+                                  if (_days[i].enabled) ...[
+                                    Expanded(
+                                      child: TextButton(
+                                        style: TextButton.styleFrom(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 6,
+                                          ),
+                                          minimumSize: Size.zero,
+                                          tapTargetSize:
+                                              MaterialTapTargetSize.shrinkWrap,
+                                        ),
+                                        onPressed: () =>
+                                            _pickTime(i, isOpen: true),
+                                        child: Text(
+                                          _fmt(_days[i].open),
+                                          style: const TextStyle(fontSize: 13),
+                                        ),
+                                      ),
+                                    ),
+                                    const Text(
+                                      '—',
+                                      style: TextStyle(fontSize: 12),
+                                    ),
+                                    Expanded(
+                                      child: TextButton(
+                                        style: TextButton.styleFrom(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 6,
+                                          ),
+                                          minimumSize: Size.zero,
+                                          tapTargetSize:
+                                              MaterialTapTargetSize.shrinkWrap,
+                                        ),
+                                        onPressed: () =>
+                                            _pickTime(i, isOpen: false),
+                                        child: Text(
+                                          _fmt(_days[i].close),
+                                          style: const TextStyle(fontSize: 13),
+                                        ),
+                                      ),
+                                    ),
+                                  ] else
+                                    const Expanded(
+                                      child: Text(
+                                        'Đóng cửa',
+                                        style: TextStyle(
+                                          color: Colors.black45,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
                             ),
                           ),
-                        ),
-                        if (_copyPromptDayIndex == i)
-                          _buildCopyPanel(context, i),
-                      ],
+                          if (_copyPromptDayIndex == i)
+                            _buildCopyPanel(context, i),
+                        ],
                       if (_error != null) ...[
                         const SizedBox(height: 16),
                         Text(
