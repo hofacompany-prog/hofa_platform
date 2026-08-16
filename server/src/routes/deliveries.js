@@ -179,6 +179,42 @@ router.post('/deliveries/:id/decline', asyncHandler(async (req, res) => {
   res.json({ ok: true, data: { reassigned: !!result } });
 }));
 
+/** Tài xế báo quán đã đóng cửa lúc đến lấy hàng (không mở được cửa/không có ai) — báo mọi admin
+ * qua notifyAdmins() (đã dùng cho đơn chuyển khoản/nạp rút ví, xem push.js), kèm link thẳng tới
+ * màn "Giờ mở cửa" của đúng chi nhánh đó (branch_hours_screen.dart bên web admin) để admin xem
+ * xét và tự quyết định đóng cửa tạm thời quán này trong bao lâu (chọn mode "Đóng cửa" + chọn
+ * thời lượng, dùng thẳng is_open/break_until đã có sẵn — không cần bảng mới, đơn thuần là 1
+ * thông báo, không phải 1 "yêu cầu" cần lưu trạng thái duyệt/từ chối riêng). Chỉ cho phép ở đúng
+ * bước 'arrived_store' — tài xế đã thật sự đến quán mới báo được, tránh báo nhầm/báo bừa. */
+router.post('/deliveries/:id/report-branch-closed', asyncHandler(async (req, res) => {
+  const delivery = await requireOwnDelivery(req.ctx, req.params.id);
+  if (delivery.status !== 'arrived_store') {
+    throw new ApiError('BAD_REQUEST', 'Chỉ báo được khi đã đến quán lấy hàng', 400);
+  }
+  const info = await db.queryOne(
+    `SELECT o.order_code, o.branch_id, o.merchant_id, m.name AS merchant_name, b.name AS branch_name,
+            u.full_name AS driver_name
+       FROM orders o
+       JOIN merchants m ON m.id = o.merchant_id
+       JOIN branches b ON b.id = o.branch_id
+       JOIN drivers dr ON dr.id = $2
+       JOIN users u ON u.id = dr.user_id
+      WHERE o.id = $1`,
+    [delivery.order_id, delivery.driver_id]
+  );
+  if (!info) throw new ApiError('NOT_FOUND', 'Không tìm thấy đơn hàng', 404);
+
+  const result = await push.notifyAdmins({
+    title: 'Quán báo đã đóng cửa',
+    body: `Tài xế ${info.driver_name} báo "${info.merchant_name}" (${info.branch_name}) đã đóng cửa ` +
+      `khi đến lấy đơn ${info.order_code} — xem xét đóng cửa tạm thời quán này.`,
+    kind: 'branch_closed_report',
+    screen: `/merchants/${info.merchant_id}/branches/${info.branch_id}/hours`
+  });
+
+  res.json({ ok: true, data: { reported: true, admins_notified: result.sent } });
+}));
+
 /** Quét các chuyến quá hạn accept_deadline và tự chuyển tài xế khác — gọi định kỳ
  * từ 1 cron ngoài (Render Cron Job, cron-job.org...) vì repo chưa có job scheduler
  * nội bộ. Bảo vệ bằng secret riêng, không dùng JWT vì đây không phải người dùng gọi. */

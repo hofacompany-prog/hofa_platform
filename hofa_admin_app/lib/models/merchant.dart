@@ -34,6 +34,7 @@ class Branch {
   final double longitude;
   final bool isMain;
   final bool isOpen;
+  final DateTime? breakUntil;
   final num deliveryRadiusKm;
 
   Branch({
@@ -49,6 +50,7 @@ class Branch {
     required this.longitude,
     required this.isMain,
     required this.isOpen,
+    this.breakUntil,
     required this.deliveryRadiusKm,
   });
 
@@ -65,6 +67,9 @@ class Branch {
     longitude: double.tryParse('${json['longitude']}') ?? 0,
     isMain: json['is_main'] as bool? ?? false,
     isOpen: json['is_open'] as bool? ?? true,
+    breakUntil: json['break_until'] != null
+        ? DateTime.tryParse(json['break_until'] as String)
+        : null,
     deliveryRadiusKm: num.tryParse('${json['delivery_radius_km']}') ?? 5,
   );
 

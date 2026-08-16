@@ -280,10 +280,15 @@ class AdminRepository {
   Future<Branch> toggleBranchOpen(
     String branchId, {
     required bool isOpen,
+    DateTime? breakUntil,
   }) async => Branch.fromJson(
     await _api.patch(
           '/branches/$branchId/toggle-open',
-          body: {'is_open': isOpen},
+          body: {
+            'is_open': isOpen,
+            if (breakUntil != null)
+              'break_until': breakUntil.toUtc().toIso8601String(),
+          },
         )
         as Map<String, dynamic>,
   );

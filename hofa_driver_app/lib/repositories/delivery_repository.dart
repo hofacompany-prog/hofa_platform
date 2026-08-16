@@ -45,4 +45,8 @@ class DeliveryRepository {
   Future<void> addTrack(String deliveryId, double latitude, double longitude) async {
     await _api.post('/deliveries/$deliveryId/tracks', body: {'latitude': latitude, 'longitude': longitude});
   }
+
+  Future<void> reportBranchClosed(String deliveryId) async {
+    await _api.post('/deliveries/$deliveryId/report-branch-closed');
+  }
 }

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/branch_hours.dart';
 import '../../providers/admin_providers.dart';
+import '../../widgets/branch_break_dialogs.dart';
 
 class _Window {
   TimeOfDay open;
@@ -66,21 +67,40 @@ class _BranchHoursScreenState extends ConsumerState<BranchHoursScreen> {
   _HoursMode _mode = _HoursMode.custom;
   bool _modeInitialized = false;
 
-  /// Chỉ chạy ĐÚNG 1 LẦN sau khi cả giờ hoạt động (_load) lẫn is_open của chi nhánh
-  /// (merchantDetailProvider) đã có — suy ra đúng chế độ đang áp dụng THẬT SỰ, không phải
+  // Mốc tự mở lại khi ở mode "Đóng cửa" (branches.break_until) — bắt buộc chọn khi TỰ chuyển
+  // sang mode này qua pickBreakDuration(); null nếu quán đang đóng vô thời hạn từ trước khi có
+  // tính năng chọn thời lượng (vd hệ thống tự tắt do không xác nhận đơn kịp).
+  DateTime? _breakUntil;
+
+  /// Chỉ chạy ĐÚNG 1 LẦN sau khi cả giờ hoạt động (_load) lẫn is_open/break_until của chi
+  /// nhánh (merchantDetailProvider) đã có — suy ra đúng chế độ đang áp dụng THẬT SỰ, không phải
   /// đoán mù: is_open=false → đang đóng cửa tay; is_open=true + chưa tick ngày nào → đang mở
   /// 24 giờ (0 dòng branch_hours, xem hofa-db/78_branch_operating_hours_gate.sql); còn lại →
   /// theo giờ hoạt động tuỳ chỉnh như trước.
-  void _initModeIfNeeded(bool branchIsOpen) {
+  void _initModeIfNeeded(bool branchIsOpen, DateTime? breakUntil) {
     if (_modeInitialized) return;
     _modeInitialized = true;
     if (!branchIsOpen) {
       _mode = _HoursMode.closed;
+      _breakUntil = breakUntil;
     } else if (!_days.any((d) => d.enabled)) {
       _mode = _HoursMode.open24;
     } else {
       _mode = _HoursMode.custom;
     }
+  }
+
+  /// Bắt buộc chọn thời lượng qua pickBreakDuration() trước khi CHUYỂN SANG mode "Đóng cửa" —
+  /// đúng yêu cầu "admin duyệt xem đóng cửa tạm thời quán đó trong bao lâu" khi xử lý báo cáo
+  /// quán đóng cửa từ tài xế (server/src/routes/deliveries.js report-branch-closed). Huỷ hộp
+  /// thoại thì giữ nguyên mode hiện tại, không tự chuyển.
+  Future<void> _selectClosedMode() async {
+    final until = await pickBreakDuration(context);
+    if (until == null) return;
+    setState(() {
+      _mode = _HoursMode.closed;
+      _breakUntil = until;
+    });
   }
 
   @override
@@ -199,10 +219,16 @@ class _BranchHoursScreenState extends ConsumerState<BranchHoursScreen> {
     try {
       final repo = ref.read(adminRepoProvider);
       if (_mode == _HoursMode.closed) {
-        // Ưu tiên trước giờ hoạt động — is_open=false, break_until=null (đóng tay vô thời
-        // hạn, xem PATCH /branches/:id/toggle-open). KHÔNG đụng branch_hours, giữ nguyên cấu
-        // hình theo ngày đang có để mở lại "Theo giờ hoạt động" sau vẫn còn y nguyên.
-        await repo.toggleBranchOpen(widget.branchId, isOpen: false);
+        // Ưu tiên trước giờ hoạt động — is_open=false, break_until=mốc đã chọn qua
+        // pickBreakDuration() (xem _selectClosedMode) để admin quyết định đóng cửa tạm thời
+        // trong bao lâu, khớp PATCH /branches/:id/toggle-open. KHÔNG đụng branch_hours, giữ
+        // nguyên cấu hình theo ngày đang có để mở lại "Theo giờ hoạt động" sau vẫn còn y
+        // nguyên.
+        await repo.toggleBranchOpen(
+          widget.branchId,
+          isOpen: false,
+          breakUntil: _breakUntil,
+        );
       } else if (_mode == _HoursMode.open24) {
         // Ưu tiên trước giờ hoạt động — is_open=true + xoá hết branch_hours (0 dòng = mở
         // 24/7, xem hofa-db/78_branch_operating_hours_gate.sql). Không xoá _days ở local
@@ -380,7 +406,17 @@ class _BranchHoursScreenState extends ConsumerState<BranchHoursScreen> {
       },
       orElse: () => true,
     );
-    if (!_loading) _initModeIfNeeded(branchIsOpen);
+    final branchBreakUntil = merchantAsync.maybeWhen(
+      data: (m) {
+        final branches = m.branches ?? const [];
+        for (final b in branches) {
+          if (b.id == widget.branchId) return b.breakUntil;
+        }
+        return null;
+      },
+      orElse: () => null,
+    );
+    if (!_loading) _initModeIfNeeded(branchIsOpen, branchBreakUntil);
 
     return Scaffold(
       appBar: AppBar(
@@ -417,11 +453,13 @@ class _BranchHoursScreenState extends ConsumerState<BranchHoursScreen> {
                               selectedColor: Theme.of(
                                 context,
                               ).colorScheme.errorContainer,
-                              onSelected: (v) => setState(
-                                () => _mode = v
-                                    ? _HoursMode.closed
-                                    : _HoursMode.custom,
-                              ),
+                              onSelected: (v) {
+                                if (v) {
+                                  _selectClosedMode();
+                                } else {
+                                  setState(() => _mode = _HoursMode.custom);
+                                }
+                              },
                             ),
                           ),
                         ],
@@ -439,12 +477,26 @@ class _BranchHoursScreenState extends ConsumerState<BranchHoursScreen> {
                       else if (_mode == _HoursMode.closed)
                         Padding(
                           padding: const EdgeInsets.only(bottom: 16),
-                          child: Text(
-                            'Cửa hàng sẽ đóng cho đến khi bạn đổi lại ở đây.',
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(
-                                  color: Theme.of(context).colorScheme.error,
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  _breakUntil != null
+                                      ? 'Cửa hàng sẽ đóng đến ${formatBreakUntil(_breakUntil!)}.'
+                                      : 'Cửa hàng sẽ đóng cho đến khi bạn đổi lại ở đây.',
+                                  style: Theme.of(context).textTheme.bodySmall
+                                      ?.copyWith(
+                                        color: Theme.of(
+                                          context,
+                                        ).colorScheme.error,
+                                      ),
                                 ),
+                              ),
+                              TextButton(
+                                onPressed: _selectClosedMode,
+                                child: const Text('Đổi thời lượng'),
+                              ),
+                            ],
                           ),
                         )
                       else

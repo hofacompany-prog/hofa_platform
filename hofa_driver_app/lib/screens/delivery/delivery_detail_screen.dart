@@ -295,6 +295,80 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
     if (await canLaunchUrl(uri)) await launchUrl(uri);
   }
 
+  /// Quán đóng cửa, không lấy được hàng — hiện SĐT khách để tài xế tự gọi báo, kèm nút gọi
+  /// nhanh luôn (tái dùng _call). Không tự động gọi ngay, để tài xế chủ động bấm.
+  Future<void> _reportClosedToCustomer() async {
+    final phone = _order?.shipRecipientPhone;
+    if (phone == null) return;
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Báo khách hàng'),
+        content: Text('Quán đã đóng cửa — gọi cho khách để báo:\n\n$phone'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Đóng'),
+          ),
+          FilledButton.icon(
+            onPressed: () {
+              Navigator.pop(context);
+              _call(phone);
+            },
+            icon: const Icon(Icons.call),
+            label: const Text('Gọi ngay'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Báo mọi admin biết quán này đang đóng cửa (server/src/routes/deliveries.js
+  /// POST /deliveries/:id/report-branch-closed → push.notifyAdmins) để admin xem xét đóng cửa
+  /// tạm thời quán đó trong bao lâu — không tự đổi trạng thái đơn/chuyến, chỉ là báo cáo.
+  Future<void> _reportClosedToAdmin() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Báo admin quán đóng cửa'),
+        content: const Text(
+          'Xác nhận quán này đã đóng cửa? Admin sẽ được báo ngay để xem xét đóng cửa tạm thời quán này trên hệ thống.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Huỷ'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Xác nhận'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    setState(() => _busy = true);
+    try {
+      await _repo.reportBranchClosed(widget.deliveryId);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Đã báo admin — cảm ơn bạn!')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final deliveryAsync = ref.watch(deliveryProvider(widget.deliveryId));
@@ -531,6 +605,10 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
                 onStartDelivering: () => _advance('delivering'),
                 onDelivered: _promptDelivered,
                 onFailed: _promptFailed,
+                onReportClosedToCustomer: order == null
+                    ? null
+                    : _reportClosedToCustomer,
+                onReportClosedToAdmin: _reportClosedToAdmin,
                 onDone: () => context.go('/'),
               ),
             ],
@@ -605,6 +683,8 @@ class _ActionArea extends StatelessWidget {
   final VoidCallback onStartDelivering;
   final VoidCallback onDelivered;
   final VoidCallback onFailed;
+  final VoidCallback? onReportClosedToCustomer;
+  final VoidCallback onReportClosedToAdmin;
   final VoidCallback onDone;
 
   const _ActionArea({
@@ -618,6 +698,8 @@ class _ActionArea extends StatelessWidget {
     required this.onStartDelivering,
     required this.onDelivered,
     required this.onFailed,
+    required this.onReportClosedToCustomer,
+    required this.onReportClosedToAdmin,
     required this.onDone,
   });
 
@@ -632,12 +714,46 @@ class _ActionArea extends StatelessWidget {
           label: Text(isBuyOnBehalf ? 'Đã đến quán' : 'Đã đến quán lấy hàng'),
         );
       case 'arrived_store':
-        return FilledButton.icon(
-          onPressed: busy
-              ? null
-              : (isBuyOnBehalf ? onBuyOnBehalfPickup : onPickedUp),
-          icon: const Icon(Icons.inventory_2_outlined),
-          label: Text(isBuyOnBehalf ? 'Đã mua xong hàng' : 'Đã lấy hàng'),
+        return Column(
+          children: [
+            FilledButton.icon(
+              onPressed: busy
+                  ? null
+                  : (isBuyOnBehalf ? onBuyOnBehalfPickup : onPickedUp),
+              icon: const Icon(Icons.inventory_2_outlined),
+              label: Text(isBuyOnBehalf ? 'Đã mua xong hàng' : 'Đã lấy hàng'),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Quán đã đóng cửa, không lấy được hàng?',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.outline,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: busy ? null : onReportClosedToCustomer,
+                    icon: const Icon(Icons.call_outlined),
+                    label: const Text('Báo khách hàng'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: busy ? null : onReportClosedToAdmin,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: theme.colorScheme.error,
+                    ),
+                    icon: const Icon(Icons.report_problem_outlined),
+                    label: const Text('Báo admin'),
+                  ),
+                ),
+              ],
+            ),
+          ],
         );
       case 'picked_up':
         return FilledButton.icon(
