@@ -7,6 +7,7 @@ import '../models/user_detail.dart';
 import '../models/merchant.dart';
 import '../models/merchant_device.dart';
 import '../models/merchant_fee_tier.dart';
+import '../models/platform_fee_settings.dart';
 import '../models/topping.dart';
 import '../models/driver.dart';
 import '../models/bank.dart';
@@ -192,6 +193,10 @@ final shippingFeeSettingsProvider =
     FutureProvider.autoDispose<ShippingFeeSettings>(
       (ref) => ref.watch(adminRepoProvider).shippingFeeSettings(),
     );
+
+final platformFeeSettingsProvider = FutureProvider.autoDispose<PlatformFeeData>(
+  (ref) => ref.watch(adminRepoProvider).platformFeeSettings(),
+);
 
 // ---- Ví tài xế ----
 

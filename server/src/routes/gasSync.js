@@ -88,6 +88,31 @@ async function requireGasMerchant(merchantId) {
   return merchant;
 }
 
+/** Copy bậc phí mua hộ mặc định toàn sàn (hofa-db/87_platform_buy_on_behalf_fee_defaults.sql,
+ * admin cấu hình ở web admin) sang merchants.buy_on_behalf_fee_basis + merchant_fee_tiers cho
+ * 1 cửa hàng buy_on_behalf VỪA TẠO qua GAS — cùng hàm với POST /merchants (merchants.js), lặp
+ * lại ở đây vì 2 route file trong repo này không share helper qua lại. Best-effort: nuốt lỗi
+ * nếu 2 bảng platform_buy_on_behalf_fee_* chưa tồn tại hoặc admin chưa cấu hình bậc nào — cửa
+ * hàng vẫn tạo được bình thường, chỉ là chưa có phí mua hộ mặc định. */
+async function applyPlatformFeeDefaults(merchantId) {
+  try {
+    const settings = await db.queryOne(
+      'SELECT fee_basis FROM platform_buy_on_behalf_fee_settings ORDER BY updated_at DESC LIMIT 1'
+    );
+    const tiers = await db.query(
+      'SELECT min_threshold, max_threshold, fee_type, fee_fixed_amount, fee_percent FROM platform_buy_on_behalf_fee_tiers ORDER BY min_threshold ASC'
+    );
+    if (!settings || !tiers.length) return;
+    await db.updateById('merchants', merchantId, { buy_on_behalf_fee_basis: settings.fee_basis });
+    for (const t of tiers) {
+      // eslint-disable-next-line no-await-in-loop
+      await db.insertRow('merchant_fee_tiers', { merchant_id: merchantId, ...t });
+    }
+  } catch (err) {
+    console.error('Không copy được phí mua hộ mặc định toàn sàn cho cửa hàng', merchantId, err);
+  }
+}
+
 /** Toàn bộ cửa hàng do GAS quản lý (id + tên) — GAS dùng để đối chiếu với danh sách dòng còn
  * lại trong sheet MERCHANT: cửa hàng nào có ở đây mà KHÔNG còn dòng nào trong sheet trỏ đúng id
  * đó (dòng đã bị XOÁ hẳn khỏi sheet, không phải chỉ xoá tên) nghĩa là cần dọn — xem
@@ -293,6 +318,7 @@ router.post('/gas-sync/apply', asyncHandler(async (req, res) => {
   };
 
   // ---- Cửa hàng ----
+  const isNewMerchant = !body.merchant.id;
   let merchant;
   if (body.merchant.id) {
     merchant = await requireGasMerchant(body.merchant.id);
@@ -325,6 +351,9 @@ router.post('/gas-sync/apply', asyncHandler(async (req, res) => {
     });
   }
   result.merchant = { id: merchant.id };
+  // Cửa hàng mới tạo qua GAS luôn merchant_type='buy_on_behalf' — tự gán phí mua hộ mặc định
+  // toàn sàn (nếu admin đã cấu hình), giống hành vi POST /merchants ở merchants.js.
+  if (isNewMerchant) await applyPlatformFeeDefaults(merchant.id);
 
   // ---- Phân loại cửa hàng (merchant_classifications, nhiều-nhiều — full-replace theo tên,
   // cùng pattern branch_hours: xoá hết rồi insert lại đúng danh sách mới). Tên không khớp bất

@@ -5,6 +5,7 @@ import '../models/user_detail.dart';
 import '../models/merchant.dart';
 import '../models/merchant_device.dart';
 import '../models/merchant_fee_tier.dart';
+import '../models/platform_fee_settings.dart';
 import '../models/branch_hours.dart';
 import '../models/driver.dart';
 import '../models/bank.dart';
@@ -321,6 +322,41 @@ class AdminRepository {
 
   Future<void> deleteFeeTier(String id) async {
     await _api.delete('/fee-tiers/$id');
+  }
+
+  // ---- Phí mua hộ mặc định toàn sàn (copy sang merchant_fee_tiers cho cửa hàng
+  // buy_on_behalf mới tạo — xem hofa-db/87_platform_buy_on_behalf_fee_defaults.sql) ----
+
+  Future<PlatformFeeData> platformFeeSettings() async =>
+      PlatformFeeData.fromJson(
+        await _api.get('/platform-fee-settings') as Map<String, dynamic>,
+      );
+
+  Future<PlatformFeeSettings> updatePlatformFeeBasis(String feeBasis) async =>
+      PlatformFeeSettings.fromJson(
+        await _api.patch(
+              '/platform-fee-settings',
+              body: {'fee_basis': feeBasis},
+            )
+            as Map<String, dynamic>,
+      );
+
+  Future<PlatformFeeTier> createPlatformFeeTier(
+    Map<String, dynamic> data,
+  ) async => PlatformFeeTier.fromJson(
+    await _api.post('/platform-fee-tiers', body: data) as Map<String, dynamic>,
+  );
+
+  Future<PlatformFeeTier> updatePlatformFeeTier(
+    String id,
+    Map<String, dynamic> data,
+  ) async => PlatformFeeTier.fromJson(
+    await _api.patch('/platform-fee-tiers/$id', body: data)
+        as Map<String, dynamic>,
+  );
+
+  Future<void> deletePlatformFeeTier(String id) async {
+    await _api.delete('/platform-fee-tiers/$id');
   }
 
   // ---- Nhóm topping (thư viện dùng chung của 1 cửa hàng) — cùng endpoint với

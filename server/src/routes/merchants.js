@@ -34,6 +34,31 @@ async function currentDefaultRadiusKm() {
   return Number(row?.default_radius_km ?? 5);
 }
 
+/** Copy bậc phí mua hộ mặc định toàn sàn (hofa-db/87_platform_buy_on_behalf_fee_defaults.sql,
+ * admin cấu hình ở web admin) sang merchants.buy_on_behalf_fee_basis + merchant_fee_tiers cho
+ * 1 cửa hàng buy_on_behalf VỪA TẠO — chỉ chạy đúng 1 lần lúc tạo mới, không đụng cửa hàng đã
+ * có sẵn tiers riêng. Best-effort: nuốt lỗi nếu 2 bảng platform_buy_on_behalf_fee_* chưa tồn
+ * tại (migration 87 chưa chạy) hoặc admin chưa cấu hình bậc nào — cửa hàng vẫn tạo được bình
+ * thường, chỉ là chưa có phí mua hộ mặc định (giống hành vi trước khi có tính năng này). */
+async function applyPlatformFeeDefaults(merchantId) {
+  try {
+    const settings = await db.queryOne(
+      'SELECT fee_basis FROM platform_buy_on_behalf_fee_settings ORDER BY updated_at DESC LIMIT 1'
+    );
+    const tiers = await db.query(
+      'SELECT min_threshold, max_threshold, fee_type, fee_fixed_amount, fee_percent FROM platform_buy_on_behalf_fee_tiers ORDER BY min_threshold ASC'
+    );
+    if (!settings || !tiers.length) return;
+    await db.updateById('merchants', merchantId, { buy_on_behalf_fee_basis: settings.fee_basis });
+    for (const t of tiers) {
+      // eslint-disable-next-line no-await-in-loop
+      await db.insertRow('merchant_fee_tiers', { merchant_id: merchantId, ...t });
+    }
+  } catch (err) {
+    console.error('Không copy được phí mua hộ mặc định toàn sàn cho cửa hàng', merchantId, err);
+  }
+}
+
 router.get('/merchants', asyncHandler(async (req, res) => {
   const { limit, offset } = pagination(req.query);
   const clauses = ['deleted_at IS NULL'];
@@ -306,6 +331,7 @@ router.post('/merchants', asyncHandler(async (req, res) => {
   const merchant = await db.insertRow('merchants', data);
 
   await db.query(`UPDATE users SET role = 'merchant_owner' WHERE id = $1 AND role = 'customer'`, [ownerId]);
+  if (merchant.merchant_type === 'buy_on_behalf') await applyPlatformFeeDefaults(merchant.id);
   res.status(201).json({ ok: true, data: merchant });
 }));
 

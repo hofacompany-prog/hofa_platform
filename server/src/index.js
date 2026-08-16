@@ -40,6 +40,7 @@ app.use('/', require('./routes/vouchers'));
 app.use('/', require('./routes/voucher-settings'));
 app.use('/', require('./routes/shipping'));
 app.use('/', require('./routes/delivery-radius-settings'));
+app.use('/', require('./routes/platform-fee-settings'));
 app.use('/', require('./routes/order-settings'));
 app.use('/', require('./routes/auto-accept-settings'));
 app.use('/', require('./routes/driver-accept-settings'));
