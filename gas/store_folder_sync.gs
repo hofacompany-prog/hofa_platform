@@ -14,14 +14,20 @@ const GAS_SYNC_SECRET = '069cfbcbd0219c755f74a2fcd75d97c2';
 // đúng thứ tự app Cửa hàng đang dùng (hofa_store_app/lib/models/branch_hours.dart).
 const WEEKDAY_LABELS_VN = ['Chủ nhật', 'Thứ hai', 'Thứ ba', 'Thứ tư', 'Thứ năm', 'Thứ sáu', 'Thứ bảy'];
 
-/** {weekday: "HH:MM-HH:MM"} từ mảng [{weekday,open_time,close_time}] — cắt giây nếu có (Postgres
- *  trả TIME kèm giây, sheet/form chỉ dùng HH:MM). Dùng cả cho diff lẫn đổ dữ liệu vào form. */
+/** {weekday: "HH:MM-HH:MM, HH:MM-HH:MM"} từ mảng [{weekday,open_time,close_time}] — cắt giây nếu
+ *  có (Postgres trả TIME kèm giây, sheet/form chỉ dùng HH:MM). Gộp NHIỀU dòng cùng weekday thành
+ *  1 chuỗi (mỗi cửa hàng cho tối đa 2 khung giờ/ngày, vd bán sáng + tối) thay vì chỉ giữ dòng
+ *  cuối. Dùng cả cho diff lẫn đổ dữ liệu vào form.
+ */
 function hoursByWeekday_(arr) {
   const map = {};
-  (arr || []).forEach(function (h) {
-    if (h.weekday === null || h.weekday === undefined) return;
-    map[h.weekday] = String(h.open_time || '').slice(0, 5) + '-' + String(h.close_time || '').slice(0, 5);
-  });
+  (arr || []).slice()
+    .sort(function (a, b) { return String(a.open_time || '').localeCompare(String(b.open_time || '')); })
+    .forEach(function (h) {
+      if (h.weekday === null || h.weekday === undefined) return;
+      const window = String(h.open_time || '').slice(0, 5) + '-' + String(h.close_time || '').slice(0, 5);
+      map[h.weekday] = map[h.weekday] ? map[h.weekday] + ', ' + window : window;
+    });
   return map;
 }
 
@@ -50,11 +56,13 @@ const STORE_FOLDER_LINK_COLUMN = 8;      // 8 - Link thư mục (tự quản lý
 const STORE_SYSTEM_ID_COLUMN = 9;        // 9 - ID hệ thống (merchants.id, server tự ghi sau khi đồng bộ)
 // Thêm CUỐI CÙNG (không chen giữa) để không phải dời lại Link thư mục/ID hệ thống — tránh lặp
 // lại rắc rối lệch cột đã gặp. 1 cột DUY NHẤT lưu JSON — form vẽ UI 7 ngày (Chủ nhật..Thứ bảy,
-// giống hệt màn "Giờ mở cửa" app Cửa hàng: mỗi ngày 1 công tắc bật/tắt + 2 ô chọn giờ, có nút áp
-// dụng nhanh 1 khung giờ cho nhiều ngày cùng lúc) — KHÔNG sửa tay trực tiếp trong ô sheet.
+// giống hệt màn "Giờ mở cửa" app Cửa hàng: mỗi ngày 1 công tắc bật/tắt + tối đa 2 khung giờ mở/
+// đóng riêng (vd bán sáng + tối, nút "+ Thêm khung giờ"), có nút áp dụng nhanh 1 khung giờ cho
+// nhiều ngày cùng lúc) — KHÔNG sửa tay trực tiếp trong ô sheet.
 // Dạng JSON: [{"weekday":1,"open_time":"08:00","close_time":"21:00"}, ...] — chỉ chứa NGÀY BẬT,
-// weekday 0=Chủ nhật..6=Thứ bảy (khớp branch_hours.weekday thật). Để trống/[] = mở 24/7 (0 dòng
-// branch_hours), xem hofa-db/78_branch_operating_hours_gate.sql.
+// CHO PHÉP NHIỀU DÒNG CÙNG weekday (tối đa 2 khung giờ/ngày ở form), weekday 0=Chủ nhật..
+// 6=Thứ bảy (khớp branch_hours.weekday thật). Để trống/[] = mở 24/7 (0 dòng branch_hours), xem
+// hofa-db/78_branch_operating_hours_gate.sql.
 const STORE_HOURS_COLUMN = 10;           // 10 - Giờ hoạt động (JSON) → branch_hours (weekday/open_time/close_time)
 // Tự điền khi tải "Ảnh đại diện" lên rồi bấm "💾 Lưu" (xem uploadImageToCloudinary) — link
 // Cloudinary công khai, KHÁC hẳn link Drive ở cột 8 (Drive không hotlink ổn định cho app hiển
@@ -1655,10 +1663,16 @@ function buildStoreManagerHtml_(idPrefix) {
   #${idPrefix}err { color: #c0392b; font-weight: bold; }
   #${idPrefix}linkArea a { display: inline-block; margin-top: 3px; }
   #${idPrefix}hoursArea { margin-top: 3px; border: 1px solid #ddd; border-radius: 6px; padding: 8px 10px; }
-  #${idPrefix}hoursArea .hoursRow { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
+  #${idPrefix}hoursArea .hoursDayBlock { padding: 4px 0; border-bottom: 1px solid #f0f0f0; }
+  #${idPrefix}hoursArea .hoursDayBlock:last-of-type { border-bottom: none; }
+  #${idPrefix}hoursArea .hoursRow { display: flex; align-items: center; gap: 8px; }
   #${idPrefix}hoursArea .hoursRow input[type=checkbox] { width: auto; margin: 0; }
   #${idPrefix}hoursArea .hoursLabel { width: 82px; flex: 0 0 auto; font-weight: normal; }
   #${idPrefix}hoursArea input[type=time] { width: auto; padding: 4px; margin: 0; box-sizing: border-box; }
+  #${idPrefix}hoursArea .hoursWindows { margin-left: 90px; margin-top: 2px; }
+  #${idPrefix}hoursArea .hoursWindowRow { display: flex; align-items: center; gap: 8px; padding: 2px 0; }
+  #${idPrefix}hoursArea .hoursRemoveWindow { margin: 0; padding: 2px 7px; }
+  #${idPrefix}hoursArea .hoursAddWindow { margin: 2px 0 0; padding: 3px 8px; font-size: 12px; }
   #${idPrefix}hoursArea .hoursBulkRow { display: flex; align-items: center; gap: 8px; margin-top: 8px; padding-top: 8px; border-top: 1px dashed #ccc; flex-wrap: wrap; }
   #${idPrefix}hoursArea .hoursBulkRow button { margin: 0; padding: 5px 10px; }
   #${idPrefix}hoursArea .hoursHint { font-size: 11px; color: #888; margin-top: 6px; }
@@ -1757,6 +1771,11 @@ function buildStoreManagerHtml_(idPrefix) {
   var PHOTO_URLS_IDX = ${STORE_PHOTO_URLS_COLUMN - 1};
   var classificationOptions = [];
   var currentClassificationNames = [];
+  // {weekday: [{open,close}, ...]} — mỗi ngày tối đa 2 khung giờ (vd bán sáng + tối), tách khỏi
+  // DOM để renderHoursEditor/collectHoursFromEditor cùng đọc/ghi mà add/remove khung không bị
+  // lệch id khi vẽ lại.
+  var hoursState = {};
+  var HOURS_MAX_WINDOWS = 2;
   var WEEKDAY_LABELS = ${JSON.stringify(WEEKDAY_LABELS_VN)};
   var EXPECTED_HEADERS = ${JSON.stringify(STORE_HEADERS)};
   var DESC_MAX_CHARS = ${STORE_DESCRIPTION_MAX_CHARS};
@@ -1997,46 +2016,110 @@ function buildStoreManagerHtml_(idPrefix) {
     if (!container) return;
     container.innerHTML = '';
     var byWeekday = {};
-    hoursArr.forEach(function (h) { byWeekday[h.weekday] = h; });
+    hoursArr.forEach(function (h) { (byWeekday[h.weekday] = byWeekday[h.weekday] || []).push(h); });
+    Object.keys(byWeekday).forEach(function (wd) {
+      byWeekday[wd].sort(function (a, b) { return String(a.open_time).localeCompare(String(b.open_time)); });
+    });
+
+    hoursState = {};
+    WEEKDAY_LABELS.forEach(function (label, wd) {
+      var rows = byWeekday[wd] || [];
+      hoursState[wd] = rows.length
+        ? rows.map(function (h) { return { open: String(h.open_time).slice(0, 5), close: String(h.close_time).slice(0, 5) }; })
+        : [{ open: '08:00', close: '21:00' }];
+    });
+
+    var dayApis = {};
 
     WEEKDAY_LABELS.forEach(function (label, wd) {
-      var row = document.createElement('div');
-      row.className = 'hoursRow';
+      var block = document.createElement('div');
+      block.className = 'hoursDayBlock';
+
+      var headerRow = document.createElement('div');
+      headerRow.className = 'hoursRow';
       var cb = document.createElement('input');
       cb.type = 'checkbox';
       cb.id = PFX + 'hoursEnable' + wd;
-      cb.checked = !!byWeekday[wd];
+      cb.checked = !!(byWeekday[wd] && byWeekday[wd].length);
       var lbl = document.createElement('span');
       lbl.className = 'hoursLabel';
       lbl.textContent = label;
-      var openInput = document.createElement('input');
-      openInput.type = 'time';
-      openInput.id = PFX + 'hoursOpen' + wd;
-      openInput.value = byWeekday[wd] ? String(byWeekday[wd].open_time).slice(0, 5) : '08:00';
-      openInput.disabled = !cb.checked;
-      var dash = document.createElement('span');
-      dash.textContent = '—';
-      var closeInput = document.createElement('input');
-      closeInput.type = 'time';
-      closeInput.id = PFX + 'hoursClose' + wd;
-      closeInput.value = byWeekday[wd] ? String(byWeekday[wd].close_time).slice(0, 5) : '21:00';
-      closeInput.disabled = !cb.checked;
+      headerRow.appendChild(cb);
+      headerRow.appendChild(lbl);
+      block.appendChild(headerRow);
+
+      var windowsDiv = document.createElement('div');
+      windowsDiv.className = 'hoursWindows';
+      windowsDiv.style.display = cb.checked ? '' : 'none';
+      block.appendChild(windowsDiv);
+
+      function renderWindows() {
+        windowsDiv.innerHTML = '';
+        hoursState[wd].forEach(function (w, winIdx) {
+          var row = document.createElement('div');
+          row.className = 'hoursWindowRow';
+          var openInput = document.createElement('input');
+          openInput.type = 'time';
+          openInput.value = w.open;
+          openInput.addEventListener('change', function () { hoursState[wd][winIdx].open = openInput.value; });
+          var dash = document.createElement('span');
+          dash.textContent = '—';
+          var closeInput = document.createElement('input');
+          closeInput.type = 'time';
+          closeInput.value = w.close;
+          closeInput.addEventListener('change', function () { hoursState[wd][winIdx].close = closeInput.value; });
+          row.appendChild(openInput);
+          row.appendChild(dash);
+          row.appendChild(closeInput);
+          if (hoursState[wd].length > 1) {
+            var rmBtn = document.createElement('button');
+            rmBtn.type = 'button';
+            rmBtn.className = 'hoursRemoveWindow';
+            rmBtn.textContent = '✕';
+            rmBtn.addEventListener('click', function () {
+              hoursState[wd].splice(winIdx, 1);
+              renderWindows();
+            });
+            row.appendChild(rmBtn);
+          }
+          windowsDiv.appendChild(row);
+        });
+        if (hoursState[wd].length < HOURS_MAX_WINDOWS) {
+          var addBtn = document.createElement('button');
+          addBtn.type = 'button';
+          addBtn.className = 'hoursAddWindow';
+          addBtn.textContent = '+ Thêm khung giờ';
+          addBtn.addEventListener('click', function () {
+            hoursState[wd].push({ open: '17:00', close: '21:00' });
+            renderWindows();
+          });
+          windowsDiv.appendChild(addBtn);
+        }
+      }
+      renderWindows();
+
       cb.addEventListener('change', function () {
-        openInput.disabled = !cb.checked;
-        closeInput.disabled = !cb.checked;
+        windowsDiv.style.display = cb.checked ? '' : 'none';
       });
-      row.appendChild(cb);
-      row.appendChild(lbl);
-      row.appendChild(openInput);
-      row.appendChild(dash);
-      row.appendChild(closeInput);
-      container.appendChild(row);
+
+      // Áp dụng nhanh chỉ ghi đè bằng ĐÚNG 1 khung giờ — muốn copy cả 2 khung giờ của 1 ngày
+      // sang ngày khác thì dùng nút "Thêm khung giờ" điền tay từng ngày (bulk row không đoán
+      // ngày nào cần 1 hay 2 khung).
+      dayApis[wd] = {
+        isChecked: function () { return cb.checked; },
+        setSingleWindow: function (open, close) {
+          hoursState[wd] = [{ open: open, close: close }];
+          renderWindows();
+        }
+      };
+
+      container.appendChild(block);
     });
 
     var bulkRow = document.createElement('div');
     bulkRow.className = 'hoursBulkRow';
     var bulkLabel = document.createElement('span');
-    bulkLabel.textContent = 'Áp dụng nhanh cho các ngày đã tick:';
+    bulkLabel.textContent = 'Áp dụng nhanh (1 khung giờ) cho các ngày đã tick:';
     var bulkOpen = document.createElement('input');
     bulkOpen.type = 'time'; bulkOpen.id = PFX + 'hoursBulkOpen'; bulkOpen.value = '08:00';
     var bulkDash = document.createElement('span'); bulkDash.textContent = '—';
@@ -2050,10 +2133,8 @@ function buildStoreManagerHtml_(idPrefix) {
       var close = $('hoursBulkClose').value;
       if (!open || !close) { showErr('Chọn đủ giờ mở/đóng ở khung "Áp dụng nhanh" trước'); return; }
       WEEKDAY_LABELS.forEach(function (label, wd) {
-        var cbEl = $('hoursEnable' + wd);
-        if (cbEl && cbEl.checked) {
-          $('hoursOpen' + wd).value = open;
-          $('hoursClose' + wd).value = close;
+        if (dayApis[wd].isChecked()) {
+          dayApis[wd].setSingleWindow(open, close);
         }
       });
       showMsg('Đã áp dụng ' + open + '—' + close + ' cho các ngày đã tick — nhớ bấm Lưu.');
@@ -2067,7 +2148,10 @@ function buildStoreManagerHtml_(idPrefix) {
 
     var hint = document.createElement('div');
     hint.className = 'hoursHint';
-    hint.textContent = 'Tick ngày đang mở cửa rồi chọn giờ riêng cho ngày đó, hoặc điền khung "Áp dụng nhanh" ở dưới rồi bấm Áp dụng để copy cùng 1 giờ cho các ngày đã tick. Không tick ngày nào = mở 24/7 tất cả các ngày.';
+    hint.textContent = 'Tick ngày đang mở cửa rồi chọn giờ riêng cho ngày đó — mỗi ngày cho tối đa ' +
+      HOURS_MAX_WINDOWS + ' khung giờ (vd bán sáng + tối), bấm "+ Thêm khung giờ" để thêm khung thứ 2. ' +
+      'Hoặc điền khung "Áp dụng nhanh" ở dưới rồi bấm Áp dụng để copy cùng 1 khung giờ cho các ngày đã ' +
+      'tick. Không tick ngày nào = mở 24/7 tất cả các ngày.';
     container.appendChild(hint);
   }
 
@@ -2076,11 +2160,11 @@ function buildStoreManagerHtml_(idPrefix) {
     WEEKDAY_LABELS.forEach(function (label, wd) {
       var cbEl = $('hoursEnable' + wd);
       if (cbEl && cbEl.checked) {
-        var openEl = $('hoursOpen' + wd);
-        var closeEl = $('hoursClose' + wd);
-        if (openEl.value && closeEl.value) {
-          result.push({ weekday: wd, open_time: openEl.value, close_time: closeEl.value });
-        }
+        (hoursState[wd] || []).forEach(function (w) {
+          if (w.open && w.close) {
+            result.push({ weekday: wd, open_time: w.open, close_time: w.close });
+          }
+        });
       }
     });
     return result;
