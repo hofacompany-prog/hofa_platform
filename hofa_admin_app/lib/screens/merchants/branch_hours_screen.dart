@@ -471,7 +471,9 @@ class _BranchHoursScreenState extends ConsumerState<BranchHoursScreen> {
                           child: Text(
                             'Cửa hàng sẽ luôn mở, không giới hạn theo khung giờ nào.',
                             style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(color: Colors.black54),
+                                ?.copyWith(
+                                  color: Theme.of(context).colorScheme.outline,
+                                ),
                           ),
                         )
                       else if (_mode == _HoursMode.closed)
@@ -506,7 +508,9 @@ class _BranchHoursScreenState extends ConsumerState<BranchHoursScreen> {
                             'Theo giờ hoạt động từng ngày bên dưới (tối đa '
                             '$_maxWindowsPerDay khung giờ/ngày):',
                             style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(color: Colors.black54),
+                                ?.copyWith(
+                                  color: Theme.of(context).colorScheme.outline,
+                                ),
                           ),
                         ),
                       if (_mode == _HoursMode.custom)
@@ -546,11 +550,13 @@ class _BranchHoursScreenState extends ConsumerState<BranchHoursScreen> {
                                         ),
                                       ),
                                       if (!_days[i].enabled)
-                                        const Expanded(
+                                        Expanded(
                                           child: Text(
                                             'Đóng cửa',
                                             style: TextStyle(
-                                              color: Colors.black45,
+                                              color: Theme.of(
+                                                context,
+                                              ).colorScheme.outline,
                                               fontSize: 13,
                                             ),
                                           ),

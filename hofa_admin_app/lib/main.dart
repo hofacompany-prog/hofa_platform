@@ -5,6 +5,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'core/env.dart';
 import 'core/push_service.dart';
 import 'core/pwa_version_service.dart';
+import 'providers/theme_provider.dart';
 import 'router.dart';
 import 'widgets/app_background.dart';
 
@@ -80,6 +81,7 @@ class _HofaAdminAppState extends ConsumerState<HofaAdminApp> {
   @override
   Widget build(BuildContext context) {
     final router = ref.watch(routerProvider);
+    final themeMode = ref.watch(themeModeProvider);
     return MaterialApp.router(
       title: 'HOFA Admin',
       debugShowCheckedModeBanner: false,
@@ -97,6 +99,25 @@ class _HofaAdminAppState extends ConsumerState<HofaAdminApp> {
           backgroundColor: Colors.transparent,
         ),
       ),
+      // Giữ ĐÚNG 2 màu thương hiệu (#85C100/#FB8519) ở cả giao diện tối thay vì để
+      // ColorScheme.fromSeed tự đổi tông theo brightness — nhất quán nhận diện thương hiệu,
+      // chỉ có surface/background đổi sang nền tối.
+      darkTheme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF85C100),
+          primary: const Color(0xFF85C100),
+          secondary: const Color(0xFFFB8519),
+          brightness: Brightness.dark,
+        ),
+        useMaterial3: true,
+        fontFamily: 'Montserrat',
+        scaffoldBackgroundColor: Colors.transparent,
+        appBarTheme: const AppBarTheme(
+          centerTitle: false,
+          backgroundColor: Colors.transparent,
+        ),
+      ),
+      themeMode: themeMode,
       builder: (context, child) => AppBackground(child: child!),
       routerConfig: router,
     );

@@ -84,9 +84,9 @@ class _FinanceSettingsScreenState extends ConsumerState<FinanceSettingsScreen> {
                 const SizedBox(height: 8),
                 Text(
                   'Mặc định 3% GTGT / 1.5% TNCN theo hộ kinh doanh dịch vụ ăn uống (TT40/2021/TT-BTC) — chỉnh lại nếu cửa hàng đăng ký loại hình khác.',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodySmall?.copyWith(color: Colors.black54),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.outline,
+                  ),
                 ),
                 if (error != null) ...[
                   const SizedBox(height: 8),

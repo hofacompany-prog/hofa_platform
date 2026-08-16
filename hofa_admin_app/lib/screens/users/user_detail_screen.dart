@@ -238,7 +238,7 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen> {
           width: 160,
           child: Text(
             label,
-            style: const TextStyle(color: Colors.black54),
+            style: TextStyle(color: Theme.of(context).colorScheme.outline),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),

@@ -3,9 +3,28 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../providers/admin_providers.dart';
+import '../../providers/theme_provider.dart';
 import '../../widgets/app_version_text.dart';
 import '../../widgets/notification_bell.dart';
 import '../../widgets/tab_icon.dart';
+
+class _ThemeToggleButton extends ConsumerWidget {
+  const _ThemeToggleButton();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final mode = ref.watch(themeModeProvider);
+    final isDark =
+        mode == ThemeMode.dark ||
+        (mode == ThemeMode.system &&
+            MediaQuery.platformBrightnessOf(context) == Brightness.dark);
+    return IconButton(
+      tooltip: isDark ? 'Chuyển giao diện sáng' : 'Chuyển giao diện tối',
+      icon: Icon(isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined),
+      onPressed: () => ref.read(themeModeProvider.notifier).toggle(),
+    );
+  }
+}
 
 class AdminShell extends ConsumerWidget {
   final Widget child;
@@ -169,6 +188,13 @@ class AdminShell extends ConsumerWidget {
                   ),
                 ),
                 const Divider(height: 1),
+                Consumer(
+                  builder: (context, ref, _) => ListTile(
+                    leading: const _ThemeToggleButton(),
+                    title: const Text('Giao diện sáng/tối'),
+                    onTap: () => ref.read(themeModeProvider.notifier).toggle(),
+                  ),
+                ),
                 ListTile(
                   leading: const Icon(Icons.logout),
                   title: const Text('Đăng xuất'),
@@ -229,6 +255,7 @@ class AdminShell extends ConsumerWidget {
                             style: theme.textTheme.bodySmall,
                           ),
                         ),
+                      const _ThemeToggleButton(),
                       const NotificationBell(),
                       IconButton(
                         tooltip: 'Đăng xuất',

@@ -327,9 +327,9 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
                     padding: const EdgeInsets.only(top: 4),
                     child: Text(
                       'Dùng cho màn Tài chính ở app cửa hàng — mặc định theo hộ kinh doanh dịch vụ ăn uống (TT40/2021/TT-BTC).',
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodySmall?.copyWith(color: Colors.black54),
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.outline,
+                      ),
                     ),
                   ),
                   const Divider(height: 28),
@@ -826,7 +826,7 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
           width: 160,
           child: Text(
             label,
-            style: const TextStyle(color: Colors.black54),
+            style: TextStyle(color: Theme.of(context).colorScheme.outline),
             maxLines: 2,
             overflow: TextOverflow.ellipsis,
           ),
