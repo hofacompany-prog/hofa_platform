@@ -1680,16 +1680,6 @@ function buildStoreManagerHtml_(idPrefix) {
 
   <div id="${idPrefix}formArea"></div>
 
-  <div class="photo-buttons">
-    <button id="${idPrefix}btnHereLoc">📍 Chọn vị trí ngay đây</button>
-    <button id="${idPrefix}btnMaps">Tìm vị trí trên Google Maps</button>
-  </div>
-
-  <div id="${idPrefix}mapPasteRow">
-    <input type="text" id="${idPrefix}mapPasteInput" placeholder="Dán toạ độ vừa sao chép từ Google Maps vào đây...">
-    <button id="${idPrefix}btnMapPasteConfirm">✅ Xác nhận</button>
-  </div>
-
   <div class="photo-tabbar">
     <button id="${idPrefix}photoTabBtnAvatar" class="photo-tab-active">Ảnh đại diện</button>
     <button id="${idPrefix}photoTabBtnStore">Ảnh quán</button>
@@ -1829,9 +1819,6 @@ function buildStoreManagerHtml_(idPrefix) {
   $('btnNew').addEventListener('click', newStore);
   $('btnSave').addEventListener('click', saveStore);
   $('btnDelete').addEventListener('click', removeStore);
-  $('btnHereLoc').addEventListener('click', useCurrentLocation);
-  $('btnMaps').addEventListener('click', openMaps);
-  $('btnMapPasteConfirm').addEventListener('click', mapPasteConfirm);
   PHOTO_TABS.forEach(function (t) {
     $(t.tabBtn).addEventListener('click', function () { switchPhotoTab(t); });
     $(t.uploadBtn).addEventListener('click', function () { uploadPhotoFor(t); });
@@ -1858,6 +1845,44 @@ function buildStoreManagerHtml_(idPrefix) {
       var sttEl = $('sttArea');
       if (sttEl) sttEl.textContent = 'Sẽ tự điền: ' + stt;
     }).withFailureHandler(function () {}).getNextStoreStt();
+  }
+
+  /** 2 nút xác định vị trí (GPS + mở Google Maps) + ô dán toạ độ/nút Xác nhận — vẽ NGAY DƯỚI
+   *  Mô tả (xem renderForm(), nhánh h === 'Mô tả') thay vì cố định dưới formArea như trước, để
+   *  gần các ô Địa chỉ/Tỉnh thành phố/Vĩ độ/Kinh độ mà 3 nút này tự điền giúp. Vẽ lại mỗi lần
+   *  renderForm() chạy (đổi quán/mở quán mới) nên gắn thẳng onclick ở đây thay vì
+   *  addEventListener 1 lần lúc khởi tạo trang (phần tử cũ đã bị area.innerHTML = '' xoá mất). */
+  function buildLocationToolsBlock_() {
+    var wrap = document.createElement('div');
+
+    var btnRow = document.createElement('div');
+    var btnHere = document.createElement('button');
+    btnHere.type = 'button';
+    btnHere.textContent = '📍 Chọn vị trí ngay đây';
+    btnHere.onclick = useCurrentLocation;
+    var btnMaps = document.createElement('button');
+    btnMaps.type = 'button';
+    btnMaps.textContent = 'Tìm vị trí trên Google Maps';
+    btnMaps.onclick = openMaps;
+    btnRow.appendChild(btnHere);
+    btnRow.appendChild(btnMaps);
+    wrap.appendChild(btnRow);
+
+    var pasteRow = document.createElement('div');
+    pasteRow.id = PFX + 'mapPasteRow';
+    var pasteInput = document.createElement('input');
+    pasteInput.type = 'text';
+    pasteInput.id = PFX + 'mapPasteInput';
+    pasteInput.placeholder = 'Dán toạ độ vừa sao chép từ Google Maps vào đây...';
+    var btnConfirm = document.createElement('button');
+    btnConfirm.type = 'button';
+    btnConfirm.textContent = '✅ Xác nhận';
+    btnConfirm.onclick = mapPasteConfirm;
+    pasteRow.appendChild(pasteInput);
+    pasteRow.appendChild(btnConfirm);
+    wrap.appendChild(pasteRow);
+
+    return wrap;
   }
 
   function renderForm(values) {
@@ -1937,6 +1962,7 @@ function buildStoreManagerHtml_(idPrefix) {
         textarea.addEventListener('input', updateCounter);
         updateCounter();
         area.appendChild(counter);
+        area.appendChild(buildLocationToolsBlock_());
       } else if (NUMBER_IDX.indexOf(i) !== -1) {
         var numInput = document.createElement('input');
         numInput.id = PFX + 'f' + i;
