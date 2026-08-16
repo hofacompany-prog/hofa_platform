@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../../core/format.dart';
+import '../../core/vnd_input_formatter.dart';
 import '../../models/branch_hours.dart' show weekdayLabels;
 import '../../models/finance_summary.dart';
 import '../../models/order.dart';
@@ -409,6 +410,7 @@ class _PayoutTab extends ConsumerWidget {
               controller: amountCtrl,
               autofocus: true,
               keyboardType: TextInputType.number,
+              inputFormatters: [VndInputFormatter()],
               decoration: const InputDecoration(
                 labelText: 'Số tiền muốn rút (đ)',
               ),
@@ -427,7 +429,7 @@ class _PayoutTab extends ConsumerWidget {
         ],
       ),
     );
-    final amount = int.tryParse(amountCtrl.text.trim());
+    final amount = VndInputFormatter.parse(amountCtrl.text);
     if (ok != true || amount == null || amount <= 0 || !context.mounted) return;
 
     try {

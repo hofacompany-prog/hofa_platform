@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/format.dart';
 import '../../core/vietqr.dart';
+import '../../core/vnd_input_formatter.dart';
 import '../../models/earnings.dart';
 import '../../providers/auth_provider.dart';
 import '../../repositories/driver_repository.dart';
@@ -37,6 +38,7 @@ class _EarningsScreenState extends ConsumerState<EarningsScreen> {
           controller: amountCtrl,
           autofocus: true,
           keyboardType: TextInputType.number,
+          inputFormatters: [VndInputFormatter()],
           decoration: const InputDecoration(labelText: 'Số tiền muốn nạp (đ)'),
         ),
         actions: [
@@ -45,8 +47,10 @@ class _EarningsScreenState extends ConsumerState<EarningsScreen> {
             child: const Text('Huỷ'),
           ),
           FilledButton(
-            onPressed: () =>
-                Navigator.pop(context, int.tryParse(amountCtrl.text.trim())),
+            onPressed: () => Navigator.pop(
+              context,
+              VndInputFormatter.parse(amountCtrl.text),
+            ),
             child: const Text('Tiếp tục'),
           ),
         ],
@@ -152,6 +156,7 @@ class _EarningsScreenState extends ConsumerState<EarningsScreen> {
               controller: amountCtrl,
               autofocus: true,
               keyboardType: TextInputType.number,
+              inputFormatters: [VndInputFormatter()],
               decoration: const InputDecoration(
                 labelText: 'Số tiền muốn rút (đ)',
               ),
@@ -170,7 +175,7 @@ class _EarningsScreenState extends ConsumerState<EarningsScreen> {
         ],
       ),
     );
-    final amount = int.tryParse(amountCtrl.text.trim());
+    final amount = VndInputFormatter.parse(amountCtrl.text);
     if (ok != true || amount == null || amount <= 0 || !mounted) return;
     if (amount < minWithdrawal) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -219,6 +224,7 @@ class _EarningsScreenState extends ConsumerState<EarningsScreen> {
               controller: amountCtrl,
               autofocus: true,
               keyboardType: TextInputType.number,
+              inputFormatters: [VndInputFormatter()],
               decoration: const InputDecoration(
                 labelText: 'Số tiền muốn chuyển (đ)',
               ),
@@ -237,7 +243,7 @@ class _EarningsScreenState extends ConsumerState<EarningsScreen> {
         ],
       ),
     );
-    final amount = int.tryParse(amountCtrl.text.trim());
+    final amount = VndInputFormatter.parse(amountCtrl.text);
     if (ok != true || amount == null || amount <= 0 || !mounted) return;
 
     try {

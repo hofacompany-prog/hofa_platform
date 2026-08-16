@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/format.dart';
+import '../../core/vnd_input_formatter.dart';
 import '../../models/shipping_fee_settings.dart';
 import '../../providers/admin_providers.dart';
 
@@ -39,12 +40,14 @@ class _ShippingFeeScreenState extends ConsumerState<ShippingFeeScreen> {
 
   void _fillFrom(ShippingFeeSettings s) {
     _isActive = s.isActive;
-    _baseFeeCtrl.text = s.baseFee.toString();
+    _baseFeeCtrl.text = VndInputFormatter.display(s.baseFee);
     _baseDistanceCtrl.text = _trimZero(s.baseDistanceKm);
-    _perKmFeeCtrl.text = s.perKmFee.toString();
-    _freeShipThresholdCtrl.text = s.freeShipThreshold?.toString() ?? '';
-    _maxFeeCtrl.text = s.maxFee?.toString() ?? '';
-    _roundToCtrl.text = s.roundTo.toString();
+    _perKmFeeCtrl.text = VndInputFormatter.display(s.perKmFee);
+    _freeShipThresholdCtrl.text = VndInputFormatter.display(
+      s.freeShipThreshold,
+    );
+    _maxFeeCtrl.text = VndInputFormatter.display(s.maxFee);
+    _roundToCtrl.text = VndInputFormatter.display(s.roundTo);
   }
 
   String _trimZero(double v) =>
@@ -53,19 +56,19 @@ class _ShippingFeeScreenState extends ConsumerState<ShippingFeeScreen> {
   ShippingFeeSettings _currentDraft(String? id) => ShippingFeeSettings(
     id: id,
     isActive: _isActive,
-    baseFee: int.tryParse(_baseFeeCtrl.text.trim()) ?? 0,
+    baseFee: VndInputFormatter.parse(_baseFeeCtrl.text) ?? 0,
     baseDistanceKm: double.tryParse(_baseDistanceCtrl.text.trim()) ?? 0,
-    perKmFee: int.tryParse(_perKmFeeCtrl.text.trim()) ?? 0,
-    freeShipThreshold: int.tryParse(_freeShipThresholdCtrl.text.trim()),
-    maxFee: int.tryParse(_maxFeeCtrl.text.trim()),
-    roundTo: int.tryParse(_roundToCtrl.text.trim()) ?? 500,
+    perKmFee: VndInputFormatter.parse(_perKmFeeCtrl.text) ?? 0,
+    freeShipThreshold: VndInputFormatter.parse(_freeShipThresholdCtrl.text),
+    maxFee: VndInputFormatter.parse(_maxFeeCtrl.text),
+    roundTo: VndInputFormatter.parse(_roundToCtrl.text) ?? 500,
   );
 
   Future<void> _save(String? id) async {
-    final baseFee = int.tryParse(_baseFeeCtrl.text.trim());
+    final baseFee = VndInputFormatter.parse(_baseFeeCtrl.text);
     final baseDistance = double.tryParse(_baseDistanceCtrl.text.trim());
-    final perKmFee = int.tryParse(_perKmFeeCtrl.text.trim());
-    final roundTo = int.tryParse(_roundToCtrl.text.trim());
+    final perKmFee = VndInputFormatter.parse(_perKmFeeCtrl.text);
+    final roundTo = VndInputFormatter.parse(_roundToCtrl.text);
     if (baseFee == null || baseFee < 0) {
       _showError('Phí cơ bản không hợp lệ');
       return;
@@ -83,7 +86,9 @@ class _ShippingFeeScreenState extends ConsumerState<ShippingFeeScreen> {
       return;
     }
     final maxFeeText = _maxFeeCtrl.text.trim();
-    final maxFee = maxFeeText.isEmpty ? null : int.tryParse(maxFeeText);
+    final maxFee = maxFeeText.isEmpty
+        ? null
+        : VndInputFormatter.parse(maxFeeText);
     if (maxFeeText.isNotEmpty && maxFee == null) {
       _showError('Phí ship tối đa không hợp lệ');
       return;
@@ -91,7 +96,7 @@ class _ShippingFeeScreenState extends ConsumerState<ShippingFeeScreen> {
     final thresholdText = _freeShipThresholdCtrl.text.trim();
     final threshold = thresholdText.isEmpty
         ? null
-        : int.tryParse(thresholdText);
+        : VndInputFormatter.parse(thresholdText);
     if (thresholdText.isNotEmpty && threshold == null) {
       _showError('Giá trị đơn miễn phí ship không hợp lệ');
       return;
@@ -192,6 +197,7 @@ class _ShippingFeeScreenState extends ConsumerState<ShippingFeeScreen> {
                                   controller: _baseFeeCtrl,
                                   enabled: _isActive,
                                   keyboardType: TextInputType.number,
+                                  inputFormatters: [VndInputFormatter()],
                                   onChanged: (_) => setState(() {}),
                                   decoration: const InputDecoration(
                                     labelText: 'Phí cơ bản (VNĐ)',
@@ -223,6 +229,7 @@ class _ShippingFeeScreenState extends ConsumerState<ShippingFeeScreen> {
                             controller: _perKmFeeCtrl,
                             enabled: _isActive,
                             keyboardType: TextInputType.number,
+                            inputFormatters: [VndInputFormatter()],
                             onChanged: (_) => setState(() {}),
                             decoration: const InputDecoration(
                               labelText: 'Phí mỗi km tiếp theo (VNĐ/km)',
@@ -244,6 +251,7 @@ class _ShippingFeeScreenState extends ConsumerState<ShippingFeeScreen> {
                             controller: _freeShipThresholdCtrl,
                             enabled: _isActive,
                             keyboardType: TextInputType.number,
+                            inputFormatters: [VndInputFormatter()],
                             onChanged: (_) => setState(() {}),
                             decoration: const InputDecoration(
                               labelText: 'Miễn phí ship khi đơn từ (VNĐ)',
@@ -257,6 +265,7 @@ class _ShippingFeeScreenState extends ConsumerState<ShippingFeeScreen> {
                             controller: _maxFeeCtrl,
                             enabled: _isActive,
                             keyboardType: TextInputType.number,
+                            inputFormatters: [VndInputFormatter()],
                             onChanged: (_) => setState(() {}),
                             decoration: const InputDecoration(
                               labelText: 'Phí ship tối đa (VNĐ)',
@@ -269,6 +278,7 @@ class _ShippingFeeScreenState extends ConsumerState<ShippingFeeScreen> {
                             controller: _roundToCtrl,
                             enabled: _isActive,
                             keyboardType: TextInputType.number,
+                            inputFormatters: [VndInputFormatter()],
                             onChanged: (_) => setState(() {}),
                             decoration: const InputDecoration(
                               labelText:

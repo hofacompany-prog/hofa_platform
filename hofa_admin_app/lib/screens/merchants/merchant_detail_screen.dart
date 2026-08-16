@@ -14,6 +14,7 @@ import 'merchant_fee_tiers_card.dart';
 import 'merchant_topping_groups_card.dart';
 import 'merchants_screen.dart' show merchantStatusLabels;
 import '../../core/responsive.dart';
+import '../../core/vnd_input_formatter.dart';
 
 const merchantTypeLabels = {
   'standard': 'HOFA Standard',
@@ -66,7 +67,7 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
     final vatRateCtrl = TextEditingController(text: m.vatRate.toString());
     final pitRateCtrl = TextEditingController(text: m.pitRate.toString());
     final minOrderCtrl = TextEditingController(
-      text: m.minOrderAmount.toString(),
+      text: VndInputFormatter.display(m.minOrderAmount),
     );
     final prepCtrl = TextEditingController(text: m.avgPrepMinutes.toString());
     final bankAccNoCtrl = TextEditingController(text: m.bankAccountNo ?? '');
@@ -292,6 +293,7 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
                       labelText: 'Đơn tối thiểu (VNĐ)',
                     ),
                     keyboardType: TextInputType.number,
+                    inputFormatters: [VndInputFormatter()],
                   ),
                   const SizedBox(height: 12),
                   Row(
@@ -509,7 +511,8 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
               'vat_rate': num.tryParse(vatRateCtrl.text.trim()) ?? m.vatRate,
               'pit_rate': num.tryParse(pitRateCtrl.text.trim()) ?? m.pitRate,
               'min_order_amount':
-                  int.tryParse(minOrderCtrl.text.trim()) ?? m.minOrderAmount,
+                  VndInputFormatter.parse(minOrderCtrl.text) ??
+                  m.minOrderAmount,
               'avg_prep_minutes':
                   int.tryParse(prepCtrl.text.trim()) ?? m.avgPrepMinutes,
               'bank_name': selectedBank?.name,

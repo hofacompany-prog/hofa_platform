@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/format.dart';
+import '../../core/vnd_input_formatter.dart';
 import '../../models/product.dart';
 import '../../providers/auth_provider.dart';
 import '../../repositories/product_repository.dart';
@@ -151,7 +152,7 @@ Future<void> _quickEditPrice(
   }
   final controllers = {
     for (final v in p.variants)
-      v.id: TextEditingController(text: v.price.toString()),
+      v.id: TextEditingController(text: VndInputFormatter.display(v.price)),
   };
   final ok = await showDialog<bool>(
     context: context,
@@ -166,6 +167,7 @@ Future<void> _quickEditPrice(
               TextField(
                 controller: controllers[v.id],
                 keyboardType: TextInputType.number,
+                inputFormatters: [VndInputFormatter()],
                 decoration: InputDecoration(
                   labelText: p.variants.length > 1 ? v.name : 'Giá (đ)',
                   border: const OutlineInputBorder(),
@@ -191,7 +193,7 @@ Future<void> _quickEditPrice(
   if (ok != true) return;
 
   final changed = p.variants.where((v) {
-    final newPrice = int.tryParse(controllers[v.id]!.text.trim());
+    final newPrice = VndInputFormatter.parse(controllers[v.id]!.text);
     return newPrice != null && newPrice != v.price;
   }).toList();
   if (changed.isEmpty) return;
@@ -200,7 +202,7 @@ Future<void> _quickEditPrice(
     await Future.wait(
       changed.map(
         (v) => _repo.updateVariant(v.id, {
-          'price': int.parse(controllers[v.id]!.text.trim()),
+          'price': VndInputFormatter.parse(controllers[v.id]!.text),
         }),
       ),
     );

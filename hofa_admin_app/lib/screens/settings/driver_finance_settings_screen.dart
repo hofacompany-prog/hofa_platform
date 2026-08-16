@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/vnd_input_formatter.dart';
 import '../../models/driver_finance_settings.dart';
 import '../../providers/admin_providers.dart';
 
@@ -40,7 +41,7 @@ class _DriverFinanceSettingsScreenState
     _vatCtrl.text = _trimZero(s.vatRate);
     _pitCtrl.text = _trimZero(s.pitRate);
     _feeShareCtrl.text = _trimZero(s.buyOnBehalfFeeShareRate);
-    _minWithdrawalCtrl.text = s.minWithdrawalAmount.toString();
+    _minWithdrawalCtrl.text = VndInputFormatter.display(s.minWithdrawalAmount);
   }
 
   String _trimZero(double v) =>
@@ -51,7 +52,7 @@ class _DriverFinanceSettingsScreenState
     final vat = double.tryParse(_vatCtrl.text.trim());
     final pit = double.tryParse(_pitCtrl.text.trim());
     final feeShare = double.tryParse(_feeShareCtrl.text.trim());
-    final minWithdrawal = int.tryParse(_minWithdrawalCtrl.text.trim());
+    final minWithdrawal = VndInputFormatter.parse(_minWithdrawalCtrl.text);
     if (rate == null ||
         rate < 0 ||
         rate > 100 ||
@@ -283,6 +284,7 @@ class _DriverFinanceSettingsScreenState
                             TextField(
                               controller: _minWithdrawalCtrl,
                               keyboardType: TextInputType.number,
+                              inputFormatters: [VndInputFormatter()],
                               decoration: const InputDecoration(
                                 suffixText: 'đ',
                                 border: OutlineInputBorder(),

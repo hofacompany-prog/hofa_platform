@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/format.dart';
 import '../../core/responsive.dart';
+import '../../core/vnd_input_formatter.dart';
 import '../../models/merchant.dart';
 import '../../models/topping.dart';
 import '../../providers/admin_providers.dart';
@@ -196,7 +197,7 @@ class _MerchantToppingGroupsCardState
   Future<void> _toppingDialog(ToppingGroup group, {Topping? existing}) async {
     final nameCtrl = TextEditingController(text: existing?.name ?? '');
     final priceCtrl = TextEditingController(
-      text: existing?.price.toString() ?? '0',
+      text: VndInputFormatter.display(existing?.price ?? 0),
     );
     var isActive = existing?.isActive ?? true;
     String? error;
@@ -229,6 +230,7 @@ class _MerchantToppingGroupsCardState
                       border: OutlineInputBorder(),
                     ),
                     keyboardType: TextInputType.number,
+                    inputFormatters: [VndInputFormatter()],
                   ),
                   const SizedBox(height: 8),
                   SwitchListTile(
@@ -264,7 +266,7 @@ class _MerchantToppingGroupsCardState
                   setInner(() => error = 'Nhập tên lựa chọn');
                   return;
                 }
-                if (int.tryParse(priceCtrl.text.trim()) == null) {
+                if (VndInputFormatter.parse(priceCtrl.text) == null) {
                   setInner(() => error = 'Nhập giá hợp lệ');
                   return;
                 }
@@ -280,7 +282,7 @@ class _MerchantToppingGroupsCardState
 
     final data = {
       'name': nameCtrl.text.trim(),
-      'price': int.parse(priceCtrl.text.trim()),
+      'price': VndInputFormatter.parse(priceCtrl.text) ?? 0,
       'is_active': isActive,
     };
     try {

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/format.dart';
+import '../../core/vnd_input_formatter.dart';
 import '../../models/product.dart';
 import '../../providers/auth_provider.dart';
 import '../../repositories/product_repository.dart';
@@ -134,7 +135,7 @@ class _ToppingGroupFormScreenState
   Future<void> _toppingDialog({Topping? existing}) async {
     final nameCtrl = TextEditingController(text: existing?.name ?? '');
     final priceCtrl = TextEditingController(
-      text: existing?.price.toString() ?? '0',
+      text: VndInputFormatter.display(existing?.price ?? 0),
     );
 
     final ok = await showDialog<bool>(
@@ -163,6 +164,7 @@ class _ToppingGroupFormScreenState
                     border: OutlineInputBorder(),
                   ),
                   keyboardType: TextInputType.number,
+                  inputFormatters: [VndInputFormatter()],
                 ),
               ],
             ),
@@ -181,7 +183,7 @@ class _ToppingGroupFormScreenState
       ),
     );
     if (ok != true || nameCtrl.text.trim().isEmpty) return;
-    final price = int.tryParse(priceCtrl.text.trim()) ?? 0;
+    final price = VndInputFormatter.parse(priceCtrl.text) ?? 0;
 
     try {
       if (existing == null) {

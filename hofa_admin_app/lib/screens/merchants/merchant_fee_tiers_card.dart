@@ -6,6 +6,7 @@ import '../../models/merchant.dart';
 import '../../models/merchant_fee_tier.dart';
 import '../../providers/admin_providers.dart';
 import '../../core/responsive.dart';
+import '../../core/vnd_input_formatter.dart';
 
 /// Cấu hình bậc phí mua hộ cho 1 cửa hàng merchant_type = 'buy_on_behalf' — admin tự thiết
 /// lập ở đây (khác wholesale_tiers, do chủ cửa hàng tự cấu hình theo biến thể sản phẩm).
@@ -50,13 +51,17 @@ class _MerchantFeeTiersCardState extends ConsumerState<MerchantFeeTiersCard> {
     final basis = widget.merchant.buyOnBehalfFeeBasis;
     if (basis == null) return;
     final minCtrl = TextEditingController(
-      text: existing?.minThreshold.toString() ?? '',
+      text: basis == 'value'
+          ? VndInputFormatter.display(existing?.minThreshold)
+          : existing?.minThreshold.toString() ?? '',
     );
     final maxCtrl = TextEditingController(
-      text: existing?.maxThreshold?.toString() ?? '',
+      text: basis == 'value'
+          ? VndInputFormatter.display(existing?.maxThreshold)
+          : existing?.maxThreshold?.toString() ?? '',
     );
     final fixedCtrl = TextEditingController(
-      text: existing?.feeFixedAmount?.toString() ?? '',
+      text: VndInputFormatter.display(existing?.feeFixedAmount),
     );
     final percentCtrl = TextEditingController(
       text: existing?.feePercent?.toString() ?? '',
@@ -92,7 +97,10 @@ class _MerchantFeeTiersCardState extends ConsumerState<MerchantFeeTiersCard> {
                           controller: minCtrl,
                           keyboardType: TextInputType.number,
                           inputFormatters: [
-                            FilteringTextInputFormatter.digitsOnly,
+                            if (basis == 'value')
+                              VndInputFormatter()
+                            else
+                              FilteringTextInputFormatter.digitsOnly,
                           ],
                           decoration: InputDecoration(
                             labelText: basis == 'quantity'
@@ -108,7 +116,10 @@ class _MerchantFeeTiersCardState extends ConsumerState<MerchantFeeTiersCard> {
                           controller: maxCtrl,
                           keyboardType: TextInputType.number,
                           inputFormatters: [
-                            FilteringTextInputFormatter.digitsOnly,
+                            if (basis == 'value')
+                              VndInputFormatter()
+                            else
+                              FilteringTextInputFormatter.digitsOnly,
                           ],
                           decoration: InputDecoration(
                             labelText: basis == 'quantity'
@@ -147,7 +158,7 @@ class _MerchantFeeTiersCardState extends ConsumerState<MerchantFeeTiersCard> {
                     TextField(
                       controller: fixedCtrl,
                       keyboardType: TextInputType.number,
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      inputFormatters: [VndInputFormatter()],
                       decoration: const InputDecoration(
                         labelText: 'Phí mua hộ (VNĐ)',
                         border: OutlineInputBorder(),
@@ -189,10 +200,8 @@ class _MerchantFeeTiersCardState extends ConsumerState<MerchantFeeTiersCard> {
             ),
             FilledButton(
               onPressed: () {
-                final min = int.tryParse(minCtrl.text.trim());
-                final max = maxCtrl.text.trim().isEmpty
-                    ? null
-                    : int.tryParse(maxCtrl.text.trim());
+                final min = VndInputFormatter.parse(minCtrl.text);
+                final max = VndInputFormatter.parse(maxCtrl.text);
                 if (min == null || min < 0) {
                   setInner(() => errorText = 'Ngưỡng "Từ" không hợp lệ');
                   return;
@@ -202,7 +211,7 @@ class _MerchantFeeTiersCardState extends ConsumerState<MerchantFeeTiersCard> {
                   return;
                 }
                 if (feeType == 'fixed' &&
-                    int.tryParse(fixedCtrl.text.trim()) == null) {
+                    VndInputFormatter.parse(fixedCtrl.text) == null) {
                   setInner(() => errorText = 'Nhập số tiền phí hợp lệ');
                   return;
                 }
@@ -224,13 +233,11 @@ class _MerchantFeeTiersCardState extends ConsumerState<MerchantFeeTiersCard> {
     if (result != true) return;
 
     final data = {
-      'min_threshold': int.parse(minCtrl.text.trim()),
-      'max_threshold': maxCtrl.text.trim().isEmpty
-          ? null
-          : int.parse(maxCtrl.text.trim()),
+      'min_threshold': VndInputFormatter.parse(minCtrl.text),
+      'max_threshold': VndInputFormatter.parse(maxCtrl.text),
       'fee_type': feeType,
       'fee_fixed_amount': feeType == 'fixed'
-          ? int.parse(fixedCtrl.text.trim())
+          ? VndInputFormatter.parse(fixedCtrl.text)
           : null,
       'fee_percent': feeType == 'percent'
           ? num.parse(percentCtrl.text.trim())

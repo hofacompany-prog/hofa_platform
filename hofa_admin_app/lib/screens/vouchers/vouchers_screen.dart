@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/format.dart';
+import '../../core/vnd_input_formatter.dart';
 import '../../models/merchant.dart';
 import '../../models/voucher.dart';
 import '../../models/voucher_amount_tier.dart';
@@ -45,13 +46,17 @@ class _VouchersScreenState extends ConsumerState<VouchersScreen> {
     final codeCtrl = TextEditingController(text: existing?.code ?? '');
     final descCtrl = TextEditingController(text: existing?.description ?? '');
     final valueCtrl = TextEditingController(
-      text: existing == null ? '' : existing.discountValue.toString(),
+      text: existing == null
+          ? ''
+          : existing.discountType == 'percent'
+          ? existing.discountValue.toString()
+          : VndInputFormatter.display(existing.discountValue),
     );
     final maxDiscountCtrl = TextEditingController(
-      text: existing?.maxDiscount?.toString() ?? '',
+      text: VndInputFormatter.display(existing?.maxDiscount),
     );
     final minOrderCtrl = TextEditingController(
-      text: existing?.minOrderAmount.toString() ?? '0',
+      text: VndInputFormatter.display(existing?.minOrderAmount ?? 0),
     );
     final usageLimitCtrl = TextEditingController(
       text: existing?.usageLimit?.toString() ?? '',
@@ -119,13 +124,15 @@ class _VouchersScreenState extends ConsumerState<VouchersScreen> {
 
           Future<void> tierDialog({VoucherAmountTier? tier}) async {
             final tierMinCtrl = TextEditingController(
-              text: tier?.minOrderAmount.toString() ?? '',
+              text: VndInputFormatter.display(tier?.minOrderAmount),
             );
             final tierValueCtrl = TextEditingController(
-              text: tier?.discountValue.toString() ?? '',
+              text: discountType == 'percent'
+                  ? tier?.discountValue.toString() ?? ''
+                  : VndInputFormatter.display(tier?.discountValue),
             );
             final tierMaxCtrl = TextEditingController(
-              text: tier?.maxDiscount?.toString() ?? '',
+              text: VndInputFormatter.display(tier?.maxDiscount),
             );
             final tierOk = await showDialog<bool>(
               context: context,
@@ -140,6 +147,7 @@ class _VouchersScreenState extends ConsumerState<VouchersScreen> {
                         controller: tierMinCtrl,
                         autofocus: true,
                         keyboardType: TextInputType.number,
+                        inputFormatters: [VndInputFormatter()],
                         decoration: const InputDecoration(
                           labelText: 'Giá trị đơn tối thiểu (VNĐ)',
                           border: OutlineInputBorder(),
@@ -149,6 +157,9 @@ class _VouchersScreenState extends ConsumerState<VouchersScreen> {
                       TextField(
                         controller: tierValueCtrl,
                         keyboardType: TextInputType.number,
+                        inputFormatters: discountType == 'percent'
+                            ? null
+                            : [VndInputFormatter()],
                         decoration: InputDecoration(
                           labelText: discountType == 'percent'
                               ? 'Phần trăm giảm ở bậc này (%)'
@@ -160,6 +171,7 @@ class _VouchersScreenState extends ConsumerState<VouchersScreen> {
                       TextField(
                         controller: tierMaxCtrl,
                         keyboardType: TextInputType.number,
+                        inputFormatters: [VndInputFormatter()],
                         decoration: const InputDecoration(
                           labelText:
                               'Giảm tối đa (VNĐ, để trống = không giới hạn)',
@@ -183,9 +195,12 @@ class _VouchersScreenState extends ConsumerState<VouchersScreen> {
             );
             if (tierOk != true || existing == null) return;
             final tierData = {
-              'min_order_amount': int.tryParse(tierMinCtrl.text.trim()) ?? 0,
-              'discount_value': int.tryParse(tierValueCtrl.text.trim()) ?? 0,
-              'max_discount': int.tryParse(tierMaxCtrl.text.trim()),
+              'min_order_amount':
+                  VndInputFormatter.parse(tierMinCtrl.text) ?? 0,
+              'discount_value': discountType == 'percent'
+                  ? int.tryParse(tierValueCtrl.text.trim()) ?? 0
+                  : VndInputFormatter.parse(tierValueCtrl.text) ?? 0,
+              'max_discount': VndInputFormatter.parse(tierMaxCtrl.text),
             };
             try {
               if (tier == null) {
@@ -296,6 +311,9 @@ class _VouchersScreenState extends ConsumerState<VouchersScreen> {
                       TextField(
                         controller: valueCtrl,
                         keyboardType: TextInputType.number,
+                        inputFormatters: discountType == 'percent'
+                            ? null
+                            : [VndInputFormatter()],
                         decoration: InputDecoration(
                           labelText: discountType == 'percent'
                               ? 'Phần trăm giảm (%)'
@@ -309,6 +327,7 @@ class _VouchersScreenState extends ConsumerState<VouchersScreen> {
                       TextField(
                         controller: maxDiscountCtrl,
                         keyboardType: TextInputType.number,
+                        inputFormatters: [VndInputFormatter()],
                         decoration: const InputDecoration(
                           labelText:
                               'Giảm tối đa (VNĐ, để trống = không giới hạn)',
@@ -320,6 +339,7 @@ class _VouchersScreenState extends ConsumerState<VouchersScreen> {
                     TextField(
                       controller: minOrderCtrl,
                       keyboardType: TextInputType.number,
+                      inputFormatters: [VndInputFormatter()],
                       decoration: const InputDecoration(
                         labelText: 'Giá trị đơn hàng tối thiểu (VNĐ)',
                         border: OutlineInputBorder(),
@@ -574,7 +594,10 @@ class _VouchersScreenState extends ConsumerState<VouchersScreen> {
                     return;
                   }
                   if (discountType != 'free_shipping' &&
-                      int.tryParse(valueCtrl.text.trim()) == null) {
+                      (discountType == 'percent'
+                              ? int.tryParse(valueCtrl.text.trim())
+                              : VndInputFormatter.parse(valueCtrl.text)) ==
+                          null) {
                     setInner(() => error = 'Vui lòng nhập giá trị giảm hợp lệ');
                     return;
                   }
@@ -596,9 +619,11 @@ class _VouchersScreenState extends ConsumerState<VouchersScreen> {
       'discount_type': discountType,
       'discount_value': discountType == 'free_shipping'
           ? 0
-          : (int.tryParse(valueCtrl.text.trim()) ?? 0),
-      'max_discount': int.tryParse(maxDiscountCtrl.text.trim()),
-      'min_order_amount': int.tryParse(minOrderCtrl.text.trim()) ?? 0,
+          : discountType == 'percent'
+          ? (int.tryParse(valueCtrl.text.trim()) ?? 0)
+          : (VndInputFormatter.parse(valueCtrl.text) ?? 0),
+      'max_discount': VndInputFormatter.parse(maxDiscountCtrl.text),
+      'min_order_amount': VndInputFormatter.parse(minOrderCtrl.text) ?? 0,
       'usage_limit': int.tryParse(usageLimitCtrl.text.trim()),
       'usage_limit_per_user':
           int.tryParse(usageLimitPerUserCtrl.text.trim()) ?? 1,

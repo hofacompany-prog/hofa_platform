@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/format.dart';
+import '../../core/vnd_input_formatter.dart';
 import '../../models/branch.dart';
 import '../../models/category.dart';
 import '../../models/product.dart';
@@ -185,7 +186,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
       text: existing?.maxQuantity?.toString() ?? '',
     );
     final priceCtrl = TextEditingController(
-      text: existing?.unitPrice.toString() ?? '',
+      text: VndInputFormatter.display(existing?.unitPrice),
     );
     final minDaysCtrl = TextEditingController(
       text:
@@ -193,10 +194,10 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
           (_tierTab == 'preorder' ? '' : '0'),
     );
     final priceDaysCtrl = TextEditingController(
-      text: existing?.unitPriceDays?.toString() ?? '',
+      text: VndInputFormatter.display(existing?.unitPriceDays),
     );
     final priceBothCtrl = TextEditingController(
-      text: existing?.unitPriceBoth?.toString() ?? '',
+      text: VndInputFormatter.display(existing?.unitPriceBoth),
     );
     final minOrderQtyCtrl = TextEditingController(
       text: existing?.minOrderQuantity?.toString() ?? '',
@@ -257,6 +258,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                       border: OutlineInputBorder(),
                     ),
                     keyboardType: TextInputType.number,
+                    inputFormatters: [VndInputFormatter()],
                   ),
                   const SizedBox(height: 12),
                   TextField(
@@ -266,6 +268,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                       border: OutlineInputBorder(),
                     ),
                     keyboardType: TextInputType.number,
+                    inputFormatters: [VndInputFormatter()],
                   ),
                   const SizedBox(height: 12),
                   TextField(
@@ -275,6 +278,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                       border: OutlineInputBorder(),
                     ),
                     keyboardType: TextInputType.number,
+                    inputFormatters: [VndInputFormatter()],
                   ),
                 ] else ...[
                   const SizedBox(height: 12),
@@ -285,6 +289,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                       border: OutlineInputBorder(),
                     ),
                     keyboardType: TextInputType.number,
+                    inputFormatters: [VndInputFormatter()],
                   ),
                   const SizedBox(height: 12),
                   TextField(
@@ -318,17 +323,17 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
     );
     if (ok != true) return;
     final minQty = int.tryParse(minQtyCtrl.text.trim());
-    final price = int.tryParse(priceCtrl.text.trim());
+    final price = VndInputFormatter.parse(priceCtrl.text);
     if (minQty == null || price == null) return;
     final maxQty = int.tryParse(maxQtyCtrl.text.trim());
     final minDays = isPreorder
         ? (int.tryParse(minDaysCtrl.text.trim()) ?? 0)
         : 0;
     final priceDays = isPreorder
-        ? int.tryParse(priceDaysCtrl.text.trim())
+        ? VndInputFormatter.parse(priceDaysCtrl.text)
         : null;
     final priceBoth = isPreorder
-        ? int.tryParse(priceBothCtrl.text.trim())
+        ? VndInputFormatter.parse(priceBothCtrl.text)
         : null;
     final minOrderQty = isPreorder
         ? null
@@ -735,7 +740,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
       _nameCtrl.text = c.name;
       _descCtrl.text = c.description ?? '';
       _defaultVariantNameCtrl.text = c.defaultVariantName;
-      _priceCtrl.text = c.price.toString();
+      _priceCtrl.text = VndInputFormatter.display(c.price);
       _salesModel = c.salesModel;
       _status = c.status;
       _imageUrl = c.imageUrl;
@@ -798,7 +803,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
           status: _status,
           imageUrl: _imageUrl!,
           defaultVariantName: _defaultVariantNameCtrl.text.trim(),
-          price: int.parse(_priceCtrl.text.trim()),
+          price: VndInputFormatter.parse(_priceCtrl.text)!,
           toppingGroupIds: _selectedToppingGroupIds,
           wholesaleTiers: _tiersByVariant['default'] ?? [],
           extraVariants: _pendingVariants,
@@ -854,7 +859,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
   Future<void> _variantDialog({ProductVariant? existing}) async {
     final nameCtrl = TextEditingController(text: existing?.name ?? '');
     final priceCtrl = TextEditingController(
-      text: existing?.price.toString() ?? '',
+      text: VndInputFormatter.display(existing?.price),
     );
     final currentStock = existing != null
         ? (_isEdit
@@ -893,6 +898,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                       border: OutlineInputBorder(),
                     ),
                     keyboardType: TextInputType.number,
+                    inputFormatters: [VndInputFormatter()],
                   ),
                   if (_branch != null && !_isBuyOnBehalf) ...[
                     const SizedBox(height: 12),
@@ -943,7 +949,7 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
       ),
     );
     if (ok != true) return;
-    final price = int.tryParse(priceCtrl.text.trim());
+    final price = VndInputFormatter.parse(priceCtrl.text);
     if (nameCtrl.text.trim().isEmpty || price == null) return;
 
     // Chưa tạo sản phẩm (đang ở màn "Thêm sản phẩm") — chưa có product_id để gọi API,
@@ -1288,8 +1294,9 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                               border: OutlineInputBorder(),
                             ),
                             keyboardType: TextInputType.number,
+                            inputFormatters: [VndInputFormatter()],
                             validator: (v) =>
-                                (int.tryParse(v?.trim() ?? '') == null)
+                                (VndInputFormatter.parse(v ?? '') == null)
                                 ? 'Nhập giá bán hợp lệ'
                                 : null,
                           ),
@@ -1508,7 +1515,8 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                                     ? 'Mặc định'
                                     : _defaultVariantNameCtrl.text.trim(),
                                 price:
-                                    int.tryParse(_priceCtrl.text.trim()) ?? 0,
+                                    VndInputFormatter.parse(_priceCtrl.text) ??
+                                    0,
                                 isDefault: true,
                                 isActive: true,
                               ),

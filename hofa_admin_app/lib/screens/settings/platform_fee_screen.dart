@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/format.dart';
 import '../../core/responsive.dart';
+import '../../core/vnd_input_formatter.dart';
 import '../../models/merchant_fee_tier.dart';
 import '../../models/platform_fee_settings.dart';
 import '../../providers/admin_providers.dart';
@@ -43,13 +44,17 @@ class _PlatformFeeScreenState extends ConsumerState<PlatformFeeScreen> {
     PlatformFeeTier? existing,
   }) async {
     final minCtrl = TextEditingController(
-      text: existing?.minThreshold.toString() ?? '',
+      text: basis == 'value'
+          ? VndInputFormatter.display(existing?.minThreshold)
+          : existing?.minThreshold.toString() ?? '',
     );
     final maxCtrl = TextEditingController(
-      text: existing?.maxThreshold?.toString() ?? '',
+      text: basis == 'value'
+          ? VndInputFormatter.display(existing?.maxThreshold)
+          : existing?.maxThreshold?.toString() ?? '',
     );
     final fixedCtrl = TextEditingController(
-      text: existing?.feeFixedAmount?.toString() ?? '',
+      text: VndInputFormatter.display(existing?.feeFixedAmount),
     );
     final percentCtrl = TextEditingController(
       text: existing?.feePercent?.toString() ?? '',
@@ -85,7 +90,10 @@ class _PlatformFeeScreenState extends ConsumerState<PlatformFeeScreen> {
                           controller: minCtrl,
                           keyboardType: TextInputType.number,
                           inputFormatters: [
-                            FilteringTextInputFormatter.digitsOnly,
+                            if (basis == 'value')
+                              VndInputFormatter()
+                            else
+                              FilteringTextInputFormatter.digitsOnly,
                           ],
                           decoration: InputDecoration(
                             labelText: basis == 'quantity'
@@ -101,7 +109,10 @@ class _PlatformFeeScreenState extends ConsumerState<PlatformFeeScreen> {
                           controller: maxCtrl,
                           keyboardType: TextInputType.number,
                           inputFormatters: [
-                            FilteringTextInputFormatter.digitsOnly,
+                            if (basis == 'value')
+                              VndInputFormatter()
+                            else
+                              FilteringTextInputFormatter.digitsOnly,
                           ],
                           decoration: InputDecoration(
                             labelText: basis == 'quantity'
@@ -140,7 +151,7 @@ class _PlatformFeeScreenState extends ConsumerState<PlatformFeeScreen> {
                     TextField(
                       controller: fixedCtrl,
                       keyboardType: TextInputType.number,
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      inputFormatters: [VndInputFormatter()],
                       decoration: const InputDecoration(
                         labelText: 'Phí mua hộ (VNĐ)',
                         border: OutlineInputBorder(),
@@ -182,10 +193,8 @@ class _PlatformFeeScreenState extends ConsumerState<PlatformFeeScreen> {
             ),
             FilledButton(
               onPressed: () {
-                final min = int.tryParse(minCtrl.text.trim());
-                final max = maxCtrl.text.trim().isEmpty
-                    ? null
-                    : int.tryParse(maxCtrl.text.trim());
+                final min = VndInputFormatter.parse(minCtrl.text);
+                final max = VndInputFormatter.parse(maxCtrl.text);
                 if (min == null || min < 0) {
                   setInner(() => errorText = 'Ngưỡng "Từ" không hợp lệ');
                   return;
@@ -195,7 +204,7 @@ class _PlatformFeeScreenState extends ConsumerState<PlatformFeeScreen> {
                   return;
                 }
                 if (feeType == 'fixed' &&
-                    int.tryParse(fixedCtrl.text.trim()) == null) {
+                    VndInputFormatter.parse(fixedCtrl.text) == null) {
                   setInner(() => errorText = 'Nhập số tiền phí hợp lệ');
                   return;
                 }
@@ -217,13 +226,11 @@ class _PlatformFeeScreenState extends ConsumerState<PlatformFeeScreen> {
     if (result != true) return;
 
     final data = {
-      'min_threshold': int.parse(minCtrl.text.trim()),
-      'max_threshold': maxCtrl.text.trim().isEmpty
-          ? null
-          : int.parse(maxCtrl.text.trim()),
+      'min_threshold': VndInputFormatter.parse(minCtrl.text),
+      'max_threshold': VndInputFormatter.parse(maxCtrl.text),
       'fee_type': feeType,
       'fee_fixed_amount': feeType == 'fixed'
-          ? int.parse(fixedCtrl.text.trim())
+          ? VndInputFormatter.parse(fixedCtrl.text)
           : null,
       'fee_percent': feeType == 'percent'
           ? num.parse(percentCtrl.text.trim())

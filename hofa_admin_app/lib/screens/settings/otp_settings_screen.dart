@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../core/vnd_input_formatter.dart';
 import '../../models/otp_settings.dart';
 import '../../providers/admin_providers.dart';
 
@@ -26,12 +27,12 @@ class _OtpSettingsScreenState extends ConsumerState<OtpSettingsScreen> {
   }
 
   void _fillFrom(OtpSettings s) {
-    _amountCtrl.text = s.minOrderAmount.toString();
+    _amountCtrl.text = VndInputFormatter.display(s.minOrderAmount);
     _registrationOtpEnabled = s.registrationOtpEnabled;
   }
 
   Future<void> _save(OtpSettings current) async {
-    final amount = int.tryParse(_amountCtrl.text.trim());
+    final amount = VndInputFormatter.parse(_amountCtrl.text);
     if (amount == null || amount < 0) {
       _showError('Số tiền không hợp lệ');
       return;
@@ -116,6 +117,7 @@ class _OtpSettingsScreenState extends ConsumerState<OtpSettingsScreen> {
                             TextField(
                               controller: _amountCtrl,
                               keyboardType: TextInputType.number,
+                              inputFormatters: [VndInputFormatter()],
                               decoration: const InputDecoration(
                                 suffixText: 'đ',
                                 border: OutlineInputBorder(),

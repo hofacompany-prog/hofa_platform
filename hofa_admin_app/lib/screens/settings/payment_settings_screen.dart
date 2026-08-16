@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/format.dart';
 import '../../core/vietqr.dart';
+import '../../core/vnd_input_formatter.dart';
 import '../../models/bank.dart';
 import '../../models/bank_account_settings.dart';
 import '../../models/driver_wallet_request.dart';
@@ -89,7 +90,7 @@ class _ConfigTabState extends ConsumerState<_ConfigTab> {
     _bankBinCtrl.text = s.bankBin ?? '';
     _accountNumberCtrl.text = s.accountNumber ?? '';
     _accountHolderCtrl.text = s.accountHolderName ?? '';
-    _minWithdrawalCtrl.text = s.minWithdrawalBalance.toString();
+    _minWithdrawalCtrl.text = VndInputFormatter.display(s.minWithdrawalBalance);
   }
 
   Future<void> _save(String? id) async {
@@ -105,7 +106,7 @@ class _ConfigTabState extends ConsumerState<_ConfigTab> {
               accountNumber: _accountNumberCtrl.text.trim(),
               accountHolderName: _accountHolderCtrl.text.trim(),
               minWithdrawalBalance:
-                  int.tryParse(_minWithdrawalCtrl.text.trim()) ?? 0,
+                  VndInputFormatter.parse(_minWithdrawalCtrl.text) ?? 0,
             ),
           );
       ref.invalidate(bankAccountSettingsProvider);
@@ -218,6 +219,7 @@ class _ConfigTabState extends ConsumerState<_ConfigTab> {
                               border: OutlineInputBorder(),
                             ),
                             keyboardType: TextInputType.number,
+                            inputFormatters: [VndInputFormatter()],
                           ),
                           const SizedBox(height: 20),
                           SizedBox(

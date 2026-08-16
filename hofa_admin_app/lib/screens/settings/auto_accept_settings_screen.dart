@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/format.dart';
+import '../../core/vnd_input_formatter.dart';
 import '../../models/auto_accept_settings.dart';
 import '../../providers/admin_providers.dart';
 
@@ -14,10 +15,12 @@ class AutoAcceptSettingsScreen extends ConsumerStatefulWidget {
   const AutoAcceptSettingsScreen({super.key});
 
   @override
-  ConsumerState<AutoAcceptSettingsScreen> createState() => _AutoAcceptSettingsScreenState();
+  ConsumerState<AutoAcceptSettingsScreen> createState() =>
+      _AutoAcceptSettingsScreenState();
 }
 
-class _AutoAcceptSettingsScreenState extends ConsumerState<AutoAcceptSettingsScreen> {
+class _AutoAcceptSettingsScreenState
+    extends ConsumerState<AutoAcceptSettingsScreen> {
   final _confirmSweepCtrl = TextEditingController();
   final _manualConfirmSweepCtrl = TextEditingController();
   final _tierItemsCtrl = TextEditingController();
@@ -50,7 +53,7 @@ class _AutoAcceptSettingsScreenState extends ConsumerState<AutoAcceptSettingsScr
     _confirmSweepCtrl.text = s.confirmSweepSeconds.toString();
     _manualConfirmSweepCtrl.text = s.manualConfirmSweepSeconds.toString();
     _tierItemsCtrl.text = s.prepTierItems.toString();
-    _tierValueCtrl.text = s.prepTierValueVnd.toString();
+    _tierValueCtrl.text = VndInputFormatter.display(s.prepTierValueVnd);
     _prepDefaultBaseCtrl.text = s.prepDefaultBaseMinutes.toString();
     _prepDefaultIncrementCtrl.text = s.prepDefaultIncrementMinutes.toString();
     _prepDefaultMaxCtrl.text = s.prepDefaultMaxMinutes.toString();
@@ -61,7 +64,9 @@ class _AutoAcceptSettingsScreenState extends ConsumerState<AutoAcceptSettingsScr
 
   Future<void> _save(String? id) async {
     final confirmSweep = int.tryParse(_confirmSweepCtrl.text.trim());
-    final manualConfirmSweep = int.tryParse(_manualConfirmSweepCtrl.text.trim());
+    final manualConfirmSweep = int.tryParse(
+      _manualConfirmSweepCtrl.text.trim(),
+    );
     if (confirmSweep == null || confirmSweep <= 0) {
       _showError('Thời gian thanh chạy màu (khi bật) không hợp lệ');
       return;
@@ -71,12 +76,16 @@ class _AutoAcceptSettingsScreenState extends ConsumerState<AutoAcceptSettingsScr
       return;
     }
     final tierItems = int.tryParse(_tierItemsCtrl.text.trim());
-    final tierValue = int.tryParse(_tierValueCtrl.text.trim());
+    final tierValue = VndInputFormatter.parse(_tierValueCtrl.text);
     final prepDefaultBase = int.tryParse(_prepDefaultBaseCtrl.text.trim());
-    final prepDefaultIncrement = int.tryParse(_prepDefaultIncrementCtrl.text.trim());
+    final prepDefaultIncrement = int.tryParse(
+      _prepDefaultIncrementCtrl.text.trim(),
+    );
     final prepDefaultMax = int.tryParse(_prepDefaultMaxCtrl.text.trim());
     final prepCeilingBase = int.tryParse(_prepCeilingBaseCtrl.text.trim());
-    final prepCeilingIncrement = int.tryParse(_prepCeilingIncrementCtrl.text.trim());
+    final prepCeilingIncrement = int.tryParse(
+      _prepCeilingIncrementCtrl.text.trim(),
+    );
     final prepCeilingMax = int.tryParse(_prepCeilingMaxCtrl.text.trim());
     if (tierItems == null || tierItems <= 0) {
       _showError('Mốc bậc theo số phần không hợp lệ');
@@ -95,25 +104,35 @@ class _AutoAcceptSettingsScreenState extends ConsumerState<AutoAcceptSettingsScr
       return;
     }
     if (prepDefaultMax == null || prepDefaultMax < prepDefaultBase) {
-      _showError('Trần thời gian chuẩn bị mặc định phải lớn hơn hoặc bằng số phút ở bậc 0');
+      _showError(
+        'Trần thời gian chuẩn bị mặc định phải lớn hơn hoặc bằng số phút ở bậc 0',
+      );
       return;
     }
     if (prepCeilingBase == null || prepCeilingBase < prepDefaultBase) {
-      _showError('Số phút tối đa cửa hàng chỉnh được ở bậc 0 phải lớn hơn hoặc bằng thời gian mặc định ở bậc 0');
+      _showError(
+        'Số phút tối đa cửa hàng chỉnh được ở bậc 0 phải lớn hơn hoặc bằng thời gian mặc định ở bậc 0',
+      );
       return;
     }
     if (prepCeilingIncrement == null || prepCeilingIncrement < 0) {
       _showError('Số phút cộng thêm mỗi bậc (trần) không hợp lệ');
       return;
     }
-    if (prepCeilingMax == null || prepCeilingMax < prepCeilingBase || prepCeilingMax < prepDefaultMax) {
-      _showError('Trần tuyệt đối phải lớn hơn hoặc bằng cả trần ở bậc 0 lẫn trần thời gian chuẩn bị mặc định');
+    if (prepCeilingMax == null ||
+        prepCeilingMax < prepCeilingBase ||
+        prepCeilingMax < prepDefaultMax) {
+      _showError(
+        'Trần tuyệt đối phải lớn hơn hoặc bằng cả trần ở bậc 0 lẫn trần thời gian chuẩn bị mặc định',
+      );
       return;
     }
 
     setState(() => _saving = true);
     try {
-      final saved = await ref.read(adminRepoProvider).updateAutoAcceptSettings(
+      final saved = await ref
+          .read(adminRepoProvider)
+          .updateAutoAcceptSettings(
             AutoAcceptSettings(
               id: id,
               confirmSweepSeconds: confirmSweep,
@@ -131,9 +150,9 @@ class _AutoAcceptSettingsScreenState extends ConsumerState<AutoAcceptSettingsScr
       ref.invalidate(autoAcceptSettingsProvider);
       if (mounted) {
         _fillFrom(saved);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Đã lưu thông số')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Đã lưu thông số')));
       }
     } catch (e) {
       _showError('Lỗi: $e');
@@ -143,7 +162,9 @@ class _AutoAcceptSettingsScreenState extends ConsumerState<AutoAcceptSettingsScr
   }
 
   void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   /// Bảng bậc tính live từ nội dung đang gõ trong ô (kể cả chưa lưu) — giúp hình dung ngay
@@ -152,7 +173,7 @@ class _AutoAcceptSettingsScreenState extends ConsumerState<AutoAcceptSettingsScr
   /// các bậc sau đó cho ra số giống hệt nhau, liệt kê thêm chỉ gây rối mắt.
   List<_TierPreviewRow> _previewRows() {
     final tierItems = int.tryParse(_tierItemsCtrl.text.trim()) ?? 0;
-    final tierValue = int.tryParse(_tierValueCtrl.text.trim()) ?? 0;
+    final tierValue = VndInputFormatter.parse(_tierValueCtrl.text) ?? 0;
     if (tierItems <= 0 || tierValue <= 0) return const [];
     final defBase = int.tryParse(_prepDefaultBaseCtrl.text.trim()) ?? 0;
     final defInc = int.tryParse(_prepDefaultIncrementCtrl.text.trim()) ?? 0;
@@ -165,15 +186,21 @@ class _AutoAcceptSettingsScreenState extends ConsumerState<AutoAcceptSettingsScr
     for (var tier = 0; tier <= 10; tier++) {
       final rawDefault = defBase + defInc * tier;
       final rawCeiling = ceilBase + ceilInc * tier;
-      final defaultMinutes = defMax > 0 && rawDefault > defMax ? defMax : rawDefault;
-      final ceilingMinutes = ceilMax > 0 && rawCeiling > ceilMax ? ceilMax : rawCeiling;
-      rows.add(_TierPreviewRow(
-        tier: tier,
-        fromItems: tier * tierItems,
-        fromValue: tier * tierValue,
-        defaultMinutes: defaultMinutes,
-        ceilingMinutes: ceilingMinutes,
-      ));
+      final defaultMinutes = defMax > 0 && rawDefault > defMax
+          ? defMax
+          : rawDefault;
+      final ceilingMinutes = ceilMax > 0 && rawCeiling > ceilMax
+          ? ceilMax
+          : rawCeiling;
+      rows.add(
+        _TierPreviewRow(
+          tier: tier,
+          fromItems: tier * tierItems,
+          fromValue: tier * tierValue,
+          defaultMinutes: defaultMinutes,
+          ceilingMinutes: ceilingMinutes,
+        ),
+      );
       final defSaturated = defMax > 0 && defaultMinutes >= defMax;
       final ceilSaturated = ceilMax > 0 && ceilingMinutes >= ceilMax;
       if (tier > 0 && defSaturated && ceilSaturated) break;
@@ -208,7 +235,9 @@ class _AutoAcceptSettingsScreenState extends ConsumerState<AutoAcceptSettingsScr
                     Text(
                       'Áp dụng cho toàn sàn — điều khiển hành vi công tắc "Tự động nhận đơn" ở '
                       'Cài đặt chi nhánh trong app cửa hàng, không cài riêng theo từng cửa hàng.',
-                      style: theme.textTheme.bodyMedium?.copyWith(color: theme.colorScheme.outline),
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.outline,
+                      ),
                     ),
                     const SizedBox(height: 20),
                     _SectionCard(
@@ -216,7 +245,8 @@ class _AutoAcceptSettingsScreenState extends ConsumerState<AutoAcceptSettingsScr
                       child: _NumberField(
                         controller: _confirmSweepCtrl,
                         label: 'Thời gian thanh chạy màu để xác nhận (giây)',
-                        helper: 'Ở màn chi tiết đơn, dải màu chạy trên thanh trượt xác nhận trong bấy nhiêu '
+                        helper:
+                            'Ở màn chi tiết đơn, dải màu chạy trên thanh trượt xác nhận trong bấy nhiêu '
                             'giây. Hết giờ mà cửa hàng chưa trượt, hệ thống tự chốt số phút đang hiện trên bộ '
                             'đếm +/- làm thời gian chuẩn bị và tự XÁC NHẬN đơn.',
                       ),
@@ -227,7 +257,8 @@ class _AutoAcceptSettingsScreenState extends ConsumerState<AutoAcceptSettingsScr
                       child: _NumberField(
                         controller: _manualConfirmSweepCtrl,
                         label: 'Thời gian thanh chạy màu để xác nhận (giây)',
-                        helper: 'Cùng vị trí thanh trượt như trên nhưng đổi màu khác. Hết giờ mà cửa hàng chưa '
+                        helper:
+                            'Cùng vị trí thanh trượt như trên nhưng đổi màu khác. Hết giờ mà cửa hàng chưa '
                             'trượt, hệ thống tự HUỶ đơn và tự đóng cửa chi nhánh — coi như cửa hàng không '
                             'theo dõi đơn. Nên đặt dài hơn hẳn thời gian ở trên (mặc định 300 giây = 5 phút).',
                       ),
@@ -241,19 +272,25 @@ class _AutoAcceptSettingsScreenState extends ConsumerState<AutoAcceptSettingsScr
                             'Đơn nào chạm mốc SỐ PHẦN hay GIÁ TRỊ trước thì tính theo bậc đó (lấy bậc lớn '
                             'hơn trong 2 cách tính). Dùng chung cho cả thời gian chuẩn bị mặc định lẫn trần '
                             '+/- bên dưới.',
-                            style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline),
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.outline,
+                            ),
                           ),
                           const SizedBox(height: 12),
                           _NumberField(
                             controller: _tierItemsCtrl,
                             label: 'Cứ mỗi bao nhiêu phần thì +1 bậc (số phần)',
-                            helper: 'Số phần = tổng số lượng món trong đơn (không phân biệt loại món).',
+                            helper:
+                                'Số phần = tổng số lượng món trong đơn (không phân biệt loại món).',
                           ),
                           const SizedBox(height: 12),
                           _NumberField(
                             controller: _tierValueCtrl,
-                            label: 'Cứ mỗi bao nhiêu đồng thì +1 bậc (giá trị đơn)',
-                            helper: 'Tính theo tổng tiền món (subtotal), chưa gồm phí ship.',
+                            label:
+                                'Cứ mỗi bao nhiêu đồng thì +1 bậc (giá trị đơn)',
+                            helper:
+                                'Tính theo tổng tiền món (subtotal), chưa gồm phí ship.',
+                            isMoney: true,
                           ),
                         ],
                       ),
@@ -266,19 +303,23 @@ class _AutoAcceptSettingsScreenState extends ConsumerState<AutoAcceptSettingsScr
                           Text(
                             'Số phút hiện sẵn ở màn chi tiết đơn (store app) khi đơn vừa vào — chốt luôn lúc '
                             'tạo đơn, không đổi dù sau đó bạn có sửa lại Thông số.',
-                            style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline),
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.outline,
+                            ),
                           ),
                           const SizedBox(height: 12),
                           _NumberField(
                             controller: _prepDefaultBaseCtrl,
                             label: 'Thời gian chuẩn bị mặc định ở bậc 0 (phút)',
-                            helper: 'Áp dụng cho đơn chưa chạm mốc bậc nào ở trên.',
+                            helper:
+                                'Áp dụng cho đơn chưa chạm mốc bậc nào ở trên.',
                           ),
                           const SizedBox(height: 12),
                           _NumberField(
                             controller: _prepDefaultIncrementCtrl,
                             label: 'Cộng thêm mỗi bậc (phút)',
-                            helper: 'Mỗi bậc vượt qua, cộng thêm bấy nhiêu phút vào thời gian chuẩn bị mặc định.',
+                            helper:
+                                'Mỗi bậc vượt qua, cộng thêm bấy nhiêu phút vào thời gian chuẩn bị mặc định.',
                           ),
                           const SizedBox(height: 12),
                           _NumberField(
@@ -297,19 +338,23 @@ class _AutoAcceptSettingsScreenState extends ConsumerState<AutoAcceptSettingsScr
                           Text(
                             'Giới hạn trên của nút +/- ở màn chi tiết đơn — cửa hàng không bấm + vượt quá '
                             'số này, dù đang ở trạng thái mặc định hay đã tự chỉnh.',
-                            style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline),
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.outline,
+                            ),
                           ),
                           const SizedBox(height: 12),
                           _NumberField(
                             controller: _prepCeilingBaseCtrl,
                             label: 'Trần +/- ở bậc 0 (phút)',
-                            helper: 'Phải lớn hơn hoặc bằng thời gian chuẩn bị mặc định ở bậc 0.',
+                            helper:
+                                'Phải lớn hơn hoặc bằng thời gian chuẩn bị mặc định ở bậc 0.',
                           ),
                           const SizedBox(height: 12),
                           _NumberField(
                             controller: _prepCeilingIncrementCtrl,
                             label: 'Cộng thêm mỗi bậc (phút)',
-                            helper: 'Mỗi bậc vượt qua, cộng thêm bấy nhiêu phút vào trần +/-.',
+                            helper:
+                                'Mỗi bậc vượt qua, cộng thêm bấy nhiêu phút vào trần +/-.',
                           ),
                           const SizedBox(height: 12),
                           _NumberField(
@@ -332,7 +377,8 @@ class _AutoAcceptSettingsScreenState extends ConsumerState<AutoAcceptSettingsScr
                         _prepCeilingIncrementCtrl,
                         _prepCeilingMaxCtrl,
                       ]),
-                      builder: (context, _) => _TierPreviewTable(rows: _previewRows()),
+                      builder: (context, _) =>
+                          _TierPreviewTable(rows: _previewRows()),
                     ),
                     const SizedBox(height: 24),
                     SizedBox(
@@ -340,7 +386,13 @@ class _AutoAcceptSettingsScreenState extends ConsumerState<AutoAcceptSettingsScr
                       child: FilledButton(
                         onPressed: _saving ? null : () => _save(settings.id),
                         child: _saving
-                            ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                            ? const SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
                             : const Text('Lưu'),
                       ),
                     ),
@@ -359,14 +411,26 @@ class _NumberField extends StatelessWidget {
   final TextEditingController controller;
   final String label;
   final String helper;
-  const _NumberField({required this.controller, required this.label, required this.helper});
+  final bool isMoney;
+  const _NumberField({
+    required this.controller,
+    required this.label,
+    required this.helper,
+    this.isMoney = false,
+  });
 
   @override
   Widget build(BuildContext context) {
     return TextField(
       controller: controller,
       keyboardType: TextInputType.number,
-      decoration: InputDecoration(labelText: label, helperText: helper, helperMaxLines: 3, border: const OutlineInputBorder()),
+      inputFormatters: isMoney ? [VndInputFormatter()] : null,
+      decoration: InputDecoration(
+        labelText: label,
+        helperText: helper,
+        helperMaxLines: 3,
+        border: const OutlineInputBorder(),
+      ),
     );
   }
 }
@@ -399,7 +463,9 @@ class _TierPreviewTable extends StatelessWidget {
         title: 'Xem trước theo bậc',
         child: Text(
           'Điền đủ 2 mốc bậc ở trên để xem bảng bậc thực tế.',
-          style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline),
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.outline,
+          ),
         ),
       );
     }
@@ -411,11 +477,17 @@ class _TierPreviewTable extends StatelessWidget {
           Text(
             'Cập nhật ngay theo số bạn đang gõ (kể cả chưa lưu) — mỗi dòng là 1 bậc, cho biết đơn '
             'đạt tới đó thì thời gian mặc định/trần +/- là bao nhiêu.',
-            style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.outline,
+            ),
           ),
           const SizedBox(height: 12),
           Table(
-            border: TableBorder(horizontalInside: BorderSide(color: theme.colorScheme.outlineVariant)),
+            border: TableBorder(
+              horizontalInside: BorderSide(
+                color: theme.colorScheme.outlineVariant,
+              ),
+            ),
             columnWidths: const {
               0: FlexColumnWidth(0.6),
               1: FlexColumnWidth(1.1),
@@ -451,14 +523,17 @@ class _TierPreviewTable extends StatelessWidget {
   }
 
   Widget _headerCell(ThemeData theme, String text) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-        child: Text(text, style: theme.textTheme.labelMedium?.copyWith(fontWeight: FontWeight.bold)),
-      );
+    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+    child: Text(
+      text,
+      style: theme.textTheme.labelMedium?.copyWith(fontWeight: FontWeight.bold),
+    ),
+  );
 
   Widget _cell(ThemeData theme, String text) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-        child: Text(text, style: theme.textTheme.bodyMedium),
-      );
+    padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+    child: Text(text, style: theme.textTheme.bodyMedium),
+  );
 }
 
 class _SectionCard extends StatelessWidget {

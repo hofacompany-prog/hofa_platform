@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/api_exception.dart';
+import '../../core/vnd_input_formatter.dart';
 import '../../models/bank.dart';
 import '../../models/merchant.dart';
 import '../../providers/auth_provider.dart';
@@ -31,7 +32,7 @@ class _StoreProfileEditScreenState
     text: widget.merchant.email ?? '',
   );
   late final _minOrderCtrl = TextEditingController(
-    text: widget.merchant.minOrderAmount.toString(),
+    text: VndInputFormatter.display(widget.merchant.minOrderAmount),
   );
   late final _prepCtrl = TextEditingController(
     text: widget.merchant.avgPrepMinutes.toString(),
@@ -106,7 +107,7 @@ class _StoreProfileEditScreenState
         'legal_doc_urls': _legalDocUrls,
         'photo_urls': _photoUrls,
         'min_order_amount':
-            int.tryParse(_minOrderCtrl.text.trim()) ??
+            VndInputFormatter.parse(_minOrderCtrl.text) ??
             widget.merchant.minOrderAmount,
         'avg_prep_minutes':
             int.tryParse(_prepCtrl.text.trim()) ??
@@ -280,6 +281,7 @@ class _StoreProfileEditScreenState
                           border: OutlineInputBorder(),
                         ),
                         keyboardType: TextInputType.number,
+                        inputFormatters: [VndInputFormatter()],
                       ),
                     ),
                     const SizedBox(width: 12),
