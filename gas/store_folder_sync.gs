@@ -116,7 +116,8 @@ const SUBFOLDER_MENU_PHOTOS = 'Ảnh menu';        // cũng là nơi chọn ản
 // KHÔNG còn nằm ở đây nữa — 1 sản phẩm thật ngoài DB có THỂ có NHIỀU biến thể (size/màu...),
 // mỗi biến thể 1 giá riêng (bảng product_variants), nên chuyển hẳn sang sheet VARIANT riêng
 // (xem bên dưới) — PRODUCT giờ chỉ còn thông tin sản phẩm CHA, không có giá. Mỗi sản phẩm cần
-// ÍT NHẤT 1 dòng trong sheet VARIANT (tab "Biến thể") mới có giá/bán được. sales_model cố định
+// ÍT NHẤT 1 dòng trong sheet VARIANT (thêm/sửa/xoá ngay trong form Sản phẩm, khối "Biến thể" —
+// xem buildProductManagerHtml_) mới có giá/bán được. sales_model cố định
 // 'instant' (giao ngay, khớp merchant mua hộ) — không phải cột chọn, xem PRODUCT_SALES_MODEL_
 // DEFAULT. Tự tạo (kèm dòng tiêu đề) nếu sheet chưa có; sheet ĐÃ có theo layout cũ (9 cột, còn
 // giá ở đây) thì chạy 1 LẦN DUY NHẤT menu "⚠️ Sắp xếp lại cột PRODUCT (chạy 1 lần)" — tự dời giá
@@ -231,7 +232,6 @@ function onOpen() {
     .createMenu('Quản lý HOFA')
     .addItem('Quản lý cửa hàng', 'openStoreManager')
     .addItem('Quản lý sản phẩm', 'openProductManager')
-    .addItem('Quản lý biến thể', 'openVariantManager')
     .addItem('Quản lý topping', 'openToppingManager')
     .addItem('Đồng bộ CSDL', 'openDbSyncManager')
     .addSeparator()
@@ -515,20 +515,17 @@ function buildAppHtml_() {
 <div class="tabbar">
   <button id="tabBtnStore" class="active">Cửa hàng</button>
   <button id="tabBtnProduct">Sản phẩm</button>
-  <button id="tabBtnVariant">Biến thể</button>
   <button id="tabBtnTopping">Topping</button>
   <button id="tabBtnDbSync">Đồng bộ CSDL</button>
 </div>
 <div id="tabStore" class="tabpanel active">${buildStoreManagerHtml_('s_')}</div>
 <div id="tabProduct" class="tabpanel">${buildProductManagerHtml_('p_')}</div>
-<div id="tabVariant" class="tabpanel">${buildVariantManagerHtml_('v_')}</div>
 <div id="tabTopping" class="tabpanel">${buildToppingManagerHtml_('t_')}</div>
 <div id="tabDbSync" class="tabpanel">${buildDbSyncManagerHtml_('d_')}</div>
 <script>
-  var TABS = ['store', 'product', 'variant', 'topping', 'dbSync'];
+  var TABS = ['store', 'product', 'topping', 'dbSync'];
   document.getElementById('tabBtnStore').addEventListener('click', function () { showTab('store'); });
   document.getElementById('tabBtnProduct').addEventListener('click', function () { showTab('product'); });
-  document.getElementById('tabBtnVariant').addEventListener('click', function () { showTab('variant'); });
   document.getElementById('tabBtnTopping').addEventListener('click', function () { showTab('topping'); });
   document.getElementById('tabBtnDbSync').addEventListener('click', function () { showTab('dbSync'); });
   function showTab(name) {
@@ -554,13 +551,6 @@ function openProductManager() {
     .setWidth(760)
     .setHeight(700);
   SpreadsheetApp.getUi().showModalDialog(html, 'Quản lý sản phẩm');
-}
-
-function openVariantManager() {
-  const html = HtmlService.createHtmlOutput(buildVariantManagerHtml_(''))
-    .setWidth(760)
-    .setHeight(700);
-  SpreadsheetApp.getUi().showModalDialog(html, 'Quản lý biến thể');
 }
 
 function openToppingManager() {
@@ -2788,10 +2778,10 @@ function buildProductManagerHtml_(idPrefix) {
   }
 
   /** Biến thể (giá bán) quản lý NGAY trong tab Sản phẩm — khớp theo Tên quán + Tên sản phẩm
-   *  (giống sheet VARIANT/tab Biến thể riêng, dùng LẠI đúng các hàm server listVariantsByProduct/
-   *  upsertVariant/deleteVariant, không có bảng/API riêng nào khác). Bắt buộc sản phẩm đã LƯU
-   *  (currentRow khác null) mới cho thêm biến thể — tránh lệch tên nếu đổi Tên sản phẩm rồi mới
-   *  lưu, biến thể đã gõ trước đó sẽ mất liên kết. */
+   *  (đọc/ghi thẳng sheet VARIANT qua các hàm server listVariantsByProduct/upsertVariant/
+   *  deleteVariant, không có bảng/API riêng nào khác — không còn tab "Biến thể" riêng). Bắt
+   *  buộc sản phẩm đã LƯU (currentRow khác null) mới cho thêm biến thể — tránh lệch tên nếu đổi
+   *  Tên sản phẩm rồi mới lưu, biến thể đã gõ trước đó sẽ mất liên kết. */
   function loadVariantsInline_() {
     var listEl = $('variantList');
     var noteEl = $('variantNote');
@@ -2963,209 +2953,6 @@ function buildProductManagerHtml_(idPrefix) {
       }).withFailureHandler(showErr).uploadImageToCloudinary(base64, file.type, file.name, 'products');
     };
     reader.readAsDataURL(file);
-  }
-})();
-</script>
-`;
-}
-
-function buildVariantManagerHtml_(idPrefix) {
-  idPrefix = idPrefix || '';
-  return `
-<style>
-  #${idPrefix}root { font-family: Arial, sans-serif; font-size: 13px; }
-  #${idPrefix}root label { font-weight: bold; display: block; margin-top: 8px; }
-  #${idPrefix}root input[type=text], #${idPrefix}root input[type=number], #${idPrefix}root select { width: 100%; padding: 6px; margin-top: 3px; box-sizing: border-box; }
-  #${idPrefix}root button { padding: 7px 14px; margin: 10px 6px 0 0; cursor: pointer; }
-  #${idPrefix}variantList { max-height: 150px; overflow: auto; border: 1px solid #ccc; border-radius: 4px; margin-top: 4px; }
-  #${idPrefix}variantList div { padding: 6px; cursor: pointer; border-bottom: 1px solid #eee; }
-  #${idPrefix}variantList div:hover { background: #f0f4ff; }
-  #${idPrefix}root .checkRow { display: flex; align-items: center; gap: 6px; margin-top: 10px; }
-  #${idPrefix}root .checkRow label { margin: 0; font-weight: normal; }
-  #${idPrefix}root .checkRow input { width: auto; margin: 0; }
-  #${idPrefix}msg { color: #0a7d1f; font-weight: bold; margin-top: 8px; min-height: 18px; }
-  #${idPrefix}err { color: #c0392b; font-weight: bold; }
-</style>
-
-<div id="${idPrefix}root">
-  <label>Chọn cửa hàng</label>
-  <select id="${idPrefix}storeSelect"></select>
-
-  <label>Chọn sản phẩm</label>
-  <select id="${idPrefix}productSelect"></select>
-
-  <label>Biến thể của sản phẩm</label>
-  <div id="${idPrefix}variantList"><i>Chọn sản phẩm để xem biến thể</i></div>
-  <button id="${idPrefix}btnNewVariant">+ Thêm biến thể mới</button>
-
-  <label>Tên biến thể *</label>
-  <input type="text" id="${idPrefix}vName" placeholder="Mặc định, Size L, ...">
-
-  <label>Giá bán *</label>
-  <input type="number" id="${idPrefix}vPrice" step="1" min="0">
-
-  <label>Trọng lượng (g)</label>
-  <input type="number" id="${idPrefix}vWeight" step="1" min="0">
-
-  <div class="checkRow">
-    <input type="checkbox" id="${idPrefix}vIsDefault">
-    <label for="${idPrefix}vIsDefault">Là biến thể mặc định</label>
-  </div>
-  <div class="checkRow">
-    <input type="checkbox" id="${idPrefix}vIsActive" checked>
-    <label for="${idPrefix}vIsActive">Đang bán</label>
-  </div>
-
-  <div id="${idPrefix}vSystemIdArea" style="color:#888; font-size:12px; margin-top:8px;"></div>
-
-  <div>
-    <button id="${idPrefix}btnSaveVariant">💾 Lưu biến thể</button>
-    <button id="${idPrefix}btnDeleteVariant">🗑 Xoá biến thể</button>
-    <button onclick="google.script.host.close()">Đóng</button>
-  </div>
-  <div id="${idPrefix}msg"></div>
-  <div id="${idPrefix}err"></div>
-</div>
-
-<script>
-(function () {
-  var PFX = '${idPrefix}';
-  var $ = function (id) { return document.getElementById(PFX + id); };
-  var currentStore = '';
-  var currentProduct = '';
-  var currentRow = null;
-  var variants = [];
-  var NAME_IDX = ${VARIANT_NAME_COLUMN - 1};
-  var PRICE_IDX = ${VARIANT_PRICE_COLUMN - 1};
-  var WEIGHT_IDX = ${VARIANT_WEIGHT_COLUMN - 1};
-  var IS_DEFAULT_IDX = ${VARIANT_IS_DEFAULT_COLUMN - 1};
-  var IS_ACTIVE_IDX = ${VARIANT_IS_ACTIVE_COLUMN - 1};
-  var SYSTEM_ID_IDX = ${VARIANT_SYSTEM_ID_COLUMN - 1};
-  var EDITABLE_COLUMN_COUNT = ${VARIANT_SYSTEM_ID_COLUMN - 1};
-
-  function showMsg(t) { $('msg').innerText = t; $('err').innerText = ''; }
-  function showErr(e) { $('err').innerText = 'Lỗi: ' + (e && e.message ? e.message : e); $('msg').innerText = ''; }
-
-  function init() {
-    google.script.run.withSuccessHandler(function (list) {
-      var sel = $('storeSelect');
-      sel.innerHTML = '';
-      var opt0 = document.createElement('option');
-      opt0.value = ''; opt0.text = '-- Chọn cửa hàng --';
-      sel.appendChild(opt0);
-      list.forEach(function (s) {
-        var opt = document.createElement('option');
-        opt.value = s.name; opt.text = s.name;
-        sel.appendChild(opt);
-      });
-    }).withFailureHandler(showErr).listStores();
-  }
-
-  $('storeSelect').addEventListener('change', onSelectStore);
-  $('productSelect').addEventListener('change', onSelectProduct);
-  $('btnNewVariant').addEventListener('click', newVariant);
-  $('btnSaveVariant').addEventListener('click', saveVariant);
-  $('btnDeleteVariant').addEventListener('click', removeVariant);
-  init();
-
-  function onSelectStore() {
-    currentStore = $('storeSelect').value;
-    currentProduct = '';
-    $('productSelect').innerHTML = '';
-    $('variantList').innerHTML = '<i>Chọn sản phẩm để xem biến thể</i>';
-    newVariant();
-    if (!currentStore) return;
-    google.script.run.withSuccessHandler(function (list) {
-      var sel = $('productSelect');
-      sel.innerHTML = '';
-      var opt0 = document.createElement('option');
-      opt0.value = ''; opt0.text = '-- Chọn sản phẩm --';
-      sel.appendChild(opt0);
-      list.forEach(function (p) {
-        var opt = document.createElement('option');
-        opt.value = p.values[${PRODUCT_NAME_COLUMN - 1}]; opt.text = p.values[${PRODUCT_NAME_COLUMN - 1}];
-        sel.appendChild(opt);
-      });
-    }).withFailureHandler(showErr).listProductsByStore(currentStore);
-  }
-
-  function onSelectProduct() {
-    currentProduct = $('productSelect').value;
-    newVariant();
-    loadVariants();
-  }
-
-  function loadVariants() {
-    var el = $('variantList');
-    if (!currentStore || !currentProduct) { el.innerHTML = '<i>Chọn sản phẩm để xem biến thể</i>'; return; }
-    google.script.run.withSuccessHandler(function (list) {
-      variants = list;
-      el.innerHTML = '';
-      if (!list.length) { el.innerHTML = '<i>Chưa có biến thể — sản phẩm này chưa bán được, cần thêm ít nhất 1 biến thể</i>'; return; }
-      list.forEach(function (v) {
-        var div = document.createElement('div');
-        div.textContent = (v.values[NAME_IDX] || '(chưa đặt tên)') + ' — ' + (v.values[PRICE_IDX] || '') + ' đ';
-        div.onclick = function () { selectVariant(v.row); };
-        el.appendChild(div);
-      });
-    }).withFailureHandler(showErr).listVariantsByProduct(currentStore, currentProduct);
-  }
-
-  function selectVariant(row) {
-    currentRow = row;
-    var v = variants.filter(function (x) { return x.row === row; })[0];
-    if (v) fillForm(v.values);
-  }
-
-  function newVariant() {
-    currentRow = null;
-    $('vName').value = '';
-    $('vPrice').value = '';
-    $('vWeight').value = '';
-    $('vIsDefault').checked = false;
-    $('vIsActive').checked = true;
-    $('vSystemIdArea').textContent = '';
-  }
-
-  function fillForm(v) {
-    $('vName').value = v[NAME_IDX] || '';
-    $('vPrice').value = v[PRICE_IDX] || '';
-    $('vWeight').value = v[WEIGHT_IDX] || '';
-    $('vIsDefault').checked = !!v[IS_DEFAULT_IDX];
-    $('vIsActive').checked = v[IS_ACTIVE_IDX] === '' || v[IS_ACTIVE_IDX] === undefined ? true : !!v[IS_ACTIVE_IDX];
-    $('vSystemIdArea').textContent = v[SYSTEM_ID_IDX]
-      ? 'Đã đồng bộ — ID: ' + v[SYSTEM_ID_IDX]
-      : 'Chưa đồng bộ lên hệ thống thật — sang tab "Đồng bộ CSDL" để đẩy lên';
-  }
-
-  function saveVariant() {
-    if (!currentStore || !currentProduct) { showErr('Chọn cửa hàng và sản phẩm trước'); return; }
-    var name = $('vName').value.trim();
-    if (!name) { showErr('Chưa nhập Tên biến thể'); return; }
-    if ($('vPrice').value === '') { showErr('Chưa nhập Giá bán'); return; }
-    var values = new Array(EDITABLE_COLUMN_COUNT).fill('');
-    values[${VARIANT_STORE_COLUMN - 1}] = currentStore;
-    values[${VARIANT_PRODUCT_COLUMN - 1}] = currentProduct;
-    values[NAME_IDX] = name;
-    values[PRICE_IDX] = Number($('vPrice').value);
-    values[WEIGHT_IDX] = $('vWeight').value === '' ? '' : Number($('vWeight').value);
-    values[IS_DEFAULT_IDX] = $('vIsDefault').checked;
-    values[IS_ACTIVE_IDX] = $('vIsActive').checked;
-    google.script.run.withSuccessHandler(function (res) {
-      currentRow = res.row;
-      showMsg('Đã lưu biến thể');
-      loadVariants();
-    }).withFailureHandler(showErr).upsertVariant(currentRow, values);
-  }
-
-  function removeVariant() {
-    if (!currentRow) { showErr('Chưa chọn biến thể để xoá'); return; }
-    if (!confirm('Xoá biến thể này?')) return;
-    google.script.run.withSuccessHandler(function () {
-      showMsg('Đã xoá biến thể');
-      newVariant();
-      loadVariants();
-    }).withFailureHandler(showErr).deleteVariant(currentRow);
   }
 })();
 </script>
