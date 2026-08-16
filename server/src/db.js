@@ -69,12 +69,20 @@ async function deleteById(table, id) {
 }
 
 /**
- * Cột/tham số kiểu mảng Postgres gốc (TEXT[]/VARCHAR[], không phải jsonb) — products.tags
- * và p_voucher_codes (tham số RPC create_order). node-postgres tự động format JS Array
- * thành cú pháp mảng Postgres {a,b,c} khi truyền thẳng (không JSON.stringify). Nếu lỡ
- * JSON.stringify thì Postgres nhận 1 chuỗi JSON, không khớp cú pháp mảng và sẽ báo lỗi.
+ * Cột/tham số kiểu mảng Postgres gốc (TEXT[]/VARCHAR[], không phải jsonb) — products.tags,
+ * vouchers.applicable_order_kinds/applicable_merchant_types (xem
+ * hofa-db/50_voucher_conditions.sql) và p_voucher_codes/p_order_ids (tham số RPC
+ * create_order). node-postgres tự động format JS Array thành cú pháp mảng Postgres {a,b,c}
+ * khi truyền thẳng (không JSON.stringify). Nếu lỡ JSON.stringify thì Postgres nhận 1 chuỗi
+ * JSON, không khớp cú pháp mảng và báo lỗi "malformed array literal".
  */
-const NATIVE_ARRAY_COLUMNS = new Set(['tags', 'p_voucher_codes', 'p_order_ids']);
+const NATIVE_ARRAY_COLUMNS = new Set([
+  'tags',
+  'applicable_order_kinds',
+  'applicable_merchant_types',
+  'p_voucher_codes',
+  'p_order_ids',
+]);
 
 /** jsonb/object cần JSON.stringify trước khi gửi qua pg; mảng TEXT[] gốc thì để nguyên. */
 function serialize(key, value) {
