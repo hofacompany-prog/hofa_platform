@@ -46,6 +46,31 @@ async function uniqueMerchantSlug(name) {
   return slug;
 }
 
+/** Tìm merchant_categories khớp đúng tên danh mục cha+con (categories.name thật, không phân
+ * biệt hoa thường — cha/con phải là 2 danh mục hệ thống có quan hệ parent_id đúng) — dùng LẠI
+ * nếu cửa hàng đã có 1 danh mục riêng cùng tên dưới đúng danh mục con đó, không thì tự tạo mới
+ * (tên đặt trùng luôn tên danh mục con hệ thống, GAS không có bước đặt tên riêng). Trả về null
+ * nếu tên cha/con trống hoặc không khớp danh mục hệ thống nào — sản phẩm đó chỉ mất tag danh
+ * mục (products.merchant_category_id ON DELETE SET NULL), không chặn đồng bộ. */
+async function resolveMerchantCategoryId_(merchantId, parentName, childName) {
+  const parent = String(parentName || '').trim();
+  const child = String(childName || '').trim();
+  if (!parent || !child) return null;
+  const category = await db.queryOne(
+    `SELECT c.id FROM categories c JOIN categories p ON p.id = c.parent_id
+      WHERE lower(c.name) = lower($1) AND lower(p.name) = lower($2) AND c.is_active AND p.is_active`,
+    [child, parent]
+  );
+  if (!category) return null;
+  const existing = await db.queryOne(
+    'SELECT id FROM merchant_categories WHERE merchant_id = $1 AND category_id = $2 AND lower(name) = lower($3)',
+    [merchantId, category.id, child]
+  );
+  if (existing) return existing.id;
+  const created = await db.insertRow('merchant_categories', { merchant_id: merchantId, category_id: category.id, name: child });
+  return created.id;
+}
+
 /** Cửa hàng đang thao tác PHẢI tồn tại và PHẢI do GAS quản lý — nguồn duy nhất của an toàn
  * "không ảnh hưởng cửa hàng khác" mà công cụ này cam kết. */
 async function requireGasMerchant(merchantId) {
@@ -202,16 +227,37 @@ router.get('/gas-sync/snapshot', asyncHandler(async (req, res) => {
     links.forEach((l) => { (linksByProduct[l.product_id] ||= []).push(groupNameById[l.group_id]); });
   }
 
+  // Tên danh mục cha/con hiện tại của từng sản phẩm (để GAS so diff) — suy từ
+  // products.merchant_category_id → merchant_categories.category_id → categories.parent_id.
+  const categoryNamesByMerchantCategoryId = {};
+  const merchantCategoryIds = [...new Set(products.map((p) => p.merchant_category_id).filter(Boolean))];
+  if (merchantCategoryIds.length) {
+    const rows = await db.query(
+      `SELECT mc.id AS merchant_category_id, c.name AS child_name, p.name AS parent_name
+         FROM merchant_categories mc
+         JOIN categories c ON c.id = mc.category_id
+         JOIN categories p ON p.id = c.parent_id
+        WHERE mc.id = ANY($1::uuid[])`,
+      [merchantCategoryIds]
+    );
+    rows.forEach((r) => { categoryNamesByMerchantCategoryId[r.merchant_category_id] = r; });
+  }
+
   res.json({
     ok: true,
     data: {
       merchant,
       branch,
-      products: products.map((p) => ({
-        ...p,
-        variants: variantsByProduct[p.id] || [],
-        topping_group_names: linksByProduct[p.id] || []
-      })),
+      products: products.map((p) => {
+        const cat = categoryNamesByMerchantCategoryId[p.merchant_category_id];
+        return {
+          ...p,
+          parent_category_name: cat ? cat.parent_name : '',
+          child_category_name: cat ? cat.child_name : '',
+          variants: variantsByProduct[p.id] || [],
+          topping_group_names: linksByProduct[p.id] || []
+        };
+      }),
       topping_groups: groups.map((g) => ({ ...g, toppings: toppingsByGroup[g.id] || [] })),
       name_conflict: null
     }
@@ -426,6 +472,8 @@ router.post('/gas-sync/apply', asyncHandler(async (req, res) => {
   for (const p of (body.products || [])) {
     const item = { name: p.name, variants: [] };
     try {
+      const merchantCategoryId = await resolveMerchantCategoryId_(merchant.id, p.parent_category_name, p.child_category_name);
+
       let product;
       if (p.id) {
         const owned = await db.queryOne('SELECT id FROM products WHERE id = $1 AND merchant_id = $2', [p.id, merchant.id]);
@@ -433,9 +481,9 @@ router.post('/gas-sync/apply', asyncHandler(async (req, res) => {
         product = await db.updateById('products', p.id, {
           name: p.name,
           description: p.description || null,
-          unit: p.unit || 'cái',
           status: p.status || 'active',
-          images: p.image_url ? [p.image_url] : []
+          images: p.image_url ? [p.image_url] : [],
+          merchant_category_id: merchantCategoryId
         });
       } else {
         product = await db.insertRow('products', {
@@ -443,10 +491,10 @@ router.post('/gas-sync/apply', asyncHandler(async (req, res) => {
           name: p.name,
           slug: slugify(`${body.merchant.name}-${p.name}`),
           description: p.description || null,
-          unit: p.unit || 'cái',
           status: p.status || 'active',
           sales_model: 'instant',
-          images: p.image_url ? [p.image_url] : []
+          images: p.image_url ? [p.image_url] : [],
+          merchant_category_id: merchantCategoryId
         });
       }
       item.id = product.id;

@@ -126,21 +126,27 @@ const PRODUCT_START_ROW = 2;
 const PRODUCT_STORE_COLUMN = 1;         // 1 - Tên quán → chỉ để lọc/liên kết, KHÔNG phải field API
 const PRODUCT_NAME_COLUMN = 2;          // 2 - Tên sản phẩm → products.name (*)
 const PRODUCT_DESCRIPTION_COLUMN = 3;   // 3 - Mô tả → products.description
-const PRODUCT_UNIT_COLUMN = 4;          // 4 - Đơn vị → products.unit (để trống server mặc định "cái")
-const PRODUCT_STATUS_COLUMN = 5;        // 5 - Trạng thái → products.status (dropdown)
-const PRODUCT_IMAGE_COLUMN = 6;         // 6 - Ảnh sản phẩm → products.images (1 ảnh)
-const PRODUCT_TOPPING_GROUPS_COLUMN = 7; // 7 - Nhóm topping áp dụng → product_topping_group_links (tên nhóm, cách nhau bằng dấu phẩy)
-const PRODUCT_SYSTEM_ID_COLUMN = 8;     // 8 - ID hệ thống (products.id, server tự ghi khi đồng bộ, không gõ tay)
+// Chọn qua 2 dropdown liên động (cha → con, danh sách lấy từ GET /categories — ĐÚNG cây danh
+// mục ngành hàng thật app dùng, admin quản lý) trong form, không gõ tay. Server tự tìm/tạo 1
+// "danh mục cửa hàng" (merchant_categories, trùng tên danh mục con) rồi gắn vào
+// products.merchant_category_id — xem resolveMerchantCategoryId_ trong gasSync.js.
+const PRODUCT_PARENT_CATEGORY_COLUMN = 4; // 4 - Danh mục cha → categories.name (cấp cha)
+const PRODUCT_CHILD_CATEGORY_COLUMN = 5;  // 5 - Danh mục con → products.merchant_category_id (qua merchant_categories)
+const PRODUCT_STATUS_COLUMN = 6;        // 6 - Trạng thái → products.status (dropdown)
+const PRODUCT_IMAGE_COLUMN = 7;         // 7 - Ảnh sản phẩm → products.images (1 ảnh)
+const PRODUCT_TOPPING_GROUPS_COLUMN = 8; // 8 - Nhóm topping áp dụng → product_topping_group_links (tên nhóm, cách nhau bằng dấu phẩy)
+const PRODUCT_SYSTEM_ID_COLUMN = 9;     // 9 - ID hệ thống (products.id, server tự ghi khi đồng bộ, không gõ tay)
 
 const PRODUCT_HEADERS = [
   'Tên quán',                // 1 — liên kết nội bộ, không gửi API
   'Tên sản phẩm',            // 2 — products.name (*)
   'Mô tả',                   // 3 — products.description
-  'Đơn vị',                  // 4 — products.unit
-  'Trạng thái',              // 5 — products.status: draft|active|out_of_stock|hidden|archived
-  'Ảnh sản phẩm',            // 6 — products.images
-  'Nhóm topping',            // 7 — product_topping_group_links, nhiều nhóm cách nhau bằng dấu phẩy (tên nhóm trong sheet TOPPING)
-  'ID hệ thống'              // 8 — products.id, server tự ghi khi đồng bộ
+  'Danh mục cha',            // 4 — categories.name (cấp cha), chọn qua dropdown trong form
+  'Danh mục con',            // 5 — products.merchant_category_id (qua merchant_categories), chọn qua dropdown trong form
+  'Trạng thái',              // 6 — products.status: draft|active|out_of_stock|hidden|archived
+  'Ảnh sản phẩm',            // 7 — products.images
+  'Nhóm topping',            // 8 — product_topping_group_links, nhiều nhóm cách nhau bằng dấu phẩy (tên nhóm trong sheet TOPPING)
+  'ID hệ thống'              // 9 — products.id, server tự ghi khi đồng bộ
 ];
 
 // Giá trị enum product_status thật (hofa-db/01_schema.sql) kèm nhãn tiếng Việt cho dropdown.
@@ -366,26 +372,28 @@ function migrateProductColumnsToApiLayout_v1() {
   const sheet = getProductSheet_();
 
   const currentHeaders = sheet.getRange(1, 1, 1, Math.max(sheet.getLastColumn(), PRODUCT_HEADERS.length)).getValues()[0];
-  if (currentHeaders[PRODUCT_NAME_COLUMN - 1] === 'Tên sản phẩm' && currentHeaders[PRODUCT_TOPPING_GROUPS_COLUMN - 1] === 'Nhóm topping') {
+  if (currentHeaders[PRODUCT_PARENT_CATEGORY_COLUMN - 1] === 'Danh mục cha' && currentHeaders[PRODUCT_TOPPING_GROUPS_COLUMN - 1] === 'Nhóm topping') {
     ui.alert('Sheet PRODUCT đã ở layout mới rồi, không cần chạy lại.');
     return;
   }
 
   const confirm = ui.alert(
     'Sắp xếp lại cột PRODUCT?',
-    'Sẽ viết lại toàn bộ dòng tiêu đề theo layout mới (Tên quán, Tên sản phẩm, Mô tả, Đơn vị, ' +
-      'Trạng thái, Ảnh sản phẩm, Nhóm topping) — cột Giá không còn ở đây nữa, sẽ TỰ DỜI sang 1 ' +
-      'dòng biến thể "Mặc định" mới bên sheet VARIANT cho từng sản phẩm đang có giá. Cột "Trạng ' +
-      'thái" giữ nguyên chữ cũ nếu có (không tự đoán quy đổi) — sau khi xong bạn nên chọn lại từ ' +
-      'dropdown cho khớp giá trị chuẩn. Tiếp tục?',
+    'Sẽ viết lại toàn bộ dòng tiêu đề theo layout mới (Tên quán, Tên sản phẩm, Mô tả, Danh mục ' +
+      'cha, Danh mục con, Trạng thái, Ảnh sản phẩm, Nhóm topping, ID hệ thống). Nếu sheet đang có ' +
+      'cột Giá (layout rất cũ) thì giá sẽ TỰ DỜI sang 1 dòng biến thể "Mặc định" mới bên sheet ' +
+      'VARIANT. Nếu sheet đang có cột Đơn vị (layout ngay trước bản này) thì cột đó bị BỎ (form ' +
+      'không còn Đơn vị nữa) — 2 cột Danh mục cha/con để TRỐNG, chọn lại qua form sau. Không mất ' +
+      'dữ liệu Tên/Mô tả/Trạng thái/Ảnh/Nhóm topping/ID hệ thống đang có. Tiếp tục?',
     ui.ButtonSet.YES_NO
   );
   if (confirm !== ui.Button.YES) return;
 
-  // Nhận diện layout cũ đang có theo SỐ CỘT thật (không đoán qua tên header, vì bản 9 cột cũ
-  // dùng đúng chữ 'Giá bán' ở cột 6 — cứ ưu tiên coi ĐÃ CÓ ≥ 9 cột là bản 9 cột, còn lại (kể cả
-  // sheet trống mới toanh mà getProductSheet_() lỡ tạo theo layout khác) coi là bản 6 cột cũ).
-  const oldColCount = sheet.getLastColumn() >= 9 ? 9 : 6;
+  // Nhận diện layout cũ qua CHỮ dòng tiêu đề (đáng tin hơn đếm số cột — dễ lẫn giữa layout 8
+  // cột "có Đơn vị, chưa có Danh mục" (bản ngay trước) với layout 9 cột rất cũ còn giá).
+  const oldColCount = currentHeaders[3] === 'Đơn vị' ? 8
+    : (currentHeaders[5] === 'Giá bán' || sheet.getLastColumn() >= 9) ? 9
+    : 6;
   const lastRow = sheet.getLastRow();
   const numDataRows = Math.max(lastRow - PRODUCT_START_ROW + 1, 0);
   const variantSheet = getVariantSheet_();
@@ -401,10 +409,17 @@ function migrateProductColumnsToApiLayout_v1() {
       row[PRODUCT_NAME_COLUMN - 1] = productName;
 
       let price;
-      if (oldColCount === 9) {
-        // Bản 9 cột: Tên quán, Tên sản phẩm, Mô tả, Đơn vị, Trạng thái, Giá bán, Giá gốc, Giá nhập, Ảnh sản phẩm
+      if (oldColCount === 8) {
+        // Bản 8 cột (ngay trước bản này, đã tách biến thể riêng — không có giá ở đây nữa):
+        // Tên quán, Tên sản phẩm, Mô tả, Đơn vị, Trạng thái, Ảnh sản phẩm, Nhóm topping, ID hệ thống
         row[PRODUCT_DESCRIPTION_COLUMN - 1] = r[2];
-        row[PRODUCT_UNIT_COLUMN - 1] = r[3];
+        row[PRODUCT_STATUS_COLUMN - 1] = r[4];
+        row[PRODUCT_IMAGE_COLUMN - 1] = r[5];
+        row[PRODUCT_TOPPING_GROUPS_COLUMN - 1] = r[6];
+        row[PRODUCT_SYSTEM_ID_COLUMN - 1] = r[7];
+      } else if (oldColCount === 9) {
+        // Bản 9 cột rất cũ: Tên quán, Tên sản phẩm, Mô tả, Đơn vị, Trạng thái, Giá bán, Giá gốc, Giá nhập, Ảnh sản phẩm
+        row[PRODUCT_DESCRIPTION_COLUMN - 1] = r[2];
         row[PRODUCT_STATUS_COLUMN - 1] = r[4];
         row[PRODUCT_IMAGE_COLUMN - 1] = r[8];
         price = r[5];
@@ -432,7 +447,7 @@ function migrateProductColumnsToApiLayout_v1() {
     sheet.getRange(PRODUCT_START_ROW, 1, numDataRows, PRODUCT_HEADERS.length).setValues(newValues);
   }
 
-  // Xoá hết cột thừa bên phải nếu bản cũ có nhiều cột hơn layout mới (9 cột cũ > 7 cột mới).
+  // Xoá hết cột thừa bên phải nếu bản cũ có nhiều cột hơn layout mới (vd bản 9 cột rất cũ).
   const extraCols = sheet.getLastColumn() - PRODUCT_HEADERS.length;
   if (extraCols > 0) sheet.deleteColumns(PRODUCT_HEADERS.length + 1, extraCols);
 
@@ -1073,6 +1088,19 @@ function getMerchantClassificationOptions() {
   }
 }
 
+/** Toàn bộ cây danh mục ngành hàng thật (GET /categories, endpoint công khai, admin quản lý —
+ *  ĐÚNG danh mục app Khách/Cửa hàng đang dùng, xem hofa_store_app product_form_screen.dart) —
+ *  trả về phẳng {id, parent_id, name}, form tự lọc ra danh mục cha (parent_id rỗng) + danh mục
+ *  con (parent_id khớp cha đã chọn) để vẽ 2 dropdown liên động. [] nếu lỗi (không throw, form
+ *  vẫn mở được, chỉ là chưa chọn được danh mục). */
+function getCategoryTree() {
+  try {
+    return gasApiRequest_('get', '/categories', null) || [];
+  } catch (e) {
+    return [];
+  }
+}
+
 /** Upload 1 ảnh lên Cloudinary — để hiển thị được trên app Khách/Cửa hàng (khác Drive: Drive
  *  không hotlink ổn định cho ảnh hiển thị công khai trong app, chỉ hợp quản lý ảnh nội bộ).
  *  Ký request qua POST /gas-sync/cloudinary-signature (bảo vệ bằng GAS_SYNC_SECRET, không phải
@@ -1213,7 +1241,8 @@ function gasSyncBuildPayloadForStore_(storeName) {
       id: v[PRODUCT_SYSTEM_ID_COLUMN - 1] || null,
       name: name,
       description: v[PRODUCT_DESCRIPTION_COLUMN - 1] || '',
-      unit: v[PRODUCT_UNIT_COLUMN - 1] || '',
+      parent_category_name: v[PRODUCT_PARENT_CATEGORY_COLUMN - 1] || '',
+      child_category_name: v[PRODUCT_CHILD_CATEGORY_COLUMN - 1] || '',
       status: v[PRODUCT_STATUS_COLUMN - 1] || 'active',
       image_url: v[PRODUCT_IMAGE_COLUMN - 1] || '',
       topping_group_names: String(v[PRODUCT_TOPPING_GROUPS_COLUMN - 1] || '')
@@ -1371,6 +1400,9 @@ function diffProducts_(lines, snapshot, payload) {
   (payload.products || []).forEach(function (p) {
     if (!p.id) {
       lines.push('🆕 SẢN PHẨM MỚI: "' + p.name + '" (' + (p.status || 'active') + ')');
+      if (p.parent_category_name || p.child_category_name) {
+        lines.push('   Danh mục: ' + [p.parent_category_name, p.child_category_name].filter(Boolean).join(' > '));
+      }
       (p.variants || []).forEach(function (v) {
         lines.push('   + Biến thể mới: "' + v.name + '" — ' + (v.price || 0) + 'đ');
       });
@@ -1388,7 +1420,11 @@ function diffProducts_(lines, snapshot, payload) {
     lines.push('📋 SẢN PHẨM "' + oldP.name + '" (id ' + oldP.id + '):');
     lines.push(fieldCompareRow_('Tên', oldP.name, p.name));
     lines.push(fieldCompareRow_('Mô tả', oldP.description, p.description));
-    lines.push(fieldCompareRow_('Đơn vị', oldP.unit, p.unit));
+    lines.push(fieldCompareRow_(
+      'Danh mục',
+      [oldP.parent_category_name, oldP.child_category_name].filter(Boolean).join(' > '),
+      [p.parent_category_name, p.child_category_name].filter(Boolean).join(' > ')
+    ));
     lines.push(fieldCompareRow_('Trạng thái', oldP.status, p.status));
     lines.push(fieldCompareRow_('Ảnh', (oldP.images && oldP.images[0]) || '', p.image_url));
     const oldGroupNames = (oldP.topping_group_names || []).slice().sort().join(', ');
@@ -1486,7 +1522,8 @@ function gasSyncApply(storeName) {
         id: p.id || undefined,
         name: p.name,
         description: p.description,
-        unit: p.unit,
+        parent_category_name: p.parent_category_name,
+        child_category_name: p.child_category_name,
         status: p.status,
         image_url: p.image_url,
         topping_group_names: p.topping_group_names,
@@ -2432,6 +2469,13 @@ function buildProductManagerHtml_(idPrefix) {
   #${idPrefix}toppingGroupBox { max-height: 130px; overflow: auto; border: 1px solid #ccc; border-radius: 4px; margin-top: 3px; padding: 6px; }
   #${idPrefix}toppingGroupBox label { display: flex; align-items: center; gap: 6px; font-weight: normal; margin: 4px 0; }
   #${idPrefix}toppingGroupBox label input { width: auto; margin: 0; }
+  #${idPrefix}root .catRow select { width: auto; flex: 1; }
+  #${idPrefix}variantList { max-height: 160px; overflow: auto; border: 1px solid #ccc; border-radius: 4px; margin-top: 4px; }
+  #${idPrefix}variantList .variantRow { display: flex; align-items: center; justify-content: space-between; padding: 6px 8px; border-bottom: 1px solid #eee; cursor: pointer; }
+  #${idPrefix}variantList .variantRow:hover { background: #f0f4ff; }
+  #${idPrefix}variantList .variantDel { color: #c0392b; font-weight: bold; padding: 0 6px; }
+  #${idPrefix}variantEditor .checkLabel { display: flex; align-items: center; gap: 4px; font-weight: normal; margin: 0; }
+  #${idPrefix}variantEditor .checkLabel input { width: auto; margin: 0; }
   #${idPrefix}msg { color: #0a7d1f; font-weight: bold; margin-top: 8px; min-height: 18px; }
   #${idPrefix}err { color: #c0392b; font-weight: bold; }
 </style>
@@ -2443,7 +2487,6 @@ function buildProductManagerHtml_(idPrefix) {
   <label>Sản phẩm của quán</label>
   <div id="${idPrefix}productList"><i>Chọn cửa hàng để xem sản phẩm</i></div>
   <button id="${idPrefix}btnNewProduct">+ Thêm sản phẩm mới</button>
-  <div style="color:#888; font-size:12px; margin-top:4px;">Sau khi lưu sản phẩm, sang tab <b>Biến thể</b> thêm ít nhất 1 biến thể (giá) thì sản phẩm mới bán được.</div>
 
   <label>Tên sản phẩm *</label>
   <input type="text" id="${idPrefix}pName">
@@ -2451,8 +2494,12 @@ function buildProductManagerHtml_(idPrefix) {
   <label>Mô tả</label>
   <textarea id="${idPrefix}pDesc"></textarea>
 
-  <label>Đơn vị</label>
-  <input type="text" id="${idPrefix}pUnit" placeholder="cái">
+  <label>Danh mục</label>
+  <div class="imgRow catRow">
+    <select id="${idPrefix}pParentCategory"></select>
+    <select id="${idPrefix}pChildCategory"></select>
+  </div>
+  <div style="color:#888; font-size:12px; margin-top:2px;">Đúng danh mục thật app đang dùng (admin quản lý) — chọn Danh mục cha trước để hiện Danh mục con.</div>
 
   <label>Trạng thái</label>
   <select id="${idPrefix}pStatus"></select>
@@ -2480,6 +2527,24 @@ function buildProductManagerHtml_(idPrefix) {
     <div class="grid" id="${idPrefix}pImageGrid"></div>
   </div>
 
+  <label>Biến thể (giá bán) *</label>
+  <div id="${idPrefix}variantNote" style="color:#888; font-size:12px;">Lưu sản phẩm trước, rồi thêm biến thể ở đây — sản phẩm cần ít nhất 1 biến thể mới bán được.</div>
+  <div id="${idPrefix}variantList" style="display:none;"></div>
+  <button id="${idPrefix}btnNewVariantInline" type="button" style="display:none;">+ Thêm biến thể</button>
+  <div id="${idPrefix}variantEditor" style="display:none; border:1px solid #ccc; border-radius:6px; padding:10px; margin-top:8px; background:#fafafa;">
+    <div class="imgRow">
+      <input type="text" id="${idPrefix}vName" placeholder="Tên biến thể (Mặc định, Size L...)" style="flex:2; width:auto;">
+      <input type="number" id="${idPrefix}vPrice" placeholder="Giá bán" step="1" min="0" style="flex:1; width:auto;">
+      <input type="number" id="${idPrefix}vWeight" placeholder="Trọng lượng (g)" step="1" min="0" style="flex:1; width:auto;">
+    </div>
+    <div class="imgRow" style="margin-top:8px;">
+      <label class="checkLabel"><input type="checkbox" id="${idPrefix}vIsDefault"> Là mặc định</label>
+      <label class="checkLabel"><input type="checkbox" id="${idPrefix}vIsActive" checked> Đang bán</label>
+    </div>
+    <button id="${idPrefix}btnSaveVariantInline" type="button">💾 Lưu biến thể</button>
+    <button id="${idPrefix}btnCancelVariantInline" type="button">Huỷ</button>
+  </div>
+
   <div id="${idPrefix}pSystemIdArea" style="color:#888; font-size:12px; margin-top:8px;"></div>
 
   <div>
@@ -2500,9 +2565,15 @@ function buildProductManagerHtml_(idPrefix) {
   var products = [];
   var currentImages = [];
   var currentToppingGroupsValue = '';
+  var categoryTree = [];
+  var currentParentCategoryName = '';
+  var currentChildCategoryName = '';
+  var currentVariants = [];
+  var editingVariantRow = null;
   var NAME_IDX = ${PRODUCT_NAME_COLUMN - 1};
   var DESC_IDX = ${PRODUCT_DESCRIPTION_COLUMN - 1};
-  var UNIT_IDX = ${PRODUCT_UNIT_COLUMN - 1};
+  var PARENT_CATEGORY_IDX = ${PRODUCT_PARENT_CATEGORY_COLUMN - 1};
+  var CHILD_CATEGORY_IDX = ${PRODUCT_CHILD_CATEGORY_COLUMN - 1};
   var STATUS_IDX = ${PRODUCT_STATUS_COLUMN - 1};
   var IMAGE_IDX = ${PRODUCT_IMAGE_COLUMN - 1};
   var TOPPING_GROUPS_IDX = ${PRODUCT_TOPPING_GROUPS_COLUMN - 1};
@@ -2532,6 +2603,14 @@ function buildProductManagerHtml_(idPrefix) {
         sel.appendChild(opt);
       });
     }).withFailureHandler(showErr).listStores();
+
+    // Cây danh mục (GET /categories, admin quản lý) tải song song, có thể về sau fillForm lần
+    // đầu — renderParentCategorySelect_ tự áp lại currentParentCategoryName/currentChildCategoryName
+    // đang có (giữ nguyên pattern classificationOptions bên buildStoreManagerHtml_).
+    google.script.run.withSuccessHandler(function (list) {
+      categoryTree = list || [];
+      renderParentCategorySelect_();
+    }).withFailureHandler(function () {}).getCategoryTree();
   }
 
   $('storeSelect').addEventListener('change', onSelectStore);
@@ -2540,7 +2619,53 @@ function buildProductManagerHtml_(idPrefix) {
   $('btnDeleteProduct').addEventListener('click', removeProduct);
   $('btnPickImage').addEventListener('click', openImagePicker);
   $('btnUploadProductImage').addEventListener('click', uploadProductImageToCloudinary);
+  $('pParentCategory').addEventListener('change', function () {
+    currentParentCategoryName = $('pParentCategory').value;
+    currentChildCategoryName = '';
+    renderChildCategorySelect_();
+  });
+  $('pChildCategory').addEventListener('change', function () {
+    currentChildCategoryName = $('pChildCategory').value;
+  });
+  $('btnNewVariantInline').addEventListener('click', function () { hideVariantEditor_(); showVariantEditor_(); });
+  $('btnCancelVariantInline').addEventListener('click', hideVariantEditor_);
+  $('btnSaveVariantInline').addEventListener('click', saveVariantInline_);
   init();
+
+  /** Danh mục cha = danh mục gốc (parent_id rỗng); option value = TÊN (không phải id) — khớp
+   *  thẳng cách sheet PRODUCT lưu Danh mục cha/con (2 cột text), không cần tra id qua lại. */
+  function renderParentCategorySelect_() {
+    var sel = $('pParentCategory');
+    sel.innerHTML = '';
+    var opt0 = document.createElement('option');
+    opt0.value = ''; opt0.text = categoryTree.length ? '-- Danh mục cha --' : 'Đang tải danh mục…';
+    sel.appendChild(opt0);
+    categoryTree.filter(function (c) { return !c.parent_id; }).forEach(function (c) {
+      var opt = document.createElement('option');
+      opt.value = c.name; opt.text = c.name;
+      sel.appendChild(opt);
+    });
+    sel.value = currentParentCategoryName;
+    renderChildCategorySelect_();
+  }
+
+  function renderChildCategorySelect_() {
+    var sel = $('pChildCategory');
+    sel.innerHTML = '';
+    var opt0 = document.createElement('option');
+    opt0.value = ''; opt0.text = '-- Danh mục con --';
+    sel.appendChild(opt0);
+    var parentName = $('pParentCategory').value;
+    var parent = categoryTree.filter(function (c) { return !c.parent_id && c.name === parentName; })[0];
+    if (parent) {
+      categoryTree.filter(function (c) { return c.parent_id === parent.id; }).forEach(function (c) {
+        var opt = document.createElement('option');
+        opt.value = c.name; opt.text = c.name;
+        sel.appendChild(opt);
+      });
+    }
+    sel.value = currentChildCategoryName;
+  }
 
   function onSelectStore() {
     currentStore = $('storeSelect').value;
@@ -2621,7 +2746,9 @@ function buildProductManagerHtml_(idPrefix) {
   function fillForm(v) {
     $('pName').value = v[NAME_IDX] || '';
     $('pDesc').value = v[DESC_IDX] || '';
-    $('pUnit').value = v[UNIT_IDX] || '';
+    currentParentCategoryName = v[PARENT_CATEGORY_IDX] || '';
+    currentChildCategoryName = v[CHILD_CATEGORY_IDX] || '';
+    renderParentCategorySelect_();
     $('pStatus').value = v[STATUS_IDX] || 'active';
     $('pImgUrl').value = v[IMAGE_IDX] || '';
     currentToppingGroupsValue = v[TOPPING_GROUPS_IDX] || '';
@@ -2630,6 +2757,8 @@ function buildProductManagerHtml_(idPrefix) {
     $('pSystemIdArea').textContent = v[SYSTEM_ID_IDX]
       ? 'Đã đồng bộ — ID: ' + v[SYSTEM_ID_IDX]
       : 'Chưa đồng bộ lên hệ thống thật — sang tab "Đồng bộ CSDL" để đẩy lên';
+    hideVariantEditor_();
+    loadVariantsInline_();
   }
 
   function updateImgPreview(url) {
@@ -2645,7 +2774,8 @@ function buildProductManagerHtml_(idPrefix) {
     values[${PRODUCT_STORE_COLUMN - 1}] = currentStore;
     values[NAME_IDX] = name;
     values[DESC_IDX] = $('pDesc').value;
-    values[UNIT_IDX] = $('pUnit').value;
+    values[PARENT_CATEGORY_IDX] = currentParentCategoryName;
+    values[CHILD_CATEGORY_IDX] = currentChildCategoryName;
     values[STATUS_IDX] = $('pStatus').value;
     values[IMAGE_IDX] = $('pImgUrl').value;
     values[TOPPING_GROUPS_IDX] = getSelectedToppingGroups();
@@ -2653,7 +2783,107 @@ function buildProductManagerHtml_(idPrefix) {
       currentRow = res.row;
       showMsg('Đã lưu sản phẩm');
       loadProducts();
+      loadVariantsInline_();
     }).withFailureHandler(showErr).upsertProduct(currentRow, values);
+  }
+
+  /** Biến thể (giá bán) quản lý NGAY trong tab Sản phẩm — khớp theo Tên quán + Tên sản phẩm
+   *  (giống sheet VARIANT/tab Biến thể riêng, dùng LẠI đúng các hàm server listVariantsByProduct/
+   *  upsertVariant/deleteVariant, không có bảng/API riêng nào khác). Bắt buộc sản phẩm đã LƯU
+   *  (currentRow khác null) mới cho thêm biến thể — tránh lệch tên nếu đổi Tên sản phẩm rồi mới
+   *  lưu, biến thể đã gõ trước đó sẽ mất liên kết. */
+  function loadVariantsInline_() {
+    var listEl = $('variantList');
+    var noteEl = $('variantNote');
+    var newBtn = $('btnNewVariantInline');
+    if (!currentStore || !currentRow) {
+      currentVariants = [];
+      listEl.style.display = 'none';
+      listEl.innerHTML = '';
+      newBtn.style.display = 'none';
+      hideVariantEditor_();
+      noteEl.style.display = 'block';
+      noteEl.textContent = 'Lưu sản phẩm trước, rồi thêm biến thể ở đây — sản phẩm cần ít nhất 1 biến thể mới bán được.';
+      return;
+    }
+    var productName = $('pName').value.trim();
+    google.script.run.withSuccessHandler(function (list) {
+      currentVariants = list;
+      listEl.innerHTML = '';
+      listEl.style.display = list.length ? 'block' : 'none';
+      newBtn.style.display = 'inline-block';
+      noteEl.style.display = list.length ? 'none' : 'block';
+      noteEl.textContent = 'Chưa có biến thể — sản phẩm này chưa bán được, bấm "+ Thêm biến thể" bên dưới.';
+      list.forEach(function (v) {
+        var row = document.createElement('div');
+        row.className = 'variantRow';
+        var label = document.createElement('span');
+        label.textContent = (v.values[${VARIANT_NAME_COLUMN - 1}] || '(chưa đặt tên)') + ' — ' +
+          (v.values[${VARIANT_PRICE_COLUMN - 1}] || 0) + 'đ' +
+          (v.values[${VARIANT_IS_DEFAULT_COLUMN - 1}] ? ' · Mặc định' : '');
+        row.appendChild(label);
+        var del = document.createElement('span');
+        del.className = 'variantDel';
+        del.textContent = '×';
+        del.title = 'Xoá biến thể';
+        del.onclick = function (e) { e.stopPropagation(); removeVariantInline_(v.row); };
+        row.appendChild(del);
+        row.onclick = function () { editVariantInline_(v); };
+        listEl.appendChild(row);
+      });
+    }).withFailureHandler(showErr).listVariantsByProduct(currentStore, productName);
+  }
+
+  function showVariantEditor_() { $('variantEditor').style.display = 'block'; }
+
+  function hideVariantEditor_() {
+    $('variantEditor').style.display = 'none';
+    editingVariantRow = null;
+    $('vName').value = '';
+    $('vPrice').value = '';
+    $('vWeight').value = '';
+    $('vIsDefault').checked = false;
+    $('vIsActive').checked = true;
+  }
+
+  function editVariantInline_(v) {
+    editingVariantRow = v.row;
+    $('vName').value = v.values[${VARIANT_NAME_COLUMN - 1}] || '';
+    $('vPrice').value = v.values[${VARIANT_PRICE_COLUMN - 1}] || '';
+    $('vWeight').value = v.values[${VARIANT_WEIGHT_COLUMN - 1}] || '';
+    $('vIsDefault').checked = !!v.values[${VARIANT_IS_DEFAULT_COLUMN - 1}];
+    var isActiveRaw = v.values[${VARIANT_IS_ACTIVE_COLUMN - 1}];
+    $('vIsActive').checked = isActiveRaw === '' || isActiveRaw === undefined ? true : !!isActiveRaw;
+    showVariantEditor_();
+  }
+
+  function saveVariantInline_() {
+    if (!currentStore || !currentRow) { showErr('Lưu sản phẩm trước'); return; }
+    var productName = $('pName').value.trim();
+    var name = $('vName').value.trim();
+    if (!name) { showErr('Chưa nhập Tên biến thể'); return; }
+    if ($('vPrice').value === '') { showErr('Chưa nhập Giá bán'); return; }
+    var values = new Array(${VARIANT_SYSTEM_ID_COLUMN - 1}).fill('');
+    values[${VARIANT_STORE_COLUMN - 1}] = currentStore;
+    values[${VARIANT_PRODUCT_COLUMN - 1}] = productName;
+    values[${VARIANT_NAME_COLUMN - 1}] = name;
+    values[${VARIANT_PRICE_COLUMN - 1}] = Number($('vPrice').value);
+    values[${VARIANT_WEIGHT_COLUMN - 1}] = $('vWeight').value === '' ? '' : Number($('vWeight').value);
+    values[${VARIANT_IS_DEFAULT_COLUMN - 1}] = $('vIsDefault').checked;
+    values[${VARIANT_IS_ACTIVE_COLUMN - 1}] = $('vIsActive').checked;
+    google.script.run.withSuccessHandler(function () {
+      showMsg('Đã lưu biến thể');
+      hideVariantEditor_();
+      loadVariantsInline_();
+    }).withFailureHandler(showErr).upsertVariant(editingVariantRow, values);
+  }
+
+  function removeVariantInline_(row) {
+    if (!confirm('Xoá biến thể này?')) return;
+    google.script.run.withSuccessHandler(function () {
+      showMsg('Đã xoá biến thể');
+      loadVariantsInline_();
+    }).withFailureHandler(showErr).deleteVariant(row);
   }
 
   function removeProduct() {
