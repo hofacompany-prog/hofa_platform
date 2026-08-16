@@ -115,7 +115,10 @@ class AdminShell extends ConsumerWidget {
     final location = GoRouterState.of(context).matchedLocation;
     final profile = ref.watch(userProfileProvider).valueOrNull;
     final isMobile = MediaQuery.of(context).size.width < _kMobileBreakpoint;
-    final wide = MediaQuery.of(context).size.width > 1100;
+    // Trước đây chỉ hiện nhãn NavigationRail khi > 1100px (dưới mức đó thu về icon-only) —
+    // bỏ hẳn ngưỡng phụ này, hễ đã qua _kMobileBreakpoint (không còn ở chế độ AppBar+Drawer)
+    // là hiện nhãn luôn, tránh 1 khoảng rộng giữa chừng (700–1100px) mất chữ khó hiểu.
+    final wide = !isMobile;
     final navIcons = ref.watch(navIconsProvider).valueOrNull ?? const [];
     final iconByTabKey = {
       for (final n in navIcons)
