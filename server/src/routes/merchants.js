@@ -838,4 +838,32 @@ router.delete('/fee-tiers/:id', asyncHandler(async (req, res) => {
   res.json({ ok: true, data: { deleted: true } });
 }));
 
+/** Nút "Đưa về mặc định toàn sàn" ở màn chi tiết cửa hàng — XOÁ HẾT bậc phí riêng đang có của
+ * cửa hàng này rồi copy lại nguyên xi bậc phí mặc định toàn sàn (khác applyPlatformFeeDefaults
+ * ở POST /merchants/POST /gas-sync/apply, vốn chỉ copy 1 lần lúc tạo mới và không xoá gì —
+ * dùng lại được cho cửa hàng cũ đã tự chỉnh tiers riêng, admin bấm để reset về mặc định). */
+router.post('/merchants/:merchantId/fee-tiers/reset-to-platform-default', asyncHandler(async (req, res) => {
+  requireRole(req.ctx, ['admin']);
+  const settings = await db.queryOne(
+    'SELECT fee_basis FROM platform_buy_on_behalf_fee_settings ORDER BY updated_at DESC LIMIT 1'
+  );
+  if (!settings) throw new ApiError('NOT_FOUND', 'Chưa cấu hình phí mua hộ mặc định toàn sàn (Tài chính > Phí mua hộ)', 404);
+  const tiers = await db.query(
+    'SELECT min_threshold, max_threshold, fee_type, fee_fixed_amount, fee_percent FROM platform_buy_on_behalf_fee_tiers ORDER BY min_threshold ASC'
+  );
+
+  await db.updateById('merchants', req.params.merchantId, { buy_on_behalf_fee_basis: settings.fee_basis });
+  await db.query('DELETE FROM merchant_fee_tiers WHERE merchant_id = $1', [req.params.merchantId]);
+  for (const t of tiers) {
+    // eslint-disable-next-line no-await-in-loop
+    await db.insertRow('merchant_fee_tiers', { merchant_id: req.params.merchantId, ...t });
+  }
+
+  const rows = await db.query(
+    'SELECT * FROM merchant_fee_tiers WHERE merchant_id = $1 ORDER BY min_threshold ASC',
+    [req.params.merchantId]
+  );
+  res.json({ ok: true, data: rows });
+}));
+
 module.exports = router;

@@ -23,6 +23,7 @@ class MerchantFeeTiersCard extends ConsumerStatefulWidget {
 
 class _MerchantFeeTiersCardState extends ConsumerState<MerchantFeeTiersCard> {
   bool _savingBasis = false;
+  bool _savingReset = false;
 
   String get _merchantId => widget.merchant.id;
 
@@ -284,6 +285,57 @@ class _MerchantFeeTiersCardState extends ConsumerState<MerchantFeeTiersCard> {
     }
   }
 
+  /// Xoá hết bậc phí riêng đang có của cửa hàng, đổi lại đúng cách tính ngưỡng bậc + toàn bộ
+  /// bậc phí mặc định toàn sàn (xem Tài chính > Phí mua hộ) — dùng khi muốn quay lại đúng mức
+  /// phí chung, không giữ lại phần đã tự chỉnh riêng.
+  Future<void> _resetToPlatformDefault() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Đưa về phí mua hộ mặc định toàn sàn?'),
+        content: const Text(
+          'Toàn bộ bậc phí riêng đang có của cửa hàng này sẽ bị XOÁ và thay bằng đúng cách '
+          'tính ngưỡng + bậc phí mặc định toàn sàn (cấu hình ở Tài chính > Phí mua hộ). '
+          'Không hoàn tác được.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Huỷ'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Đưa về mặc định'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    setState(() => _savingReset = true);
+    try {
+      await ref
+          .read(adminRepoProvider)
+          .resetMerchantFeeTiersToPlatformDefault(_merchantId);
+      ref.invalidate(merchantFeeTiersProvider(_merchantId));
+      ref.invalidate(merchantDetailProvider(_merchantId));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Đã đưa về phí mua hộ mặc định toàn sàn'),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _savingReset = false);
+    }
+  }
+
   String _thresholdLabel(String basis, int min, int? max) {
     if (basis == 'quantity') {
       return max == null
@@ -450,10 +502,31 @@ class _MerchantFeeTiersCardState extends ConsumerState<MerchantFeeTiersCard> {
                         ),
                       ),
                     const SizedBox(height: 4),
-                    OutlinedButton.icon(
-                      onPressed: () => _openTierDialog(),
-                      icon: const Icon(Icons.add_circle_outline),
-                      label: const Text('Thêm bậc'),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: () => _openTierDialog(),
+                          icon: const Icon(Icons.add_circle_outline),
+                          label: const Text('Thêm bậc'),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: _savingReset
+                              ? null
+                              : _resetToPlatformDefault,
+                          icon: _savingReset
+                              ? const SizedBox(
+                                  height: 16,
+                                  width: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.restore),
+                          label: const Text('Phí mua hộ mặc định'),
+                        ),
+                      ],
                     ),
                   ],
                 ),

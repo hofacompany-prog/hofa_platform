@@ -324,6 +324,22 @@ class AdminRepository {
     await _api.delete('/fee-tiers/$id');
   }
 
+  /// Xoá hết bậc phí riêng đang có của cửa hàng rồi copy lại đúng bậc phí mặc định toàn sàn
+  /// (buy_on_behalf_fee_basis + merchant_fee_tiers) — nút "Đưa về mặc định toàn sàn" ở
+  /// MerchantFeeTiersCard. Trả về danh sách bậc phí MỚI sau khi reset.
+  Future<List<MerchantFeeTier>> resetMerchantFeeTiersToPlatformDefault(
+    String merchantId,
+  ) async {
+    final list =
+        await _api.post(
+              '/merchants/$merchantId/fee-tiers/reset-to-platform-default',
+            )
+            as List;
+    return list
+        .map((e) => MerchantFeeTier.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
   // ---- Phí mua hộ mặc định toàn sàn (copy sang merchant_fee_tiers cho cửa hàng
   // buy_on_behalf mới tạo — xem hofa-db/87_platform_buy_on_behalf_fee_defaults.sql) ----
 
