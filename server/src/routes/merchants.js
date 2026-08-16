@@ -312,6 +312,52 @@ router.post('/merchants', asyncHandler(async (req, res) => {
 router.patch('/merchants/:id', asyncHandler(async (req, res) => {
   await requireMerchantAccess(req.ctx, req.params.id);
   const data = pickFields(req.body, MERCHANT_FIELDS);
+
+  // Admin gắn/tạo tài khoản chủ cửa hàng thật — dùng lúc chuyển cửa hàng mua hộ (owner_id đang
+  // trỏ vào 1 tài khoản dùng chung GAS_SYNC_OWNER_ID, xem gasSync.js) sang cửa hàng thường có
+  // chủ thật, để chủ tự đăng nhập app Cửa hàng bằng SĐT nhận thông báo đơn hàng. CÙNG pattern
+  // với owner_phone/owner_password ở POST /merchants — chỉ khác là ở đây chạy trong PATCH nên
+  // giới hạn admin (owner/staff PATCH cửa hàng của chính mình không được đổi chủ).
+  if (req.ctx.role === 'admin' && req.body.owner_phone) {
+    let ownerId;
+    if (req.body.owner_password) {
+      const existing = await db.queryOne('SELECT id FROM users WHERE phone = $1', [req.body.owner_phone]);
+      if (existing) {
+        throw new ApiError(
+          'CONFLICT',
+          'Số điện thoại này đã có tài khoản — dùng số khác, hoặc để trống mật khẩu để gắn vào tài khoản có sẵn',
+          409
+        );
+      }
+      if (String(req.body.owner_password).length < 6) {
+        throw new ApiError('BAD_REQUEST', 'Mật khẩu ban đầu phải từ 6 ký tự', 400);
+      }
+      let authUserId;
+      try {
+        authUserId = await supabaseAdmin.createAuthUser(req.body.owner_phone, req.body.owner_password);
+      } catch (err) {
+        throw new ApiError('CONFLICT', `Không tạo được tài khoản mới: ${err.message}`, 409);
+      }
+      const created = await db.insertRow('users', {
+        id: authUserId,
+        phone: req.body.owner_phone,
+        full_name: req.body.owner_full_name || req.body.name,
+        role: 'customer',
+        status: 'active'
+      });
+      ownerId = created.id;
+    } else {
+      const owner = await db.queryOne('SELECT id FROM users WHERE phone = $1', [req.body.owner_phone]);
+      if (!owner) throw new ApiError('NOT_FOUND', 'Không tìm thấy người dùng với SĐT này', 404);
+      ownerId = owner.id;
+    }
+    data.owner_id = ownerId;
+    // Đã có chủ thật tự quản lý — không còn để GAS đồng bộ/tự dọn "mồ côi" vào cửa hàng này nữa
+    // (xem is_gas_synced ở hofa-db/85_merchant_gas_sync.sql, requireGasMerchant ở gasSync.js).
+    data.is_gas_synced = false;
+    await db.query(`UPDATE users SET role = 'merchant_owner' WHERE id = $1 AND role = 'customer'`, [ownerId]);
+  }
+
   const updated = await db.updateById('merchants', req.params.id, data);
   res.json({ ok: true, data: updated });
 }));

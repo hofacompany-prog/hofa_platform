@@ -75,6 +75,10 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
     );
     final taxCodeCtrl = TextEditingController(text: m.taxCode ?? '');
     final licenseCtrl = TextEditingController(text: m.businessLicenseNo ?? '');
+    final ownerPhoneCtrl = TextEditingController();
+    final ownerFullNameCtrl = TextEditingController();
+    final ownerPasswordCtrl = TextEditingController();
+    var obscureOwnerPassword = true;
     var merchantType = m.merchantType;
     var classificationIds = m.classifications.map((c) => c.id).toSet();
     var logoUrl = m.logoUrl;
@@ -169,6 +173,68 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
                     onChanged: (v) =>
                         setInner(() => merchantType = v ?? merchantType),
                   ),
+                  // Cửa hàng mua hộ KHÔNG có chủ thật (owner_id trỏ vào 1 tài khoản dùng chung
+                  // cho mọi cửa hàng do GAS quản lý) — chuyển sang loại khác thì cần tạo/gắn 1
+                  // tài khoản chủ THẬT để đăng nhập app Cửa hàng, nhận thông báo đơn hàng...
+                  // Chỉ hiện đúng lúc đang chuyển (m.merchantType cũ = mua hộ, đang chọn loại
+                  // khác) — cửa hàng đã có chủ thật từ trước thì không hiện lại, tránh vô tình
+                  // tạo/gắn nhầm tài khoản khác mỗi lần sửa các trường khác.
+                  if (m.merchantType == 'buy_on_behalf' &&
+                      merchantType != 'buy_on_behalf') ...[
+                    const Divider(height: 28),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'Chủ cửa hàng (bắt buộc khi chuyển khỏi Mua hộ)',
+                        style: Theme.of(context).textTheme.labelLarge,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Cửa hàng mua hộ chưa có chủ thật — điền SĐT để chủ đăng nhập app Cửa '
+                      'hàng nhận thông báo đơn hàng, đổi trạng thái đơn...',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.outline,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: ownerPhoneCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'SĐT chủ cửa hàng',
+                      ),
+                      keyboardType: TextInputType.phone,
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: ownerFullNameCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'Họ tên chủ cửa hàng',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: ownerPasswordCtrl,
+                      obscureText: obscureOwnerPassword,
+                      decoration: InputDecoration(
+                        labelText: 'Mật khẩu ban đầu',
+                        helperText:
+                            'Để trống nếu SĐT trên đã có tài khoản (gắn cửa hàng vào tài '
+                            'khoản đó). Nhập mật khẩu để tạo TÀI KHOẢN HOÀN TOÀN MỚI.',
+                        helperMaxLines: 3,
+                        suffixIcon: IconButton(
+                          icon: Icon(
+                            obscureOwnerPassword
+                                ? Icons.visibility_outlined
+                                : Icons.visibility_off_outlined,
+                          ),
+                          onPressed: () => setInner(
+                            () => obscureOwnerPassword = !obscureOwnerPassword,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   Align(
                     alignment: Alignment.centerLeft,
@@ -382,40 +448,95 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
       return;
     }
 
+    final convertingFromBuyOnBehalf =
+        m.merchantType == 'buy_on_behalf' && merchantType != 'buy_on_behalf';
+    if (convertingFromBuyOnBehalf) {
+      if (ownerPhoneCtrl.text.trim().isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Chuyển khỏi Mua hộ cần điền SĐT chủ cửa hàng — mở lại và điền trước khi lưu',
+              ),
+            ),
+          );
+        }
+        return;
+      }
+      if (ownerPasswordCtrl.text.trim().isNotEmpty) {
+        if (ownerPasswordCtrl.text.trim().length < 6) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Mật khẩu ban đầu phải từ 6 ký tự')),
+            );
+          }
+          return;
+        }
+        if (ownerFullNameCtrl.text.trim().isEmpty) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'Nhập họ tên chủ cửa hàng (bắt buộc khi tạo tài khoản mới)',
+                ),
+              ),
+            );
+          }
+          return;
+        }
+      }
+    }
+
     await _run(() async {
-      await ref.read(adminRepoProvider).updateMerchant(m.id, {
-        'name': nameCtrl.text.trim(),
-        'description': descCtrl.text.trim(),
-        'merchant_type': merchantType,
-        if (logoUrl != null) 'logo_url': logoUrl,
-        if (coverUrl != null) 'cover_url': coverUrl,
-        'legal_doc_urls': legalDocUrls,
-        'photo_urls': photoUrls,
-        'phone': phoneCtrl.text.trim(),
-        'email': emailCtrl.text.trim().isEmpty ? null : emailCtrl.text.trim(),
-        'commission_rate':
-            num.tryParse(commissionCtrl.text.trim()) ?? m.commissionRate,
-        'vat_rate': num.tryParse(vatRateCtrl.text.trim()) ?? m.vatRate,
-        'pit_rate': num.tryParse(pitRateCtrl.text.trim()) ?? m.pitRate,
-        'min_order_amount':
-            int.tryParse(minOrderCtrl.text.trim()) ?? m.minOrderAmount,
-        'avg_prep_minutes':
-            int.tryParse(prepCtrl.text.trim()) ?? m.avgPrepMinutes,
-        'bank_name': selectedBank?.name,
-        'bank_bin': selectedBank?.bin,
-        'bank_account_no': bankAccNoCtrl.text.trim().isEmpty
-            ? null
-            : bankAccNoCtrl.text.trim(),
-        'bank_account_name': bankAccNameCtrl.text.trim().isEmpty
-            ? null
-            : bankAccNameCtrl.text.trim(),
-        'tax_code': taxCodeCtrl.text.trim().isEmpty
-            ? null
-            : taxCodeCtrl.text.trim(),
-        'business_license_no': licenseCtrl.text.trim().isEmpty
-            ? null
-            : licenseCtrl.text.trim(),
-      });
+      await ref
+          .read(adminRepoProvider)
+          .updateMerchant(
+            m.id,
+            {
+              'name': nameCtrl.text.trim(),
+              'description': descCtrl.text.trim(),
+              'merchant_type': merchantType,
+              if (logoUrl != null) 'logo_url': logoUrl,
+              if (coverUrl != null) 'cover_url': coverUrl,
+              'legal_doc_urls': legalDocUrls,
+              'photo_urls': photoUrls,
+              'phone': phoneCtrl.text.trim(),
+              'email': emailCtrl.text.trim().isEmpty
+                  ? null
+                  : emailCtrl.text.trim(),
+              'commission_rate':
+                  num.tryParse(commissionCtrl.text.trim()) ?? m.commissionRate,
+              'vat_rate': num.tryParse(vatRateCtrl.text.trim()) ?? m.vatRate,
+              'pit_rate': num.tryParse(pitRateCtrl.text.trim()) ?? m.pitRate,
+              'min_order_amount':
+                  int.tryParse(minOrderCtrl.text.trim()) ?? m.minOrderAmount,
+              'avg_prep_minutes':
+                  int.tryParse(prepCtrl.text.trim()) ?? m.avgPrepMinutes,
+              'bank_name': selectedBank?.name,
+              'bank_bin': selectedBank?.bin,
+              'bank_account_no': bankAccNoCtrl.text.trim().isEmpty
+                  ? null
+                  : bankAccNoCtrl.text.trim(),
+              'bank_account_name': bankAccNameCtrl.text.trim().isEmpty
+                  ? null
+                  : bankAccNameCtrl.text.trim(),
+              'tax_code': taxCodeCtrl.text.trim().isEmpty
+                  ? null
+                  : taxCodeCtrl.text.trim(),
+              'business_license_no': licenseCtrl.text.trim().isEmpty
+                  ? null
+                  : licenseCtrl.text.trim(),
+            },
+            ownerPhone: convertingFromBuyOnBehalf
+                ? ownerPhoneCtrl.text.trim()
+                : null,
+            ownerPassword: convertingFromBuyOnBehalf
+                ? ownerPasswordCtrl.text.trim()
+                : null,
+            ownerFullName: convertingFromBuyOnBehalf
+                ? ownerFullNameCtrl.text.trim()
+                : null,
+          );
       await ref
           .read(adminRepoProvider)
           .setMerchantClassifications(m.id, classificationIds.toList());

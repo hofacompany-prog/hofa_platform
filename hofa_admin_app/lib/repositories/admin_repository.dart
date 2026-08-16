@@ -168,10 +168,30 @@ class AdminRepository {
         as Map<String, dynamic>,
   );
 
-  Future<Merchant> updateMerchant(String id, Map<String, dynamic> data) async =>
-      Merchant.fromJson(
-        await _api.patch('/merchants/$id', body: data) as Map<String, dynamic>,
-      );
+  /// [ownerPhone]/[ownerPassword]/[ownerFullName]: dùng khi chuyển cửa hàng mua hộ (chưa có chủ
+  /// thật) sang cửa hàng thường — cùng quy tắc với [createMerchant]: có [ownerPassword] thì tạo
+  /// THẲNG 1 tài khoản hoàn toàn mới; để trống thì gắn vào 1 tài khoản đã có sẵn theo SĐT.
+  Future<Merchant> updateMerchant(
+    String id,
+    Map<String, dynamic> data, {
+    String? ownerPhone,
+    String? ownerPassword,
+    String? ownerFullName,
+  }) async => Merchant.fromJson(
+    await _api.patch(
+          '/merchants/$id',
+          body: {
+            ...data,
+            if (ownerPhone != null && ownerPhone.isNotEmpty)
+              'owner_phone': ownerPhone,
+            if (ownerPassword != null && ownerPassword.isNotEmpty)
+              'owner_password': ownerPassword,
+            if (ownerFullName != null && ownerFullName.isNotEmpty)
+              'owner_full_name': ownerFullName,
+          },
+        )
+        as Map<String, dynamic>,
+  );
 
   Future<void> deleteMerchant(String id) async {
     await _api.delete('/merchants/$id');
@@ -264,10 +284,12 @@ class AdminRepository {
     String branchId,
     List<BranchHour> hours,
   ) async {
-    final list = await _api.put(
-      '/branches/$branchId/hours',
-      body: {'hours': hours.map((h) => h.toJson()).toList()},
-    ) as List;
+    final list =
+        await _api.put(
+              '/branches/$branchId/hours',
+              body: {'hours': hours.map((h) => h.toJson()).toList()},
+            )
+            as List;
     return list
         .map((e) => BranchHour.fromJson(e as Map<String, dynamic>))
         .toList();
