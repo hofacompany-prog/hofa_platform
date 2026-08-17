@@ -509,15 +509,23 @@ function doGet(e) {
  *  bị trùng id phần tử HTML. */
 function buildAppHtml_() {
   return `
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-  body { font-family: Arial, sans-serif; margin: 0; }
-  .tabbar { display: flex; position: sticky; top: 0; background: #fff; border-bottom: 1px solid #ddd; z-index: 10; }
-  .tabbar button {
-    flex: 1; padding: 14px 8px; border: none; background: #f4f4f4; font-weight: bold; font-size: 14px;
-    cursor: pointer; margin: 0; border-radius: 0;
+  :root {
+    --brand: #85C100; --brand-ink: #4c6e00; --accent: #FB8519;
+    --bg: #f6f8f1; --surface: #ffffff; --border: #e1e7d5;
+    --ink: #1b2013; --ink-muted: #6c7660;
   }
-  .tabbar button.active { background: #85C100; color: #fff; }
-  .tabpanel { padding: 12px; display: none; }
+  body { font-family: 'Montserrat', Arial, sans-serif; margin: 0; background: var(--bg); color: var(--ink); }
+  .tabbar { display: flex; position: sticky; top: 0; background: var(--surface); border-bottom: 1px solid var(--border); z-index: 10; }
+  .tabbar button {
+    flex: 1; padding: 14px 8px; border: none; background: none; font-weight: 600; font-size: 13px; color: var(--ink-muted);
+    cursor: pointer; margin: 0; border-radius: 0; border-bottom: 2px solid transparent; font-family: inherit;
+  }
+  .tabbar button.active { background: none; color: var(--brand-ink); border-bottom-color: var(--brand); }
+  .tabpanel { padding: 16px; display: none; }
   .tabpanel.active { display: block; }
 </style>
 <div class="tabbar">
@@ -1641,41 +1649,64 @@ function reverseGeocodeLatLng(lat, lng) {
 function buildStoreManagerHtml_(idPrefix) {
   idPrefix = idPrefix || '';
   return `
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-  #${idPrefix}root { font-family: Arial, sans-serif; font-size: 13px; }
-  #${idPrefix}root label { font-weight: bold; display: block; margin-top: 8px; }
-  #${idPrefix}root input[type=text], #${idPrefix}root textarea { width: 100%; padding: 6px; margin-top: 3px; box-sizing: border-box; }
+  :root {
+    --brand: #85C100; --brand-ink: #4c6e00; --accent: #FB8519;
+    --bg: #f6f8f1; --surface: #ffffff; --surface-alt: #eef2e5; --border: #e1e7d5;
+    --ink: #1b2013; --ink-muted: #6c7660; --ink-faint: #97a086; --danger: #d64545;
+    --radius: 10px; --radius-sm: 8px;
+  }
+  #${idPrefix}root { font-family: 'Montserrat', Arial, sans-serif; font-size: 13px; color: var(--ink); }
+  #${idPrefix}root label { font-weight: 600; display: block; margin-top: 10px; font-size: 12px; color: var(--ink-muted); }
+  #${idPrefix}root input[type=text], #${idPrefix}root textarea {
+    width: 100%; padding: 9px 11px; margin-top: 4px; box-sizing: border-box; font-family: inherit; font-size: 13px;
+    border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink);
+  }
   #${idPrefix}root textarea { resize: vertical; min-height: 60px; font-family: inherit; }
-  #${idPrefix}root select { width: 100%; padding: 6px; margin-top: 3px; box-sizing: border-box; }
+  #${idPrefix}root select {
+    width: 100%; padding: 9px 11px; margin-top: 4px; box-sizing: border-box; font-family: inherit; font-size: 13px;
+    border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink);
+  }
   #${idPrefix}root .row { display: flex; gap: 10px; align-items: flex-end; }
   #${idPrefix}root .row > div { flex: 1; }
-  #${idPrefix}root button { padding: 7px 14px; margin: 10px 6px 0 0; cursor: pointer; }
-  #${idPrefix}root .photo-tabbar { display: flex; gap: 6px; margin-top: 10px; }
-  #${idPrefix}root .photo-tabbar button { flex: 1; margin: 0; background: #eef; }
-  #${idPrefix}root .photo-tabbar button.photo-tab-active { background: #85C100; color: #fff; }
-  #${idPrefix}root .photo-panel { display: none; border: 1px solid #ccc; border-radius: 6px; padding: 10px; margin-top: 10px; background: #fafafa; }
+  #${idPrefix}root button {
+    padding: 9px 16px; margin: 10px 8px 0 0; cursor: pointer; font-family: inherit; font-weight: 600; font-size: 12.5px;
+    border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink);
+  }
+  #${idPrefix}btnSave { background: var(--brand); border-color: var(--brand); color: #fff; }
+  #${idPrefix}btnDelete { background: none; border-color: var(--danger); color: var(--danger); }
+  #${idPrefix}root .photo-tabbar { display: flex; gap: 6px; margin-top: 12px; }
+  #${idPrefix}root .photo-tabbar button { flex: 1; margin: 0; background: var(--surface); }
+  #${idPrefix}root .photo-tabbar button.photo-tab-active { background: var(--brand); border-color: var(--brand); color: #fff; }
+  #${idPrefix}root .photo-panel { display: none; border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; margin-top: 10px; background: var(--surface-alt); }
   #${idPrefix}root .photo-panel.photo-panel-active { display: block; }
   #${idPrefix}root .grid { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
   #${idPrefix}root .thumb { position: relative; width: 88px; height: 88px; }
-  #${idPrefix}root .thumb img { width: 100%; height: 100%; object-fit: cover; border-radius: 4px; border: 1px solid #ddd; cursor: pointer; }
-  #${idPrefix}root .thumb .del { position: absolute; top: -6px; right: -6px; background: #d33; color: #fff; border-radius: 50%; width: 18px; height: 18px; font-size: 11px; line-height: 18px; text-align: center; cursor: pointer; }
-  #${idPrefix}msg { color: #0a7d1f; font-weight: bold; margin-top: 8px; min-height: 18px; }
-  #${idPrefix}err { color: #c0392b; font-weight: bold; }
-  #${idPrefix}linkArea a { display: inline-block; margin-top: 3px; }
-  #${idPrefix}hoursArea { margin-top: 3px; border: 1px solid #ddd; border-radius: 6px; padding: 8px 10px; }
-  #${idPrefix}hoursArea .hoursDayBlock { padding: 4px 0; border-bottom: 1px solid #f0f0f0; }
+  #${idPrefix}root .thumb img { width: 100%; height: 100%; object-fit: cover; border-radius: var(--radius-sm); border: 1px solid var(--border); cursor: pointer; }
+  #${idPrefix}root .thumb .del { position: absolute; top: -6px; right: -6px; background: var(--danger); color: #fff; border-radius: 50%; width: 18px; height: 18px; font-size: 11px; line-height: 18px; text-align: center; cursor: pointer; }
+  #${idPrefix}msg { color: var(--brand-ink); font-weight: 600; margin-top: 8px; min-height: 18px; }
+  #${idPrefix}err { color: var(--danger); font-weight: 600; }
+  #${idPrefix}linkArea a { display: inline-block; margin-top: 3px; color: var(--brand-ink); }
+  #${idPrefix}hoursArea { margin-top: 4px; border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; background: var(--surface); }
+  #${idPrefix}hoursArea .hoursDayBlock { padding: 5px 0; border-bottom: 1px solid var(--border); }
   #${idPrefix}hoursArea .hoursDayBlock:last-of-type { border-bottom: none; }
   #${idPrefix}hoursArea .hoursRow { display: flex; align-items: center; gap: 8px; }
-  #${idPrefix}hoursArea .hoursRow input[type=checkbox] { width: auto; margin: 0; }
-  #${idPrefix}hoursArea .hoursLabel { width: 82px; flex: 0 0 auto; font-weight: normal; }
-  #${idPrefix}hoursArea input[type=time] { width: auto; padding: 4px; margin: 0; box-sizing: border-box; }
+  #${idPrefix}hoursArea .hoursRow input[type=checkbox] { width: auto; margin: 0; accent-color: var(--brand); }
+  #${idPrefix}hoursArea .hoursLabel { width: 82px; flex: 0 0 auto; font-weight: 500; color: var(--ink); font-size: 13px; }
+  #${idPrefix}hoursArea input[type=time] {
+    width: auto; padding: 5px 8px; margin: 0; box-sizing: border-box; font-family: inherit;
+    border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink);
+  }
   #${idPrefix}hoursArea .hoursWindows { margin-left: 90px; margin-top: 2px; }
   #${idPrefix}hoursArea .hoursWindowRow { display: flex; align-items: center; gap: 8px; padding: 2px 0; }
-  #${idPrefix}hoursArea .hoursRemoveWindow { margin: 0; padding: 2px 7px; }
-  #${idPrefix}hoursArea .hoursAddWindow { margin: 2px 0 0; padding: 3px 8px; font-size: 12px; }
-  #${idPrefix}hoursArea .hoursBulkRow { display: flex; align-items: center; gap: 8px; margin-top: 8px; padding-top: 8px; border-top: 1px dashed #ccc; flex-wrap: wrap; }
-  #${idPrefix}hoursArea .hoursBulkRow button { margin: 0; padding: 5px 10px; }
-  #${idPrefix}hoursArea .hoursHint { font-size: 11px; color: #888; margin-top: 6px; }
+  #${idPrefix}hoursArea .hoursRemoveWindow { margin: 0; padding: 3px 8px; }
+  #${idPrefix}hoursArea .hoursAddWindow { margin: 2px 0 0; padding: 4px 10px; font-size: 11.5px; background: var(--surface-alt); }
+  #${idPrefix}hoursArea .hoursBulkRow { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border); flex-wrap: wrap; }
+  #${idPrefix}hoursArea .hoursBulkRow button { margin: 0; padding: 6px 12px; }
+  #${idPrefix}hoursArea .hoursHint { font-size: 11px; color: var(--ink-faint); margin-top: 8px; }
   #${idPrefix}mapPasteRow { display: flex; gap: 8px; margin-top: 8px; }
   #${idPrefix}mapPasteRow input[type=text] { flex: 1; margin-top: 0; }
   #${idPrefix}mapPasteRow button { margin: 0; }
@@ -2551,33 +2582,48 @@ function buildStoreManagerHtml_(idPrefix) {
 function buildProductManagerHtml_(idPrefix) {
   idPrefix = idPrefix || '';
   return `
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-  #${idPrefix}root { font-family: Arial, sans-serif; font-size: 13px; }
-  #${idPrefix}root label { font-weight: bold; display: block; margin-top: 8px; }
-  #${idPrefix}root input[type=text], #${idPrefix}root textarea, #${idPrefix}root select { width: 100%; padding: 6px; margin-top: 3px; box-sizing: border-box; }
+  :root {
+    --brand: #85C100; --brand-ink: #4c6e00; --accent: #FB8519;
+    --bg: #f6f8f1; --surface: #ffffff; --surface-alt: #eef2e5; --border: #e1e7d5;
+    --ink: #1b2013; --ink-muted: #6c7660; --ink-faint: #97a086; --danger: #d64545;
+    --radius: 10px; --radius-sm: 8px;
+  }
+  #${idPrefix}root { font-family: 'Montserrat', Arial, sans-serif; font-size: 13px; color: var(--ink); }
+  #${idPrefix}root label { font-weight: 600; display: block; margin-top: 10px; font-size: 12px; color: var(--ink-muted); }
+  #${idPrefix}root input[type=text], #${idPrefix}root textarea, #${idPrefix}root select {
+    width: 100%; padding: 9px 11px; margin-top: 4px; box-sizing: border-box; font-family: inherit; font-size: 13px;
+    border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink);
+  }
   #${idPrefix}root textarea { resize: vertical; min-height: 50px; font-family: inherit; }
-  #${idPrefix}root button { padding: 7px 14px; margin: 10px 6px 0 0; cursor: pointer; }
-  #${idPrefix}productList { max-height: 150px; overflow: auto; border: 1px solid #ccc; border-radius: 4px; margin-top: 4px; }
-  #${idPrefix}productList div { padding: 6px; cursor: pointer; border-bottom: 1px solid #eee; }
-  #${idPrefix}productList div:hover { background: #f0f4ff; }
+  #${idPrefix}root button {
+    padding: 9px 16px; margin: 10px 8px 0 0; cursor: pointer; font-family: inherit; font-weight: 600; font-size: 12.5px;
+    border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink);
+  }
+  #${idPrefix}productList { max-height: 150px; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); margin-top: 4px; background: var(--surface); }
+  #${idPrefix}productList div { padding: 8px 10px; cursor: pointer; border-bottom: 1px solid var(--border); }
+  #${idPrefix}productList div:hover { background: var(--surface-alt); }
   #${idPrefix}root .imgRow { display: flex; gap: 8px; align-items: center; margin-top: 3px; }
-  #${idPrefix}pImgPreview { width: 56px; height: 56px; object-fit: cover; border: 1px solid #ccc; border-radius: 4px; display: none; }
-  #${idPrefix}root .photo-panel { display: none; border: 1px solid #ccc; border-radius: 6px; padding: 10px; margin-top: 10px; background: #fafafa; }
+  #${idPrefix}pImgPreview { width: 56px; height: 56px; object-fit: cover; border: 1px solid var(--border); border-radius: var(--radius-sm); display: none; }
+  #${idPrefix}root .photo-panel { display: none; border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; margin-top: 10px; background: var(--surface-alt); }
   #${idPrefix}root .grid { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
   #${idPrefix}root .thumb { width: 88px; height: 88px; }
-  #${idPrefix}root .thumb img { width: 100%; height: 100%; object-fit: cover; border-radius: 4px; border: 1px solid #ddd; cursor: pointer; }
-  #${idPrefix}toppingGroupBox { max-height: 130px; overflow: auto; border: 1px solid #ccc; border-radius: 4px; margin-top: 3px; padding: 6px; }
-  #${idPrefix}toppingGroupBox label { display: flex; align-items: center; gap: 6px; font-weight: normal; margin: 4px 0; }
-  #${idPrefix}toppingGroupBox label input { width: auto; margin: 0; }
+  #${idPrefix}root .thumb img { width: 100%; height: 100%; object-fit: cover; border-radius: var(--radius-sm); border: 1px solid var(--border); cursor: pointer; }
+  #${idPrefix}toppingGroupBox { max-height: 130px; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); margin-top: 4px; padding: 8px; background: var(--surface); }
+  #${idPrefix}toppingGroupBox label { display: flex; align-items: center; gap: 6px; font-weight: 400; margin: 4px 0; color: var(--ink); }
+  #${idPrefix}toppingGroupBox label input { width: auto; margin: 0; accent-color: var(--brand); }
   #${idPrefix}root .catRow select { width: auto; flex: 1; }
-  #${idPrefix}variantList { max-height: 160px; overflow: auto; border: 1px solid #ccc; border-radius: 4px; margin-top: 4px; }
-  #${idPrefix}variantList .variantRow { display: flex; align-items: center; justify-content: space-between; padding: 6px 8px; border-bottom: 1px solid #eee; cursor: pointer; }
-  #${idPrefix}variantList .variantRow:hover { background: #f0f4ff; }
-  #${idPrefix}variantList .variantDel { color: #c0392b; font-weight: bold; padding: 0 6px; }
-  #${idPrefix}variantEditor .checkLabel { display: flex; align-items: center; gap: 4px; font-weight: normal; margin: 0; }
-  #${idPrefix}variantEditor .checkLabel input { width: auto; margin: 0; }
-  #${idPrefix}msg { color: #0a7d1f; font-weight: bold; margin-top: 8px; min-height: 18px; }
-  #${idPrefix}err { color: #c0392b; font-weight: bold; }
+  #${idPrefix}variantList { max-height: 160px; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); margin-top: 4px; background: var(--surface); }
+  #${idPrefix}variantList .variantRow { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; border-bottom: 1px solid var(--border); cursor: pointer; }
+  #${idPrefix}variantList .variantRow:hover { background: var(--surface-alt); }
+  #${idPrefix}variantList .variantDel { color: var(--danger); font-weight: 600; padding: 0 6px; }
+  #${idPrefix}variantEditor .checkLabel { display: flex; align-items: center; gap: 4px; font-weight: 400; margin: 0; color: var(--ink); }
+  #${idPrefix}variantEditor .checkLabel input { width: auto; margin: 0; accent-color: var(--brand); }
+  #${idPrefix}msg { color: var(--brand-ink); font-weight: 600; margin-top: 8px; min-height: 18px; }
+  #${idPrefix}err { color: var(--danger); font-weight: 600; }
 </style>
 
 <div id="${idPrefix}root">
@@ -3072,21 +3118,36 @@ function buildProductManagerHtml_(idPrefix) {
 function buildToppingManagerHtml_(idPrefix) {
   idPrefix = idPrefix || '';
   return `
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-  #${idPrefix}root { font-family: Arial, sans-serif; font-size: 13px; }
-  #${idPrefix}root label { font-weight: bold; display: block; margin-top: 8px; }
-  #${idPrefix}root input[type=text], #${idPrefix}root input[type=number], #${idPrefix}root select { width: 100%; padding: 6px; margin-top: 3px; box-sizing: border-box; }
-  #${idPrefix}root button { padding: 7px 14px; margin: 10px 6px 0 0; cursor: pointer; }
-  #${idPrefix}toppingList { max-height: 150px; overflow: auto; border: 1px solid #ccc; border-radius: 4px; margin-top: 4px; }
-  #${idPrefix}toppingList div { padding: 6px; cursor: pointer; border-bottom: 1px solid #eee; }
-  #${idPrefix}toppingList div:hover { background: #f0f4ff; }
-  #${idPrefix}toppingList div.groupHeader { font-weight: bold; background: #f5f5f5; cursor: default; }
-  #${idPrefix}toppingList div.groupHeader:hover { background: #f5f5f5; }
+  :root {
+    --brand: #85C100; --brand-ink: #4c6e00; --accent: #FB8519;
+    --bg: #f6f8f1; --surface: #ffffff; --surface-alt: #eef2e5; --border: #e1e7d5;
+    --ink: #1b2013; --ink-muted: #6c7660; --ink-faint: #97a086; --danger: #d64545;
+    --radius: 10px; --radius-sm: 8px;
+  }
+  #${idPrefix}root { font-family: 'Montserrat', Arial, sans-serif; font-size: 13px; color: var(--ink); }
+  #${idPrefix}root label { font-weight: 600; display: block; margin-top: 10px; font-size: 12px; color: var(--ink-muted); }
+  #${idPrefix}root input[type=text], #${idPrefix}root input[type=number], #${idPrefix}root select {
+    width: 100%; padding: 9px 11px; margin-top: 4px; box-sizing: border-box; font-family: inherit; font-size: 13px;
+    border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink);
+  }
+  #${idPrefix}root button {
+    padding: 9px 16px; margin: 10px 8px 0 0; cursor: pointer; font-family: inherit; font-weight: 600; font-size: 12.5px;
+    border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink);
+  }
+  #${idPrefix}toppingList { max-height: 150px; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); margin-top: 4px; background: var(--surface); }
+  #${idPrefix}toppingList div { padding: 8px 10px; cursor: pointer; border-bottom: 1px solid var(--border); }
+  #${idPrefix}toppingList div:hover { background: var(--surface-alt); }
+  #${idPrefix}toppingList div.groupHeader { font-weight: 600; background: var(--surface-alt); cursor: default; color: var(--ink); }
+  #${idPrefix}toppingList div.groupHeader:hover { background: var(--surface-alt); }
   #${idPrefix}root .checkRow { display: flex; align-items: center; gap: 6px; margin-top: 10px; }
-  #${idPrefix}root .checkRow label { margin: 0; font-weight: normal; }
-  #${idPrefix}root .checkRow input { width: auto; margin: 0; }
-  #${idPrefix}msg { color: #0a7d1f; font-weight: bold; margin-top: 8px; min-height: 18px; }
-  #${idPrefix}err { color: #c0392b; font-weight: bold; }
+  #${idPrefix}root .checkRow label { margin: 0; font-weight: 400; color: var(--ink); }
+  #${idPrefix}root .checkRow input { width: auto; margin: 0; accent-color: var(--brand); }
+  #${idPrefix}msg { color: var(--brand-ink); font-weight: 600; margin-top: 8px; min-height: 18px; }
+  #${idPrefix}err { color: var(--danger); font-weight: 600; }
 </style>
 
 <div id="${idPrefix}root">
@@ -3288,15 +3349,43 @@ function buildToppingManagerHtml_(idPrefix) {
 function buildDbSyncManagerHtml_(idPrefix) {
   idPrefix = idPrefix || '';
   return `
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-  #${idPrefix}root { font-family: Arial, sans-serif; font-size: 13px; }
-  #${idPrefix}root label { font-weight: bold; display: block; margin-top: 8px; }
-  #${idPrefix}root select { width: 100%; padding: 6px; margin-top: 3px; box-sizing: border-box; }
-  #${idPrefix}root button { padding: 7px 14px; margin: 10px 6px 0 0; cursor: pointer; }
+  :root {
+    --brand: #85C100; --brand-ink: #4c6e00; --accent: #FB8519;
+    --bg: #f6f8f1; --surface: #ffffff; --surface-alt: #eef2e5; --border: #e1e7d5;
+    --ink: #1b2013; --ink-muted: #6c7660; --ink-faint: #97a086; --danger: #d64545; --danger-bg: #fbeaea;
+    --radius: 10px; --radius-sm: 8px;
+  }
+  #${idPrefix}root { font-family: 'Montserrat', Arial, sans-serif; font-size: 13px; color: var(--ink); }
+  #${idPrefix}root label { font-weight: 600; display: block; margin-top: 10px; font-size: 12px; color: var(--ink-muted); }
+  #${idPrefix}root select {
+    width: 100%; padding: 9px 11px; margin-top: 4px; box-sizing: border-box; font-family: inherit; font-size: 13px;
+    border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink);
+  }
+  #${idPrefix}root button {
+    padding: 9px 16px; margin: 10px 8px 0 0; cursor: pointer; font-family: inherit; font-weight: 600; font-size: 12.5px;
+    border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink);
+  }
   #${idPrefix}root button:disabled { opacity: 0.5; cursor: not-allowed; }
-  #${idPrefix}diffBox { white-space: pre-wrap; font-family: 'Courier New', monospace; font-size: 12px; max-height: 320px; overflow: auto; border: 1px solid #ccc; border-radius: 4px; padding: 10px; margin-top: 8px; background: #fafafa; }
-  #${idPrefix}msg { color: #0a7d1f; font-weight: bold; margin-top: 8px; min-height: 18px; }
-  #${idPrefix}err { color: #c0392b; font-weight: bold; }
+  /* 2 nút hành động thật (đồng bộ lên hệ thống, xoá cứng) tô đậm theo đúng mức độ — còn 2 nút
+   * "Kiểm tra" chỉ xem trước, giữ kiểu viền trung tính để không lẫn với hành động thật. */
+  #${idPrefix}btnApply { background: var(--brand); border-color: var(--brand); color: #fff; }
+  #${idPrefix}btnDeleteOrphans { background: var(--danger); border-color: var(--danger); color: #fff; }
+  #${idPrefix}diffBox {
+    white-space: pre-wrap; font-family: 'Courier New', monospace; font-size: 12px; max-height: 320px; overflow: auto;
+    border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; margin-top: 8px; background: var(--surface-alt); color: var(--ink);
+  }
+  #${idPrefix}msg { color: var(--brand-ink); font-weight: 600; margin-top: 8px; min-height: 18px; }
+  #${idPrefix}err { color: var(--danger); font-weight: 600; }
+  #${idPrefix}orphanBox {
+    white-space: pre-wrap; font-family: 'Courier New', monospace; font-size: 12px; max-height: 200px; overflow: auto;
+    border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; margin-top: 8px; background: var(--danger-bg); color: var(--ink);
+  }
+  #${idPrefix}orphanMsg { color: var(--brand-ink); font-weight: 600; margin-top: 8px; min-height: 18px; }
+  #${idPrefix}orphanErr { color: var(--danger); font-weight: 600; }
 </style>
 
 <div id="${idPrefix}root">
@@ -3319,7 +3408,7 @@ function buildDbSyncManagerHtml_(idPrefix) {
   <div id="${idPrefix}msg"></div>
   <div id="${idPrefix}err"></div>
 
-  <hr style="margin-top:20px; border:none; border-top:1px solid #ddd;">
+  <hr style="margin-top:20px; border:none; border-top:1px solid var(--border);">
 
   <label>Cửa hàng đã bị xoá hẳn khỏi sheet MERCHANT</label>
   <div style="color:#888; font-size:12px;">
@@ -3332,9 +3421,9 @@ function buildDbSyncManagerHtml_(idPrefix) {
     <button id="${idPrefix}btnCheckOrphans">🔍 Kiểm tra cửa hàng cần xoá</button>
     <button id="${idPrefix}btnDeleteOrphans" disabled>🗑️ Xoá cứng các cửa hàng này</button>
   </div>
-  <div id="${idPrefix}orphanBox" style="white-space:pre-wrap; font-family:'Courier New',monospace; font-size:12px; max-height:200px; overflow:auto; border:1px solid #ccc; border-radius:4px; padding:10px; margin-top:8px; background:#fff5f5;">Bấm "Kiểm tra cửa hàng cần xoá" để xem.</div>
-  <div id="${idPrefix}orphanMsg" style="color:#0a7d1f; font-weight:bold; margin-top:8px; min-height:18px;"></div>
-  <div id="${idPrefix}orphanErr" style="color:#c0392b; font-weight:bold;"></div>
+  <div id="${idPrefix}orphanBox">Bấm "Kiểm tra cửa hàng cần xoá" để xem.</div>
+  <div id="${idPrefix}orphanMsg"></div>
+  <div id="${idPrefix}orphanErr"></div>
 </div>
 
 <script>
