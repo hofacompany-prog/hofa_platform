@@ -181,81 +181,71 @@ class _MerchantsScreenState extends ConsumerState<MerchantsScreen> {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final searchField = TextField(
-                  controller: _searchCtrl,
-                  decoration: InputDecoration(
-                    hintText: 'Tìm theo tên cửa hàng...',
-                    prefixIcon: const Icon(Icons.search),
-                    suffixIcon: _searchCtrl.text.isEmpty
-                        ? null
-                        : IconButton(
-                            tooltip: 'Xoá tìm kiếm',
-                            icon: const Icon(Icons.close, size: 18),
-                            onPressed: _clearSearch,
-                          ),
-                    border: const OutlineInputBorder(),
-                    isDense: true,
+            // Luôn giữ đúng 1 hàng (không xuống dòng) — hết chỗ thì FittedBox tự thu nhỏ cả
+            // cụm lại (chữ + control nhỏ theo cùng tỉ lệ) thay vì tràn ngang hay đổi bố cục.
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              alignment: Alignment.centerLeft,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SizedBox(
+                    width: 220,
+                    child: TextField(
+                      controller: _searchCtrl,
+                      decoration: InputDecoration(
+                        hintText: 'Tìm theo tên cửa hàng...',
+                        prefixIcon: const Icon(Icons.search),
+                        suffixIcon: _searchCtrl.text.isEmpty
+                            ? null
+                            : IconButton(
+                                tooltip: 'Xoá tìm kiếm',
+                                icon: const Icon(Icons.close, size: 18),
+                                onPressed: _clearSearch,
+                              ),
+                        border: const OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      onChanged: _onSearchChanged,
+                    ),
                   ),
-                  onChanged: _onSearchChanged,
-                );
-                final typeDropdown = DropdownButton<String>(
-                  value: _typeFilter,
-                  onChanged: (v) => setState(() => _typeFilter = v ?? 'all'),
-                  items: [
-                    const DropdownMenuItem(
-                      value: 'all',
-                      child: Text('Mọi loại cửa hàng'),
-                    ),
-                    ...merchantTypeLabels.entries.map(
-                      (e) =>
-                          DropdownMenuItem(value: e.key, child: Text(e.value)),
-                    ),
-                  ],
-                );
-                final statusDropdown = DropdownButton<String>(
-                  value: _statusFilter,
-                  onChanged: (v) => setState(() => _statusFilter = v ?? 'all'),
-                  items: [
-                    const DropdownMenuItem(
-                      value: 'all',
-                      child: Text('Mọi trạng thái'),
-                    ),
-                    ...merchantStatusLabels.entries.map(
-                      (e) =>
-                          DropdownMenuItem(value: e.key, child: Text(e.value)),
-                    ),
-                  ],
-                );
-                // Dưới 640px, ô tìm kiếm + 2 dropdown không đủ chỗ nằm chung 1 hàng (Row
-                // không tự xuống dòng, gây tràn ngang trên điện thoại) — xếp ô tìm kiếm
-                // riêng 1 hàng, 2 dropdown xuống hàng dưới trong Wrap để tự ngắt dòng tiếp
-                // nếu vẫn chưa đủ chỗ.
-                if (constraints.maxWidth < 640) {
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      searchField,
-                      const SizedBox(height: 12),
-                      Wrap(
-                        spacing: 16,
-                        runSpacing: 8,
-                        children: [typeDropdown, statusDropdown],
+                  const SizedBox(width: 16),
+                  DropdownButton<String>(
+                    value: _typeFilter,
+                    onChanged: (v) => setState(() => _typeFilter = v ?? 'all'),
+                    items: [
+                      const DropdownMenuItem(
+                        value: 'all',
+                        child: Text('Mọi loại cửa hàng'),
+                      ),
+                      ...merchantTypeLabels.entries.map(
+                        (e) => DropdownMenuItem(
+                          value: e.key,
+                          child: Text(e.value),
+                        ),
                       ),
                     ],
-                  );
-                }
-                return Row(
-                  children: [
-                    Expanded(child: searchField),
-                    const SizedBox(width: 16),
-                    typeDropdown,
-                    const SizedBox(width: 16),
-                    statusDropdown,
-                  ],
-                );
-              },
+                  ),
+                  const SizedBox(width: 16),
+                  DropdownButton<String>(
+                    value: _statusFilter,
+                    onChanged: (v) =>
+                        setState(() => _statusFilter = v ?? 'all'),
+                    items: [
+                      const DropdownMenuItem(
+                        value: 'all',
+                        child: Text('Mọi trạng thái'),
+                      ),
+                      ...merchantStatusLabels.entries.map(
+                        (e) => DropdownMenuItem(
+                          value: e.key,
+                          child: Text(e.value),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
           if (_busy) const LinearProgressIndicator(),
