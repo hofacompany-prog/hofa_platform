@@ -4,6 +4,12 @@ class Env {
   static const supabaseUrl = String.fromEnvironment('SUPABASE_URL');
   static const supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
   static const apiBaseUrl = String.fromEnvironment('API_BASE_URL');
+
+  /// Gốc URL app Khách đã deploy — dùng để dựng link chia sẻ (vd chia sẻ 1 cửa hàng, xem
+  /// merchant_detail_screen.dart). KHÔNG lấy từ Uri.base vì app này còn có bản Android native
+  /// (không có "URL trình duyệt" để đọc) — đổi hằng số này nếu sau này gắn domain riêng
+  /// (hofa.com.vn) thay vì domain *.workers.dev mặc định của Cloudflare.
+  static const webBaseUrl = 'https://hofa-customer.hofacompany.workers.dev';
   /// Được set bằng --dart-define=APP_VERSION=<git hash> trong build_web.sh, không
   /// khai báo trong env.json — mặc định '0.1.0+1' chỉ dùng khi `flutter run` lúc dev.
   static const appVersion = String.fromEnvironment(

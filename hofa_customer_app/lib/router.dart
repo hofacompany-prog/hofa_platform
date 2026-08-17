@@ -43,19 +43,35 @@ final routerProvider = Provider<GoRouter>((ref) {
       Supabase.instance.client.auth.onAuthStateChange,
     ),
     redirect: (context, state) async {
-      // Cho lướt tự do ở trang chủ ('/') dù chưa cài PWA — chỉ chặn bắt cài khi bấm sang BẤT KỲ
-      // màn nào khác (kể cả đăng nhập), để khách xem thử cửa hàng/sản phẩm trước khi bị yêu cầu
-      // cài. Chỉ áp dụng khi trình duyệt thực sự có cách cài (Android/Chrome hoặc bất kỳ trình
-      // duyệt nào trên iOS), desktop không hỗ trợ (Firefox, Safari desktop...) thì không bị
+      // Cùng triết lý guestProtectedPaths bên dưới (login) — cho lướt/chọn món TỰ DO ở hầu hết
+      // app (trang chủ, chi tiết cửa hàng/sản phẩm — mở được cả từ link chia sẻ, giỏ hàng, danh
+      // mục, đặt trước...) dù chưa cài PWA, chỉ chặn bắt cài đúng lúc bấm sang màn THẬT SỰ cần
+      // tài khoản (đặt hàng, đơn hàng, hồ sơ...). Trải nghiệm CHÍNH vẫn là point-of-use
+      // (lib/core/require_pwa_install.dart, gọi TRƯỚC requireLogin ở cart_screen.dart/
+      // product_detail_screen.dart) — nhánh dưới đây chỉ là lưới an toàn cho ai gõ thẳng URL vào
+      // các màn đó. Chỉ áp dụng khi trình duyệt thực sự có cách cài (Android/Chrome hoặc bất kỳ
+      // trình duyệt nào trên iOS), desktop không hỗ trợ (Firefox, Safari desktop...) thì không bị
       // chặn. Đã từng cài (appinstalled, xem PwaInstallService.wasInstalledPreviously) mà vẫn
       // đang mở bằng trình duyệt thường (chưa mở từ icon màn hình chính) thì cũng vào màn này —
       // InstallPwaScreen tự đổi sang thông báo "mở app ngoài màn hình" thay vì hỏi cài lại.
+      const pwaProtectedPaths = [
+        '/checkout',
+        '/orders',
+        '/profile',
+        '/notifications',
+        '/favorites',
+      ];
+      final isPwaProtected = pwaProtectedPaths.any(
+        (p) =>
+            state.matchedLocation == p ||
+            state.matchedLocation.startsWith('$p/'),
+      );
       final needsInstall =
           !PwaInstallService.isStandalone() &&
           (PwaInstallService.wasInstalledPreviously() ||
               PwaInstallService.hasDeferredPrompt() ||
               PwaInstallService.isIOS());
-      if (needsInstall && state.matchedLocation != '/') {
+      if (needsInstall && isPwaProtected) {
         return state.matchedLocation == '/install-pwa' ? null : '/install-pwa';
       }
       if (!needsInstall && state.matchedLocation == '/install-pwa') return '/';

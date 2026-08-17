@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../core/env.dart';
 import '../../core/geo.dart';
 import '../../core/maps_launcher.dart';
 import '../../models/category.dart';
@@ -171,7 +173,27 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
           data: (m) => Text(m.name),
           orElse: () => const Text('Cửa hàng'),
         ),
-        actions: [MerchantFavoriteButton(merchantId: merchantId)],
+        actions: [
+          IconButton(
+            tooltip: 'Chia sẻ cửa hàng',
+            icon: const Icon(Icons.share_outlined),
+            onPressed: () {
+              final name = merchantAsync.maybeWhen(
+                data: (m) => m.name,
+                orElse: () => 'cửa hàng này',
+              );
+              SharePlus.instance.share(
+                ShareParams(
+                  text:
+                      'Ghé "$name" trên HOFA nè: '
+                      '${Env.webBaseUrl}/#/merchants/$merchantId',
+                  subject: name,
+                ),
+              );
+            },
+          ),
+          MerchantFavoriteButton(merchantId: merchantId),
+        ],
       ),
       body: merchantAsync.when(
         loading: () => const Center(child: CircularProgressIndicator()),
