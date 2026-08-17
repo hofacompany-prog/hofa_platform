@@ -135,6 +135,10 @@ class _MerchantsScreenState extends ConsumerState<MerchantsScreen> {
     final merchantsAsync = ref.watch(merchantsProvider);
     final theme = Theme.of(context);
 
+    // Dưới ngưỡng này, AppBar không đủ chỗ cho tiêu đề + 3 nút có nhãn chữ (tràn ngang trên
+    // điện thoại) — thu 2 nút phụ về icon-only, khớp cách admin_shell.dart quyết định
+    // sáng/tối/gọn theo cùng 1 ngưỡng bề rộng.
+    final isNarrow = MediaQuery.of(context).size.width < 700;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Cửa hàng'),
@@ -145,17 +149,31 @@ class _MerchantsScreenState extends ConsumerState<MerchantsScreen> {
             onPressed: () => ref.invalidate(merchantsProvider),
           ),
           const SizedBox(width: 8),
-          OutlinedButton.icon(
-            onPressed: () => context.push('/merchants/featured-home'),
-            icon: const Icon(Icons.home_outlined),
-            label: const Text('Trang chủ nổi bật'),
-          ),
+          if (isNarrow)
+            IconButton(
+              tooltip: 'Trang chủ nổi bật',
+              onPressed: () => context.push('/merchants/featured-home'),
+              icon: const Icon(Icons.home_outlined),
+            )
+          else
+            OutlinedButton.icon(
+              onPressed: () => context.push('/merchants/featured-home'),
+              icon: const Icon(Icons.home_outlined),
+              label: const Text('Trang chủ nổi bật'),
+            ),
           const SizedBox(width: 8),
-          FilledButton.icon(
-            onPressed: () => context.push('/merchants/new'),
-            icon: const Icon(Icons.add),
-            label: const Text('Tạo cửa hàng'),
-          ),
+          if (isNarrow)
+            IconButton.filled(
+              tooltip: 'Tạo cửa hàng',
+              onPressed: () => context.push('/merchants/new'),
+              icon: const Icon(Icons.add),
+            )
+          else
+            FilledButton.icon(
+              onPressed: () => context.push('/merchants/new'),
+              icon: const Icon(Icons.add),
+              label: const Text('Tạo cửa hàng'),
+            ),
           const SizedBox(width: 16),
         ],
       ),
@@ -163,29 +181,26 @@ class _MerchantsScreenState extends ConsumerState<MerchantsScreen> {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _searchCtrl,
-                    decoration: InputDecoration(
-                      hintText: 'Tìm theo tên cửa hàng...',
-                      prefixIcon: const Icon(Icons.search),
-                      suffixIcon: _searchCtrl.text.isEmpty
-                          ? null
-                          : IconButton(
-                              tooltip: 'Xoá tìm kiếm',
-                              icon: const Icon(Icons.close, size: 18),
-                              onPressed: _clearSearch,
-                            ),
-                      border: const OutlineInputBorder(),
-                      isDense: true,
-                    ),
-                    onChanged: _onSearchChanged,
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final searchField = TextField(
+                  controller: _searchCtrl,
+                  decoration: InputDecoration(
+                    hintText: 'Tìm theo tên cửa hàng...',
+                    prefixIcon: const Icon(Icons.search),
+                    suffixIcon: _searchCtrl.text.isEmpty
+                        ? null
+                        : IconButton(
+                            tooltip: 'Xoá tìm kiếm',
+                            icon: const Icon(Icons.close, size: 18),
+                            onPressed: _clearSearch,
+                          ),
+                    border: const OutlineInputBorder(),
+                    isDense: true,
                   ),
-                ),
-                const SizedBox(width: 16),
-                DropdownButton<String>(
+                  onChanged: _onSearchChanged,
+                );
+                final typeDropdown = DropdownButton<String>(
                   value: _typeFilter,
                   onChanged: (v) => setState(() => _typeFilter = v ?? 'all'),
                   items: [
@@ -198,9 +213,8 @@ class _MerchantsScreenState extends ConsumerState<MerchantsScreen> {
                           DropdownMenuItem(value: e.key, child: Text(e.value)),
                     ),
                   ],
-                ),
-                const SizedBox(width: 16),
-                DropdownButton<String>(
+                );
+                final statusDropdown = DropdownButton<String>(
                   value: _statusFilter,
                   onChanged: (v) => setState(() => _statusFilter = v ?? 'all'),
                   items: [
@@ -213,8 +227,35 @@ class _MerchantsScreenState extends ConsumerState<MerchantsScreen> {
                           DropdownMenuItem(value: e.key, child: Text(e.value)),
                     ),
                   ],
-                ),
-              ],
+                );
+                // Dưới 640px, ô tìm kiếm + 2 dropdown không đủ chỗ nằm chung 1 hàng (Row
+                // không tự xuống dòng, gây tràn ngang trên điện thoại) — xếp ô tìm kiếm
+                // riêng 1 hàng, 2 dropdown xuống hàng dưới trong Wrap để tự ngắt dòng tiếp
+                // nếu vẫn chưa đủ chỗ.
+                if (constraints.maxWidth < 640) {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      searchField,
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 16,
+                        runSpacing: 8,
+                        children: [typeDropdown, statusDropdown],
+                      ),
+                    ],
+                  );
+                }
+                return Row(
+                  children: [
+                    Expanded(child: searchField),
+                    const SizedBox(width: 16),
+                    typeDropdown,
+                    const SizedBox(width: 16),
+                    statusDropdown,
+                  ],
+                );
+              },
             ),
           ),
           if (_busy) const LinearProgressIndicator(),
