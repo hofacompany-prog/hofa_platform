@@ -4,6 +4,9 @@
     "start_url": ".",
     "scope": "/",
     "display": "standalone",
+    "launch_handler": {
+        "client_mode": "navigate-existing"
+    },
     "background_color": "#FFFFFF",
     "theme_color": "#85C100",
     "description": "HOFA — Đặt hàng từ cửa hàng gần bạn, giao nhanh tận nơi.",
