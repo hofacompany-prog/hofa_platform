@@ -361,82 +361,100 @@ class _MerchantsScreenState extends ConsumerState<MerchantsScreen> {
                                 ],
                               ),
                               const SizedBox(height: 8),
-                              Wrap(
-                                alignment: WrapAlignment.end,
-                                crossAxisAlignment: WrapCrossAlignment.center,
-                                spacing: 8,
-                                runSpacing: 4,
-                                children: [
-                                  Chip(
-                                    label: Text(
-                                      merchantTypeLabels[m.merchantType] ??
-                                          m.merchantType,
-                                    ),
-                                    backgroundColor: theme.colorScheme.secondary
-                                        .withValues(alpha: 0.12),
-                                    labelStyle: TextStyle(
-                                      color: theme.colorScheme.secondary,
-                                    ),
-                                    visualDensity: VisualDensity.compact,
-                                  ),
-                                  Chip(
-                                    label: Text(
-                                      merchantStatusLabels[m.status] ??
-                                          m.status,
-                                    ),
-                                    backgroundColor: color.withValues(
-                                      alpha: 0.12,
-                                    ),
-                                    side: BorderSide(
-                                      color: color.withValues(alpha: 0.4),
-                                    ),
-                                    visualDensity: VisualDensity.compact,
-                                  ),
-                                  if (m.status == 'pending_review') ...[
-                                    FilledButton(
-                                      onPressed: _busy
-                                          ? null
-                                          : () => _review(m, true),
-                                      child: const Text('Duyệt'),
-                                    ),
-                                    OutlinedButton(
-                                      onPressed: _busy
-                                          ? null
-                                          : () => _review(m, false),
-                                      style: OutlinedButton.styleFrom(
-                                        foregroundColor:
-                                            theme.colorScheme.error,
+                              // Luôn giữ đúng 1 hàng (nhãn loại/trạng thái bên trái, nút hành
+                              // động bên phải) — hết chỗ thì FittedBox tự thu nhỏ cả cụm thay
+                              // vì Wrap cũ xuống dòng, đỡ đẩy card cao thấp lộn xộn giữa các
+                              // dòng khác nhau trong danh sách.
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Chip(
+                                        label: Text(
+                                          merchantTypeLabels[m.merchantType] ??
+                                              m.merchantType,
+                                        ),
+                                        backgroundColor: theme
+                                            .colorScheme
+                                            .secondary
+                                            .withValues(alpha: 0.12),
+                                        labelStyle: TextStyle(
+                                          color: theme.colorScheme.secondary,
+                                        ),
+                                        visualDensity: VisualDensity.compact,
                                       ),
-                                      child: const Text('Từ chối'),
-                                    ),
-                                  ] else if (m.status == 'active')
-                                    OutlinedButton(
-                                      onPressed: _busy
-                                          ? null
-                                          : () => _run(
-                                              () => ref
-                                                  .read(adminRepoProvider)
-                                                  .setMerchantPaused(m.id, true)
-                                                  .then((_) {}),
-                                            ),
-                                      child: const Text('Tạm dừng'),
-                                    )
-                                  else if (m.status == 'paused')
-                                    FilledButton.tonal(
-                                      onPressed: _busy
-                                          ? null
-                                          : () => _run(
-                                              () => ref
-                                                  .read(adminRepoProvider)
-                                                  .setMerchantPaused(
-                                                    m.id,
-                                                    false,
-                                                  )
-                                                  .then((_) {}),
-                                            ),
-                                      child: const Text('Mở lại'),
-                                    ),
-                                ],
+                                      const SizedBox(width: 8),
+                                      Chip(
+                                        label: Text(
+                                          merchantStatusLabels[m.status] ??
+                                              m.status,
+                                        ),
+                                        backgroundColor: color.withValues(
+                                          alpha: 0.12,
+                                        ),
+                                        side: BorderSide(
+                                          color: color.withValues(alpha: 0.4),
+                                        ),
+                                        visualDensity: VisualDensity.compact,
+                                      ),
+                                      if (m.status == 'pending_review') ...[
+                                        const SizedBox(width: 8),
+                                        FilledButton(
+                                          onPressed: _busy
+                                              ? null
+                                              : () => _review(m, true),
+                                          child: const Text('Duyệt'),
+                                        ),
+                                        const SizedBox(width: 8),
+                                        OutlinedButton(
+                                          onPressed: _busy
+                                              ? null
+                                              : () => _review(m, false),
+                                          style: OutlinedButton.styleFrom(
+                                            foregroundColor:
+                                                theme.colorScheme.error,
+                                          ),
+                                          child: const Text('Từ chối'),
+                                        ),
+                                      ] else if (m.status == 'active') ...[
+                                        const SizedBox(width: 8),
+                                        OutlinedButton(
+                                          onPressed: _busy
+                                              ? null
+                                              : () => _run(
+                                                  () => ref
+                                                      .read(adminRepoProvider)
+                                                      .setMerchantPaused(
+                                                        m.id,
+                                                        true,
+                                                      )
+                                                      .then((_) {}),
+                                                ),
+                                          child: const Text('Tạm dừng'),
+                                        ),
+                                      ] else if (m.status == 'paused') ...[
+                                        const SizedBox(width: 8),
+                                        FilledButton.tonal(
+                                          onPressed: _busy
+                                              ? null
+                                              : () => _run(
+                                                  () => ref
+                                                      .read(adminRepoProvider)
+                                                      .setMerchantPaused(
+                                                        m.id,
+                                                        false,
+                                                      )
+                                                      .then((_) {}),
+                                                ),
+                                          child: const Text('Mở lại'),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
                               ),
                             ],
                           ),
