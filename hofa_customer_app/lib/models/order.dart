@@ -156,6 +156,10 @@ class Order {
   bool get needsDriverPick =>
       isBuyOnBehalf && status == 'ready_for_pickup' && selectedDriverId == null;
 
+  /// Tổng SỐ LƯỢNG món (cộng dồn quantity từng dòng) — khác items.length (chỉ đếm số DÒNG sản
+  /// phẩm khác nhau, đơn "2x Cá basa" chỉ có 1 dòng nhưng phải hiện 2 món).
+  int get totalQuantity => items.fold(0, (sum, i) => sum + i.quantity);
+
   factory Order.fromJson(Map<String, dynamic> json) => Order(
     id: json['id'] as String,
     orderCode: json['order_code'] as String? ?? '',

@@ -646,7 +646,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 children: orders
                     .map(
                       (e) => Text(
-                        '• ${formatDateTime(e.key)} (${e.value.length} món)',
+                        '• ${formatDateTime(e.key)} '
+                        '(${e.value.fold<int>(0, (sum, i) => sum + i.quantity)} món)',
                       ),
                     )
                     .toList(),

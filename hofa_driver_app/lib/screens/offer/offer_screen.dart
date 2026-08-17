@@ -532,7 +532,7 @@ class _OfferDetails extends ConsumerWidget {
         ],
         const SizedBox(height: 12),
         Text(
-          '${order.orderCode} · ${order.items.length} món · '
+          '${order.orderCode} · ${order.totalQuantity} món · '
           '${order.paymentMethod == 'cod' ? 'Thu hộ ${formatVnd(order.totalAmount)}' : 'Đã thanh toán'}',
           style: theme.textTheme.bodySmall,
         ),

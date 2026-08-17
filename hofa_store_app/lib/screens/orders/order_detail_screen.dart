@@ -356,7 +356,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen>
                       fontWeight: FontWeight.bold,
                     ),
                     children: [
-                      TextSpan(text: '${o.items.length} món'),
+                      TextSpan(text: '${o.totalQuantity} món'),
                       TextSpan(
                         text: ' cho ${o.shipRecipientName}',
                         style: const TextStyle(fontWeight: FontWeight.normal),
