@@ -799,15 +799,37 @@ function upsertStore(row, values) {
 }
 
 /** Xoá 1 dòng cửa hàng — thư mục Drive tương ứng chỉ CHUYỂN VÀO THÙNG RÁC (không xoá vĩnh
- *  viễn), phòng lỡ tay xoá nhầm còn khôi phục lại được. */
+ *  viễn), phòng lỡ tay xoá nhầm còn khôi phục lại được. Xoá kèm mọi dòng TOPPING/VARIANT khớp
+ *  đúng tên quán này trong sheet — nếu không sẽ để lại rác mồ côi (dòng topping/biến thể trỏ
+ *  về 1 quán không còn tồn tại trong MERCHANT), dễ gây lẫn lộn hoặc lỗi lúc đồng bộ sau này.
+ *  CỐ Ý không đụng sheet PRODUCT — chỉ dọn đúng phần topping/biến thể theo yêu cầu, sản phẩm
+ *  vẫn giữ lại làm tham khảo (tự xoá tay nếu cần). */
 function deleteStore(row) {
   const sheet = getStoreSheet_();
+  const storeName = String(sheet.getRange(row, STORE_NAME_COLUMN).getValue() || '').trim();
   const folderId = folderIdFromLink_(sheet.getRange(row, STORE_FOLDER_LINK_COLUMN).getValue());
   if (folderId) {
     const folder = getFolderByIdSafe_(folderId);
     if (folder) folder.setTrashed(true);
   }
   sheet.deleteRow(row);
+  if (storeName) {
+    deleteRowsByStoreName_(getToppingSheet_(), TOPPING_START_ROW, TOPPING_STORE_COLUMN, storeName);
+    deleteRowsByStoreName_(getVariantSheet_(), VARIANT_START_ROW, VARIANT_STORE_COLUMN, storeName);
+  }
+}
+
+/** Xoá mọi dòng có đúng tên quán ở [storeColumn] trong 1 sheet (TOPPING/VARIANT) — quét từ
+ *  DƯỚI LÊN để deleteRow() không làm lệch chỉ số các dòng chưa xét tới ở trên. */
+function deleteRowsByStoreName_(sheet, startRow, storeColumn, storeName) {
+  const lastRow = sheet.getLastRow();
+  if (lastRow < startRow) return;
+  const values = sheet.getRange(startRow, storeColumn, lastRow - startRow + 1, 1).getValues();
+  for (let i = values.length - 1; i >= 0; i--) {
+    if (String(values[i][0]).trim() === storeName) {
+      sheet.deleteRow(startRow + i);
+    }
+  }
 }
 
 
@@ -2338,7 +2360,7 @@ function buildStoreManagerHtml_(idPrefix) {
 
   function removeStore() {
     if (!currentRow) { showErr('Chưa chọn cửa hàng để xoá'); return; }
-    if (!confirm('Xoá cửa hàng này? Thư mục Drive sẽ chuyển vào Thùng rác.')) return;
+    if (!confirm('Xoá cửa hàng này? Thư mục Drive sẽ chuyển vào Thùng rác, mọi dòng Topping/Biến thể của quán này trong sheet cũng bị xoá theo (sản phẩm vẫn giữ lại).')) return;
     google.script.run.withSuccessHandler(function () {
       showMsg('Đã xoá cửa hàng');
       newStore();
