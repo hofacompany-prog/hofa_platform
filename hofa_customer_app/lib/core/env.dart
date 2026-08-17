@@ -7,9 +7,9 @@ class Env {
 
   /// Gốc URL app Khách đã deploy — dùng để dựng link chia sẻ (vd chia sẻ 1 cửa hàng, xem
   /// merchant_detail_screen.dart). KHÔNG lấy từ Uri.base vì app này còn có bản Android native
-  /// (không có "URL trình duyệt" để đọc) — đổi hằng số này nếu sau này gắn domain riêng
-  /// (hofa.com.vn) thay vì domain *.workers.dev mặc định của Cloudflare.
-  static const webBaseUrl = 'https://hofa-customer.hofacompany.workers.dev';
+  /// (không có "URL trình duyệt" để đọc). Domain riêng hofa.com.vn đã gắn sẵn cho worker
+  /// hofa-customer (xác nhận qua app-version.json khớp nhau ở cả 2 domain).
+  static const webBaseUrl = 'https://hofa.com.vn';
   /// Được set bằng --dart-define=APP_VERSION=<git hash> trong build_web.sh, không
   /// khai báo trong env.json — mặc định '0.1.0+1' chỉ dùng khi `flutter run` lúc dev.
   static const appVersion = String.fromEnvironment(
