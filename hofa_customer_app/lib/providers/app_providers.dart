@@ -195,6 +195,13 @@ final otpSettingsProvider = FutureProvider.autoDispose<OtpSettings>(
   (ref) => ref.watch(merchantRepoProvider).otpSettings(),
 );
 
+/// Chu kỳ (phút) CustomerShell nhắc lại popup cài PWA — admin cấu hình, xem
+/// hofa-db/88_pwa_reminder_settings.sql. KHÔNG autoDispose — CustomerShell sống suốt phiên app,
+/// giữ nguyên giá trị đã tải cho cả phiên thay vì tải lại mỗi lần provider bị huỷ/dispose.
+final pwaReminderIntervalMinutesProvider = FutureProvider<int>(
+  (ref) => ref.watch(merchantRepoProvider).pwaReminderIntervalMinutes(),
+);
+
 // ---- Sản phẩm ----
 
 final categoriesProvider = FutureProvider.autoDispose<List<Category>>(

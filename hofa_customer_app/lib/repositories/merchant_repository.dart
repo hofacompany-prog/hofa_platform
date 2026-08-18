@@ -43,6 +43,19 @@ class MerchantRepository {
         .toList();
   }
 
+  /// Chu kỳ (phút) nhắc lại popup cài PWA cho khách chưa cài — admin cấu hình, xem
+  /// hofa-db/88_pwa_reminder_settings.sql. Lỗi mạng/chưa có dòng nào thì mặc định 5.
+  Future<int> pwaReminderIntervalMinutes() async {
+    try {
+      final json = await _api.get('/pwa-reminder-settings') as Map<String, dynamic>?;
+      final v = json?['interval_minutes'];
+      if (v is num && v > 0) return v.toInt();
+      return 5;
+    } catch (_) {
+      return 5;
+    }
+  }
+
   /// Ngưỡng giá trị đơn để bắt buộc xác nhận OTP giao hàng — xem
   /// hofa-db/73_otp_threshold_settings.sql.
   Future<OtpSettings> otpSettings() async {

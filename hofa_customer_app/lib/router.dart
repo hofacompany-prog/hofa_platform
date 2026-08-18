@@ -3,11 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/go_router_refresh_stream.dart';
-import 'core/pwa_install_service.dart';
 import 'providers/auth_providers.dart';
 import 'providers/app_providers.dart' show merchantRepoProvider;
 import 'screens/auth/login_screen.dart';
-import 'screens/install/install_pwa_screen.dart';
 import 'screens/auth/complete_profile_screen.dart';
 import 'screens/shell/customer_shell.dart';
 import 'screens/home/home_screen.dart';
@@ -68,39 +66,9 @@ final routerProvider = Provider<GoRouter>((ref) {
         }
       }
 
-      // Cùng triết lý guestProtectedPaths bên dưới (login) — cho lướt/chọn món TỰ DO ở hầu hết
-      // app (trang chủ, chi tiết cửa hàng/sản phẩm — mở được cả từ link chia sẻ, giỏ hàng, danh
-      // mục, đặt trước...) dù chưa cài PWA, chỉ chặn bắt cài đúng lúc bấm sang màn THẬT SỰ cần
-      // tài khoản (đặt hàng, đơn hàng, hồ sơ...). Trải nghiệm CHÍNH vẫn là point-of-use
-      // (lib/core/require_pwa_install.dart, gọi TRƯỚC requireLogin ở cart_screen.dart/
-      // product_detail_screen.dart) — nhánh dưới đây chỉ là lưới an toàn cho ai gõ thẳng URL vào
-      // các màn đó. Chỉ áp dụng khi trình duyệt thực sự có cách cài (Android/Chrome hoặc bất kỳ
-      // trình duyệt nào trên iOS), desktop không hỗ trợ (Firefox, Safari desktop...) thì không bị
-      // chặn. Đã từng cài (appinstalled, xem PwaInstallService.wasInstalledPreviously) mà vẫn
-      // đang mở bằng trình duyệt thường (chưa mở từ icon màn hình chính) thì cũng vào màn này —
-      // InstallPwaScreen tự đổi sang thông báo "mở app ngoài màn hình" thay vì hỏi cài lại.
-      const pwaProtectedPaths = [
-        '/checkout',
-        '/orders',
-        '/profile',
-        '/notifications',
-        '/favorites',
-      ];
-      final isPwaProtected = pwaProtectedPaths.any(
-        (p) =>
-            state.matchedLocation == p ||
-            state.matchedLocation.startsWith('$p/'),
-      );
-      final needsInstall =
-          !PwaInstallService.isStandalone() &&
-          (PwaInstallService.wasInstalledPreviously() ||
-              PwaInstallService.hasDeferredPrompt() ||
-              PwaInstallService.isIOS());
-      if (needsInstall && isPwaProtected) {
-        return state.matchedLocation == '/install-pwa' ? null : '/install-pwa';
-      }
-      if (!needsInstall && state.matchedLocation == '/install-pwa') return '/';
-
+      // Cài PWA không còn là điều kiện chặn đường đi nữa — khách lướt/đặt hàng/đăng nhập tự do
+      // dù chưa cài, chỉ còn popup nhắc định kỳ (xem CustomerShell + widgets/install_pwa_dialog.dart,
+      // chu kỳ cấu hình ở admin — hofa-db/88_pwa_reminder_settings.sql).
       final session = Supabase.instance.client.auth.currentSession;
       final loggingIn = state.matchedLocation == '/login';
       final completingProfile = state.matchedLocation == '/complete-profile';
@@ -147,10 +115,6 @@ final routerProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
-      GoRoute(
-        path: '/install-pwa',
-        builder: (context, state) => const InstallPwaScreen(),
-      ),
       GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
       GoRoute(
         path: '/complete-profile',

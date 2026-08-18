@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/format.dart';
 import '../../core/require_login.dart';
-import '../../core/require_pwa_install.dart';
 import '../../models/buy_now_request.dart';
 import '../../models/cart_item.dart';
 import '../../models/product.dart';
@@ -145,12 +144,10 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
     List<ToppingGroup> toppingGroups, {
     bool buyNow = false,
   }) async {
-    // "Mua ngay" đặt đơn thẳng nên cần cài PWA + đăng nhập — kiểm tra ngay từ đầu, trước cả
-    // bước chọn topping, để khách không phải chọn xong rồi mới bị hỏi. "Thêm vào giỏ" (buyNow
-    // = false) không cần gì cả, giỏ hàng là state cục bộ.
+    // "Mua ngay" đặt đơn thẳng nên cần đăng nhập — kiểm tra ngay từ đầu, trước cả bước chọn
+    // topping, để khách không phải chọn xong rồi mới bị hỏi. "Thêm vào giỏ" (buyNow = false)
+    // không cần gì cả, giỏ hàng là state cục bộ.
     if (buyNow) {
-      if (!await requirePwaInstall(context)) return;
-      if (!mounted) return;
       if (!await requireLogin(context)) return;
     }
     if (!mounted) return;

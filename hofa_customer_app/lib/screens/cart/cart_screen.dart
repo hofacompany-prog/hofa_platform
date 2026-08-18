@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 import '../../core/format.dart';
 import '../../core/geo.dart';
 import '../../core/require_login.dart';
-import '../../core/require_pwa_install.dart';
 import '../../models/cart_item.dart';
 import '../../providers/app_providers.dart';
 import '../../providers/cart_provider.dart';
@@ -335,8 +334,6 @@ class CartScreen extends ConsumerWidget {
                         ),
                         FilledButton(
                           onPressed: () async {
-                            if (!await requirePwaInstall(context)) return;
-                            if (!context.mounted) return;
                             if (!await requireLogin(context)) return;
                             if (context.mounted) context.push('/checkout');
                           },

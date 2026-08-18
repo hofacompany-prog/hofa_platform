@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show TextInput;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -73,6 +74,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         email: phoneToAuthEmail(_phoneCtrl.text.trim()),
         password: _passwordCtrl.text,
       );
+      // Báo trình duyệt "form đã nộp xong" — đây là lúc Chrome/Safari thật sự bật popup "Lưu
+      // mật khẩu?" trên web, chỉ gắn autofillHints thôi chưa đủ để tự bật popup này.
+      TextInput.finishAutofillContext();
     } on AuthException catch (e) {
       setState(() => _error = translateAuthError(e));
     } catch (e) {
@@ -227,6 +231,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             phone: _phoneCtrl.text.trim(),
           );
       ref.invalidate(userProfileProvider);
+      TextInput.finishAutofillContext();
       if (!mounted) return;
       await showDialog<void>(
         context: context,
@@ -321,53 +326,79 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               onSubmitted: (_) => _submit(),
                             ),
                           ] else ...[
-                            if (_isSignUp) ...[
-                              TextFormField(
-                                controller: _fullNameCtrl,
-                                decoration: const InputDecoration(
-                                  labelText: 'Họ tên',
-                                  border: OutlineInputBorder(),
-                                ),
-                                validator: (v) =>
-                                    (v == null || v.trim().isEmpty)
-                                    ? 'Nhập họ tên'
-                                    : null,
+                            // AutofillGroup + autofillHints đúng cặp username/password (kể cả
+                            // khi định danh thật là SĐT — trình duyệt chỉ nhận diện "sẽ lưu mật
+                            // khẩu" qua các hint chuẩn này) để Chrome/Safari tự bật hỏi "Lưu mật
+                            // khẩu?" sau khi đăng nhập/đăng ký thành công, lần sau khỏi gõ lại.
+                            AutofillGroup(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  if (_isSignUp) ...[
+                                    TextFormField(
+                                      controller: _fullNameCtrl,
+                                      decoration: const InputDecoration(
+                                        labelText: 'Họ tên',
+                                        border: OutlineInputBorder(),
+                                      ),
+                                      autofillHints: const [AutofillHints.name],
+                                      validator: (v) =>
+                                          (v == null || v.trim().isEmpty)
+                                          ? 'Nhập họ tên'
+                                          : null,
+                                    ),
+                                    const SizedBox(height: 16),
+                                  ],
+                                  TextFormField(
+                                    controller: _phoneCtrl,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Số điện thoại',
+                                      border: OutlineInputBorder(),
+                                    ),
+                                    keyboardType: TextInputType.phone,
+                                    autofillHints: [
+                                      _isSignUp
+                                          ? AutofillHints.newUsername
+                                          : AutofillHints.username,
+                                    ],
+                                    validator: (v) =>
+                                        (v == null || !isValidPhone(v.trim()))
+                                        ? 'Số điện thoại không hợp lệ'
+                                        : null,
+                                  ),
+                                  const SizedBox(height: 16),
+                                  TextFormField(
+                                    controller: _passwordCtrl,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Mật khẩu',
+                                      border: OutlineInputBorder(),
+                                    ),
+                                    obscureText: true,
+                                    autofillHints: [
+                                      _isSignUp
+                                          ? AutofillHints.newPassword
+                                          : AutofillHints.password,
+                                    ],
+                                    onFieldSubmitted: (_) => _submit(),
+                                    validator: (v) =>
+                                        (v == null || v.length < 6)
+                                        ? 'Mật khẩu tối thiểu 6 ký tự'
+                                        : null,
+                                  ),
+                                  if (!_isSignUp)
+                                    Align(
+                                      alignment: Alignment.centerRight,
+                                      child: TextButton(
+                                        onPressed: _loading
+                                            ? null
+                                            : _forgotPassword,
+                                        child: const Text('Quên mật khẩu?'),
+                                      ),
+                                    ),
+                                ],
                               ),
-                              const SizedBox(height: 16),
-                            ],
-                            TextFormField(
-                              controller: _phoneCtrl,
-                              decoration: const InputDecoration(
-                                labelText: 'Số điện thoại',
-                                border: OutlineInputBorder(),
-                              ),
-                              keyboardType: TextInputType.phone,
-                              validator: (v) =>
-                                  (v == null || !isValidPhone(v.trim()))
-                                  ? 'Số điện thoại không hợp lệ'
-                                  : null,
                             ),
-                            const SizedBox(height: 16),
-                            TextFormField(
-                              controller: _passwordCtrl,
-                              decoration: const InputDecoration(
-                                labelText: 'Mật khẩu',
-                                border: OutlineInputBorder(),
-                              ),
-                              obscureText: true,
-                              onFieldSubmitted: (_) => _submit(),
-                              validator: (v) => (v == null || v.length < 6)
-                                  ? 'Mật khẩu tối thiểu 6 ký tự'
-                                  : null,
-                            ),
-                            if (!_isSignUp)
-                              Align(
-                                alignment: Alignment.centerRight,
-                                child: TextButton(
-                                  onPressed: _loading ? null : _forgotPassword,
-                                  child: const Text('Quên mật khẩu?'),
-                                ),
-                              ),
                           ],
                           if (_error != null) ...[
                             const SizedBox(height: 16),

@@ -50,6 +50,7 @@ app.use('/', require('./routes/chat-settings'));
 app.use('/', require('./routes/order-messages'));
 app.use('/', require('./routes/bank-account-settings'));
 app.use('/', require('./routes/admin-contact-settings'));
+app.use('/', require('./routes/pwa-reminder-settings'));
 app.use('/', require('./routes/banks'));
 app.use('/', require('./routes/nav-icons'));
 app.use('/', require('./routes/icon-libraries'));

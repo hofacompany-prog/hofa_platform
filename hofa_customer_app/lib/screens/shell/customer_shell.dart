@@ -1,14 +1,25 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../core/pwa_install_service.dart';
 import '../../core/require_login.dart';
 import '../../providers/app_providers.dart';
 import '../../providers/cart_provider.dart';
+import '../../widgets/install_pwa_dialog.dart';
 import '../../widgets/tab_icon.dart';
 
-class CustomerShell extends ConsumerWidget {
+class CustomerShell extends ConsumerStatefulWidget {
   final Widget child;
   const CustomerShell({super.key, required this.child});
+
+  @override
+  ConsumerState<CustomerShell> createState() => _CustomerShellState();
+}
+
+class _CustomerShellState extends ConsumerState<CustomerShell> {
+  Timer? _reminderTimer;
+  bool _reminderShowing = false;
 
   static const _items = [
     (
@@ -60,7 +71,48 @@ class CustomerShell extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  void initState() {
+    super.initState();
+    _startReminderTimer();
+  }
+
+  @override
+  void dispose() {
+    _reminderTimer?.cancel();
+    super.dispose();
+  }
+
+  /// Đợi tải chu kỳ (phút) admin cấu hình (hofa-db/88_pwa_reminder_settings.sql) rồi hẹn giờ
+  /// nhắc lặp lại suốt phiên app — CustomerShell bọc TOÀN BỘ route trong ShellRoute nên đúng
+  /// nghĩa "nhắc khi khách đang ở bất kỳ trang nào của Hofa", không chỉ 1 trang cụ thể.
+  Future<void> _startReminderTimer() async {
+    final minutes = await ref.read(pwaReminderIntervalMinutesProvider.future);
+    if (!mounted) return;
+    _reminderTimer = Timer.periodic(
+      Duration(minutes: minutes),
+      (_) => _maybeShowReminder(),
+    );
+  }
+
+  void _maybeShowReminder() {
+    if (!mounted || _reminderShowing) return;
+    // Đã cài rồi (dù đang mở lại bằng trình duyệt thường) thì thôi hẳn, không nhắc nữa — khác
+    // InstallPwaScreen trước đây (vẫn nhắc "mở app ở màn hình chính" kể cả đã cài).
+    final needsInstall =
+        !PwaInstallService.isStandalone() &&
+        !PwaInstallService.wasInstalledPreviously() &&
+        (PwaInstallService.hasDeferredPrompt() || PwaInstallService.isIOS());
+    if (!needsInstall) return;
+    final location = GoRouterState.of(context).matchedLocation;
+    if (location == '/login' || location == '/complete-profile') return;
+    _reminderShowing = true;
+    showInstallPwaDialog(context).whenComplete(() {
+      _reminderShowing = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final location = GoRouterState.of(context).matchedLocation;
     final selectedIndex = _indexFor(location);
@@ -70,7 +122,7 @@ class CustomerShell extends ConsumerWidget {
     final iconByTabKey = ref.watch(navIconsProvider).valueOrNull ?? const {};
 
     return Scaffold(
-      body: child,
+      body: widget.child,
       // onlyShowSelected: chỉ hiện chữ cho mục đang chọn (giống store app) — 5 mục hiện đủ
       // chữ cùng lúc trên màn hẹp dễ bị dính/chật, ẩn bớt chữ mục chưa chọn cho gọn gàng.
       bottomNavigationBar: NavigationBarTheme(

@@ -25,6 +25,7 @@ import '../models/driver_accept_settings.dart';
 import '../models/driver_dispatch_settings.dart';
 import '../models/bank_account_settings.dart';
 import '../models/admin_contact_settings.dart';
+import '../models/pwa_reminder_settings.dart';
 import '../models/admin_notification.dart';
 import '../models/notification_settings.dart';
 import '../models/nav_tab_icon.dart';
@@ -288,6 +289,11 @@ final bankAccountSettingsProvider =
 final adminContactSettingsProvider =
     FutureProvider.autoDispose<AdminContactSettings>(
       (ref) => ref.watch(adminRepoProvider).adminContactSettings(),
+    );
+
+final pwaReminderSettingsProvider =
+    FutureProvider.autoDispose<PwaReminderSettings>(
+      (ref) => ref.watch(adminRepoProvider).pwaReminderSettings(),
     );
 
 final pendingPaymentOrdersProvider = FutureProvider.autoDispose<List<Order>>(

@@ -23,6 +23,7 @@ import '../models/driver_accept_settings.dart';
 import '../models/driver_dispatch_settings.dart';
 import '../models/bank_account_settings.dart';
 import '../models/admin_contact_settings.dart';
+import '../models/pwa_reminder_settings.dart';
 import '../models/admin_notification.dart';
 import '../models/notification_inbox_item.dart';
 import '../models/notification_settings.dart';
@@ -976,6 +977,22 @@ class AdminRepository {
     AdminContactSettings settings,
   ) async => AdminContactSettings.fromJson(
     await _api.patch('/admin-contact-settings', body: settings.toJson())
+        as Map<String, dynamic>,
+  );
+
+  // ---- Chu kỳ nhắc cài PWA (app Khách) ----
+
+  Future<PwaReminderSettings> pwaReminderSettings() async {
+    final data = await _api.get('/pwa-reminder-settings');
+    return data == null
+        ? PwaReminderSettings.fallback()
+        : PwaReminderSettings.fromJson(data as Map<String, dynamic>);
+  }
+
+  Future<PwaReminderSettings> updatePwaReminderSettings(
+    PwaReminderSettings settings,
+  ) async => PwaReminderSettings.fromJson(
+    await _api.patch('/pwa-reminder-settings', body: settings.toJson())
         as Map<String, dynamic>,
   );
 
