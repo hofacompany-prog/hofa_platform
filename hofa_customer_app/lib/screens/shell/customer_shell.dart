@@ -9,6 +9,12 @@ import '../../providers/cart_provider.dart';
 import '../../widgets/install_pwa_dialog.dart';
 import '../../widgets/tab_icon.dart';
 
+/// Cờ toàn app (KHÔNG phải field trong State) — chặn 2 popup nhắc cài PWA chồng nhau tuyệt đối,
+/// kể cả trong trường hợp hiếm CustomerShell bị tạo lại (dispose/initState lại) đúng lúc dialog
+/// cũ chưa kịp đóng, field trong State cũ sẽ mất theo State đó nhưng biến module-level này thì
+/// không.
+bool _pwaReminderShowing = false;
+
 class CustomerShell extends ConsumerStatefulWidget {
   final Widget child;
   const CustomerShell({super.key, required this.child});
@@ -19,7 +25,6 @@ class CustomerShell extends ConsumerStatefulWidget {
 
 class _CustomerShellState extends ConsumerState<CustomerShell> {
   Timer? _reminderTimer;
-  bool _reminderShowing = false;
 
   static const _items = [
     (
@@ -95,7 +100,12 @@ class _CustomerShellState extends ConsumerState<CustomerShell> {
   }
 
   void _maybeShowReminder() {
-    if (!mounted || _reminderShowing) return;
+    if (!mounted || _pwaReminderShowing) return;
+    // Đang có popup/dialog KHÁC hiện trên cùng route (vd "Đăng nhập để tiếp tục", "Quên mật
+    // khẩu") thì route hiện tại của chính CustomerShell không còn isCurrent — bỏ qua lượt này,
+    // đợi chu kỳ sau, tránh 2 popup chồng nhau.
+    final route = ModalRoute.of(context);
+    if (route != null && !route.isCurrent) return;
     // Đã cài rồi (dù đang mở lại bằng trình duyệt thường) thì thôi hẳn, không nhắc nữa — khác
     // InstallPwaScreen trước đây (vẫn nhắc "mở app ở màn hình chính" kể cả đã cài).
     final needsInstall =
@@ -105,9 +115,9 @@ class _CustomerShellState extends ConsumerState<CustomerShell> {
     if (!needsInstall) return;
     final location = GoRouterState.of(context).matchedLocation;
     if (location == '/login' || location == '/complete-profile') return;
-    _reminderShowing = true;
+    _pwaReminderShowing = true;
     showInstallPwaDialog(context).whenComplete(() {
-      _reminderShowing = false;
+      _pwaReminderShowing = false;
     });
   }
 
