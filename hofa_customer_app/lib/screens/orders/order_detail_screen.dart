@@ -309,6 +309,17 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                               .join(', '),
                                           style: theme.textTheme.bodySmall,
                                         ),
+                                      if (item.note != null &&
+                                          item.note!.trim().isNotEmpty)
+                                        Text(
+                                          'Ghi chú: ${item.note}',
+                                          style: theme.textTheme.bodySmall
+                                              ?.copyWith(
+                                                color:
+                                                    theme.colorScheme.secondary,
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                        ),
                                     ],
                                   ),
                                 ),

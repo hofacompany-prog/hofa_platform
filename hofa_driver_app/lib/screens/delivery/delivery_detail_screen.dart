@@ -1037,6 +1037,7 @@ class _OrderItemsCard extends StatelessWidget {
                     Expanded(
                       child: Text(
                         '${item.quantity}x ${item.productName}${item.variantName != null ? ' (${item.variantName})' : ''}'
+                        '${item.toppings.isNotEmpty ? ' + ${item.toppings.map((t) => t.name).join(', ')}' : ''}'
                         '${item.note != null && item.note!.isNotEmpty ? ' — ${item.note}' : ''}',
                       ),
                     ),
@@ -1107,6 +1108,7 @@ class _BuyOnBehalfShoppingCard extends StatelessWidget {
                     Expanded(
                       child: Text(
                         '${item.quantity}x ${item.productName}${item.variantName != null ? ' (${item.variantName})' : ''}'
+                        '${item.toppings.isNotEmpty ? ' + ${item.toppings.map((t) => t.name).join(', ')}' : ''}'
                         '${item.note != null && item.note!.isNotEmpty ? ' — ${item.note}' : ''}',
                       ),
                     ),

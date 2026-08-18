@@ -1,3 +1,16 @@
+class OrderItemTopping {
+  final String name;
+  final int price;
+
+  OrderItemTopping({required this.name, required this.price});
+
+  factory OrderItemTopping.fromJson(Map<String, dynamic> json) =>
+      OrderItemTopping(
+        name: json['name'] as String? ?? '',
+        price: (json['price'] as num?)?.toInt() ?? 0,
+      );
+}
+
 class OrderItem {
   final String id;
   final String productName;
@@ -7,6 +20,7 @@ class OrderItem {
   final int quantity;
   final int lineTotal;
   final String? note;
+  final List<OrderItemTopping> toppings;
 
   OrderItem({
     required this.id,
@@ -17,6 +31,7 @@ class OrderItem {
     required this.quantity,
     required this.lineTotal,
     this.note,
+    this.toppings = const [],
   });
 
   factory OrderItem.fromJson(Map<String, dynamic> json) => OrderItem(
@@ -28,6 +43,11 @@ class OrderItem {
     quantity: (json['quantity'] as num?)?.toInt() ?? 0,
     lineTotal: (json['line_total'] as num?)?.toInt() ?? 0,
     note: json['note'] as String?,
+    toppings:
+        (json['toppings'] as List?)
+            ?.map((t) => OrderItemTopping.fromJson(t as Map<String, dynamic>))
+            .toList() ??
+        const [],
   );
 }
 

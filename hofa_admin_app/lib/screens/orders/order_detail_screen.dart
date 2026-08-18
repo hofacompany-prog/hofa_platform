@@ -384,11 +384,39 @@ class _AdminOrderDetailScreenState
                                   vertical: 3,
                                 ),
                                 child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text('${item.quantity}× '),
                                     Expanded(
-                                      child: Text(
-                                        '${item.productName} ${item.variantName ?? ''}',
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            '${item.productName} ${item.variantName ?? ''}',
+                                          ),
+                                          if (item.toppings.isNotEmpty)
+                                            Text(
+                                              item.toppings
+                                                  .map((t) => t.name)
+                                                  .join(', '),
+                                              style:
+                                                  theme.textTheme.bodySmall,
+                                            ),
+                                          if (item.note != null &&
+                                              item.note!.trim().isNotEmpty)
+                                            Text(
+                                              'Ghi chú: ${item.note}',
+                                              style: theme.textTheme.bodySmall
+                                                  ?.copyWith(
+                                                    color: theme
+                                                        .colorScheme
+                                                        .secondary,
+                                                    fontWeight:
+                                                        FontWeight.bold,
+                                                  ),
+                                            ),
+                                        ],
                                       ),
                                     ),
                                     Text(formatVnd(item.lineTotal)),
