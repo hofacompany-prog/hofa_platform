@@ -388,17 +388,6 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
                     ),
                   ],
                 ),
-              ] else ...[
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    onPressed: () => context.push(
-                      '/merchants/${merchant.id}/report-price',
-                    ),
-                    icon: const Icon(Icons.price_change_outlined),
-                    label: const Text('Báo giá sai'),
-                  ),
-                ),
               ],
               if (!merchant.hasOpenBranch) ...[
                 const SizedBox(height: 12),
