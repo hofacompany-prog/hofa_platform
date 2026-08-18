@@ -110,7 +110,12 @@ class DashboardScreen extends ConsumerWidget {
                   const SizedBox(height: 32),
                   Text('Đơn hàng gần đây', style: theme.textTheme.titleMedium),
                   const SizedBox(height: 12),
-                  Card(
+                  // SizedBox ép full-width — không có gì bắt buộc Card giãn hết bề ngang, nên khi
+                  // có đơn (nội dung chỉ rộng bằng mã đơn/giá tiền) Card co lại theo, chỉ tình cờ
+                  // đầy khi trống vì Center bên trong tự giãn hết cỡ.
+                  SizedBox(
+                    width: double.infinity,
+                    child: Card(
                     elevation: 0,
                     color: theme.colorScheme.surfaceContainerLow,
                     child: s.recentOrders.isEmpty
@@ -189,6 +194,7 @@ class DashboardScreen extends ConsumerWidget {
                                 })
                                 .toList(),
                           ),
+                    ),
                   ),
                 ],
               ),
