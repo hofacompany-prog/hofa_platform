@@ -111,6 +111,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     double? pickedLat = existing?.latitude;
     double? pickedLng = existing?.longitude;
     String? mapError;
+    // Banner tóm tắt hiện NGAY TRONG dialog khi bấm Lưu mà còn thiếu trường bắt buộc — cùng lý
+    // do với mapError bên dưới (SnackBar gắn vào màn phía SAU dialog, bị lớp phủ mờ che mất).
+    // Đặt ở đầu Column nên luôn thấy ngay không cần cuộn, dialog vẫn mở để nhập tiếp.
+    String? formError;
 
     // Khớp đúng các cột NOT NULL của bảng addresses (hofa-db/01_schema.sql) — ward/district
     // không bắt buộc, giữ nguyên TextField thường, không validator.
@@ -130,6 +134,25 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    if (formError != null)
+                      Container(
+                        width: double.infinity,
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.errorContainer,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          formError!,
+                          style: TextStyle(
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onErrorContainer,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
                     TextFormField(
                       controller: nameCtrl,
                       decoration: const InputDecoration(
@@ -236,7 +259,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             ),
             FilledButton(
               onPressed: () {
-                if (!formKey.currentState!.validate()) return;
+                if (!formKey.currentState!.validate()) {
+                  setDialogState(
+                    () => formError =
+                        'Còn thiếu thông tin bắt buộc — điền đủ các ô đánh dấu đỏ bên dưới rồi bấm Lưu lại.',
+                  );
+                  return;
+                }
                 Navigator.pop(context, true);
               },
               child: const Text('Lưu'),
