@@ -609,6 +609,11 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
                     ? null
                     : _reportClosedToCustomer,
                 onReportClosedToAdmin: _reportClosedToAdmin,
+                onReportPrice: order == null
+                    ? null
+                    : () => context.push(
+                        '/merchants/${order.merchantId}/report-price',
+                      ),
                 onDone: () => context.go('/'),
               ),
             ],
@@ -685,6 +690,7 @@ class _ActionArea extends StatelessWidget {
   final VoidCallback onFailed;
   final VoidCallback? onReportClosedToCustomer;
   final VoidCallback onReportClosedToAdmin;
+  final VoidCallback? onReportPrice;
   final VoidCallback onDone;
 
   const _ActionArea({
@@ -700,6 +706,7 @@ class _ActionArea extends StatelessWidget {
     required this.onFailed,
     required this.onReportClosedToCustomer,
     required this.onReportClosedToAdmin,
+    required this.onReportPrice,
     required this.onDone,
   });
 
@@ -752,6 +759,17 @@ class _ActionArea extends StatelessWidget {
                   ),
                 ),
               ],
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: (busy || onReportPrice == null)
+                    ? null
+                    : onReportPrice,
+                icon: const Icon(Icons.price_change_outlined),
+                label: const Text('Báo giá sai'),
+              ),
             ),
           ],
         );

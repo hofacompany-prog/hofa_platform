@@ -24,6 +24,7 @@ import '../models/driver_dispatch_settings.dart';
 import '../models/bank_account_settings.dart';
 import '../models/admin_contact_settings.dart';
 import '../models/pwa_reminder_settings.dart';
+import '../models/price_report.dart';
 import '../models/admin_notification.dart';
 import '../models/notification_inbox_item.dart';
 import '../models/notification_settings.dart';
@@ -995,6 +996,31 @@ class AdminRepository {
     await _api.patch('/pwa-reminder-settings', body: settings.toJson())
         as Map<String, dynamic>,
   );
+
+  // ---- Báo cáo giá sai ----
+
+  Future<List<PriceReport>> priceReports({String? status}) async {
+    final list =
+        await _api.get(
+              '/admin/price-reports',
+              query: {if (status != null) 'status': status},
+            )
+            as List;
+    return list
+        .map((e) => PriceReport.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<void> approvePriceReport(String id, {required int finalPrice}) async {
+    await _api.patch(
+      '/admin/price-reports/$id',
+      body: {'status': 'approved', 'final_price': finalPrice},
+    );
+  }
+
+  Future<void> rejectPriceReport(String id) async {
+    await _api.patch('/admin/price-reports/$id', body: {'status': 'rejected'});
+  }
 
   Future<BankAccountSettings> updateBankAccountSettings(
     BankAccountSettings settings,

@@ -228,6 +228,14 @@ final merchantProductsPagedProvider = StateNotifierProvider.autoDispose
       );
     });
 
+/// Danh sách sản phẩm 1 cửa hàng để chọn báo giá sai (report_price_screen.dart) — tải 1 lần,
+/// không phân trang/khoảng cách như merchantProductsPagedProvider (chỉ cần liệt kê để chọn).
+final merchantProductPickerProvider = FutureProvider.autoDispose
+    .family<List<Product>, String>(
+      (ref, merchantId) =>
+          ref.watch(productRepoProvider).products(merchantId: merchantId, limit: 200),
+    );
+
 final merchantCategoriesProvider = FutureProvider.autoDispose
     .family<List<MerchantCategory>, String>(
       (ref, merchantId) =>

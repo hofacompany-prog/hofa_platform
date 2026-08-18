@@ -367,12 +367,36 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
               ),
               if (merchant.isBuyOnBehalf) ...[
                 BuyOnBehalfFeeNotice(merchant: merchant),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: _contactAdmin,
+                        icon: const Icon(Icons.support_agent_outlined),
+                        label: const Text('Liên hệ hỗ trợ'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () => context.push(
+                          '/merchants/${merchant.id}/report-price',
+                        ),
+                        icon: const Icon(Icons.price_change_outlined),
+                        label: const Text('Báo giá sai'),
+                      ),
+                    ),
+                  ],
+                ),
+              ] else ...[
                 SizedBox(
                   width: double.infinity,
                   child: OutlinedButton.icon(
-                    onPressed: _contactAdmin,
-                    icon: const Icon(Icons.support_agent_outlined),
-                    label: const Text('Liên hệ hỗ trợ'),
+                    onPressed: () => context.push(
+                      '/merchants/${merchant.id}/report-price',
+                    ),
+                    icon: const Icon(Icons.price_change_outlined),
+                    label: const Text('Báo giá sai'),
                   ),
                 ),
               ],

@@ -1,11 +1,20 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/delivery.dart';
+import '../models/product.dart';
 import '../repositories/delivery_repository.dart';
+import '../repositories/product_repository.dart';
 import 'auth_provider.dart';
 
 const kTerminalDeliveryStatuses = {'delivered', 'failed', 'returned'};
 
 final _deliveryRepo = DeliveryRepository();
+final _productRepo = ProductRepository();
+
+/// Danh sách sản phẩm 1 cửa hàng để chọn báo giá sai (report_price_screen.dart).
+final merchantProductPickerProvider = FutureProvider.autoDispose
+    .family<List<Product>, String>(
+      (ref, merchantId) => _productRepo.products(merchantId: merchantId),
+    );
 
 /// Chuyến đang chạy dở (đã gán nhưng chưa xong) — null nếu tài xế đang rảnh.
 final activeDeliveryProvider = FutureProvider.autoDispose<Delivery?>((ref) async {

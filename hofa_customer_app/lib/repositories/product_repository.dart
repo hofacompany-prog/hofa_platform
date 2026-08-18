@@ -58,6 +58,18 @@ class ProductRepository {
         .toList();
   }
 
+  /// Báo giá sai của 1 biến thể sản phẩm — admin duyệt qua GET/PATCH /admin/price-reports
+  /// (web admin), xem hofa-db/89_product_price_reports.sql.
+  Future<void> reportPrice({
+    required String variantId,
+    required int reportedPrice,
+  }) async {
+    await _api.post(
+      '/price-reports',
+      body: {'variant_id': variantId, 'reported_price': reportedPrice},
+    );
+  }
+
   Future<Product> product(String id) async =>
       Product.fromJson(await _api.get('/products/$id') as Map<String, dynamic>);
 

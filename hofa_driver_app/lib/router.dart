@@ -18,6 +18,7 @@ import 'screens/earnings/wallet_history_screen.dart';
 import 'screens/profile/profile_screen.dart';
 import 'screens/delivery/delivery_detail_screen.dart';
 import 'screens/delivery/delivery_map_screen.dart';
+import 'screens/merchant/report_price_screen.dart';
 import 'screens/delivery/chat_screen.dart';
 import 'screens/offer/offer_screen.dart';
 import 'screens/notifications/notifications_screen.dart';
@@ -120,6 +121,11 @@ final routerProvider = Provider<GoRouter>((ref) {
         path: '/deliveries/:id/map',
         builder: (context, state) =>
             DeliveryMapScreen(deliveryId: state.pathParameters['id']!),
+      ),
+      GoRoute(
+        path: '/merchants/:id/report-price',
+        builder: (context, state) =>
+            ReportPriceScreen(merchantId: state.pathParameters['id']!),
       ),
       GoRoute(
         // Truy cập CHỈ qua nút trong chi tiết chuyến, không có hộp thư riêng — id ở đây là
