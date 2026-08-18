@@ -193,16 +193,23 @@ const SENSITIVE_MERCHANT_FIELDS = [
   'bank_name', 'bank_bin', 'bank_account_no', 'bank_account_name', 'tax_code', 'business_license_no', 'legal_doc_urls'
 ];
 
+// Link chia sẻ (nút "Chia sẻ cửa hàng" ở app Khách) dùng slug thay vì UUID cho dễ đọc — route
+// này chấp nhận cả 2, tự nhận diện bằng hình dạng UUID rồi tra theo cột tương ứng. Mọi truy vấn
+// phụ bên dưới đều dùng row.id (UUID thật) chứ không dùng thẳng req.params.id.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 router.get('/merchants/:id', asyncHandler(async (req, res) => {
-  const row = await db.queryOne('SELECT * FROM merchants WHERE id = $1 AND deleted_at IS NULL', [req.params.id]);
+  const lookupColumn = UUID_RE.test(req.params.id) ? 'id' : 'slug';
+  const row = await db.queryOne(`SELECT * FROM merchants WHERE ${lookupColumn} = $1 AND deleted_at IS NULL`, [req.params.id]);
   if (!row) throw new ApiError('NOT_FOUND', 'Không tìm thấy cửa hàng', 404);
+  const merchantId = row.id;
 
   row.classifications = await db.query(
     `SELECT mc.id, mc.name FROM merchant_classification_links l
        JOIN merchant_classifications mc ON mc.id = l.classification_id
       WHERE l.merchant_id = $1
       ORDER BY mc.sort_order, mc.name`,
-    [req.params.id]
+    [merchantId]
   );
 
   // Cùng cách tính với GET /merchants (danh sách) — xem haversineKmSql. Khác GET /merchants:
@@ -217,7 +224,7 @@ router.get('/merchants/:id', asyncHandler(async (req, res) => {
           AND b.latitude IS NOT NULL AND b.longitude IS NOT NULL
         ORDER BY b.is_open DESC, distance_km ASC
         LIMIT 1`,
-      [coords.lat, coords.lng, req.params.id]
+      [coords.lat, coords.lng, merchantId]
     );
     row.distance_km = nearest?.distance_km ?? null;
     row.beyond_own_radius = nearest ? nearest.distance_km > nearest.delivery_radius_km : false;
@@ -255,7 +262,7 @@ router.get('/merchants/:id', asyncHandler(async (req, res) => {
              AND b.latitude IS NOT NULL AND b.longitude IS NOT NULL
             ORDER BY is_main DESC LIMIT 1
          ) AS branch_longitude`,
-      [req.params.id]
+      [merchantId]
     );
     return res.json({
       ok: true,
@@ -274,7 +281,7 @@ router.get('/merchants/:id', asyncHandler(async (req, res) => {
     db.query(
       `SELECT b.*, branch_effective_status(b.id) AS status
          FROM branches b WHERE b.merchant_id = $1 AND b.deleted_at IS NULL ORDER BY is_main DESC`,
-      [req.params.id]
+      [merchantId]
     )
   ]);
   res.json({ ok: true, data: { ...row, owner, branches } });

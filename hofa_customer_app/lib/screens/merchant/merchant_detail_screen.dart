@@ -178,15 +178,16 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
             tooltip: 'Chia sẻ cửa hàng',
             icon: const Icon(Icons.share_outlined),
             onPressed: () {
-              final name = merchantAsync.maybeWhen(
-                data: (m) => m.name,
-                orElse: () => 'cửa hàng này',
-              );
+              final merchant = merchantAsync.valueOrNull;
+              final name = merchant?.name ?? 'cửa hàng này';
+              // Slug (tên đọc được) thay vì UUID cho link dễ đọc — router.dart tự tra slug
+              // -> id thật khi mở link này (xem _merchantSlugPathRe).
+              final linkId = merchant?.slug ?? merchantId;
               SharePlus.instance.share(
                 ShareParams(
                   text:
                       'Ghé "$name" trên HOFA nè: '
-                      '${Env.webBaseUrl}/#/merchants/$merchantId',
+                      '${Env.webBaseUrl}/#/merchants/$linkId',
                   subject: name,
                 ),
               );

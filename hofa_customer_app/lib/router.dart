@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/go_router_refresh_stream.dart';
 import 'core/pwa_install_service.dart';
 import 'providers/auth_providers.dart';
+import 'providers/app_providers.dart' show merchantRepoProvider;
 import 'screens/auth/login_screen.dart';
 import 'screens/install/install_pwa_screen.dart';
 import 'screens/auth/complete_profile_screen.dart';
@@ -30,6 +31,12 @@ import 'screens/categories/category_products_screen.dart';
 import 'screens/favorites/favorite_merchants_screen.dart';
 import 'main.dart' show navigatorKey;
 
+final _uuidRe = RegExp(
+  r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
+  caseSensitive: false,
+);
+final _merchantSlugPathRe = RegExp(r'^/merchants/([^/]+)(/reviews)?$');
+
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     navigatorKey: navigatorKey,
@@ -43,6 +50,24 @@ final routerProvider = Provider<GoRouter>((ref) {
       Supabase.instance.client.auth.onAuthStateChange,
     ),
     redirect: (context, state) async {
+      // Link chia sẻ cửa hàng (nút "Chia sẻ cửa hàng" ở merchant_detail_screen.dart) dùng slug
+      // (tên đọc được) thay vì UUID cho dễ đọc — GET /merchants/:id đã hỗ trợ tra bằng slug
+      // (server/src/routes/merchants.js). MerchantDetailScreen bên dưới vẫn luôn cần UUID thật
+      // làm khoá cho các provider sản phẩm/danh mục/yêu thích, nên thay vì sửa lại toàn bộ
+      // luồng bên trong màn hình, chỉ tra slug -> id thật 1 lần ở đây rồi redirect sang URL có
+      // UUID thật. Link nội bộ (đã dùng UUID sẵn) khớp _uuidRe nên bỏ qua nhánh này ngay.
+      final merchantMatch = _merchantSlugPathRe.firstMatch(state.matchedLocation);
+      if (merchantMatch != null && !_uuidRe.hasMatch(merchantMatch.group(1)!)) {
+        try {
+          final merchant = await ref
+              .read(merchantRepoProvider)
+              .merchant(merchantMatch.group(1)!);
+          return '/merchants/${merchant.id}${merchantMatch.group(2) ?? ''}';
+        } catch (_) {
+          return '/';
+        }
+      }
+
       // Cùng triết lý guestProtectedPaths bên dưới (login) — cho lướt/chọn món TỰ DO ở hầu hết
       // app (trang chủ, chi tiết cửa hàng/sản phẩm — mở được cả từ link chia sẻ, giỏ hàng, danh
       // mục, đặt trước...) dù chưa cài PWA, chỉ chặn bắt cài đúng lúc bấm sang màn THẬT SỰ cần
