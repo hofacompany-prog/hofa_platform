@@ -136,6 +136,14 @@ class _InstallPwaDialogState extends State<_InstallPwaDialog> {
                   label: 'Thêm vào Màn hình chính',
                 ),
               ],
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Để sau'),
+                ),
+              ),
             ],
           ),
         ),
