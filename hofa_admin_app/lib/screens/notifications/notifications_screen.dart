@@ -1652,45 +1652,50 @@ class _TtlSettingsCardState extends ConsumerState<_TtlSettingsCard> {
               ),
             ),
             const SizedBox(height: 12),
-            Row(
-              children: [
-                SizedBox(
-                  width: 120,
-                  child: TextField(
-                    controller: _valueCtrl,
-                    enabled: !_saving,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Sống được',
-                      hintText: 'Để trống',
-                      border: OutlineInputBorder(),
-                      isDense: true,
+            // Ô nhập cỡ cố định + dropdown + nút Lưu cộng lại dễ vượt bề rộng card trên màn
+            // hẹp — cuộn ngang thay vì để RenderFlex overflow.
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 120,
+                    child: TextField(
+                      controller: _valueCtrl,
+                      enabled: !_saving,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: 'Sống được',
+                        hintText: 'Để trống',
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                DropdownButton<String>(
-                  value: _unit,
-                  onChanged: _saving
-                      ? null
-                      : (v) => setState(() => _unit = v ?? _unit),
-                  items: const [
-                    DropdownMenuItem(value: 'days', child: Text('Ngày')),
-                    DropdownMenuItem(value: 'hours', child: Text('Giờ')),
-                  ],
-                ),
-                const SizedBox(width: 16),
-                FilledButton(
-                  onPressed: _saving ? null : _save,
-                  child: _saving
-                      ? const SizedBox(
-                          height: 16,
-                          width: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Text('Lưu'),
-                ),
-              ],
+                  const SizedBox(width: 12),
+                  DropdownButton<String>(
+                    value: _unit,
+                    onChanged: _saving
+                        ? null
+                        : (v) => setState(() => _unit = v ?? _unit),
+                    items: const [
+                      DropdownMenuItem(value: 'days', child: Text('Ngày')),
+                      DropdownMenuItem(value: 'hours', child: Text('Giờ')),
+                    ],
+                  ),
+                  const SizedBox(width: 16),
+                  FilledButton(
+                    onPressed: _saving ? null : _save,
+                    child: _saving
+                        ? const SizedBox(
+                            height: 16,
+                            width: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Lưu'),
+                  ),
+                ],
+              ),
             ),
           ],
         ),

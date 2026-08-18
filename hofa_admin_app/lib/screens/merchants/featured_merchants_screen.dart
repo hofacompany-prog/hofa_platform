@@ -161,29 +161,34 @@ class _FeaturedMerchantsScreenState
                                     : null,
                               ),
                               title: Text(m.name),
-                              trailing: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  IconButton(
-                                    tooltip: 'Lên',
-                                    icon: const Icon(Icons.arrow_upward),
-                                    onPressed: i == 0
-                                        ? null
-                                        : () => _move(featured, i, -1),
-                                  ),
-                                  IconButton(
-                                    tooltip: 'Xuống',
-                                    icon: const Icon(Icons.arrow_downward),
-                                    onPressed: i == featured.length - 1
-                                        ? null
-                                        : () => _move(featured, i, 1),
-                                  ),
-                                  IconButton(
-                                    tooltip: 'Bỏ khỏi trang chủ',
-                                    icon: const Icon(Icons.close),
-                                    onPressed: () => _remove(m),
-                                  ),
-                                ],
+                              // 3 IconButton cỡ mặc định (lên/xuống/bỏ) tràn ra ngoài trailing
+                              // của ListTile trên màn hẹp — cuộn ngang thay vì overflow.
+                              trailing: SingleChildScrollView(
+                                scrollDirection: Axis.horizontal,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IconButton(
+                                      tooltip: 'Lên',
+                                      icon: const Icon(Icons.arrow_upward),
+                                      onPressed: i == 0
+                                          ? null
+                                          : () => _move(featured, i, -1),
+                                    ),
+                                    IconButton(
+                                      tooltip: 'Xuống',
+                                      icon: const Icon(Icons.arrow_downward),
+                                      onPressed: i == featured.length - 1
+                                          ? null
+                                          : () => _move(featured, i, 1),
+                                    ),
+                                    IconButton(
+                                      tooltip: 'Bỏ khỏi trang chủ',
+                                      icon: const Icon(Icons.close),
+                                      onPressed: () => _remove(m),
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
                           );

@@ -120,22 +120,27 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      ImageUploadField(
-                        label: 'Ảnh đại diện',
-                        folder: 'merchants',
-                        initialUrl: logoUrl,
-                        onChanged: (url) => logoUrl = url,
-                      ),
-                      const SizedBox(width: 16),
-                      ImageUploadField(
-                        label: 'Ảnh bìa',
-                        folder: 'merchants',
-                        initialUrl: coverUrl,
-                        onChanged: (url) => coverUrl = url,
-                      ),
-                    ],
+                  // 2 ô ảnh 140x140 cố định cạnh nhau (296px+) dễ vượt bề rộng dialog trên màn
+                  // hẹp — cuộn ngang thay vì để RenderFlex overflow.
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      children: [
+                        ImageUploadField(
+                          label: 'Ảnh đại diện',
+                          folder: 'merchants',
+                          initialUrl: logoUrl,
+                          onChanged: (url) => logoUrl = url,
+                        ),
+                        const SizedBox(width: 16),
+                        ImageUploadField(
+                          label: 'Ảnh bìa',
+                          folder: 'merchants',
+                          initialUrl: coverUrl,
+                          onChanged: (url) => coverUrl = url,
+                        ),
+                      ],
+                    ),
                   ),
                   const SizedBox(height: 16),
                   MultiImageUploadField(

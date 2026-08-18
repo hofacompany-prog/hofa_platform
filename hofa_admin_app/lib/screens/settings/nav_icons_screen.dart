@@ -158,21 +158,31 @@ class _NavIconsScreenState extends ConsumerState<NavIconsScreen> {
                                           strokeWidth: 2,
                                         ),
                                       )
-                                    : Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          if (iconUrl != null)
-                                            TextButton(
+                                    // 2 nút nhãn dài ("Khôi phục mặc định" + "Chọn icon") tràn
+                                    // ra ngoài trailing của ListTile trên màn hẹp — cuộn ngang
+                                    // thay vì để RenderFlex overflow.
+                                    : SingleChildScrollView(
+                                        scrollDirection: Axis.horizontal,
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            if (iconUrl != null)
+                                              TextButton(
+                                                onPressed: () => _resetIcon(
+                                                  app,
+                                                  slot.tabKey,
+                                                ),
+                                                child: const Text(
+                                                  'Khôi phục mặc định',
+                                                ),
+                                              ),
+                                            OutlinedButton(
                                               onPressed: () =>
-                                                  _resetIcon(app, slot.tabKey),
-                                              child: const Text('Khôi phục mặc định'),
+                                                  _pickIcon(app, slot.tabKey),
+                                              child: const Text('Chọn icon'),
                                             ),
-                                          OutlinedButton(
-                                            onPressed: () =>
-                                                _pickIcon(app, slot.tabKey),
-                                            child: const Text('Chọn icon'),
-                                          ),
-                                        ],
+                                          ],
+                                        ),
                                       ),
                               );
                             }).toList(),

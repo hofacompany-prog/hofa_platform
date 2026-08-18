@@ -493,38 +493,43 @@ class _MerchantToppingGroupsCardState
             ),
           ],
         ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            IconButton(
-              tooltip: 'Lên',
-              visualDensity: VisualDensity.compact,
-              icon: const Icon(Icons.arrow_upward, size: 18),
-              onPressed: _busy || gi == 0
-                  ? null
-                  : () => _moveGroup(groups, gi, -1),
-            ),
-            IconButton(
-              tooltip: 'Xuống',
-              visualDensity: VisualDensity.compact,
-              icon: const Icon(Icons.arrow_downward, size: 18),
-              onPressed: _busy || gi == groups.length - 1
-                  ? null
-                  : () => _moveGroup(groups, gi, 1),
-            ),
-            IconButton(
-              tooltip: 'Sửa nhóm',
-              visualDensity: VisualDensity.compact,
-              icon: const Icon(Icons.edit_outlined, size: 18),
-              onPressed: () => _groupDialog(existing: g),
-            ),
-            IconButton(
-              tooltip: 'Xoá nhóm',
-              visualDensity: VisualDensity.compact,
-              icon: const Icon(Icons.delete_outline, size: 18),
-              onPressed: () => _deleteGroup(g),
-            ),
-          ],
+        // 4 IconButton cố định (lên/xuống/sửa/xoá) tràn ra ngoài trailing của ExpansionTile
+        // trên màn hẹp — cuộn ngang thay vì để RenderFlex overflow.
+        trailing: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                tooltip: 'Lên',
+                visualDensity: VisualDensity.compact,
+                icon: const Icon(Icons.arrow_upward, size: 18),
+                onPressed: _busy || gi == 0
+                    ? null
+                    : () => _moveGroup(groups, gi, -1),
+              ),
+              IconButton(
+                tooltip: 'Xuống',
+                visualDensity: VisualDensity.compact,
+                icon: const Icon(Icons.arrow_downward, size: 18),
+                onPressed: _busy || gi == groups.length - 1
+                    ? null
+                    : () => _moveGroup(groups, gi, 1),
+              ),
+              IconButton(
+                tooltip: 'Sửa nhóm',
+                visualDensity: VisualDensity.compact,
+                icon: const Icon(Icons.edit_outlined, size: 18),
+                onPressed: () => _groupDialog(existing: g),
+              ),
+              IconButton(
+                tooltip: 'Xoá nhóm',
+                visualDensity: VisualDensity.compact,
+                icon: const Icon(Icons.delete_outline, size: 18),
+                onPressed: () => _deleteGroup(g),
+              ),
+            ],
+          ),
         ),
         children: [
           Padding(
@@ -583,41 +588,51 @@ class _MerchantToppingGroupsCardState
               ),
             ),
             const SizedBox(width: 8),
-            Text(
-              t.price > 0 ? '+${formatVnd(t.price)}' : 'Miễn phí',
-              style: theme.textTheme.bodySmall,
-            ),
-            Switch(
-              value: t.isActive,
-              onChanged: (_) => _toggleToppingActive(t),
-            ),
-            IconButton(
-              tooltip: 'Lên',
-              visualDensity: VisualDensity.compact,
-              icon: const Icon(Icons.arrow_upward, size: 16),
-              onPressed: _busy || ti == 0
-                  ? null
-                  : () => _moveTopping(g, g.toppings, ti, -1),
-            ),
-            IconButton(
-              tooltip: 'Xuống',
-              visualDensity: VisualDensity.compact,
-              icon: const Icon(Icons.arrow_downward, size: 16),
-              onPressed: _busy || ti == g.toppings.length - 1
-                  ? null
-                  : () => _moveTopping(g, g.toppings, ti, 1),
-            ),
-            IconButton(
-              tooltip: 'Sửa',
-              visualDensity: VisualDensity.compact,
-              icon: const Icon(Icons.edit_outlined, size: 16),
-              onPressed: () => _toppingDialog(g, existing: t),
-            ),
-            IconButton(
-              tooltip: 'Xoá',
-              visualDensity: VisualDensity.compact,
-              icon: const Icon(Icons.delete_outline, size: 16),
-              onPressed: () => _deleteTopping(t),
+            // Giá + switch + 4 IconButton cố định dễ tràn ra ngoài cùng dòng với tên trên màn
+            // hẹp — cuộn ngang riêng cụm này, giữ tên topping ở phần Expanded không đổi.
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    t.price > 0 ? '+${formatVnd(t.price)}' : 'Miễn phí',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                  Switch(
+                    value: t.isActive,
+                    onChanged: (_) => _toggleToppingActive(t),
+                  ),
+                  IconButton(
+                    tooltip: 'Lên',
+                    visualDensity: VisualDensity.compact,
+                    icon: const Icon(Icons.arrow_upward, size: 16),
+                    onPressed: _busy || ti == 0
+                        ? null
+                        : () => _moveTopping(g, g.toppings, ti, -1),
+                  ),
+                  IconButton(
+                    tooltip: 'Xuống',
+                    visualDensity: VisualDensity.compact,
+                    icon: const Icon(Icons.arrow_downward, size: 16),
+                    onPressed: _busy || ti == g.toppings.length - 1
+                        ? null
+                        : () => _moveTopping(g, g.toppings, ti, 1),
+                  ),
+                  IconButton(
+                    tooltip: 'Sửa',
+                    visualDensity: VisualDensity.compact,
+                    icon: const Icon(Icons.edit_outlined, size: 16),
+                    onPressed: () => _toppingDialog(g, existing: t),
+                  ),
+                  IconButton(
+                    tooltip: 'Xoá',
+                    visualDensity: VisualDensity.compact,
+                    icon: const Icon(Icons.delete_outline, size: 16),
+                    onPressed: () => _deleteTopping(t),
+                  ),
+                ],
+              ),
             ),
           ],
         ),

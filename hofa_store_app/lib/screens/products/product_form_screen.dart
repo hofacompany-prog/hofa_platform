@@ -1327,9 +1327,15 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text(
-                                'Biến thể khác (không bắt buộc)',
-                                style: Theme.of(context).textTheme.titleMedium,
+                              Expanded(
+                                child: Text(
+                                  'Biến thể khác (không bắt buộc)',
+                                  style: Theme.of(
+                                    context,
+                                  ).textTheme.titleMedium,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
                               TextButton.icon(
                                 onPressed: () => _variantDialog(),
@@ -1383,9 +1389,15 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                           Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Text(
-                                'Danh sách biến thể',
-                                style: Theme.of(context).textTheme.titleMedium,
+                              Expanded(
+                                child: Text(
+                                  'Danh sách biến thể',
+                                  style: Theme.of(
+                                    context,
+                                  ).textTheme.titleMedium,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
                               TextButton.icon(
                                 onPressed: () => _variantDialog(),
@@ -1533,9 +1545,13 @@ class _ProductFormScreenState extends ConsumerState<ProductFormScreen> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(
-                              'Topping & tuỳ chọn thêm',
-                              style: Theme.of(context).textTheme.titleMedium,
+                            Expanded(
+                              child: Text(
+                                'Topping & tuỳ chọn thêm',
+                                style: Theme.of(context).textTheme.titleMedium,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
                             TextButton.icon(
                               onPressed: () async {

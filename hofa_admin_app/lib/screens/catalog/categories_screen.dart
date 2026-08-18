@@ -489,31 +489,36 @@ class _CategoryActions extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        IconButton(
-          tooltip: 'Đưa lên trên',
-          icon: const Icon(Icons.arrow_upward),
-          onPressed: busy || onMoveUp == null ? null : onMoveUp,
-        ),
-        IconButton(
-          tooltip: 'Đưa xuống dưới',
-          icon: const Icon(Icons.arrow_downward),
-          onPressed: busy || onMoveDown == null ? null : onMoveDown,
-        ),
-        if (onAddChild != null)
+    // Tối đa 4 IconButton cỡ mặc định (lên/xuống/thêm con/sửa) tràn ra ngoài trailing của
+    // ListTile/ExpansionTile trên màn hẹp — cuộn ngang thay vì để RenderFlex overflow.
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
           IconButton(
-            tooltip: 'Thêm danh mục con',
-            icon: const Icon(Icons.add),
-            onPressed: busy ? null : onAddChild,
+            tooltip: 'Đưa lên trên',
+            icon: const Icon(Icons.arrow_upward),
+            onPressed: busy || onMoveUp == null ? null : onMoveUp,
           ),
-        IconButton(
-          tooltip: 'Sửa',
-          icon: const Icon(Icons.edit_outlined),
-          onPressed: busy ? null : onEdit,
-        ),
-      ],
+          IconButton(
+            tooltip: 'Đưa xuống dưới',
+            icon: const Icon(Icons.arrow_downward),
+            onPressed: busy || onMoveDown == null ? null : onMoveDown,
+          ),
+          if (onAddChild != null)
+            IconButton(
+              tooltip: 'Thêm danh mục con',
+              icon: const Icon(Icons.add),
+              onPressed: busy ? null : onAddChild,
+            ),
+          IconButton(
+            tooltip: 'Sửa',
+            icon: const Icon(Icons.edit_outlined),
+            onPressed: busy ? null : onEdit,
+          ),
+        ],
+      ),
     );
   }
 }

@@ -309,27 +309,34 @@ class _OfferScreenState extends ConsumerState<OfferScreen>
             child: Column(
               children: [
                 const SizedBox(height: 8),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    _AmountChip(
-                      icon: Icons.route,
-                      label: delivery.distanceKm != null
-                          ? '${delivery.distanceKm!.toStringAsFixed(1)} km'
-                          : '—',
-                    ),
-                    _AmountChip(
-                      icon: Icons.timer_outlined,
-                      label: delivery.etaMinutes != null
-                          ? '${delivery.etaMinutes} phút'
-                          : '—',
-                    ),
-                    _AmountChip(
-                      icon: Icons.payments,
-                      label: formatVnd(delivery.driverFee),
-                      highlight: true,
-                    ),
-                  ],
+                // 3 chip khoảng cách/thời gian/phí — cuộn ngang phòng khi phí hiển thị dài
+                // (số tiền lớn) làm tổng bề rộng vượt màn hình hẹp, thay vì để tràn/cắt chữ.
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      _AmountChip(
+                        icon: Icons.route,
+                        label: delivery.distanceKm != null
+                            ? '${delivery.distanceKm!.toStringAsFixed(1)} km'
+                            : '—',
+                      ),
+                      const SizedBox(width: 28),
+                      _AmountChip(
+                        icon: Icons.timer_outlined,
+                        label: delivery.etaMinutes != null
+                            ? '${delivery.etaMinutes} phút'
+                            : '—',
+                      ),
+                      const SizedBox(width: 28),
+                      _AmountChip(
+                        icon: Icons.payments,
+                        label: formatVnd(delivery.driverFee),
+                        highlight: true,
+                      ),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 24),
                 orderAsync.when(

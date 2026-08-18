@@ -373,9 +373,13 @@ class _ToppingGroupFormScreenState
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          'Lựa chọn trong nhóm',
-                          style: Theme.of(context).textTheme.titleMedium,
+                        Expanded(
+                          child: Text(
+                            'Lựa chọn trong nhóm',
+                            style: Theme.of(context).textTheme.titleMedium,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
                         TextButton.icon(
                           onPressed: () => _toppingDialog(),

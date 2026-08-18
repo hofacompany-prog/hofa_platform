@@ -77,6 +77,7 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen>
         title: const Text('Tài chính'),
         bottom: TabBar(
           controller: _tabController,
+          isScrollable: true,
           tabs: const [
             Tab(text: 'Tóm tắt'),
             Tab(text: 'Giao dịch'),
@@ -88,21 +89,24 @@ class _FinanceScreenState extends ConsumerState<FinanceScreen>
         children: [
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            child: Row(
-              children: financePeriodLabels.entries
-                  .map(
-                    (e) => Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: ChoiceChip(
-                        label: Text(e.value),
-                        selected: period == e.key,
-                        onSelected: (_) =>
-                            ref.read(_financePeriodProvider.notifier).state =
-                                e.key,
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: financePeriodLabels.entries
+                    .map(
+                      (e) => Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: ChoiceChip(
+                          label: Text(e.value),
+                          selected: period == e.key,
+                          onSelected: (_) => ref
+                              .read(_financePeriodProvider.notifier)
+                              .state = e.key,
+                        ),
                       ),
-                    ),
-                  )
-                  .toList(),
+                    )
+                    .toList(),
+              ),
             ),
           ),
           const Divider(height: 1),
