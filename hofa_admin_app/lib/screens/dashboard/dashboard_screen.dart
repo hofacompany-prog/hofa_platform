@@ -124,6 +124,7 @@ class DashboardScreen extends ConsumerWidget {
                             child: Center(child: Text('Chưa có đơn hàng nào')),
                           )
                         : Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: s.recentOrders
                                 .map((o) {
                                   final color = statusColor(
@@ -137,28 +138,40 @@ class DashboardScreen extends ConsumerWidget {
                                         horizontal: 16,
                                         vertical: 8,
                                       ),
-                                      child: Column(
+                                      // Row thay vì gộp chung 1 Column — chữ (mã đơn/khách) neo
+                                      // trái qua Expanded, trạng thái neo phải qua Column riêng,
+                                      // dù Card đã full-width thì bố cục vẫn đúng ý (không phải
+                                      // co theo bề rộng nội dung như Wrap trước đây).
+                                      child: Row(
                                         crossAxisAlignment:
-                                            CrossAxisAlignment.start,
+                                            CrossAxisAlignment.center,
                                         children: [
-                                          Text(
-                                            '${o.orderCode} · ${o.merchantName}',
-                                            maxLines: 2,
-                                            overflow: TextOverflow.ellipsis,
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  '${o.orderCode} · ${o.merchantName}',
+                                                  maxLines: 2,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                ),
+                                                Text(
+                                                  '${o.customerName} — ${formatDateTime(o.createdAt)}',
+                                                  style:
+                                                      theme.textTheme.bodySmall,
+                                                  maxLines: 2,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                ),
+                                              ],
+                                            ),
                                           ),
-                                          Text(
-                                            '${o.customerName} — ${formatDateTime(o.createdAt)}',
-                                            style: theme.textTheme.bodySmall,
-                                            maxLines: 2,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Wrap(
-                                            alignment: WrapAlignment.end,
+                                          const SizedBox(width: 12),
+                                          Column(
                                             crossAxisAlignment:
-                                                WrapCrossAlignment.center,
-                                            spacing: 12,
-                                            runSpacing: 4,
+                                                CrossAxisAlignment.end,
                                             children: [
                                               Text(
                                                 formatVnd(o.totalAmount),
@@ -166,6 +179,7 @@ class DashboardScreen extends ConsumerWidget {
                                                   fontWeight: FontWeight.w500,
                                                 ),
                                               ),
+                                              const SizedBox(height: 4),
                                               Chip(
                                                 label: Text(
                                                   orderStatusLabels[o.status] ??
