@@ -129,13 +129,27 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         address.first.longitude == null) {
       return null;
     }
-    final distanceKm = haversineKm(
+    // Ước tính NHANH bằng đường chim bay trước (không phụ thuộc mạng, hiện ngay không cần chờ)
+    // — có kết quả đường đi thực tế (OSRM qua server, xem routeDistanceKmProvider) cho ĐÚNG
+    // cặp toạ độ này thì dùng số đó thay thế, số hiển thị tự cập nhật khi tải xong, không cần
+    // màn hình loading riêng.
+    final fallbackKm = haversineKm(
       branch.latitude!,
       branch.longitude!,
       address.first.latitude!,
       address.first.longitude!,
     );
-    return settings.estimate(distanceKm, orderAmount: orderAmount);
+    final realKm = ref
+        .watch(
+          routeDistanceKmProvider((
+            branch.latitude!,
+            branch.longitude!,
+            address.first.latitude!,
+            address.first.longitude!,
+          )),
+        )
+        .valueOrNull;
+    return settings.estimate(realKm ?? fallbackKm, orderAmount: orderAmount);
   }
 
   /// Chọn ngày+giờ giao cho đơn "Đặt trước" (giao ngay) — không cho chọn trong quá khứ và phải

@@ -3,6 +3,7 @@ const db = require('../db');
 const asyncHandler = require('../asyncHandler');
 const { ApiError } = require('../errors');
 const { pickFields, requireFields, pagination, requireRole, requireMerchantAccess, requirePermission, haversineKm, haversineKmSql, parseLatLng } = require('../utils');
+const { routeDistancesKm } = require('../routing');
 
 const PRODUCT_FIELDS = [
   'name', 'slug', 'description', 'sales_model', 'status', 'brand', 'unit', 'variant_group_name',
@@ -132,12 +133,29 @@ async function attachDistance(products, query) {
   );
   const nearestByMerchant = {};
   for (const b of branches) {
+    // haversine chỉ để CHỌN chi nhánh gần nhất (đủ tốt cho việc này) — km hiển thị thật thì
+    // tính lại bằng đường đi thực tế ngay dưới, gộp 1 lần gọi OSRM cho mọi cửa hàng trong trang.
     const km = haversineKm(coords.lat, coords.lng, Number(b.latitude), Number(b.longitude));
     const cur = nearestByMerchant[b.merchant_id];
     // Ưu tiên chi nhánh đang mở — trong cùng nhóm mở/đóng thì lấy gần nhất.
     if (!cur || (b.is_open && !cur.isOpen) || (b.is_open === cur.isOpen && km < cur.km)) {
-      nearestByMerchant[b.merchant_id] = { km, isOpen: b.is_open, radiusKm: Number(b.delivery_radius_km) };
+      nearestByMerchant[b.merchant_id] = {
+        km,
+        isOpen: b.is_open,
+        radiusKm: Number(b.delivery_radius_km),
+        lat: Number(b.latitude),
+        lng: Number(b.longitude)
+      };
     }
+  }
+  const merchantsWithBranch = Object.keys(nearestByMerchant);
+  if (merchantsWithBranch.length) {
+    const realDistances = await routeDistancesKm(
+      coords.lat,
+      coords.lng,
+      merchantsWithBranch.map((mid) => nearestByMerchant[mid])
+    );
+    merchantsWithBranch.forEach((mid, i) => { nearestByMerchant[mid].km = realDistances[i]; });
   }
   // beyond_own_radius: vượt bán kính riêng của chi nhánh gần nhất nhưng vẫn lọt qua bộ lọc SQL
   // ở GET /products (còn trong mức mặc định toàn sàn) — dùng để app khách tô cam khoảng cách,

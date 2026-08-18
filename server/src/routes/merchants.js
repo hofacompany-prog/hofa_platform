@@ -3,6 +3,7 @@ const db = require('../db');
 const asyncHandler = require('../asyncHandler');
 const { ApiError } = require('../errors');
 const { pickFields, requireFields, pagination, requireAuth, requireRole, requireMerchantAccess, requirePermission, requireOwnerAccess, parseLatLng, haversineKmSql } = require('../utils');
+const { routeDistanceKm, routeDistancesKm } = require('../routing');
 const supabaseAdmin = require('../supabaseAdmin');
 const push = require('../push');
 
@@ -104,10 +105,10 @@ router.get('/merchants', asyncHandler(async (req, res) => {
     const defaultRadiusKm = await currentDefaultRadiusKm();
     params.push(defaultRadiusKm);
     const defaultRadiusParam = params.length;
-    distanceSelect = 'nearest_branch.distance_km, COALESCE(nearest_branch.distance_km > nearest_branch.delivery_radius_km, false) AS beyond_own_radius';
+    distanceSelect = 'nearest_branch.distance_km, nearest_branch.latitude AS branch_lat, nearest_branch.longitude AS branch_lng, nearest_branch.delivery_radius_km, COALESCE(nearest_branch.distance_km > nearest_branch.delivery_radius_km, false) AS beyond_own_radius';
     distanceJoin = `
       LEFT JOIN LATERAL (
-        SELECT (${haversineKmSql(latParam, lngParam)}) AS distance_km, b.delivery_radius_km
+        SELECT (${haversineKmSql(latParam, lngParam)}) AS distance_km, b.delivery_radius_km, b.latitude, b.longitude
           FROM branches b
          WHERE b.merchant_id = m.id AND b.deleted_at IS NULL
            AND b.latitude IS NOT NULL AND b.longitude IS NOT NULL
@@ -159,6 +160,25 @@ router.get('/merchants', asyncHandler(async (req, res) => {
       LIMIT $${params.length - 1} OFFSET $${params.length}`,
     params
   );
+  // Lọc/sắp trong SQL vẫn dùng khoảng cách chim bay ở trên (không thể gọi routing engine
+  // ngoài ngay trong SQL, và đổi thứ tự sau khi đã LIMIT/OFFSET sẽ làm lệch phân trang) —
+  // NHƯNG số km hiển thị cho khách thì thay bằng đường đi thực tế, tính lại cho ĐÚNG TRANG
+  // đang trả về (đã bị giới hạn bởi limit nên không tốn nhiều lệnh gọi OSRM cùng lúc).
+  if (coords) {
+    const withBranch = rows.filter((r) => r.branch_lat != null && r.branch_lng != null);
+    if (withBranch.length) {
+      const realDistances = await routeDistancesKm(
+        coords.lat,
+        coords.lng,
+        withBranch.map((r) => ({ lat: r.branch_lat, lng: r.branch_lng }))
+      );
+      withBranch.forEach((r, i) => {
+        r.distance_km = realDistances[i];
+        r.beyond_own_radius = r.delivery_radius_km != null && realDistances[i] > r.delivery_radius_km;
+      });
+    }
+    rows.forEach((r) => { delete r.branch_lat; delete r.branch_lng; delete r.delivery_radius_km; });
+  }
   res.json({ ok: true, data: rows, hasMore: rows.length === limit });
 }));
 
@@ -217,8 +237,10 @@ router.get('/merchants/:id', asyncHandler(async (req, res) => {
   // lịch sử đơn dù nay đã ngoài phạm vi, chỉ cần cờ beyond_own_radius để tô cam khoảng cách.
   const coords = parseLatLng(req.query);
   if (coords) {
+    // haversine chỉ để CHỌN chi nhánh gần nhất (đủ tốt cho việc này) — số km hiển thị cho
+    // khách thì tính lại bằng đường đi thực tế ngay dưới.
     const nearest = await db.queryOne(
-      `SELECT (${haversineKmSql(1, 2)}) AS distance_km, b.delivery_radius_km
+      `SELECT (${haversineKmSql(1, 2)}) AS distance_km, b.delivery_radius_km, b.latitude, b.longitude
          FROM branches b
         WHERE b.merchant_id = $3 AND b.deleted_at IS NULL
           AND b.latitude IS NOT NULL AND b.longitude IS NOT NULL
@@ -226,8 +248,10 @@ router.get('/merchants/:id', asyncHandler(async (req, res) => {
         LIMIT 1`,
       [coords.lat, coords.lng, merchantId]
     );
-    row.distance_km = nearest?.distance_km ?? null;
-    row.beyond_own_radius = nearest ? nearest.distance_km > nearest.delivery_radius_km : false;
+    row.distance_km = nearest
+      ? await routeDistanceKm(coords.lat, coords.lng, nearest.latitude, nearest.longitude)
+      : null;
+    row.beyond_own_radius = nearest ? row.distance_km > nearest.delivery_radius_km : false;
   }
 
   const isPrivileged = req.ctx.authenticated && (req.ctx.role === 'admin' || row.owner_id === req.ctx.userId);

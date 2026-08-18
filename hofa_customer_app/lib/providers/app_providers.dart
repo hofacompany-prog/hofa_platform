@@ -175,6 +175,15 @@ final shippingFeeSettingsProvider =
       (ref) => ref.watch(shippingRepoProvider).feeSettings(),
     );
 
+/// Khoảng cách đường đi thực tế (km) giữa 2 toạ độ (lat1,lng1,lat2,lng2) — dùng ở checkout để
+/// ước tính phí ship chuẩn hơn đường chim bay, xem shipping_repository.dart#routeDistanceKm.
+final routeDistanceKmProvider = FutureProvider.autoDispose
+    .family<double, (double, double, double, double)>(
+      (ref, c) => ref
+          .watch(shippingRepoProvider)
+          .routeDistanceKm(c.$1, c.$2, c.$3, c.$4),
+    );
+
 /// Thông tin tài khoản ngân hàng toàn sàn (chỉnh ở app admin) — dùng dựng QR VietQR ở màn chi
 /// tiết đơn cho đơn thanh toán chuyển khoản.
 final bankAccountSettingsProvider =

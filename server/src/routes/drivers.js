@@ -2,7 +2,8 @@ const router = require('express').Router();
 const db = require('../db');
 const asyncHandler = require('../asyncHandler');
 const { ApiError } = require('../errors');
-const { pickFields, requireFields, pagination, requireAuth, requireRole, haversineKm } = require('../utils');
+const { pickFields, requireFields, pagination, requireAuth, requireRole } = require('../utils');
+const { routeDistancesKm } = require('../routing');
 const push = require('../push');
 
 const DRIVER_PROFILE_FIELDS = [
@@ -107,9 +108,15 @@ router.get('/drivers/available', asyncHandler(async (req, res) => {
   );
   if (req.query.latitude !== undefined && req.query.longitude !== undefined) {
     const lat = parseFloat(req.query.latitude), lon = parseFloat(req.query.longitude);
-    drivers.forEach((d) => {
-      d.distance_km = d.current_latitude != null ? haversineKm(lat, lon, d.current_latitude, d.current_longitude) : null;
-    });
+    const located = drivers.filter((d) => d.current_latitude != null);
+    // Đường đi thực tế thay vì chim bay — 1 lần gọi OSRM Table, tự rớt về haversine nếu lỗi.
+    const distances = await routeDistancesKm(
+      lat,
+      lon,
+      located.map((d) => ({ lat: d.current_latitude, lng: d.current_longitude }))
+    );
+    located.forEach((d, i) => { d.distance_km = distances[i]; });
+    drivers.forEach((d) => { if (d.current_latitude == null) d.distance_km = null; });
     drivers.sort((a, b) => (a.distance_km ?? 1e9) - (b.distance_km ?? 1e9));
   }
   const { limit } = pagination(req.query);

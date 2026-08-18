@@ -1,5 +1,5 @@
 const db = require('./db');
-const { haversineKm } = require('./utils');
+const { routeDistanceKm, routeDistancesKm } = require('./routing');
 const push = require('./push');
 
 const AVG_SPEED_KMH = 25; // giả định tốc độ trung bình nội thành, dùng để ước lượng ETA
@@ -57,9 +57,14 @@ async function findNearestOnlineDriver(pickupLat, pickupLng, excludeDriverIds, {
   );
   if (!drivers.length) return null;
   if (pickupLat == null || pickupLng == null) return drivers[0];
-  drivers.forEach((d) => {
-    d._distance = haversineKm(pickupLat, pickupLng, d.current_latitude, d.current_longitude);
-  });
+  // Đường đi thực tế thay vì chim bay — 1 lần gọi OSRM Table cho cả danh sách tài xế online,
+  // tự rớt về haversine (từng phần tử hoặc cả danh sách) nếu OSRM lỗi/timeout, xem routing.js.
+  const distances = await routeDistancesKm(
+    pickupLat,
+    pickupLng,
+    drivers.map((d) => ({ lat: d.current_latitude, lng: d.current_longitude }))
+  );
+  drivers.forEach((d, i) => { d._distance = distances[i]; });
   drivers.sort((a, b) => a._distance - b._distance);
   return drivers[0];
 }
@@ -87,7 +92,7 @@ async function offerToNearestDriver(orderId, { excludeDriverIds = [] } = {}) {
 
   const distanceKm =
     branch?.latitude != null && order.ship_latitude != null
-      ? haversineKm(branch.latitude, branch.longitude, order.ship_latitude, order.ship_longitude)
+      ? await routeDistanceKm(branch.latitude, branch.longitude, order.ship_latitude, order.ship_longitude)
       : null;
   return assignDriverAndNotify(order, driver, distanceKm);
 }
@@ -110,7 +115,7 @@ async function offerToSpecificDriver(orderId, driverId) {
 
   const distanceKm =
     branch?.latitude != null && order.ship_latitude != null
-      ? haversineKm(branch.latitude, branch.longitude, order.ship_latitude, order.ship_longitude)
+      ? await routeDistanceKm(branch.latitude, branch.longitude, order.ship_latitude, order.ship_longitude)
       : null;
   return assignDriverAndNotify(order, driver, distanceKm);
 }
