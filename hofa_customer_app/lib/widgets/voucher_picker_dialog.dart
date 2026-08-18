@@ -63,23 +63,8 @@ Future<String?> showVoucherPickerDialog(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (selectable.isEmpty)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        child: Text(
-                          vouchers.isEmpty
-                              ? 'Cửa hàng chưa có voucher công khai nào.'
-                              : 'Đã áp dụng hết voucher công khai của cửa hàng.',
-                        ),
-                      )
-                    else
-                      ...selectable.map(
-                        (v) =>
-                            _VoucherTile(voucher: v, orderAmount: orderAmount),
-                      ),
-                    const Divider(height: 32),
                     Text(
-                      'Hoặc nhập mã khác',
+                      'Nhập mã voucher',
                       style: Theme.of(context).textTheme.titleSmall,
                     ),
                     const SizedBox(height: 8),
@@ -110,6 +95,26 @@ Future<String?> showVoucherPickerDialog(
                         ),
                       ],
                     ),
+                    const Divider(height: 32),
+                    Text(
+                      'Hoặc chọn từ danh sách',
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                    const SizedBox(height: 8),
+                    if (selectable.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        child: Text(
+                          vouchers.isEmpty
+                              ? 'Cửa hàng chưa có voucher công khai nào.'
+                              : 'Đã áp dụng hết voucher công khai của cửa hàng.',
+                        ),
+                      )
+                    else
+                      ...selectable.map(
+                        (v) =>
+                            _VoucherTile(voucher: v, orderAmount: orderAmount),
+                      ),
                   ],
                 ),
               ),
