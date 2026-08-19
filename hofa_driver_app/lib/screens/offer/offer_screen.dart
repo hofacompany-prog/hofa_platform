@@ -538,10 +538,42 @@ class _OfferDetails extends ConsumerWidget {
           ),
         ],
         const SizedBox(height: 12),
-        Text(
-          '${order.orderCode} · ${order.totalQuantity} món · '
-          '${order.paymentMethod == 'cod' ? 'Thu hộ ${formatVnd(order.totalAmount)}' : 'Đã thanh toán'}',
-          style: theme.textTheme.bodySmall,
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            // Nổi bật ngay cạnh mã đơn — tài xế cần biết ngay lúc quyết định nhận đơn là đơn
+            // mua hộ sẽ có thêm phí (buy_on_behalf_fee_share, xem
+            // hofa-db/79_driver_buy_on_behalf_fee_share.sql), không phải đợi đọc hết đoạn giải
+            // thích cách ứng tiền ở trên.
+            if (branchAsync.valueOrNull?.isBuyOnBehalf == true) ...[
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 3,
+                ),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.secondary,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  'MUA HỘ +PHÍ',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onSecondary,
+                    fontWeight: FontWeight.bold,
+                    letterSpacing: 0.3,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+            ],
+            Expanded(
+              child: Text(
+                '${order.orderCode} · ${order.totalQuantity} món · '
+                '${order.paymentMethod == 'cod' ? 'Thu hộ ${formatVnd(order.totalAmount)}' : 'Đã thanh toán'}',
+                style: theme.textTheme.bodySmall,
+              ),
+            ),
+          ],
         ),
       ],
     );

@@ -81,7 +81,10 @@ async function findNearestOnlineDriver(pickupLat, pickupLng, excludeDriverIds, {
  * Trả về { delivery, driver } hoặc null nếu không còn tài xế nào online phù hợp.
  */
 async function offerToNearestDriver(orderId, { excludeDriverIds = [] } = {}) {
-  const order = await db.queryOne('SELECT * FROM orders WHERE id = $1', [orderId]);
+  const order = await db.queryOne(
+    `SELECT o.*, m.merchant_type FROM orders o JOIN merchants m ON m.id = o.merchant_id WHERE o.id = $1`,
+    [orderId]
+  );
   if (!order) return null;
   const branch = await db.queryOne('SELECT * FROM branches WHERE id = $1', [order.branch_id]);
 
@@ -102,7 +105,10 @@ async function offerToNearestDriver(orderId, { excludeDriverIds = [] } = {}) {
  * online HOẶC không đủ Ví trên theo giá trị đơn (xem findNearestOnlineDriver), trả về null
  * để nơi gọi tự báo lại cho khách chọn người khác. */
 async function offerToSpecificDriver(orderId, driverId) {
-  const order = await db.queryOne('SELECT * FROM orders WHERE id = $1', [orderId]);
+  const order = await db.queryOne(
+    `SELECT o.*, m.merchant_type FROM orders o JOIN merchants m ON m.id = o.merchant_id WHERE o.id = $1`,
+    [orderId]
+  );
   if (!order) return null;
   const driver = await db.queryOne(
     `SELECT d.* FROM drivers d
@@ -152,8 +158,12 @@ async function assignDriverAndNotify(order, driver, distanceKm) {
     [windowSeconds, delivery.id]
   );
   const deadline = deadlineRow.accept_deadline.toISOString();
+  // Báo ngay từ tiêu đề thông báo là đơn mua hộ — tài xế cần biết TRƯỚC khi mở app ra xem chi
+  // tiết (có thêm phí mua hộ, xem hofa-db/79_driver_buy_on_behalf_fee_share.sql; badge "MUA HỘ
+  // +PHÍ" cạnh mã đơn ở offer_screen.dart/delivery_detail_screen.dart chỉ thấy SAU khi mở app).
+  const isBuyOnBehalf = order.merchant_type === 'buy_on_behalf';
   await push.sendPushToUser(driver.user_id, {
-    title: 'Đơn mới gần bạn!',
+    title: isBuyOnBehalf ? 'Đơn mới gần bạn! (Mua hộ +phí)' : 'Đơn mới gần bạn!',
     body: `${order.order_code} · ${distanceKm != null ? distanceKm.toFixed(1) + ' km' : ''} · ${driverFee.toLocaleString('vi-VN')}đ — xác nhận trong ${windowSeconds}s`,
     data: {
       type: 'delivery_offer',
