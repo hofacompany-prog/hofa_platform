@@ -198,7 +198,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     setState(() => _scheduledFor = combined);
   }
 
-  Future<void> _addAddress() async {
+  /// Trả về địa chỉ vừa lưu (đã tự chọn làm [_selectedAddressId]) — null nếu khách huỷ/lỗi.
+  /// Dùng lại để nút "Đặt hàng" gọi thẳng khi chưa có địa chỉ nào, xem chỗ dùng bên dưới.
+  Future<Address?> _addAddress() async {
     final nameCtrl = TextEditingController();
     final phoneCtrl = TextEditingController();
     final line1Ctrl = TextEditingController();
@@ -325,7 +327,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         ),
       ),
     );
-    if (ok != true) return;
+    if (ok != true) return null;
     if (nameCtrl.text.trim().isEmpty ||
         phoneCtrl.text.trim().isEmpty ||
         line1Ctrl.text.trim().isEmpty ||
@@ -334,7 +336,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Thiếu thông tin bắt buộc')),
         );
-      return;
+      return null;
     }
     try {
       final created = await ref.read(userRepoProvider).createAddress({
@@ -351,11 +353,13 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       });
       ref.invalidate(addressesProvider);
       setState(() => _selectedAddressId = created.id);
+      return created;
     } catch (e) {
       if (mounted)
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      return null;
     }
   }
 
@@ -1353,14 +1357,23 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   ),
                   const SizedBox(height: 12),
                   FilledButton(
-                    onPressed: (_placing || _selectedAddressId == null)
+                    // Nút LUÔN mở kể cả chưa có địa chỉ nào — bấm vào lúc đó thì hiện thẳng
+                    // popup "Thêm địa chỉ giao hàng" (_addAddress, y hệt lúc bấm nút thêm địa
+                    // chỉ ở trên), xác nhận xong là tự lưu + chọn luôn địa chỉ đó rồi đặt hàng
+                    // tiếp, không cần bấm "Đặt hàng" lần 2.
+                    onPressed: _placing
                         ? null
-                        : () {
-                            final address = addresses
-                                .where((a) => a.id == _selectedAddressId)
-                                .toList();
-                            if (address.isEmpty) return;
-                            _placeOrder(address.first, shippingFee);
+                        : () async {
+                            Address? address;
+                            if (_selectedAddressId != null) {
+                              final matches = addresses
+                                  .where((a) => a.id == _selectedAddressId)
+                                  .toList();
+                              address = matches.isEmpty ? null : matches.first;
+                            }
+                            address ??= await _addAddress();
+                            if (!mounted || address == null) return;
+                            _placeOrder(address, shippingFee);
                           },
                     child: _placing
                         ? const SizedBox(
