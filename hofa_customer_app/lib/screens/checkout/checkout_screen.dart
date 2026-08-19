@@ -201,6 +201,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   /// Trả về địa chỉ vừa lưu (đã tự chọn làm [_selectedAddressId]) — null nếu khách huỷ/lỗi.
   /// Dùng lại để nút "Đặt hàng" gọi thẳng khi chưa có địa chỉ nào, xem chỗ dùng bên dưới.
   Future<Address?> _addAddress() async {
+    final formKey = GlobalKey<FormState>();
     final nameCtrl = TextEditingController();
     final phoneCtrl = TextEditingController();
     final line1Ctrl = TextEditingController();
@@ -210,6 +211,14 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     double? pickedLat;
     double? pickedLng;
     String? mapError;
+    // Banner tóm tắt hiện NGAY TRONG dialog khi bấm Lưu mà còn thiếu trường bắt buộc — cùng lý
+    // do với mapError bên dưới (SnackBar gắn vào màn phía SAU dialog, bị lớp phủ mờ che mất).
+    String? formError;
+
+    // Khớp đúng các cột NOT NULL của bảng addresses (hofa-db/01_schema.sql) — ward/district
+    // không bắt buộc, giữ nguyên TextField thường, không validator.
+    String? requiredValidator(String? v) =>
+        (v == null || v.trim().isEmpty) ? 'Bắt buộc nhập' : null;
 
     final ok = await showDialog<bool>(
       context: context,
@@ -219,98 +228,126 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           content: SizedBox(
             width: 360,
             child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: nameCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Tên người nhận',
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: phoneCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'SĐT người nhận',
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  OutlinedButton.icon(
-                    icon: const Icon(Icons.map_outlined),
-                    label: Text(
-                      pickedLat == null
-                          ? 'Chọn vị trí trên bản đồ'
-                          : 'Đã chọn vị trí trên bản đồ ✓',
-                    ),
-                    onPressed: () async {
-                      // Bắt nhập tên + SĐT người nhận TRƯỚC khi cho chọn vị trí — tránh khách
-                      // chọn xong bản đồ rồi mới phát hiện thiếu, phải quay lại chọn lại từ đầu.
-                      // Báo lỗi NGAY TRONG dialog (không dùng SnackBar) — SnackBar gắn vào
-                      // ScaffoldMessenger của màn phía SAU dialog, hiện ra bị lớp phủ mờ của
-                      // dialog che mất, trông như "ẩn ở dưới".
-                      if (nameCtrl.text.trim().isEmpty ||
-                          phoneCtrl.text.trim().isEmpty) {
-                        setDialogState(
-                          () => mapError =
-                              'Nhập tên và số điện thoại người nhận trước khi chọn vị trí trên bản đồ',
-                        );
-                        return;
-                      }
-                      setDialogState(() => mapError = null);
-                      final picked = await Navigator.of(context)
-                          .push<PickedAddress>(
-                            MaterialPageRoute(
-                              builder: (_) => const AddressPickerScreen(),
-                            ),
-                          );
-                      if (picked == null) return;
-                      line1Ctrl.text = picked.line1;
-                      wardCtrl.text = picked.ward ?? '';
-                      districtCtrl.text = picked.district ?? '';
-                      provinceCtrl.text = picked.province;
-                      setDialogState(() {
-                        pickedLat = picked.latitude;
-                        pickedLng = picked.longitude;
-                      });
-                    },
-                  ),
-                  if (mapError != null)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: Text(
-                        mapError!,
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.error,
-                          fontSize: 12,
+              child: Form(
+                key: formKey,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (formError != null)
+                      Container(
+                        width: double.infinity,
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.errorContainer,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          formError!,
+                          style: TextStyle(
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onErrorContainer,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
+                    TextFormField(
+                      controller: nameCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'Tên người nhận',
+                      ),
+                      validator: requiredValidator,
                     ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: line1Ctrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Số nhà, tên đường',
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: phoneCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'SĐT người nhận',
+                      ),
+                      validator: requiredValidator,
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: wardCtrl,
-                    decoration: const InputDecoration(labelText: 'Phường/Xã'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: districtCtrl,
-                    decoration: const InputDecoration(labelText: 'Quận/Huyện'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: provinceCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Tỉnh/Thành phố',
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.map_outlined),
+                      label: Text(
+                        pickedLat == null
+                            ? 'Chọn vị trí trên bản đồ'
+                            : 'Đã chọn vị trí trên bản đồ ✓',
+                      ),
+                      onPressed: () async {
+                        // Bắt nhập tên + SĐT người nhận TRƯỚC khi cho chọn vị trí — tránh khách
+                        // chọn xong bản đồ rồi mới phát hiện thiếu, phải quay lại chọn lại từ đầu.
+                        // Báo lỗi NGAY TRONG dialog (không dùng SnackBar) — SnackBar gắn vào
+                        // ScaffoldMessenger của màn phía SAU dialog, hiện ra bị lớp phủ mờ của
+                        // dialog che mất, trông như "ẩn ở dưới".
+                        if (nameCtrl.text.trim().isEmpty ||
+                            phoneCtrl.text.trim().isEmpty) {
+                          setDialogState(
+                            () => mapError =
+                                'Nhập tên và số điện thoại người nhận trước khi chọn vị trí trên bản đồ',
+                          );
+                          return;
+                        }
+                        setDialogState(() => mapError = null);
+                        final picked = await Navigator.of(context)
+                            .push<PickedAddress>(
+                              MaterialPageRoute(
+                                builder: (_) => const AddressPickerScreen(),
+                              ),
+                            );
+                        if (picked == null) return;
+                        line1Ctrl.text = picked.line1;
+                        wardCtrl.text = picked.ward ?? '';
+                        districtCtrl.text = picked.district ?? '';
+                        provinceCtrl.text = picked.province;
+                        setDialogState(() {
+                          pickedLat = picked.latitude;
+                          pickedLng = picked.longitude;
+                        });
+                      },
                     ),
-                  ),
-                ],
+                    if (mapError != null)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Text(
+                          mapError!,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: line1Ctrl,
+                      decoration: const InputDecoration(
+                        labelText: 'Số nhà, tên đường',
+                      ),
+                      validator: requiredValidator,
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: wardCtrl,
+                      decoration: const InputDecoration(labelText: 'Phường/Xã'),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: districtCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'Quận/Huyện',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: provinceCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'Tỉnh/Thành phố',
+                      ),
+                      validator: requiredValidator,
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -320,7 +357,16 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
               child: const Text('Huỷ'),
             ),
             FilledButton(
-              onPressed: () => Navigator.pop(context, true),
+              onPressed: () {
+                if (!formKey.currentState!.validate()) {
+                  setDialogState(
+                    () => formError =
+                        'Còn thiếu thông tin bắt buộc — điền đủ các ô đánh dấu đỏ bên dưới rồi bấm Lưu lại.',
+                  );
+                  return;
+                }
+                Navigator.pop(context, true);
+              },
               child: const Text('Lưu'),
             ),
           ],
@@ -328,16 +374,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       ),
     );
     if (ok != true) return null;
-    if (nameCtrl.text.trim().isEmpty ||
-        phoneCtrl.text.trim().isEmpty ||
-        line1Ctrl.text.trim().isEmpty ||
-        provinceCtrl.text.trim().isEmpty) {
-      if (mounted)
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Thiếu thông tin bắt buộc')),
-        );
-      return null;
-    }
     try {
       final created = await ref.read(userRepoProvider).createAddress({
         'recipient_name': nameCtrl.text.trim(),
@@ -1326,11 +1362,15 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                         children: [
                           Text(
                             'Giảm giá',
-                            style: TextStyle(color: theme.colorScheme.secondary),
+                            style: TextStyle(
+                              color: theme.colorScheme.secondary,
+                            ),
                           ),
                           Text(
                             '-${formatVnd(_voucherDiscount)}',
-                            style: TextStyle(color: theme.colorScheme.secondary),
+                            style: TextStyle(
+                              color: theme.colorScheme.secondary,
+                            ),
                           ),
                         ],
                       ),
