@@ -135,6 +135,86 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
     }
   }
 
+  /// Mục lớn "Nhắn tin" — bấm vào hiện 2 lựa chọn (cửa hàng/tài xế, tài xế chỉ hiện khi đã
+  /// gán được tài xế) thay vì 2 nút riêng chiếm chỗ ngang hàng.
+  Future<void> _showChatOptions(Order o, bool hasDriver) async {
+    // Dùng context của State (rootContext) để push SAU KHI sheet đã đóng — dùng lại context
+    // của chính ListTile (đang bị Navigator.pop huỷ) để push tiếp dễ dính lỗi "deactivated
+    // widget's ancestor" dù thường vẫn chạy được, tách hẳn cho chắc.
+    final rootContext = context;
+    await showModalBottomSheet(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: ChatBadgeIcon(
+                orderId: o.id,
+                channel: 'customer_merchant',
+                icon: Icons.storefront_outlined,
+              ),
+              title: const Text('Nhắn tin cửa hàng'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                rootContext.push('/orders/${o.id}/chat/merchant');
+              },
+            ),
+            if (hasDriver)
+              ListTile(
+                leading: ChatBadgeIcon(
+                  orderId: o.id,
+                  channel: 'customer_driver',
+                  icon: Icons.delivery_dining_outlined,
+                ),
+                title: const Text('Nhắn tin tài xế'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  rootContext.push('/orders/${o.id}/chat/driver');
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Mục lớn "Gọi điện" — bấm vào hiện 2 lựa chọn (cửa hàng/tài xế, tài xế chỉ hiện khi đã gán
+  /// được tài xế), cùng cấu trúc với _showChatOptions.
+  Future<void> _showCallOptions(
+    String? merchantPhone,
+    String? driverPhone,
+    bool hasDriver,
+  ) async {
+    await showModalBottomSheet(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.storefront_outlined),
+              title: const Text('Gọi cửa hàng'),
+              subtitle: Text(merchantPhone ?? 'Chưa có số điện thoại'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _contactMerchant(merchantPhone);
+              },
+            ),
+            if (hasDriver)
+              ListTile(
+                leading: const Icon(Icons.delivery_dining_outlined),
+                title: const Text('Gọi tài xế'),
+                subtitle: Text(driverPhone ?? 'Chưa có số điện thoại'),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _callDriver(driverPhone);
+                },
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   /// Gọi thẳng tài xế đang phụ trách đơn — cạnh nút "Nhắn tin tài xế" đã có sẵn, cùng điều kiện
   /// hiện (chỉ khi đã gán được tài xế, xem hasDriver ở build()).
   Future<void> _callDriver(String? phone) async {
@@ -440,50 +520,34 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                     if (!chatOpen) return const SizedBox();
                     final hasDriver =
                         deliveryAsync.valueOrNull?.driverId != null;
+                    final merchantPhone = ref
+                        .watch(merchantDetailProvider(o.merchantId))
+                        .valueOrNull
+                        ?.phone;
+                    final driverPhone = deliveryAsync.valueOrNull?.driverPhone;
                     return Padding(
                       padding: const EdgeInsets.only(top: 12),
                       child: Row(
                         children: [
                           Expanded(
                             child: OutlinedButton.icon(
-                              icon: ChatBadgeIcon(
-                                orderId: o.id,
-                                channel: 'customer_merchant',
-                                icon: Icons.storefront_outlined,
-                              ),
-                              label: const Text('Nhắn tin cửa hàng'),
-                              onPressed: () =>
-                                  context.push('/orders/${o.id}/chat/merchant'),
+                              icon: const Icon(Icons.chat_bubble_outline),
+                              label: const Text('Nhắn tin'),
+                              onPressed: () => _showChatOptions(o, hasDriver),
                             ),
                           ),
-                          if (hasDriver) ...[
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: OutlinedButton.icon(
-                                icon: ChatBadgeIcon(
-                                  orderId: o.id,
-                                  channel: 'customer_driver',
-                                  icon: Icons.delivery_dining_outlined,
-                                ),
-                                label: const Text('Nhắn tin tài xế'),
-                                onPressed: () =>
-                                    context.push('/orders/${o.id}/chat/driver'),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              icon: const Icon(Icons.call_outlined),
+                              label: const Text('Gọi điện'),
+                              onPressed: () => _showCallOptions(
+                                merchantPhone,
+                                driverPhone,
+                                hasDriver,
                               ),
                             ),
-                            const SizedBox(width: 8),
-                            OutlinedButton(
-                              style: OutlinedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 12,
-                                ),
-                              ),
-                              onPressed: () => _callDriver(
-                                deliveryAsync.valueOrNull?.driverPhone,
-                              ),
-                              child: const Icon(Icons.call_outlined),
-                            ),
-                          ],
+                          ),
                         ],
                       ),
                     );
