@@ -94,11 +94,16 @@ router.patch('/drivers/me/location', asyncHandler(async (req, res) => {
   res.json({ ok: true, data: { updated: true } });
 }));
 
-/** Danh sách tài xế online, sắp theo khoảng cách gần nhất tới 1 toạ độ (vd: chi nhánh) — dùng
- * cho merchant/admin gán tay LẪN khách tự chọn tài xế ở đơn mua hộ (buy_on_behalf), nên chỉ
- * chọn đúng các cột hiển thị được công khai (tên, ảnh, đánh giá, loại xe) — không bao giờ trả
- * national_id/license_no/wallet_balance/document_urls dù ai gọi. exclude= loại bớt tài xế đã
- * từ chối đơn này (dùng lúc khách chọn lại sau khi tài xế trước từ chối/hết hạn). */
+/** Danh sách tài xế online cho KHÁCH tự chọn tài xế ở đơn mua hộ (buy_on_behalf) — chỉ hiện
+ * tài xế đã bật "Tự động nhận đơn" (auto_accept), vì khách chọn tay 1 người cụ thể thì đơn
+ * phải được nhận ngay, không có ai đứng ra bấm "Nhận" thủ công cho họ như flow tự động tìm
+ * (offerToNearestDriver/findNearestOnlineDriver ở dispatch.js — flow ĐÓ vẫn xét mọi tài xế
+ * online, không lọc auto_accept, vì có cửa sổ auto_accept_sweep_seconds/manual_accept_sweep_
+ * seconds để tài xế online-nhưng-không-auto tự bấm nhận kịp). Sắp theo khoảng cách gần nhất
+ * tới 1 toạ độ (vd: chi nhánh) — chỉ chọn đúng các cột hiển thị công khai (tên, ảnh, đánh giá,
+ * loại xe), không bao giờ trả national_id/license_no/wallet_balance/document_urls dù ai gọi.
+ * exclude= loại bớt tài xế đã từ chối đơn này (dùng lúc khách chọn lại sau khi tài xế trước từ
+ * chối/hết hạn). */
 router.get('/drivers/available', asyncHandler(async (req, res) => {
   requireAuth(req.ctx);
   const excludeIds = typeof req.query.exclude === 'string' && req.query.exclude.trim()
@@ -109,7 +114,7 @@ router.get('/drivers/available', asyncHandler(async (req, res) => {
             d.rating_avg, d.rating_count, u.full_name, u.avatar_url
        FROM drivers d
        JOIN users u ON u.id = d.user_id
-      WHERE d.status = 'online' AND d.id <> ALL($1::uuid[])`,
+      WHERE d.status = 'online' AND d.auto_accept = true AND d.id <> ALL($1::uuid[])`,
     [excludeIds]
   );
   if (req.query.latitude !== undefined && req.query.longitude !== undefined) {
