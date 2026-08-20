@@ -203,9 +203,19 @@ class MerchantProductsScreen extends ConsumerWidget {
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Text(
-                                  '${p.variants.length} biến thể · từ ${formatVnd(p.lowestPrice)}',
-                                  style: Theme.of(context).textTheme.bodySmall,
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      '${p.variants.length} biến thể',
+                                      style: Theme.of(context).textTheme.bodySmall,
+                                    ),
+                                    Text(
+                                      'từ ${formatVnd(p.lowestPrice)}',
+                                      style: Theme.of(context).textTheme.bodySmall,
+                                    ),
+                                  ],
                                 ),
                                 const SizedBox(width: 6),
                                 Icon(
@@ -224,21 +234,17 @@ class MerchantProductsScreen extends ConsumerWidget {
               Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Transform.scale(
-                    scale: 0.75,
-                    child: Switch(
-                      value: isActive,
-                      onChanged: (_) => _toggleActive(context, ref, p),
-                    ),
-                  ),
+                  // Nút bật/tắt + kéo sắp xếp cùng 1 hàng — dồn xuống hàng dưới (cùng nút
+                  // xoá) từng bị chèn sát khu vực "sửa giá nhanh" ở cột bên trái.
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      IconButton(
-                        tooltip: 'Xoá sản phẩm',
-                        icon: const Icon(Icons.delete_outline, size: 20),
-                        visualDensity: VisualDensity.compact,
-                        onPressed: () => _confirmDelete(context, ref, p),
+                      Transform.scale(
+                        scale: 0.75,
+                        child: Switch(
+                          value: isActive,
+                          onChanged: (_) => _toggleActive(context, ref, p),
+                        ),
                       ),
                       ReorderableDragStartListener(
                         index: index,
@@ -248,6 +254,12 @@ class MerchantProductsScreen extends ConsumerWidget {
                         ),
                       ),
                     ],
+                  ),
+                  IconButton(
+                    tooltip: 'Xoá sản phẩm',
+                    icon: const Icon(Icons.delete_outline, size: 20),
+                    visualDensity: VisualDensity.compact,
+                    onPressed: () => _confirmDelete(context, ref, p),
                   ),
                 ],
               ),

@@ -434,9 +434,19 @@ class ProductsListScreen extends ConsumerWidget {
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Text(
-                                  '${p.variants.length} biến thể · từ ${formatVnd(p.lowestPrice)}',
-                                  style: Theme.of(context).textTheme.bodySmall,
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      '${p.variants.length} biến thể',
+                                      style: Theme.of(context).textTheme.bodySmall,
+                                    ),
+                                    Text(
+                                      'từ ${formatVnd(p.lowestPrice)}',
+                                      style: Theme.of(context).textTheme.bodySmall,
+                                    ),
+                                  ],
                                 ),
                                 const SizedBox(width: 6),
                                 Icon(
@@ -455,12 +465,27 @@ class ProductsListScreen extends ConsumerWidget {
               Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Transform.scale(
-                    scale: 0.75,
-                    child: Switch(
-                      value: isActive,
-                      onChanged: (_) => _toggleActive(context, ref, p),
-                    ),
+                  // Nút bật/tắt + kéo sắp xếp cùng 1 hàng — dồn xuống hàng dưới (cùng
+                  // sao chép/xoá) từng bị chèn sát khu vực "sửa giá nhanh" ở cột bên trái.
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Transform.scale(
+                        scale: 0.75,
+                        child: Switch(
+                          value: isActive,
+                          onChanged: (_) => _toggleActive(context, ref, p),
+                        ),
+                      ),
+                      // Kéo để đổi thứ tự hiển thị cho khách — xem [_reorder].
+                      ReorderableDragStartListener(
+                        index: index,
+                        child: const Padding(
+                          padding: EdgeInsets.all(8),
+                          child: Icon(Icons.drag_handle, size: 20),
+                        ),
+                      ),
+                    ],
                   ),
                   Row(
                     mainAxisSize: MainAxisSize.min,
@@ -476,14 +501,6 @@ class ProductsListScreen extends ConsumerWidget {
                         icon: const Icon(Icons.delete_outline, size: 20),
                         visualDensity: VisualDensity.compact,
                         onPressed: () => _confirmDelete(context, ref, p),
-                      ),
-                      // Kéo để đổi thứ tự hiển thị cho khách — xem [_reorder].
-                      ReorderableDragStartListener(
-                        index: index,
-                        child: const Padding(
-                          padding: EdgeInsets.all(8),
-                          child: Icon(Icons.drag_handle, size: 20),
-                        ),
                       ),
                     ],
                   ),
