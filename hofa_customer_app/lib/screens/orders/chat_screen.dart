@@ -97,7 +97,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             imageUrl: imageUrl,
           );
       _bodyCtrl.clear();
-      await _load();
+      await _load(silent: true);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -161,15 +161,27 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 ? Center(child: Text(_error!))
                 : _messages.isEmpty
                 ? const Center(child: Text('Chưa có tin nhắn nào'))
-                : ListView.builder(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.all(12),
-                    itemCount: _messages.length,
-                    itemBuilder: (context, i) => _MessageBubble(
-                      message: _messages[i],
-                      isMe: _messages[i].senderId == _myUserId,
-                      otherPartyLastReadAt: _otherPartyLastReadAt,
-                    ),
+                : Builder(
+                    builder: (context) {
+                      final items = _timelineItems(_messages);
+                      return ListView.builder(
+                        controller: _scrollController,
+                        padding: const EdgeInsets.all(12),
+                        itemCount: items.length,
+                        itemBuilder: (context, i) {
+                          final item = items[i];
+                          if (item is DateTime) {
+                            return _DateSeparator(date: item);
+                          }
+                          final message = item as ChatMessage;
+                          return _MessageBubble(
+                            message: message,
+                            isMe: message.senderId == _myUserId,
+                            otherPartyLastReadAt: _otherPartyLastReadAt,
+                          );
+                        },
+                      );
+                    },
                   ),
           ),
           if (!canSend)
@@ -242,7 +254,8 @@ class _MessageBubble extends StatelessWidget {
   final ChatMessage message;
   final bool isMe;
   // Mốc "đã đọc tới lúc nào" của đầu bên kia — chỉ dùng cho tin CỦA MÌNH (isMe), để hiện
-  // "Đã gửi"/"Đã xem" thay vì ngày giờ. Tin nhận từ đối phương vẫn hiện ngày giờ như cũ.
+  // 1 tick (đã gửi)/2 tick (đã xem) thay vì giờ. Tin nhận từ đối phương vẫn hiện giờ (không
+  // còn kèm ngày — ngày đã tách ra _DateSeparator riêng).
   final DateTime? otherPartyLastReadAt;
   const _MessageBubble({
     required this.message,
@@ -259,6 +272,11 @@ class _MessageBubble extends StatelessWidget {
     final textColor = isMe
         ? theme.colorScheme.onPrimary
         : theme.colorScheme.onSurface;
+    // Đầu bên kia đã mở màn chat SAU (hoặc đúng lúc) tin này được gửi thì coi là đã xem — 1
+    // tick (Icons.done) = đã gửi, 2 tick (Icons.done_all) = đã xem, giống quy ước quen thuộc.
+    final seen =
+        otherPartyLastReadAt != null &&
+        !message.createdAt.isAfter(otherPartyLastReadAt!);
     return Align(
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
@@ -293,21 +311,85 @@ class _MessageBubble extends StatelessWidget {
               Text(message.body!, style: TextStyle(color: textColor)),
             ],
             const SizedBox(height: 4),
-            Text(
-              isMe
-                  ? ((otherPartyLastReadAt != null &&
-                            !message.createdAt.isAfter(otherPartyLastReadAt!))
-                        ? 'Đã xem'
-                        : 'Đã gửi')
-                  : formatDateTime(message.createdAt),
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: textColor.withValues(alpha: 0.7),
-                fontSize: 10,
+            if (isMe)
+              Icon(
+                seen ? Icons.done_all : Icons.done,
+                size: 14,
+                color: textColor.withValues(alpha: seen ? 1 : 0.7),
+              )
+            else
+              Text(
+                // Chỉ giờ — ngày đã tách riêng thành _DateSeparator ở giữa màn hình, không lặp
+                // lại ở từng tin nữa.
+                formatTime(message.createdAt),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: textColor.withValues(alpha: 0.7),
+                  fontSize: 10,
+                ),
               ),
-            ),
           ],
         ),
       ),
     );
   }
+}
+
+/// Mốc chuyển ngày giữa 2 tin nhắn khác ngày — pill nhỏ căn giữa màn hình, cùng kiểu
+/// WhatsApp/Messenger, xem _timelineItems.
+class _DateSeparator extends StatelessWidget {
+  final DateTime date;
+  const _DateSeparator({required this.date});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 8),
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surfaceContainerHighest,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Text(
+            _dateSeparatorLabel(date),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: theme.colorScheme.outline,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// "Hôm nay"/"Hôm qua" cho 2 ngày gần nhất, còn lại hiện dd/MM/yyyy — [date] đã chuẩn hoá về
+/// đúng nửa đêm giờ local (xem _timelineItems), không cần gọi .toLocal() lại ở đây.
+String _dateSeparatorLabel(DateTime date) {
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final diff = today.difference(date).inDays;
+  if (diff == 0) return 'Hôm nay';
+  if (diff == 1) return 'Hôm qua';
+  return formatDate(date);
+}
+
+/// Chèn 1 mốc DateTime (nửa đêm giờ local của ngày đó) trước tin đầu tiên của mỗi ngày khác
+/// nhau — ListView.itemBuilder phân biệt DateTime (mốc ngày) và ChatMessage (bong bóng tin) qua
+/// kiểu runtime, xem chỗ dùng ở build().
+List<Object> _timelineItems(List<ChatMessage> messages) {
+  final items = <Object>[];
+  DateTime? lastDay;
+  for (final m in messages) {
+    final local = m.createdAt.toLocal();
+    final day = DateTime(local.year, local.month, local.day);
+    if (lastDay == null || day != lastDay) {
+      items.add(day);
+      lastDay = day;
+    }
+    items.add(m);
+  }
+  return items;
 }
