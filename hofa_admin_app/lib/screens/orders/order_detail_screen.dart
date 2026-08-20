@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/format.dart';
+import '../../models/driver.dart';
 import '../../models/order.dart';
 import '../../providers/admin_providers.dart';
 import 'orders_screen.dart' show statusColor;
@@ -104,6 +105,108 @@ class _AdminOrderDetailScreenState
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(const SnackBar(content: Text('Đã cho quét tiếp')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// Quét NGAY 1 lượt tìm tài xế online gần nhất — chủ yếu dùng cho đơn mua hộ chưa có ai
+  /// nhận (khác _continueDriverSearch: đó chỉ reset để chờ sweep tự động chạy ở chu kỳ sau).
+  Future<void> _rescanDriver(Order o) async {
+    setState(() => _busy = true);
+    try {
+      final driverName = await ref
+          .read(adminRepoProvider)
+          .rescanOrderDriver(o.id);
+      ref.invalidate(orderDetailProvider(widget.orderId));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              driverName != null
+                  ? 'Đã gán tài xế $driverName'
+                  : 'Đã gán tài xế',
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// Admin tự chỉ định 1 tài xế online cho đơn mua hộ, thay vì để hệ thống tự quét — mở dialog
+  /// chọn từ danh sách tài xế đang online (GET /admin/drivers?status=online).
+  Future<void> _pickDriver(Order o) async {
+    final driversAsync = await ref.read(adminRepoProvider).drivers(status: 'online');
+    if (!mounted) return;
+    if (driversAsync.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Hiện không có tài xế nào đang online')),
+      );
+      return;
+    }
+    final picked = await showDialog<Driver>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Chọn tài xế'),
+        content: SizedBox(
+          width: dialogWidth(context, 360),
+          height: 400,
+          child: ListView.separated(
+            shrinkWrap: true,
+            itemCount: driversAsync.length,
+            separatorBuilder: (_, _) => const Divider(height: 1),
+            itemBuilder: (context, i) {
+              final d = driversAsync[i];
+              return ListTile(
+                leading: const Icon(Icons.two_wheeler_outlined),
+                title: Text('${d.vehicleType ?? "Xe"} · ${d.vehiclePlate ?? "—"}'),
+                subtitle: Text(
+                  '${d.totalDeliveries} chuyến · ${d.ratingAvg.toStringAsFixed(1)}★',
+                ),
+                onTap: () => Navigator.pop(context, d),
+              );
+            },
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Đóng'),
+          ),
+        ],
+      ),
+    );
+    if (picked == null || !mounted) return;
+
+    setState(() => _busy = true);
+    try {
+      final assigned = await ref
+          .read(adminRepoProvider)
+          .selectDriverForOrder(o.id, picked.id);
+      ref.invalidate(orderDetailProvider(widget.orderId));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              assigned ? 'Đã gán tài xế' : 'Tài xế không còn online, thử lại',
+            ),
+          ),
+        );
       }
     } catch (e) {
       if (mounted) {
@@ -267,6 +370,58 @@ class _AdminOrderDetailScreenState
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     if (_busy) const LinearProgressIndicator(),
+                    // Đơn mua hộ chưa có tài xế nhận — hiện ngay khi vừa vào chờ tài xế lấy,
+                    // không cần đợi sweepDriverSearch báo động (driverSearchAlertedAt, card
+                    // riêng bên dưới) mới xử lý được.
+                    if (o.merchantType == 'buy_on_behalf' &&
+                        o.status == 'ready_for_pickup' &&
+                        o.deliveryDriverId == null) ...[
+                      Card(
+                        elevation: 0,
+                        color: theme.colorScheme.tertiaryContainer.withValues(
+                          alpha: 0.5,
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.two_wheeler_outlined,
+                                    color: theme.colorScheme.onTertiaryContainer,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      'Đơn mua hộ chưa có tài xế',
+                                      style: theme.textTheme.titleSmall,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.end,
+                                children: [
+                                  OutlinedButton(
+                                    onPressed: _busy ? null : () => _pickDriver(o),
+                                    child: const Text('Chọn tài xế'),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  FilledButton(
+                                    onPressed: _busy ? null : () => _rescanDriver(o),
+                                    child: const Text('Quét tài xế'),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
                     if (o.driverSearchAlertedAt != null) ...[
                       Card(
                         elevation: 0,

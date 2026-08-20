@@ -3,6 +3,7 @@ const db = require('../db');
 const asyncHandler = require('../asyncHandler');
 const { ApiError } = require('../errors');
 const { pickFields, requireRole } = require('../utils');
+const dispatch = require('../dispatch');
 
 const FIELDS = ['rescan_interval_seconds', 'max_rescan_attempts'];
 
@@ -40,6 +41,25 @@ router.post('/admin/orders/:id/driver-search/continue', asyncHandler(async (req,
     driver_search_alerted_at: null
   });
   res.json({ ok: true, data: updated });
+}));
+
+/** Admin bấm "Quét tài xế" cho 1 đơn cụ thể (chủ yếu dùng cho đơn mua hộ bị kẹt — chưa có ai
+ * nhận) — quét NGAY lập tức (khác /driver-search/continue chỉ reset để chờ sweep tự động chạy
+ * lại ở chu kỳ tiếp theo). Cùng logic offerToNearestDriver dùng ở nút "Tìm tài xế" của cửa hàng
+ * (POST /orders/:orderId/find-driver, deliveries.js) nhưng không cần requireMerchantAccess vì
+ * admin xử lý được đơn của MỌI cửa hàng, kể cả cửa hàng mua hộ dùng chung tài khoản GAS_SYNC. */
+router.post('/admin/orders/:id/rescan-driver', asyncHandler(async (req, res) => {
+  requireRole(req.ctx, ['admin']);
+  const order = await db.queryOne('SELECT id FROM orders WHERE id = $1', [req.params.id]);
+  if (!order) throw new ApiError('NOT_FOUND', 'Không tìm thấy đơn hàng', 404);
+
+  const existing = await db.queryOne('SELECT declined_driver_ids FROM deliveries WHERE order_id = $1', [req.params.id]);
+  const result = await dispatch.offerToNearestDriver(req.params.id, {
+    excludeDriverIds: existing?.declined_driver_ids || []
+  });
+  if (!result) throw new ApiError('NOT_FOUND', 'Hiện không có tài xế nào đang online phù hợp', 404);
+  const driverUser = await db.queryOne('SELECT full_name FROM users WHERE id = $1', [result.driver.user_id]);
+  res.json({ ok: true, data: { ...result.delivery, driver_name: driverUser?.full_name ?? null } });
 }));
 
 module.exports = router;

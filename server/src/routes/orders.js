@@ -194,13 +194,23 @@ router.get('/admin/orders', asyncHandler(async (req, res) => {
     params.push(req.query.to);
     clauses.push(`(o.created_at AT TIME ZONE 'Asia/Ho_Chi_Minh')::date <= $${params.length}::date`);
   }
+  // Đơn mua hộ đang chờ tài xế lấy nhưng CHƯA có ai nhận (deliveries chưa có dòng nào, hoặc có
+  // nhưng driver_id còn NULL) — dùng cho màn "Đơn hàng" lọc nhanh những đơn bị kẹt cần admin
+  // quét/chọn tài xế thủ công, xem order_detail_screen.dart.
+  if (req.query.needs_driver === 'true') {
+    clauses.push(
+      `m.merchant_type = 'buy_on_behalf' AND o.status = 'ready_for_pickup' AND (d.id IS NULL OR d.driver_id IS NULL)`
+    );
+  }
   const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
   params.push(limit, offset);
   const rows = await db.query(
-    `SELECT o.*, m.name AS merchant_name, u.full_name AS customer_name
+    `SELECT o.*, m.name AS merchant_name, m.merchant_type, u.full_name AS customer_name,
+            d.status AS delivery_status, d.driver_id AS delivery_driver_id
        FROM orders o
        JOIN merchants m ON m.id = o.merchant_id
        JOIN users u ON u.id = o.customer_id
+       LEFT JOIN deliveries d ON d.order_id = o.id
        ${where}
       ORDER BY o.created_at DESC
       LIMIT $${params.length - 1} OFFSET $${params.length}`,
@@ -299,9 +309,19 @@ router.get('/orders/:id', asyncHandler(async (req, res) => {
   // Kèm tên + loại cửa hàng — app khách cần merchant_type để biết đơn mua hộ (hiện nút
   // "Chọn tài xế" khi cần chọn lại) và merchant_name để hiện tên quán ở màn chi tiết đơn.
   const merchant = await db.queryOne('SELECT name, merchant_type FROM merchants WHERE id = $1', [order.merchant_id]);
+  // delivery_driver_id — admin cần biết đơn mua hộ đã có tài xế hay chưa để hiện đúng thẻ
+  // "Quét tài xế"/"Chọn tài xế" (order_detail_screen.dart), không phải tự suy luận qua status.
+  const delivery = await db.queryOne('SELECT status, driver_id FROM deliveries WHERE order_id = $1', [order.id]);
   res.json({
     ok: true,
-    data: { ...order, merchant_name: merchant?.name ?? null, merchant_type: merchant?.merchant_type ?? null, items }
+    data: {
+      ...order,
+      merchant_name: merchant?.name ?? null,
+      merchant_type: merchant?.merchant_type ?? null,
+      delivery_status: delivery?.status ?? null,
+      delivery_driver_id: delivery?.driver_id ?? null,
+      items
+    }
   });
 }));
 

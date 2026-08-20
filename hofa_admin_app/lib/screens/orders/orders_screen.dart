@@ -46,6 +46,7 @@ class OrdersScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final ordersAsync = ref.watch(ordersProvider);
     final statusFilter = ref.watch(orderStatusFilterProvider);
+    final needsDriverFilter = ref.watch(orderNeedsDriverFilterProvider);
     final fromDate = ref.watch(orderFromDateProvider);
     final toDate = ref.watch(orderToDateProvider);
     final theme = Theme.of(context);
@@ -95,10 +96,24 @@ class OrdersScreen extends ConsumerWidget {
                   padding: const EdgeInsets.only(right: 8),
                   child: ChoiceChip(
                     label: const Text('Tất cả'),
-                    selected: statusFilter == null,
-                    onSelected: (_) =>
-                        ref.read(orderStatusFilterProvider.notifier).state =
-                            null,
+                    selected: statusFilter == null && !needsDriverFilter,
+                    onSelected: (_) {
+                      ref.read(orderNeedsDriverFilterProvider.notifier).state =
+                          false;
+                      ref.read(orderStatusFilterProvider.notifier).state =
+                          null;
+                    },
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: ChoiceChip(
+                    avatar: const Icon(Icons.two_wheeler_outlined, size: 18),
+                    label: const Text('Mua hộ cần tài xế'),
+                    selected: needsDriverFilter,
+                    onSelected: (v) =>
+                        ref.read(orderNeedsDriverFilterProvider.notifier).state =
+                            v,
                   ),
                 ),
                 ...orderStatusLabels.entries.map(
@@ -106,10 +121,13 @@ class OrdersScreen extends ConsumerWidget {
                     padding: const EdgeInsets.only(right: 8),
                     child: ChoiceChip(
                       label: Text(e.value),
-                      selected: statusFilter == e.key,
-                      onSelected: (_) =>
-                          ref.read(orderStatusFilterProvider.notifier).state =
-                              e.key,
+                      selected: !needsDriverFilter && statusFilter == e.key,
+                      onSelected: (_) {
+                        ref.read(orderNeedsDriverFilterProvider.notifier).state =
+                            false;
+                        ref.read(orderStatusFilterProvider.notifier).state =
+                            e.key;
+                      },
                     ),
                   ),
                 ),

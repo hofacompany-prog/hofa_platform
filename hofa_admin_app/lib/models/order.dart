@@ -73,6 +73,12 @@ class Order {
   // có giá trị nghĩa là đang chờ admin quyết định huỷ đơn hay quét tiếp.
   final int driverSearchAttempts;
   final DateTime? driverSearchAlertedAt;
+  // 'buy_on_behalf' = đơn mua hộ, cần tài xế tự nhận hoặc khách/admin chỉ định — xem
+  // POST /orders/:id/select-driver. deliveryDriverId null = CHƯA có ai nhận, dùng để hiện thẻ
+  // "Quét tài xế"/"Chọn tài xế" ở order_detail_screen.dart bất kể có bị sweep báo động hay chưa.
+  final String? merchantType;
+  final String? selectedDriverId;
+  final String? deliveryDriverId;
 
   Order({
     required this.id,
@@ -96,6 +102,9 @@ class Order {
     this.customerName,
     this.driverSearchAttempts = 0,
     this.driverSearchAlertedAt,
+    this.merchantType,
+    this.selectedDriverId,
+    this.deliveryDriverId,
   });
 
   factory Order.fromJson(Map<String, dynamic> json) => Order(
@@ -129,6 +138,9 @@ class Order {
     driverSearchAlertedAt: json['driver_search_alerted_at'] != null
         ? DateTime.tryParse(json['driver_search_alerted_at'].toString())
         : null,
+    merchantType: json['merchant_type'] as String?,
+    selectedDriverId: json['selected_driver_id'] as String?,
+    deliveryDriverId: json['delivery_driver_id'] as String?,
   );
 
   /// Tổng SỐ LƯỢNG món (cộng dồn quantity từng dòng) — khác items.length (chỉ đếm số DÒNG sản

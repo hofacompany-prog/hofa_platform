@@ -135,13 +135,25 @@ final orderStatusFilterProvider = StateProvider.autoDispose<String?>(
 final orderFromDateProvider = StateProvider.autoDispose<String?>((ref) => null);
 final orderToDateProvider = StateProvider.autoDispose<String?>((ref) => null);
 
+/// Chip lọc nhanh "Mua hộ cần tài xế" — bật thì bỏ qua statusFilter (server tự lọc đúng
+/// status='ready_for_pickup' + buy_on_behalf + chưa có tài xế), xem orders_screen.dart.
+final orderNeedsDriverFilterProvider = StateProvider.autoDispose<bool>(
+  (ref) => false,
+);
+
 final ordersProvider = FutureProvider.autoDispose<List<Order>>((ref) {
+  final needsDriver = ref.watch(orderNeedsDriverFilterProvider);
   final status = ref.watch(orderStatusFilterProvider);
   final from = ref.watch(orderFromDateProvider);
   final to = ref.watch(orderToDateProvider);
   return ref
       .watch(adminRepoProvider)
-      .orders(status: status, from: from, to: to);
+      .orders(
+        status: needsDriver ? null : status,
+        from: from,
+        to: to,
+        needsDriver: needsDriver,
+      );
 });
 
 final orderDetailProvider = FutureProvider.autoDispose.family<Order, String>(

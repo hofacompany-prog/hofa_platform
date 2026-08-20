@@ -500,6 +500,9 @@ class AdminRepository {
     // khách/cửa hàng phải chọn 1 trong 4 khoảng nhanh), có giá trị thì lọc theo created_at.
     String? from,
     String? to,
+    // true = chỉ đơn mua hộ đang chờ tài xế lấy nhưng chưa ai nhận — dùng cho chip lọc nhanh
+    // "Mua hộ cần tài xế" ở orders_screen.dart.
+    bool needsDriver = false,
     int limit = 100,
   }) async {
     final list =
@@ -511,6 +514,7 @@ class AdminRepository {
                 if (q != null && q.isNotEmpty) 'q': q,
                 if (from != null) 'from': from,
                 if (to != null) 'to': to,
+                if (needsDriver) 'needs_driver': 'true',
               },
             )
             as List;
@@ -969,6 +973,28 @@ class AdminRepository {
     await _api.post('/admin/orders/$orderId/driver-search/continue')
         as Map<String, dynamic>,
   );
+
+  /// Quét NGAY 1 lượt tìm tài xế online gần nhất cho đơn — chủ yếu dùng cho đơn mua hộ chưa
+  /// có ai nhận. Trả về tên tài xế vừa được gán (null nếu response không có, không nên xảy ra
+  /// vì gán thành công server luôn kèm driver_name) để hiện xác nhận cho admin.
+  Future<String?> rescanOrderDriver(String orderId) async {
+    final data =
+        await _api.post('/admin/orders/$orderId/rescan-driver')
+            as Map<String, dynamic>;
+    return data['driver_name'] as String?;
+  }
+
+  /// Admin chỉ định thẳng 1 tài xế cho đơn mua hộ (thay vì để hệ thống tự quét) — cùng route
+  /// khách hàng dùng để tự chọn/chọn lại tài xế, server đã cho phép role admin gọi.
+  Future<bool> selectDriverForOrder(String orderId, String driverId) async {
+    final data =
+        await _api.post(
+              '/orders/$orderId/select-driver',
+              body: {'driver_id': driverId},
+            )
+            as Map<String, dynamic>;
+    return data['assigned'] == true;
+  }
 
   // ---- Thông tin tài khoản ngân hàng (VietQR) ----
 
