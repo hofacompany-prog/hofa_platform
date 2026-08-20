@@ -19,6 +19,7 @@ class Delivery {
   final int? etaMinutes;
   final String? driverId;
   final String? driverName;
+  final String? driverPhone;
   final num? driverRatingAvg;
 
   Delivery({
@@ -30,6 +31,7 @@ class Delivery {
     this.etaMinutes,
     this.driverId,
     this.driverName,
+    this.driverPhone,
     this.driverRatingAvg,
   });
 
@@ -42,6 +44,7 @@ class Delivery {
         etaMinutes: (json['eta_minutes'] as num?)?.toInt(),
         driverId: json['driver_id'] as String?,
         driverName: json['driver_name'] as String?,
+        driverPhone: json['driver_phone'] as String?,
         driverRatingAvg: json['driver_rating_avg'] != null
             ? num.tryParse('${json['driver_rating_avg']}')
             : null,

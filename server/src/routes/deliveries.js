@@ -37,8 +37,10 @@ async function needsCustomerRepick(orderId) {
 router.get('/orders/:orderId/delivery', asyncHandler(async (req, res) => {
   await requireOrderAccess(req.ctx, req.params.orderId);
   // Kèm tên + rating tài xế — màn "Đánh giá tài xế" phía khách cần hiện tên, không chỉ driver_id.
+  // Kèm cả SĐT (driver_phone) — nút "Gọi tài xế" ở order_detail_screen.dart, cạnh "Nhắn tin
+  // tài xế" đã có sẵn, cùng điều kiện hiện (chỉ khi đã gán được tài xế).
   const row = await db.queryOne(
-    `SELECT d.*, u.full_name AS driver_name, dr.rating_avg AS driver_rating_avg
+    `SELECT d.*, u.full_name AS driver_name, u.phone AS driver_phone, dr.rating_avg AS driver_rating_avg
        FROM deliveries d
        LEFT JOIN drivers dr ON dr.id = d.driver_id
        LEFT JOIN users u ON u.id = dr.user_id

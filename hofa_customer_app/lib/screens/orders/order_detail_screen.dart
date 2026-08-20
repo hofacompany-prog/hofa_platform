@@ -135,6 +135,25 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
     }
   }
 
+  /// Gọi thẳng tài xế đang phụ trách đơn — cạnh nút "Nhắn tin tài xế" đã có sẵn, cùng điều kiện
+  /// hiện (chỉ khi đã gán được tài xế, xem hasDriver ở build()).
+  Future<void> _callDriver(String? phone) async {
+    if (phone == null || phone.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Chưa có số điện thoại tài xế')),
+      );
+      return;
+    }
+    final uri = Uri(scheme: 'tel', path: phone);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri);
+    } else if (mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Không gọi được tới $phone')));
+    }
+  }
+
   /// Đơn mua hộ cần khách chọn (hoặc chọn lại, sau khi tài xế trước từ chối/hết hạn) tài xế —
   /// xem Order.needsDriverPick. Dùng chung màn chọn với checkout_screen.dart.
   Future<void> _pickDriver(Order o) async {
@@ -450,6 +469,19 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                 onPressed: () =>
                                     context.push('/orders/${o.id}/chat/driver'),
                               ),
+                            ),
+                            const SizedBox(width: 8),
+                            OutlinedButton(
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 12,
+                                ),
+                              ),
+                              onPressed: () => _callDriver(
+                                deliveryAsync.valueOrNull?.driverPhone,
+                              ),
+                              child: const Icon(Icons.call_outlined),
                             ),
                           ],
                         ],
