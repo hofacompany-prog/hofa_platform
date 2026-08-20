@@ -558,6 +558,7 @@ router.get('/merchants/:merchantId/finance/summary', asyncHandler(async (req, re
          CASE $2
            WHEN 'yesterday' THEN (now() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date - 1
            WHEN 'week' THEN date_trunc('week', (now() AT TIME ZONE 'Asia/Ho_Chi_Minh'))::date
+           WHEN 'month' THEN date_trunc('month', (now() AT TIME ZONE 'Asia/Ho_Chi_Minh'))::date
            WHEN 'custom' THEN $3::date
            ELSE (now() AT TIME ZONE 'Asia/Ho_Chi_Minh')::date
          END AS from_date,

@@ -46,5 +46,12 @@ class FinanceSummary {
   );
 }
 
-/// Chip lọc khoảng thời gian ở màn Tài chính — 'week' = từ đầu tuần (thứ Hai) tới hôm nay.
-const financePeriodLabels = {'today': 'Hôm nay', 'yesterday': 'Hôm qua', 'week': 'Tuần này'};
+/// Chip lọc khoảng thời gian ở màn Tài chính — 'week' = từ đầu tuần (thứ Hai) tới hôm nay,
+/// 'month' = từ đầu tháng tới hôm nay — dời từ màn Đơn hàng qua đây (orders_list_screen.dart
+/// trước đây có ô lọc riêng theo ngày/tuần/tháng, giờ màn đó luôn cố định "Hôm nay").
+const financePeriodLabels = {
+  'today': 'Hôm nay',
+  'yesterday': 'Hôm qua',
+  'week': 'Tuần này',
+  'month': 'Tháng này',
+};

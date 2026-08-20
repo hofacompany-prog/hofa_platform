@@ -29,29 +29,28 @@ const _statusGroups = <String, List<String>>{
   'Đã hủy': ['cancelled', 'refunded'],
 };
 
-/// Thứ tự tab hiển thị — giữ nguyên tab mặc định lúc mở màn ("Đang chuẩn bị").
+/// Thứ tự tab hiển thị — "Sắp tới" lên đầu (đơn mới chưa xác nhận cần thấy ngay), tab MẶC ĐỊNH
+/// lúc mở màn vẫn là "Đang chuẩn bị" (đặt riêng ở _selectedGroupProvider, không suy từ .first
+/// nữa) — bếp đang làm gì mới là việc cần thấy ngay khi mở màn, dù không còn đứng đầu danh sách.
 const _tabOrder = [
+  'Sắp tới',
   'Đang chuẩn bị',
   'Đã làm xong',
-  'Sắp tới',
   'Đã hoàn tất',
   'Đã hủy',
 ];
 
 final _selectedGroupProvider = StateProvider.autoDispose<String>(
-  (ref) => _tabOrder.first,
+  (ref) => 'Đang chuẩn bị',
 );
 
-/// Khoảng thời gian đang chọn — bắt buộc luôn có 1 giá trị (mặc định "Hôm nay"), không còn tải
-/// toàn bộ lịch sử đơn không giới hạn thời gian như trước.
-final _dateRangeProvider = StateProvider.autoDispose<DateRangePreset>(
-  (ref) => DateRangePreset.today,
-);
-
+/// Ô lọc khoảng thời gian đã dời qua màn Tài chính (finance_screen.dart) — màn Đơn hàng là
+/// worklist vận hành (đang chuẩn bị/sắp tới hôm nay), không cần chọn khoảng ngày, luôn cố định
+/// "Hôm nay" để không phải tải toàn bộ lịch sử đơn không giới hạn thời gian.
 final _ordersProvider = FutureProvider.autoDispose<List<Order>>((ref) async {
   final merchant = await ref.watch(myMerchantProvider.future);
   if (merchant == null) return [];
-  final (from, to) = ref.watch(_dateRangeProvider).toRange();
+  final (from, to) = DateRangePreset.today.toRange();
   return OrderRepository().listForMerchant(merchant.id, from: from, to: to);
 });
 
@@ -77,7 +76,6 @@ class OrdersListScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final ordersAsync = ref.watch(_ordersProvider);
     final selectedGroup = ref.watch(_selectedGroupProvider);
-    final dateRange = ref.watch(_dateRangeProvider);
     final unreadOrderIds =
         ref.watch(_unreadOrderIdsProvider).valueOrNull ?? const <String>{};
 
@@ -88,26 +86,6 @@ class OrdersListScreen extends ConsumerWidget {
       ),
       body: Column(
         children: [
-          SizedBox(
-            height: 44,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              children: DateRangePreset.values
-                  .map(
-                    (p) => Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      child: ChoiceChip(
-                        label: Text(p.label),
-                        selected: dateRange == p,
-                        onSelected: (_) =>
-                            ref.read(_dateRangeProvider.notifier).state = p,
-                      ),
-                    ),
-                  )
-                  .toList(),
-            ),
-          ),
           SizedBox(
             height: 44,
             child: ListView(
