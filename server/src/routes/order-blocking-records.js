@@ -17,6 +17,14 @@ const BLOCKING_TABLES = [
   'driver_cod_settlement_items'
 ];
 
+// driver_cod_settlement_items KHÔNG có cột created_at (chỉ id/settlement_id/order_id/amount,
+// xem hofa-db/62_driver_wallet_ledger.sql) — sắp theo created_at cho bảng này sẽ lỗi
+// "column created_at does not exist" (SQLSTATE không nằm trong SQLSTATE_MAP nên rơi vào lỗi
+// 500 chung "Lỗi hệ thống" thay vì báo rõ nguyên nhân).
+const ORDER_COLUMN = {
+  driver_cod_settlement_items: 'id'
+};
+
 /** Admin xem trước dữ liệu đang CHẶN XOÁ 1 đơn (trước khi bấm "Xoá đơn hàng" mà dính lỗi khoá
  * ngoại) — trả nguyên các dòng của cả 4 bảng để admin đối chiếu số tiền/loại giao dịch trước
  * khi quyết định xoá, không chỉ đếm số lượng. */
@@ -27,8 +35,9 @@ router.get('/admin/orders/:id/blocking-records', asyncHandler(async (req, res) =
 
   const data = {};
   for (const table of BLOCKING_TABLES) {
+    const orderCol = ORDER_COLUMN[table] || 'created_at';
     data[table] = await db.query(
-      `SELECT * FROM ${table} WHERE order_id = $1 ORDER BY created_at DESC`,
+      `SELECT * FROM ${table} WHERE order_id = $1 ORDER BY ${orderCol} DESC`,
       [req.params.id]
     );
   }
