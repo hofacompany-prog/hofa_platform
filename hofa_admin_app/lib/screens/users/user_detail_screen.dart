@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../core/format.dart';
 import '../../models/address.dart';
 import '../../models/user_profile.dart';
@@ -475,38 +476,60 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen> {
     );
   }
 
-  Widget _addressTile(Address a, ThemeData theme) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 6),
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(
-          Icons.location_on_outlined,
-          size: 18,
-          color: theme.colorScheme.primary,
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '${a.label ?? 'Địa chỉ'} · ${a.recipientName} · ${a.recipientPhone}',
-                style: const TextStyle(fontWeight: FontWeight.w500),
-              ),
-              Text(a.fullLine, style: theme.textTheme.bodySmall),
-            ],
+  /// Ưu tiên toạ độ đã lưu (chính xác đúng ghim khách chọn lúc thêm địa chỉ) — chỉ mới thiếu
+  /// (địa chỉ nhập tay từ trước khi có bản đồ chọn điểm) mới rơi về tìm theo chuỗi địa chỉ.
+  Future<void> _openInMaps(Address a) async {
+    final uri = a.latitude != null && a.longitude != null
+        ? Uri.parse(
+            'https://www.google.com/maps/search/?api=1&query=${a.latitude},${a.longitude}',
+          )
+        : Uri.parse(
+            'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(a.fullLine)}',
+          );
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Không mở được Google Maps')),
+      );
+    }
+  }
+
+  Widget _addressTile(Address a, ThemeData theme) => InkWell(
+    onTap: () => _openInMaps(a),
+    child: Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            Icons.location_on_outlined,
+            size: 18,
+            color: theme.colorScheme.primary,
           ),
-        ),
-        if (a.isDefault)
-          const Padding(
-            padding: EdgeInsets.only(left: 8),
-            child: Chip(
-              label: Text('Mặc định'),
-              visualDensity: VisualDensity.compact,
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${a.label ?? 'Địa chỉ'} · ${a.recipientName} · ${a.recipientPhone}',
+                  style: const TextStyle(fontWeight: FontWeight.w500),
+                ),
+                Text(a.fullLine, style: theme.textTheme.bodySmall),
+              ],
             ),
           ),
-      ],
+          if (a.isDefault)
+            const Padding(
+              padding: EdgeInsets.only(left: 8),
+              child: Chip(
+                label: Text('Mặc định'),
+                visualDensity: VisualDensity.compact,
+              ),
+            ),
+        ],
+      ),
     ),
   );
 }
