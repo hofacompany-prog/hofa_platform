@@ -540,9 +540,33 @@ class AdminRepository {
   );
 
   /// Xoá thẳng, không chặn theo trạng thái/thanh toán (giai đoạn MVP). Nếu đơn còn bị ràng
-  /// buộc khoá ngoại (vd đã có giao dịch thanh toán) thì server trả lỗi cụ thể từ Postgres.
+  /// buộc khoá ngoại (vd đã có giao dịch thanh toán) thì server trả lỗi cụ thể từ Postgres —
+  /// dùng orderBlockingRecords/deleteOrderBlockingRecords bên dưới để dọn trước khi xoá lại.
   Future<void> deleteOrder(String id) async {
     await _api.delete('/admin/orders/$id');
+  }
+
+  /// 4 bảng có thể chặn xoá 1 đơn (driver_wallet_transactions/payments/
+  /// merchant_wallet_transactions/driver_cod_settlement_items) — xem
+  /// server/src/routes/order-blocking-records.js. Trả nguyên các dòng để admin xem trước khi
+  /// xoá, không chỉ đếm số lượng.
+  Future<Map<String, dynamic>> orderBlockingRecords(String orderId) async =>
+      await _api.get('/admin/orders/$orderId/blocking-records')
+          as Map<String, dynamic>;
+
+  /// [tables] null = xoá cả 4 bảng; truyền vào để xoá riêng từng bảng. Trả về số dòng đã xoá
+  /// theo từng bảng.
+  Future<Map<String, dynamic>> deleteOrderBlockingRecords(
+    String orderId, {
+    List<String>? tables,
+  }) async {
+    final data =
+        await _api.delete(
+              '/admin/orders/$orderId/blocking-records',
+              query: tables != null ? {'tables': tables.join(',')} : null,
+            )
+            as Map<String, dynamic>;
+    return data['deleted'] as Map<String, dynamic>;
   }
 
   // ---- Giám sát chuyến giao hàng ----

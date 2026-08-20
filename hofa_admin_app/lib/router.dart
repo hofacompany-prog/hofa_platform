@@ -14,6 +14,7 @@ import 'screens/merchants/featured_merchants_screen.dart';
 import 'screens/merchants/branch_hours_screen.dart';
 import 'screens/orders/orders_screen.dart';
 import 'screens/orders/order_detail_screen.dart';
+import 'screens/orders/order_blocking_records_screen.dart';
 import 'screens/users/users_screen.dart';
 import 'screens/users/user_detail_screen.dart';
 import 'screens/drivers/driver_hub_screen.dart';
@@ -100,6 +101,12 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: '/orders/:id',
             builder: (context, state) =>
                 AdminOrderDetailScreen(orderId: state.pathParameters['id']!),
+          ),
+          GoRoute(
+            path: '/orders/:id/blocking-records',
+            builder: (context, state) => OrderBlockingRecordsScreen(
+              orderId: state.pathParameters['id']!,
+            ),
           ),
           GoRoute(
             path: '/users',

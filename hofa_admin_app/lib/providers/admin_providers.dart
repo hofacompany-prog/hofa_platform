@@ -160,6 +160,13 @@ final orderDetailProvider = FutureProvider.autoDispose.family<Order, String>(
   (ref, id) => ref.watch(adminRepoProvider).order(id),
 );
 
+/// Dữ liệu 4 bảng có thể chặn xoá 1 đơn — xem order_blocking_records_screen.dart.
+final orderBlockingRecordsProvider = FutureProvider.autoDispose
+    .family<Map<String, dynamic>, String>(
+      (ref, orderId) =>
+          ref.watch(adminRepoProvider).orderBlockingRecords(orderId),
+    );
+
 /// null = đang hoạt động (mặc định phía server), 'all' = mọi trạng thái, hoặc 1 giá trị cụ thể.
 final deliveryStatusFilterProvider = StateProvider.autoDispose<String?>(
   (ref) => null,

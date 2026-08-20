@@ -617,6 +617,15 @@ class _AdminOrderDetailScreenState
                       icon: const Icon(Icons.delete_outline),
                       label: const Text('Xoá đơn hàng'),
                     ),
+                    const SizedBox(height: 8),
+                    // Xoá đơn dính lỗi khoá ngoại (vd driver_wallet_transactions_order_id_fkey)
+                    // thì vào đây dọn trước — xem order_blocking_records_screen.dart.
+                    TextButton.icon(
+                      onPressed: () =>
+                          context.push('/orders/${o.id}/blocking-records'),
+                      icon: const Icon(Icons.cleaning_services_outlined),
+                      label: const Text('Dữ liệu chặn xoá (ví/thanh toán)'),
+                    ),
                   ],
                 ),
               ),
