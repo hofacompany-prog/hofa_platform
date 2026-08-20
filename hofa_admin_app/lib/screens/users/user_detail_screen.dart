@@ -435,6 +435,17 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen> {
                                         : 'Tạm khoá tài khoản',
                                   ),
                                 ),
+                                OutlinedButton.icon(
+                                  onPressed: _busy
+                                      ? null
+                                      : () => context.go(
+                                          '/users/${u.id}/blocking-records',
+                                        ),
+                                  icon: const Icon(
+                                    Icons.warning_amber_outlined,
+                                  ),
+                                  label: const Text('Dữ liệu chặn xoá'),
+                                ),
                               ],
                             ),
                           ],

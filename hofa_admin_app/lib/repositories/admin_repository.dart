@@ -122,6 +122,20 @@ class AdminRepository {
     await _api.delete('/admin/users/$userId');
   }
 
+  /// Xem trước dữ liệu chặn "Xoá vĩnh viễn" 1 người dùng (cửa hàng đang đứng tên, hồ sơ tài xế,
+  /// đơn hàng đã đặt) — mở từ user_detail_screen.dart trước khi bấm xoá, cùng ý tưởng với
+  /// orderBlockingRecords bên dưới nhưng KHÔNG có API xoá hàng loạt (đây là dữ liệu nghiệp vụ
+  /// thật, không phải bảng sổ sách).
+  Future<Map<String, dynamic>> userBlockingRecords(String userId) async =>
+      await _api.get('/admin/users/$userId/blocking-records')
+          as Map<String, dynamic>;
+
+  /// Chuyển chủ 1 cửa hàng đang chặn xoá user sang tài khoản "HOFA Admin" dùng chung (server tự
+  /// gán GAS_SYNC_OWNER_ID) — gỡ chặn mà không cần tìm chủ mới ngay.
+  Future<void> transferMerchantToAdminOwner(String merchantId) async {
+    await _api.post('/admin/merchants/$merchantId/transfer-to-admin-owner');
+  }
+
   // ---- Cửa hàng ----
   // Admin gọi GET /merchants sẽ thấy MỌI trạng thái (server bỏ lọc status khi role=admin).
 

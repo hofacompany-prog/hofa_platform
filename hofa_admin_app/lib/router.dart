@@ -20,6 +20,7 @@ import 'screens/orders/order_detail_screen.dart';
 import 'screens/orders/order_blocking_records_screen.dart';
 import 'screens/users/users_screen.dart';
 import 'screens/users/user_detail_screen.dart';
+import 'screens/users/user_blocking_records_screen.dart';
 import 'screens/drivers/driver_hub_screen.dart';
 import 'screens/deliveries/delivery_detail_screen.dart';
 import 'screens/catalog/categories_hub_screen.dart';
@@ -138,6 +139,12 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: '/users/:id',
             builder: (context, state) =>
                 UserDetailScreen(userId: state.pathParameters['id']!),
+          ),
+          GoRoute(
+            path: '/users/:id/blocking-records',
+            builder: (context, state) => UserBlockingRecordsScreen(
+              userId: state.pathParameters['id']!,
+            ),
           ),
           GoRoute(
             path: '/drivers',

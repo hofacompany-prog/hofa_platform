@@ -141,6 +141,13 @@ final userDevicesProvider = FutureProvider.autoDispose
       (ref, userId) => ref.watch(adminRepoProvider).userDevices(userId),
     );
 
+/// Dữ liệu chặn "Xoá vĩnh viễn" 1 người dùng (cửa hàng đang đứng tên, hồ sơ tài xế, đơn hàng đã
+/// đặt) — xem user_blocking_records_screen.dart.
+final userBlockingRecordsProvider = FutureProvider.autoDispose
+    .family<Map<String, dynamic>, String>(
+      (ref, userId) => ref.watch(adminRepoProvider).userBlockingRecords(userId),
+    );
+
 final driversProvider = FutureProvider.autoDispose<List<Driver>>(
   (ref) => ref.watch(adminRepoProvider).drivers(),
 );
