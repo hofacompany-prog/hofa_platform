@@ -282,4 +282,27 @@ router.delete('/devices/:id', asyncHandler(async (req, res) => {
   res.json({ ok: true, data: { deleted: true } });
 }));
 
+// Admin xem/gỡ thiết bị của BẤT KỲ người dùng nào (khách, tài xế, cửa hàng...) — cùng cơ chế
+// gỡ với DELETE /devices/:id ở trên (DEVICE_REVOKED chặn request kế tiếp của máy đó), chỉ khác
+// không giới hạn "của chính mình" như requireOwnRow.
+router.get('/admin/users/:id/devices', asyncHandler(async (req, res) => {
+  requireRole(req.ctx, ['admin']);
+  const rows = await db.query(
+    'SELECT * FROM user_devices WHERE user_id = $1 ORDER BY last_active_at DESC NULLS LAST',
+    [req.params.id]
+  );
+  res.json({ ok: true, data: rows });
+}));
+
+router.delete('/admin/users/:id/devices/:deviceId', asyncHandler(async (req, res) => {
+  requireRole(req.ctx, ['admin']);
+  const device = await db.queryOne(
+    'SELECT id FROM user_devices WHERE id = $1 AND user_id = $2',
+    [req.params.deviceId, req.params.id]
+  );
+  if (!device) throw new ApiError('NOT_FOUND', 'Không tìm thấy thiết bị', 404);
+  await db.deleteById('user_devices', req.params.deviceId);
+  res.json({ ok: true, data: { deleted: true } });
+}));
+
 module.exports = router;

@@ -6,6 +6,7 @@ import '../../models/address.dart';
 import '../../models/user_profile.dart';
 import '../../providers/admin_providers.dart';
 import 'users_screen.dart' show roleLabels, statusLabels;
+import 'user_devices_card.dart';
 import '../../core/responsive.dart';
 
 class UserDetailScreen extends ConsumerStatefulWidget {
@@ -462,6 +463,8 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen> {
                         ),
                       ),
                     ),
+                    const SizedBox(height: 16),
+                    UserDevicesCard(userId: widget.userId),
                   ],
                 ),
               ),

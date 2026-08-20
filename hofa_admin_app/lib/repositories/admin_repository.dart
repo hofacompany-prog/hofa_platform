@@ -2,6 +2,7 @@ import '../core/api_client.dart';
 import '../models/admin_stats.dart';
 import '../models/user_profile.dart';
 import '../models/user_detail.dart';
+import '../models/user_device.dart';
 import '../models/merchant.dart';
 import '../models/merchant_device.dart';
 import '../models/merchant_fee_tier.dart';
@@ -92,6 +93,19 @@ class AdminRepository {
   Future<UserDetail> userDetail(String userId) async => UserDetail.fromJson(
     await _api.get('/admin/users/$userId') as Map<String, dynamic>,
   );
+
+  // ---- Thiết bị đã đăng nhập của 1 người dùng (khách/tài xế/cửa hàng...) ----
+
+  Future<List<UserDevice>> userDevices(String userId) async {
+    final list = await _api.get('/admin/users/$userId/devices') as List;
+    return list
+        .map((e) => UserDevice.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<void> removeUserDevice(String userId, String deviceId) async {
+    await _api.delete('/admin/users/$userId/devices/$deviceId');
+  }
 
   Future<UserProfile> updateUser(
     String userId,

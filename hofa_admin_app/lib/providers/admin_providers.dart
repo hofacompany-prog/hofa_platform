@@ -4,6 +4,7 @@ import '../core/api_exception.dart';
 import '../models/admin_stats.dart';
 import '../models/user_profile.dart';
 import '../models/user_detail.dart';
+import '../models/user_device.dart';
 import '../models/merchant.dart';
 import '../models/merchant_device.dart';
 import '../models/merchant_fee_tier.dart';
@@ -113,6 +114,11 @@ final usersProvider = FutureProvider.autoDispose<List<UserProfile>>((ref) {
 final userDetailProvider = FutureProvider.autoDispose
     .family<UserDetail, String>(
       (ref, id) => ref.watch(adminRepoProvider).userDetail(id),
+    );
+
+final userDevicesProvider = FutureProvider.autoDispose
+    .family<List<UserDevice>, String>(
+      (ref, userId) => ref.watch(adminRepoProvider).userDevices(userId),
     );
 
 final driversProvider = FutureProvider.autoDispose<List<Driver>>(
