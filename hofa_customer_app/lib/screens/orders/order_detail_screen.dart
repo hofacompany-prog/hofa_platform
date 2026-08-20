@@ -136,7 +136,8 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
   }
 
   /// Mục lớn "Nhắn tin" — bấm vào hiện 2 lựa chọn (cửa hàng/tài xế, tài xế chỉ hiện khi đã
-  /// gán được tài xế) thay vì 2 nút riêng chiếm chỗ ngang hàng.
+  /// gán được tài xế) thay vì 2 nút riêng chiếm chỗ ngang hàng. Đơn mua hộ không có cửa hàng
+  /// thật để nhắn (chỉ tài xế đi mua hộ) — mục cửa hàng hiện mờ, không bấm được.
   Future<void> _showChatOptions(Order o, bool hasDriver) async {
     // Dùng context của State (rootContext) để push SAU KHI sheet đã đóng — dùng lại context
     // của chính ListTile (đang bị Navigator.pop huỷ) để push tiếp dễ dính lỗi "deactivated
@@ -148,16 +149,24 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
         child: Wrap(
           children: [
             ListTile(
-              leading: ChatBadgeIcon(
-                orderId: o.id,
-                channel: 'customer_merchant',
-                icon: Icons.storefront_outlined,
-              ),
+              enabled: !o.isBuyOnBehalf,
+              leading: o.isBuyOnBehalf
+                  ? const Icon(Icons.storefront_outlined)
+                  : ChatBadgeIcon(
+                      orderId: o.id,
+                      channel: 'customer_merchant',
+                      icon: Icons.storefront_outlined,
+                    ),
               title: const Text('Nhắn tin cửa hàng'),
-              onTap: () {
-                Navigator.pop(sheetContext);
-                rootContext.push('/orders/${o.id}/chat/merchant');
-              },
+              subtitle: o.isBuyOnBehalf
+                  ? const Text('Không khả dụng — đơn mua hộ không qua cửa hàng')
+                  : null,
+              onTap: o.isBuyOnBehalf
+                  ? null
+                  : () {
+                      Navigator.pop(sheetContext);
+                      rootContext.push('/orders/${o.id}/chat/merchant');
+                    },
             ),
             if (hasDriver)
               ListTile(
@@ -179,8 +188,10 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
   }
 
   /// Mục lớn "Gọi điện" — bấm vào hiện 2 lựa chọn (cửa hàng/tài xế, tài xế chỉ hiện khi đã gán
-  /// được tài xế), cùng cấu trúc với _showChatOptions.
+  /// được tài xế), cùng cấu trúc với _showChatOptions. Đơn mua hộ: mục cửa hàng hiện mờ, không
+  /// bấm được, cùng lý do với _showChatOptions.
   Future<void> _showCallOptions(
+    bool isBuyOnBehalf,
     String? merchantPhone,
     String? driverPhone,
     bool hasDriver,
@@ -191,13 +202,20 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
         child: Wrap(
           children: [
             ListTile(
+              enabled: !isBuyOnBehalf,
               leading: const Icon(Icons.storefront_outlined),
               title: const Text('Gọi cửa hàng'),
-              subtitle: Text(merchantPhone ?? 'Chưa có số điện thoại'),
-              onTap: () {
-                Navigator.pop(sheetContext);
-                _contactMerchant(merchantPhone);
-              },
+              subtitle: Text(
+                isBuyOnBehalf
+                    ? 'Không khả dụng — đơn mua hộ không qua cửa hàng'
+                    : merchantPhone ?? 'Chưa có số điện thoại',
+              ),
+              onTap: isBuyOnBehalf
+                  ? null
+                  : () {
+                      Navigator.pop(sheetContext);
+                      _contactMerchant(merchantPhone);
+                    },
             ),
             if (hasDriver)
               ListTile(
@@ -542,6 +560,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                               icon: const Icon(Icons.call_outlined),
                               label: const Text('Gọi điện'),
                               onPressed: () => _showCallOptions(
+                                o.isBuyOnBehalf,
                                 merchantPhone,
                                 driverPhone,
                                 hasDriver,
