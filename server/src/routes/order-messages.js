@@ -25,21 +25,26 @@ function isChatWindowOpen(order, hoursAfterDelivered) {
 
 /** Kiểm quyền theo ĐÚNG kênh — customer_driver chỉ dành cho khách hàng + tài xế phụ trách đơn,
  * customer_merchant chỉ dành cho khách hàng + cửa hàng. requireOrderAccess đã xác nhận ctx là 1
- * trong customer/merchant/driver/admin của đơn này — ở đây chỉ cần loại bên KHÔNG thuộc kênh. */
+ * trong customer/merchant/driver/admin của đơn này — ở đây chỉ cần loại bên KHÔNG thuộc kênh.
+ * CHỈ chặn theo ctx.role khi ctx KHÔNG PHẢI chính khách hàng của đơn này — dùng thẳng ctx.role
+ * (role tài khoản TOÀN HỆ THỐNG) từng chặn oan tài khoản có role merchant_owner/staff/driver
+ * nhưng lại chính là người đặt đơn đó (role toàn hệ thống, không phải quan hệ với ĐÚNG đơn này —
+ * order.customer_id mới là nguồn sự thật, giống cách orderCanView đã làm ở utils.js). */
 async function requireChannelAccess(ctx, order, channel) {
   if (ctx.role === 'admin') return;
+  const isOrderCustomer = ctx.userId === order.customer_id;
   if (channel === 'customer_driver') {
-    if (ctx.role === 'merchant_owner' || ctx.role === 'merchant_staff') {
+    if (!isOrderCustomer && (ctx.role === 'merchant_owner' || ctx.role === 'merchant_staff')) {
       throw new ApiError('FORBIDDEN', 'Kênh này chỉ dành cho khách hàng và tài xế', 403);
     }
-    if (ctx.role === 'driver') {
+    if (!isOrderCustomer && ctx.role === 'driver') {
       const delivery = await db.queryOne('SELECT driver_id FROM deliveries WHERE order_id = $1', [order.id]);
       if (!delivery || !delivery.driver_id) {
         throw new ApiError('BAD_REQUEST', 'Đơn chưa có tài xế phụ trách', 400);
       }
     }
   } else if (channel === 'customer_merchant') {
-    if (ctx.role === 'driver') {
+    if (!isOrderCustomer && ctx.role === 'driver') {
       throw new ApiError('FORBIDDEN', 'Kênh này chỉ dành cho khách hàng và cửa hàng', 403);
     }
   }
