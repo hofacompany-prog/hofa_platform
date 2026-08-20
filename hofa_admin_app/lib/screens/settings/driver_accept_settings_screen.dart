@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/driver_accept_settings.dart';
 import '../../models/driver_dispatch_settings.dart';
+import '../../models/pickup_proximity_settings.dart';
 import '../../providers/admin_providers.dart';
 
 /// Tham số toàn sàn cho thanh trượt "Nhận đơn" ở màn nhận đơn của tài xế (driver app) —
@@ -23,10 +24,13 @@ class _DriverAcceptSettingsScreenState
   final _manualCtrl = TextEditingController();
   final _rescanIntervalCtrl = TextEditingController();
   final _maxRescanAttemptsCtrl = TextEditingController();
+  final _pickupRadiusCtrl = TextEditingController();
   bool _initialized = false;
   bool _dispatchInitialized = false;
+  bool _pickupRadiusInitialized = false;
   bool _saving = false;
   bool _savingDispatch = false;
+  bool _savingPickupRadius = false;
 
   @override
   void dispose() {
@@ -34,6 +38,7 @@ class _DriverAcceptSettingsScreenState
     _manualCtrl.dispose();
     _rescanIntervalCtrl.dispose();
     _maxRescanAttemptsCtrl.dispose();
+    _pickupRadiusCtrl.dispose();
     super.dispose();
   }
 
@@ -45,6 +50,38 @@ class _DriverAcceptSettingsScreenState
   void _fillDispatchFrom(DriverDispatchSettings s) {
     _rescanIntervalCtrl.text = s.rescanIntervalSeconds.toString();
     _maxRescanAttemptsCtrl.text = s.maxRescanAttempts.toString();
+  }
+
+  void _fillPickupRadiusFrom(PickupProximitySettings s) {
+    _pickupRadiusCtrl.text = s.maxDistanceMeters.toString();
+  }
+
+  Future<void> _savePickupRadius(String? id) async {
+    final meters = int.tryParse(_pickupRadiusCtrl.text.trim());
+    if (meters == null || meters <= 0) {
+      _showError('Bán kính không hợp lệ');
+      return;
+    }
+
+    setState(() => _savingPickupRadius = true);
+    try {
+      final saved = await ref
+          .read(adminRepoProvider)
+          .updatePickupProximitySettings(
+            PickupProximitySettings(id: id, maxDistanceMeters: meters),
+          );
+      ref.invalidate(pickupProximitySettingsProvider);
+      if (mounted) {
+        _fillPickupRadiusFrom(saved);
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Đã lưu thông số')));
+      }
+    } catch (e) {
+      _showError('Lỗi: $e');
+    } finally {
+      if (mounted) setState(() => _savingPickupRadius = false);
+    }
   }
 
   Future<void> _saveDispatch(String? id) async {
@@ -266,6 +303,76 @@ class _DriverAcceptSettingsScreenState
                                         ? null
                                         : () => _saveDispatch(s.id),
                                     child: _savingDispatch
+                                        ? const SizedBox(
+                                            height: 20,
+                                            width: 20,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                            ),
+                                          )
+                                        : const Text('Lưu'),
+                                  ),
+                                ),
+                              ],
+                            );
+                          },
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 32),
+                    const Divider(),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Bán kính xác nhận "Đã lấy hàng" (đơn mua hộ)',
+                      style: theme.textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Đơn mua hộ không có nhân viên cửa hàng xác nhận hộ — tài xế phải đứng '
+                      'trong bán kính này quanh chi nhánh mới xác nhận "Đã lấy hàng" được, tránh '
+                      'chụp ảnh khống từ xa. Vượt quá thì app tài xế báo lỗi và không cho xác nhận.',
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.outline,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Consumer(
+                      builder: (context, ref, _) {
+                        final pickupAsync = ref.watch(
+                          pickupProximitySettingsProvider,
+                        );
+                        return pickupAsync.when(
+                          loading: () => const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 16),
+                            child: Center(child: CircularProgressIndicator()),
+                          ),
+                          error: (e, _) => Text('Lỗi: $e'),
+                          data: (s) {
+                            if (!_pickupRadiusInitialized) {
+                              _fillPickupRadiusFrom(s);
+                              _pickupRadiusInitialized = true;
+                            }
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                _SectionCard(
+                                  title: 'Bán kính tối đa',
+                                  child: _NumberField(
+                                    controller: _pickupRadiusCtrl,
+                                    label: 'Khoảng cách tối đa tới chi nhánh (mét)',
+                                    helper:
+                                        'VD 100 — tài xế cách chi nhánh xa hơn số này (đường '
+                                        'chim bay) thì không xác nhận "Đã lấy hàng" được.',
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: FilledButton(
+                                    onPressed: _savingPickupRadius
+                                        ? null
+                                        : () => _savePickupRadius(s.id),
+                                    child: _savingPickupRadius
                                         ? const SizedBox(
                                             height: 20,
                                             width: 20,

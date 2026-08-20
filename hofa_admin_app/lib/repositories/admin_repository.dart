@@ -24,6 +24,7 @@ import '../models/order_settings.dart';
 import '../models/auto_accept_settings.dart';
 import '../models/driver_accept_settings.dart';
 import '../models/driver_dispatch_settings.dart';
+import '../models/pickup_proximity_settings.dart';
 import '../models/bank_account_settings.dart';
 import '../models/admin_contact_settings.dart';
 import '../models/pwa_reminder_settings.dart';
@@ -1159,6 +1160,22 @@ class AdminRepository {
     DriverDispatchSettings settings,
   ) async => DriverDispatchSettings.fromJson(
     await _api.patch('/driver-dispatch-settings', body: settings.toJson())
+        as Map<String, dynamic>,
+  );
+
+  // ---- Bán kính bắt buộc lúc tài xế xác nhận "Đã lấy hàng" (đơn mua hộ) ----
+
+  Future<PickupProximitySettings> pickupProximitySettings() async {
+    final data = await _api.get('/pickup-proximity-settings');
+    return data == null
+        ? PickupProximitySettings.fallback()
+        : PickupProximitySettings.fromJson(data as Map<String, dynamic>);
+  }
+
+  Future<PickupProximitySettings> updatePickupProximitySettings(
+    PickupProximitySettings settings,
+  ) async => PickupProximitySettings.fromJson(
+    await _api.patch('/pickup-proximity-settings', body: settings.toJson())
         as Map<String, dynamic>,
   );
 

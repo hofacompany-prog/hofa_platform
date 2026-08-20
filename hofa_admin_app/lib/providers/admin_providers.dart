@@ -25,6 +25,7 @@ import '../models/order_settings.dart';
 import '../models/auto_accept_settings.dart';
 import '../models/driver_accept_settings.dart';
 import '../models/driver_dispatch_settings.dart';
+import '../models/pickup_proximity_settings.dart';
 import '../models/bank_account_settings.dart';
 import '../models/admin_contact_settings.dart';
 import '../models/pwa_reminder_settings.dart';
@@ -324,6 +325,11 @@ final driverAcceptSettingsProvider =
 final driverDispatchSettingsProvider =
     FutureProvider.autoDispose<DriverDispatchSettings>(
       (ref) => ref.watch(adminRepoProvider).driverDispatchSettings(),
+    );
+
+final pickupProximitySettingsProvider =
+    FutureProvider.autoDispose<PickupProximitySettings>(
+      (ref) => ref.watch(adminRepoProvider).pickupProximitySettings(),
     );
 
 final bankAccountSettingsProvider =

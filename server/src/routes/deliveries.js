@@ -2,7 +2,7 @@ const router = require('express').Router();
 const db = require('../db');
 const asyncHandler = require('../asyncHandler');
 const { ApiError } = require('../errors');
-const { requireFields, pagination, requireRole, requireMerchantAccess, requireOrderAccess } = require('../utils');
+const { requireFields, pagination, requireRole, requireMerchantAccess, requireOrderAccess, haversineKm } = require('../utils');
 const dispatch = require('../dispatch');
 const config = require('../config');
 const push = require('../push');
@@ -127,9 +127,47 @@ router.post('/orders/:orderId/find-driver', asyncHandler(async (req, res) => {
  * status: accepted | arrived_store | picked_up | delivering | delivered | failed
  * picked_up và delivered bắt buộc kèm otp đúng (khách đọc cho tài xế).
  */
+/** Đơn mua hộ không có nhân viên cửa hàng xác nhận hộ tài xế đã lấy hàng thật (khác đơn thường —
+ * OTP đọc từ nhân viên) — chỉ dựa vào ảnh tài xế tự chụp, dễ chụp khống từ xa. Bắt buộc tài xế
+ * đứng trong bán kính pickup_proximity_settings.max_distance_meters quanh chi nhánh lúc xác nhận
+ * "Đã lấy hàng", dựa vào toạ độ GPS app tài xế gửi kèm (driver_latitude/driver_longitude).
+ * hofa-db/91_buy_on_behalf_pickup_proximity.sql. */
+async function requirePickupProximity(ctx, delivery, body) {
+  const order = await db.queryOne(
+    `SELECT m.merchant_type, b.latitude, b.longitude
+       FROM orders o
+       JOIN merchants m ON m.id = o.merchant_id
+       JOIN branches b ON b.id = o.branch_id
+      WHERE o.id = $1`,
+    [delivery.order_id]
+  );
+  if (order?.merchant_type !== 'buy_on_behalf') return;
+
+  const driverLat = Number(body.driver_latitude);
+  const driverLng = Number(body.driver_longitude);
+  if (!Number.isFinite(driverLat) || !Number.isFinite(driverLng)) {
+    throw new ApiError('LOCATION_REQUIRED', 'Cần bật định vị để xác nhận đã lấy hàng cho đơn mua hộ', 400);
+  }
+
+  const settings = await db.queryOne('SELECT * FROM pickup_proximity_settings ORDER BY updated_at DESC LIMIT 1');
+  const maxMeters = settings?.max_distance_meters ?? 100;
+  const distanceMeters = haversineKm(driverLat, driverLng, order.latitude, order.longitude) * 1000;
+  if (distanceMeters > maxMeters) {
+    throw new ApiError(
+      'TOO_FAR_FROM_STORE',
+      `Bạn đang ở quá xa cửa hàng (cách ${Math.round(distanceMeters)}m) — hãy di chuyển lại gần hơn rồi thử lại`,
+      400
+    );
+  }
+}
+
 router.patch('/deliveries/:id/status', asyncHandler(async (req, res) => {
   requireFields(req.body, ['status']);
   const delivery = await requireOwnDelivery(req.ctx, req.params.id);
+
+  if (req.body.status === 'picked_up') {
+    await requirePickupProximity(req.ctx, delivery, req.body);
+  }
 
   if (req.body.status === 'accepted' && delivery.accept_deadline && new Date(delivery.accept_deadline) < new Date()) {
     const driver = await db.queryOne('SELECT auto_accept FROM drivers WHERE user_id = $1', [req.ctx.userId]);

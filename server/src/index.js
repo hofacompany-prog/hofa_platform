@@ -46,6 +46,7 @@ app.use('/', require('./routes/order-settings'));
 app.use('/', require('./routes/auto-accept-settings'));
 app.use('/', require('./routes/driver-accept-settings'));
 app.use('/', require('./routes/driver-dispatch-settings'));
+app.use('/', require('./routes/pickup-proximity-settings'));
 app.use('/', require('./routes/otp-settings'));
 app.use('/', require('./routes/chat-settings'));
 app.use('/', require('./routes/order-messages'));

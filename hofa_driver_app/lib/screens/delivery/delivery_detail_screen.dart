@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/format.dart';
+import '../../core/location_tracker.dart';
 import '../../core/maps_launcher.dart';
 import '../../models/branch.dart';
 import '../../models/chat_message.dart';
@@ -86,6 +87,8 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
     String? recipientName,
     List<String>? proofPhotoUrls,
     String? failureReason,
+    double? driverLatitude,
+    double? driverLongitude,
   }) async {
     setState(() => _busy = true);
     try {
@@ -96,6 +99,8 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
         recipientName: recipientName,
         proofPhotoUrls: proofPhotoUrls,
         failureReason: failureReason,
+        driverLatitude: driverLatitude,
+        driverLongitude: driverLongitude,
       );
       ref.invalidate(deliveryProvider(widget.deliveryId));
       ref.invalidate(activeDeliveryProvider);
@@ -200,9 +205,15 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
   /// bước "picked_up" ở đây không hỏi OTP mà bắt buộc 1 ảnh hoá đơn/hàng đã mua làm bằng chứng
   /// (xem update_delivery_status trong hofa-db/43_buy_on_behalf_driver_dispatch.sql — server
   /// chặn hẳn nếu thiếu ảnh). Ví tài xế được hoàn tiền hàng ngay khi xác nhận thành công.
+  /// Kèm thêm toạ độ GPS hiện tại — server so với toạ độ chi nhánh, cách quá bán kính admin cấu
+  /// hình (mặc định 100m, xem PickupProximitySettings/hofa-db/91_buy_on_behalf_pickup_
+  /// proximity.sql) thì chặn, tránh chụp ảnh khống từ xa.
   Future<void> _promptBuyOnBehalfPickup() async {
     String? photoUrl;
     String? error;
+    bool confirming = false;
+    double? driverLat;
+    double? driverLng;
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => StatefulBuilder(
@@ -214,7 +225,8 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const Text(
-                  'Đơn mua hộ — không cần OTP, chỉ cần chụp ảnh hoá đơn hoặc hàng đã mua làm bằng chứng.',
+                  'Đơn mua hộ — không cần OTP, chỉ cần chụp ảnh hoá đơn hoặc hàng đã mua làm bằng chứng. '
+                  'Bạn cần đứng gần cửa hàng lúc xác nhận.',
                 ),
                 const SizedBox(height: 12),
                 ImageUploadField(
@@ -239,25 +251,52 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context, false),
+              onPressed: confirming ? null : () => Navigator.pop(context, false),
               child: const Text('Huỷ'),
             ),
             FilledButton(
-              onPressed: () {
-                if (photoUrl == null) {
-                  setInner(() => error = 'Cần chụp ảnh trước khi xác nhận');
-                  return;
-                }
-                Navigator.pop(context, true);
-              },
-              child: const Text('Xác nhận'),
+              onPressed: confirming
+                  ? null
+                  : () async {
+                      if (photoUrl == null) {
+                        setInner(() => error = 'Cần chụp ảnh trước khi xác nhận');
+                        return;
+                      }
+                      setInner(() {
+                        confirming = true;
+                        error = null;
+                      });
+                      final pos = await LocationTracker.instance.current();
+                      if (pos == null) {
+                        setInner(() {
+                          confirming = false;
+                          error = 'Cần bật định vị (GPS) để xác nhận đã lấy hàng';
+                        });
+                        return;
+                      }
+                      driverLat = pos.latitude;
+                      driverLng = pos.longitude;
+                      if (context.mounted) Navigator.pop(context, true);
+                    },
+              child: confirming
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Xác nhận'),
             ),
           ],
         ),
       ),
     );
     if (ok != true || photoUrl == null) return;
-    await _advance('picked_up', proofPhotoUrls: [photoUrl!]);
+    await _advance(
+      'picked_up',
+      proofPhotoUrls: [photoUrl!],
+      driverLatitude: driverLat,
+      driverLongitude: driverLng,
+    );
   }
 
   Future<void> _promptFailed() async {

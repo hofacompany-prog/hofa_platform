@@ -27,6 +27,10 @@ class DeliveryRepository {
     List<String>? proofPhotoUrls,
     String? signatureUrl,
     String? failureReason,
+    // Bắt buộc kèm lúc status='picked_up' cho đơn mua hộ — server so với toạ độ chi nhánh,
+    // xem PATCH /deliveries/:id/status (server/src/routes/deliveries.js).
+    double? driverLatitude,
+    double? driverLongitude,
   }) async =>
       Delivery.fromJson(await _api.patch('/deliveries/$deliveryId/status', body: {
         'status': status,
@@ -35,6 +39,8 @@ class DeliveryRepository {
         if (proofPhotoUrls != null) 'proof_photo_urls': proofPhotoUrls,
         if (signatureUrl != null) 'signature_url': signatureUrl,
         if (failureReason != null) 'failure_reason': failureReason,
+        if (driverLatitude != null) 'driver_latitude': driverLatitude,
+        if (driverLongitude != null) 'driver_longitude': driverLongitude,
       }) as Map<String, dynamic>);
 
   Future<bool> decline(String deliveryId) async {
