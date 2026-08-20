@@ -109,6 +109,12 @@ final routerProvider = Provider<GoRouter>((ref) {
           if (ref.read(authFlowInProgressProvider)) return null;
           return completingProfile ? null : '/complete-profile';
         }
+        // Tài khoản đăng ký role khác (tài xế, cửa hàng...) không được dùng app Khách hàng —
+        // 1 tài khoản Supabase Auth có thể tự do đăng nhập mọi app nếu không chặn ở đây.
+        if (profile.role != 'customer') {
+          await Supabase.instance.client.auth.signOut();
+          return loggingIn ? null : '/login';
+        }
         if (loggingIn || completingProfile) return '/';
       } catch (_) {
         // lỗi mạng tạm thời — đừng khoá cứng người dùng

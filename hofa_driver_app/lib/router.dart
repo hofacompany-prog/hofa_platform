@@ -62,6 +62,14 @@ final routerProvider = Provider<GoRouter>((ref) {
 
       try {
         final profile = await ref.read(userProfileProvider.future);
+        // Tài khoản đăng ký role khác (khách hàng, cửa hàng...) không được dùng app Tài xế —
+        // 1 tài khoản Supabase Auth có thể tự do đăng nhập mọi app nếu không chặn ở đây, dẫn
+        // tới lẫn role lúc test/dùng thật (vd tài khoản merchant_owner lại đặt đơn ở app Khách
+        // rồi mở app Tài xế bằng chính tài khoản đó).
+        if (profile != null && profile.role != 'driver') {
+          await Supabase.instance.client.auth.signOut();
+          return '/login';
+        }
         final driver = profile == null
             ? null
             : await ref.read(myDriverProvider.future);
