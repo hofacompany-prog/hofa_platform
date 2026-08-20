@@ -2,12 +2,12 @@ const router = require('express').Router();
 const db = require('../db');
 const asyncHandler = require('../asyncHandler');
 const { ApiError } = require('../errors');
-const { requireFields, requireAuth, requireRole } = require('../utils');
+const { requireFields, requireProfile, requireRole } = require('../utils');
 const push = require('../push');
 
 // Khách/tài xế báo giá sai của 1 biến thể sản phẩm — xem hofa-db/89_product_price_reports.sql.
 router.post('/price-reports', asyncHandler(async (req, res) => {
-  requireAuth(req.ctx);
+  requireProfile(req.ctx);
   requireFields(req.body, ['variant_id', 'reported_price']);
   const reportedPrice = Number(req.body.reported_price);
   if (!Number.isFinite(reportedPrice) || reportedPrice < 0) {

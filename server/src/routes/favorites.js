@@ -2,12 +2,12 @@ const router = require('express').Router();
 const db = require('../db');
 const asyncHandler = require('../asyncHandler');
 const { ApiError } = require('../errors');
-const { requireFields, pagination, requireAuth } = require('../utils');
+const { requireFields, pagination, requireProfile } = require('../utils');
 
 /** Danh sách cửa hàng yêu thích (đầy đủ thông tin merchant, phân trang) — dùng cho màn
  * "Cửa hàng yêu thích" phía app khách, mở từ icon trái tim ở trang chủ. */
 router.get('/favorites', asyncHandler(async (req, res) => {
-  requireAuth(req.ctx);
+  requireProfile(req.ctx);
   const { limit, offset } = pagination(req.query);
   const rows = await db.query(
     `SELECT m.*,
@@ -28,13 +28,13 @@ router.get('/favorites', asyncHandler(async (req, res) => {
 /** Chỉ trả về id — nhẹ, dùng để tô/tắt icon tim ở mọi nơi khác (thẻ cửa hàng, chi tiết cửa
  * hàng) mà không cần tải lại toàn bộ thông tin merchant mỗi lần. */
 router.get('/favorites/ids', asyncHandler(async (req, res) => {
-  requireAuth(req.ctx);
+  requireProfile(req.ctx);
   const rows = await db.query('SELECT merchant_id FROM merchant_favorites WHERE customer_id = $1', [req.ctx.userId]);
   res.json({ ok: true, data: rows.map((r) => r.merchant_id) });
 }));
 
 router.post('/favorites', asyncHandler(async (req, res) => {
-  requireAuth(req.ctx);
+  requireProfile(req.ctx);
   requireFields(req.body, ['merchant_id']);
   const merchant = await db.findById('merchants', req.body.merchant_id);
   if (!merchant) throw new ApiError('NOT_FOUND', 'Không tìm thấy cửa hàng', 404);
@@ -52,7 +52,7 @@ router.post('/favorites', asyncHandler(async (req, res) => {
 }));
 
 router.delete('/favorites/:merchantId', asyncHandler(async (req, res) => {
-  requireAuth(req.ctx);
+  requireProfile(req.ctx);
   await db.query(
     'DELETE FROM merchant_favorites WHERE customer_id = $1 AND merchant_id = $2',
     [req.ctx.userId, req.params.merchantId]

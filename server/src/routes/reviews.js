@@ -2,7 +2,7 @@ const router = require('express').Router();
 const db = require('../db');
 const asyncHandler = require('../asyncHandler');
 const { ApiError } = require('../errors');
-const { requireFields, pagination, requireAuth, requireMerchantAccess } = require('../utils');
+const { requireFields, pagination, requireProfile, requireMerchantAccess } = require('../utils');
 
 /** order_id: liệt kê mọi đánh giá (mọi target_type) của 1 đơn cụ thể — màn "Đánh giá đơn hàng"
  * phía khách dùng để biết đã đánh giá món/cửa hàng/tài xế nào rồi. Không thì lọc theo
@@ -68,7 +68,7 @@ async function assertTargetBelongsToOrder(order, targetType, targetId) {
  * REVIEW_WINDOW_DAYS ngày kể từ lúc giao — quá hạn thì ẩn hẳn màn đánh giá phía khách,
  * chặn luôn ở server phòng khách gọi thẳng API. */
 router.post('/reviews', asyncHandler(async (req, res) => {
-  requireAuth(req.ctx);
+  requireProfile(req.ctx);
   requireFields(req.body, ['order_id', 'target_type', 'target_id', 'rating']);
   const order = await db.findById('orders', req.body.order_id);
   if (!order) throw new ApiError('NOT_FOUND', 'Không tìm thấy đơn hàng', 404);

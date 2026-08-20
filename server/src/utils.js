@@ -28,6 +28,20 @@ function requireAuth(ctx) {
   }
 }
 
+/** Từ migration 90 (hofa-db/90_multi_role_accounts.sql): đã đăng nhập (authenticated=true)
+ * KHÔNG còn đồng nghĩa đã có hồ sơ (ctx.userId có thể null — SĐT có tài khoản Auth ở role khác
+ * nhưng chưa /me/sync cho scope hiện tại, xem middleware/auth.js). Mọi route dùng ctx.userId
+ * làm khoá ngoại (insert/update/query WHERE user_id = ...) PHẢI gọi hàm này thay vì requireAuth
+ * trần — thiếu bước này từng gây lỗi 500 thô "null value in column violates not-null constraint"
+ * (vd POST /devices) thay vì báo rõ "chưa có hồ sơ". CHỈ 2 route thật sự cần chấp nhận userId
+ * null (GET /me, POST /me/sync) mới được giữ requireAuth trần. */
+function requireProfile(ctx) {
+  requireAuth(ctx);
+  if (!ctx.userId) {
+    throw new ApiError('PROFILE_NOT_FOUND', 'Đã đăng nhập nhưng chưa có hồ sơ — gọi POST /me/sync trước', 404);
+  }
+}
+
 function requireRole(ctx, roles) {
   requireAuth(ctx);
   if (!roles.includes(ctx.role)) {
@@ -151,7 +165,7 @@ function parseLatLng(query) {
 
 module.exports = {
   pickFields, requireFields, pagination,
-  requireAuth, requireRole, requireOwnRow, requireMerchantAccess,
+  requireAuth, requireProfile, requireRole, requireOwnRow, requireMerchantAccess,
   requirePermission, requireOwnerAccess,
   orderCanView, requireOrderAccess, haversineKm, haversineKmSql, parseLatLng
 };

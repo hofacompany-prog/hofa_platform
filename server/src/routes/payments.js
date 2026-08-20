@@ -3,7 +3,7 @@ const db = require('../db');
 const config = require('../config');
 const asyncHandler = require('../asyncHandler');
 const { ApiError } = require('../errors');
-const { requireFields, requireAuth, requireRole, requireMerchantAccess, requireOrderAccess } = require('../utils');
+const { requireFields, requireProfile, requireRole, requireMerchantAccess, requireOrderAccess } = require('../utils');
 const orderOffer = require('../orderOffer');
 
 router.get('/orders/:orderId/payments', asyncHandler(async (req, res) => {
@@ -21,7 +21,7 @@ router.get('/orders/:orderId/payments', asyncHandler(async (req, res) => {
  * - merchant_owner/merchant_staff/admin: chuyển khoản, QR, ghi tay
  */
 router.post('/payments', asyncHandler(async (req, res) => {
-  requireAuth(req.ctx);
+  requireProfile(req.ctx);
   requireFields(req.body, ['order_id', 'method', 'amount']);
   const order = await db.findById('orders', req.body.order_id);
   if (!order) throw new ApiError('NOT_FOUND', 'Không tìm thấy đơn hàng', 404);

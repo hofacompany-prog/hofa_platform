@@ -2,7 +2,7 @@ const router = require('express').Router();
 const db = require('../db');
 const asyncHandler = require('../asyncHandler');
 const { ApiError } = require('../errors');
-const { pickFields, requireFields, pagination, requireAuth, requireRole } = require('../utils');
+const { pickFields, requireFields, pagination, requireProfile, requireRole } = require('../utils');
 const { routeDistancesKm } = require('../routing');
 const push = require('../push');
 
@@ -25,14 +25,12 @@ router.get('/drivers/me', asyncHandler(async (req, res) => {
 }));
 
 router.post('/drivers/register', asyncHandler(async (req, res) => {
-  requireAuth(req.ctx);
   // Hồ sơ users role='driver' (X-App-Scope: driver) phải có TRƯỚC — router client gọi
   // POST /me/sync tạo hồ sơ này (Hoàn tất hồ sơ) trước khi vào màn đăng ký tài xế, xem
   // router.dart mỗi app. Ở đây chỉ thêm thông tin CHUYÊN MÔN tài xế, không còn cần đổi role
-  // vì hồ sơ đã tạo đúng role='driver' ngay từ đầu.
-  if (!req.ctx.userId) {
-    throw new ApiError('PROFILE_NOT_FOUND', 'Chưa có hồ sơ — gọi POST /me/sync trước', 404);
-  }
+  // vì hồ sơ đã tạo đúng role='driver' ngay từ đầu. requireProfile tự báo PROFILE_NOT_FOUND
+  // nếu chưa /me/sync.
+  requireProfile(req.ctx);
   requireFields(req.body, [
     'national_id', 'license_no', 'vehicle_type', 'vehicle_plate',
     'bank_name', 'bank_bin', 'bank_account_number', 'bank_account_holder'
@@ -105,7 +103,7 @@ router.patch('/drivers/me/location', asyncHandler(async (req, res) => {
  * exclude= loại bớt tài xế đã từ chối đơn này (dùng lúc khách chọn lại sau khi tài xế trước từ
  * chối/hết hạn). */
 router.get('/drivers/available', asyncHandler(async (req, res) => {
-  requireAuth(req.ctx);
+  requireProfile(req.ctx);
   const excludeIds = typeof req.query.exclude === 'string' && req.query.exclude.trim()
     ? req.query.exclude.split(',').map((s) => s.trim()).filter(Boolean)
     : [];

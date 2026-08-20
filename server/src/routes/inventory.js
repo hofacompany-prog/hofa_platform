@@ -2,7 +2,7 @@ const router = require('express').Router();
 const db = require('../db');
 const asyncHandler = require('../asyncHandler');
 const { ApiError } = require('../errors');
-const { pickFields, requireFields, requireAuth, pagination, requireMerchantAccess, requirePermission } = require('../utils');
+const { pickFields, requireFields, requireProfile, pagination, requireMerchantAccess, requirePermission } = require('../utils');
 
 const INVENTORY_UPDATE_FIELDS = ['low_stock_threshold'];
 
@@ -43,7 +43,7 @@ router.get('/branches/:branchId/inventory/low-stock', asyncHandler(async (req, r
  * (sale_out được hệ thống tự ghi lúc tài xế lấy hàng, xem PATCH /deliveries/:id/status)
  */
 router.post('/inventory/adjust', asyncHandler(async (req, res) => {
-  requireAuth(req.ctx);
+  requireProfile(req.ctx);
   requireFields(req.body, ['branch_id', 'variant_id', 'move_type', 'quantity']);
   if (req.body.move_type === 'sale_out') {
     throw new ApiError('BAD_REQUEST', 'sale_out chỉ được ghi tự động khi giao hàng, không gọi tay', 400);
@@ -83,7 +83,7 @@ router.patch('/branches/:branchId/inventory/:variantId', asyncHandler(async (req
 /** Xoá hẳn 1 dòng tồn kho — xem delete_inventory_row() trong hofa-db/04_api_functions.sql
  * (chặn nếu đang giữ chỗ cho đơn hàng, tự ghi sổ điều chỉnh về 0 trước khi xoá nếu còn tồn). */
 router.delete('/branches/:branchId/inventory/:variantId', asyncHandler(async (req, res) => {
-  requireAuth(req.ctx);
+  requireProfile(req.ctx);
   await requireBranchAccess(req.ctx, req.params.branchId);
   await db.callRpc('delete_inventory_row', {
     p_branch_id: req.params.branchId,

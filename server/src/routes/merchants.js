@@ -2,7 +2,7 @@ const router = require('express').Router();
 const db = require('../db');
 const asyncHandler = require('../asyncHandler');
 const { ApiError } = require('../errors');
-const { pickFields, requireFields, pagination, requireAuth, requireRole, requireMerchantAccess, requirePermission, requireOwnerAccess, parseLatLng, haversineKmSql } = require('../utils');
+const { pickFields, requireFields, pagination, requireProfile, requireRole, requireMerchantAccess, requirePermission, requireOwnerAccess, parseLatLng, haversineKmSql } = require('../utils');
 const { routeDistanceKm, routeDistancesKm } = require('../routing');
 const supabaseAdmin = require('../supabaseAdmin');
 const push = require('../push');
@@ -186,7 +186,7 @@ router.get('/merchants', asyncHandler(async (req, res) => {
  * khác với GET /merchants (chỉ trả active cho người ngoài). Phải đặt TRƯỚC route /merchants/:id
  * để Express không hiểu nhầm "mine" là 1 giá trị :id. */
 router.get('/merchants/mine', asyncHandler(async (req, res) => {
-  requireAuth(req.ctx);
+  requireProfile(req.ctx);
   const owned = await db.query(
     'SELECT * FROM merchants WHERE owner_id = $1 AND deleted_at IS NULL ORDER BY created_at DESC',
     [req.ctx.userId]
@@ -366,7 +366,7 @@ async function resolveOwnerIdByPhone(phone, password, fullNameFallback) {
 }
 
 router.post('/merchants', asyncHandler(async (req, res) => {
-  requireAuth(req.ctx);
+  requireProfile(req.ctx);
   requireFields(req.body, ['name', 'slug']);
   const data = pickFields(req.body, MERCHANT_FIELDS);
 

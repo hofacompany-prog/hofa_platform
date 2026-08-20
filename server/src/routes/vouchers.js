@@ -2,7 +2,7 @@ const router = require('express').Router();
 const db = require('../db');
 const asyncHandler = require('../asyncHandler');
 const { ApiError } = require('../errors');
-const { pickFields, requireFields, pagination, requireAuth, requireRole, requireMerchantAccess } = require('../utils');
+const { pickFields, requireFields, pagination, requireProfile, requireRole, requireMerchantAccess } = require('../utils');
 
 const VOUCHER_FIELDS = [
   'code', 'merchant_id', 'description', 'discount_type', 'discount_value', 'max_discount',
@@ -95,7 +95,7 @@ router.patch('/vouchers/:id/deactivate', asyncHandler(async (req, res) => {
 
 /** Kiểm tra trước khi đặt hàng: mã còn dùng được không, giảm bao nhiêu — KHÔNG trừ lượt dùng. */
 router.post('/vouchers/validate', asyncHandler(async (req, res) => {
-  requireAuth(req.ctx);
+  requireProfile(req.ctx);
   requireFields(req.body, ['code', 'merchant_id', 'order_amount']);
 
   const voucher = await db.queryOne(`SELECT * FROM vouchers WHERE code = $1 AND is_active`, [req.body.code]);

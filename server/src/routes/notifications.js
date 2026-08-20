@@ -2,13 +2,13 @@ const router = require('express').Router();
 const db = require('../db');
 const asyncHandler = require('../asyncHandler');
 const { ApiError } = require('../errors');
-const { pagination, requireAuth } = require('../utils');
+const { pagination, requireProfile } = require('../utils');
 
 /** Hộp thư thông báo trong app — 1 dòng/user cho mỗi push đã gửi (xem push.js
  * saveNotifications), độc lập với việc push có thật sự tới máy hay không. */
 
 router.get('/notifications', asyncHandler(async (req, res) => {
-  requireAuth(req.ctx);
+  requireProfile(req.ctx);
   const { limit, offset } = pagination(req.query);
   const params = [req.ctx.userId];
   let categoryClause = '';
@@ -25,7 +25,7 @@ router.get('/notifications', asyncHandler(async (req, res) => {
 }));
 
 router.get('/notifications/unread-count', asyncHandler(async (req, res) => {
-  requireAuth(req.ctx);
+  requireProfile(req.ctx);
   const params = [req.ctx.userId];
   let categoryClause = '';
   if (req.query.category) {
@@ -40,7 +40,7 @@ router.get('/notifications/unread-count', asyncHandler(async (req, res) => {
 }));
 
 router.patch('/notifications/:id/read', asyncHandler(async (req, res) => {
-  requireAuth(req.ctx);
+  requireProfile(req.ctx);
   const existing = await db.queryOne('SELECT id FROM notifications WHERE id = $1 AND user_id = $2', [req.params.id, req.ctx.userId]);
   if (!existing) throw new ApiError('NOT_FOUND', 'Không tìm thấy thông báo', 404);
   const updated = await db.updateById('notifications', req.params.id, { read_at: new Date().toISOString() });
@@ -48,7 +48,7 @@ router.patch('/notifications/:id/read', asyncHandler(async (req, res) => {
 }));
 
 router.post('/notifications/read-all', asyncHandler(async (req, res) => {
-  requireAuth(req.ctx);
+  requireProfile(req.ctx);
   await db.query(
     'UPDATE notifications SET read_at = now() WHERE user_id = $1 AND read_at IS NULL',
     [req.ctx.userId]

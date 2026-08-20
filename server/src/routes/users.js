@@ -2,7 +2,7 @@ const router = require('express').Router();
 const db = require('../db');
 const asyncHandler = require('../asyncHandler');
 const { ApiError } = require('../errors');
-const { pickFields, requireFields, pagination, requireAuth, requireRole, requireOwnRow } = require('../utils');
+const { pickFields, requireFields, pagination, requireAuth, requireProfile, requireRole, requireOwnRow } = require('../utils');
 const push = require('../push');
 const supabaseAdmin = require('../supabaseAdmin');
 const { SCOPE_DEFAULT_ROLE } = require('../appScope');
@@ -57,7 +57,7 @@ router.post('/me/sync', asyncHandler(async (req, res) => {
 }));
 
 router.patch('/me', asyncHandler(async (req, res) => {
-  requireAuth(req.ctx);
+  requireProfile(req.ctx);
   const data = pickFields(req.body, ['full_name', 'email', 'avatar_url', 'date_of_birth']);
   const updated = await db.updateById('users', req.ctx.userId, data);
   res.json({ ok: true, data: updated });
@@ -170,7 +170,7 @@ router.delete('/admin/users/:id', asyncHandler(async (req, res) => {
 // ---- Địa chỉ giao hàng ----
 
 router.get('/addresses', asyncHandler(async (req, res) => {
-  requireAuth(req.ctx);
+  requireProfile(req.ctx);
   const rows = await db.query(
     'SELECT * FROM addresses WHERE user_id = $1 ORDER BY is_default DESC, created_at DESC',
     [req.ctx.userId]
@@ -179,7 +179,7 @@ router.get('/addresses', asyncHandler(async (req, res) => {
 }));
 
 router.post('/addresses', asyncHandler(async (req, res) => {
-  requireAuth(req.ctx);
+  requireProfile(req.ctx);
   requireFields(req.body, ['recipient_name', 'recipient_phone', 'line1', 'province']);
   const data = pickFields(req.body, ADDRESS_FIELDS);
   data.user_id = req.ctx.userId;
@@ -188,7 +188,7 @@ router.post('/addresses', asyncHandler(async (req, res) => {
 }));
 
 router.patch('/addresses/:id', asyncHandler(async (req, res) => {
-  requireAuth(req.ctx);
+  requireProfile(req.ctx);
   await requireOwnRow('addresses', req.params.id, req.ctx.userId, 'user_id');
   const data = pickFields(req.body, ADDRESS_FIELDS);
   const updated = await db.updateById('addresses', req.params.id, data);
@@ -196,7 +196,7 @@ router.patch('/addresses/:id', asyncHandler(async (req, res) => {
 }));
 
 router.delete('/addresses/:id', asyncHandler(async (req, res) => {
-  requireAuth(req.ctx);
+  requireProfile(req.ctx);
   await requireOwnRow('addresses', req.params.id, req.ctx.userId, 'user_id');
   await db.deleteById('addresses', req.params.id);
   res.json({ ok: true, data: { deleted: true } });
@@ -205,13 +205,13 @@ router.delete('/addresses/:id', asyncHandler(async (req, res) => {
 // ---- Thiết bị (push notification) ----
 
 router.get('/devices', asyncHandler(async (req, res) => {
-  requireAuth(req.ctx);
+  requireProfile(req.ctx);
   const rows = await db.query('SELECT * FROM user_devices WHERE user_id = $1', [req.ctx.userId]);
   res.json({ ok: true, data: rows });
 }));
 
 router.post('/devices', asyncHandler(async (req, res) => {
-  requireAuth(req.ctx);
+  requireProfile(req.ctx);
   requireFields(req.body, ['device_id']);
   const existing = await db.queryOne(
     'SELECT id FROM user_devices WHERE user_id = $1 AND device_id = $2',
@@ -291,7 +291,7 @@ router.post('/devices', asyncHandler(async (req, res) => {
 // X-Device-Id — chỉ có SAU KHI thiết bị đã đăng ký qua POST /devices ít nhất 1 lần), buộc app
 // trên máy đó tự đăng xuất + xoá session Supabase cục bộ (xem ApiClient của app).
 router.delete('/devices/:id', asyncHandler(async (req, res) => {
-  requireAuth(req.ctx);
+  requireProfile(req.ctx);
   await requireOwnRow('user_devices', req.params.id, req.ctx.userId, 'user_id');
   await db.deleteById('user_devices', req.params.id);
   res.json({ ok: true, data: { deleted: true } });

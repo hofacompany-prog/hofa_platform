@@ -2,7 +2,7 @@ const router = require('express').Router();
 const db = require('../db');
 const asyncHandler = require('../asyncHandler');
 const { ApiError } = require('../errors');
-const { requireFields, pickFields, pagination, requireAuth, requireRole, requireMerchantAccess, requireOrderAccess, requirePermission } = require('../utils');
+const { requireFields, pickFields, pagination, requireProfile, requireRole, requireMerchantAccess, requireOrderAccess, requirePermission } = require('../utils');
 const dispatch = require('../dispatch');
 const orderOffer = require('../orderOffer');
 const push = require('../push');
@@ -18,7 +18,7 @@ const ORDER_STATUS_ROLES = {
 };
 
 router.post('/orders', asyncHandler(async (req, res) => {
-  requireAuth(req.ctx);
+  requireProfile(req.ctx);
   const body = req.body;
   requireFields(body, ['merchant_id', 'branch_id', 'items', 'ship_recipient_name', 'ship_recipient_phone', 'ship_line1', 'ship_province']);
   if (!Array.isArray(body.items) || body.items.length === 0) {
@@ -150,7 +150,7 @@ router.post('/orders', asyncHandler(async (req, res) => {
 }));
 
 router.get('/orders/mine', asyncHandler(async (req, res) => {
-  requireAuth(req.ctx);
+  requireProfile(req.ctx);
   const { limit, offset } = pagination(req.query);
   const clauses = ['customer_id = $1'];
   const params = [req.ctx.userId];
@@ -331,7 +331,7 @@ router.get('/orders/:id', asyncHandler(async (req, res) => {
  * dùng lại đúng logic gọi lúc thanh toán xong, xem orderOffer.js).
  */
 router.post('/orders/:id/select-driver', asyncHandler(async (req, res) => {
-  requireAuth(req.ctx);
+  requireProfile(req.ctx);
   requireFields(req.body, ['driver_id']);
   const order = await requireOrderAccess(req.ctx, req.params.id);
   if (order.customer_id !== req.ctx.userId && req.ctx.role !== 'admin') {
@@ -358,7 +358,7 @@ router.get('/orders/:id/history', asyncHandler(async (req, res) => {
 }));
 
 router.patch('/orders/:id/status', asyncHandler(async (req, res) => {
-  requireAuth(req.ctx);
+  requireProfile(req.ctx);
   requireFields(req.body, ['status']);
   const order = await requireOrderAccess(req.ctx, req.params.id);
 
