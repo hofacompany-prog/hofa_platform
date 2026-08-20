@@ -26,6 +26,13 @@ router.get('/drivers/me', asyncHandler(async (req, res) => {
 
 router.post('/drivers/register', asyncHandler(async (req, res) => {
   requireAuth(req.ctx);
+  // Hồ sơ users role='driver' (X-App-Scope: driver) phải có TRƯỚC — router client gọi
+  // POST /me/sync tạo hồ sơ này (Hoàn tất hồ sơ) trước khi vào màn đăng ký tài xế, xem
+  // router.dart mỗi app. Ở đây chỉ thêm thông tin CHUYÊN MÔN tài xế, không còn cần đổi role
+  // vì hồ sơ đã tạo đúng role='driver' ngay từ đầu.
+  if (!req.ctx.userId) {
+    throw new ApiError('PROFILE_NOT_FOUND', 'Chưa có hồ sơ — gọi POST /me/sync trước', 404);
+  }
   requireFields(req.body, [
     'national_id', 'license_no', 'vehicle_type', 'vehicle_plate',
     'bank_name', 'bank_bin', 'bank_account_number', 'bank_account_holder'
@@ -37,7 +44,6 @@ router.post('/drivers/register', asyncHandler(async (req, res) => {
   const data = pickFields(req.body, DRIVER_PROFILE_FIELDS);
   data.user_id = req.ctx.userId;
   const driver = await db.insertRow('drivers', data);
-  await db.query(`UPDATE users SET role = 'driver' WHERE id = $1 AND role = 'customer'`, [req.ctx.userId]);
   res.status(201).json({ ok: true, data: driver });
 }));
 

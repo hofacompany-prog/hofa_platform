@@ -1,4 +1,5 @@
 const config = require('./config');
+const db = require('./db');
 
 let client = null;
 let initTried = false;
@@ -83,4 +84,17 @@ async function updateUserPassword(authUserId, password) {
   if (error) throw error;
 }
 
-module.exports = { createAuthUser, deleteAuthUser, updateUserPassword, phoneToAuthEmail };
+/**
+ * Dùng khi tạo 1 hồ sơ role MỚI cho 1 SĐT (đăng ký làm nhân viên cửa hàng, admin gán chủ mới...)
+ * — nếu SĐT này đã có tài khoản Auth từ trước (role khác, xem hofa-db/90_multi_role_accounts.sql)
+ * thì TÁI SỬ DỤNG đúng auth_user_id đó (Supabase chỉ cho 1 SĐT/email gắn 1 auth.users, không
+ * tạo trùng được — mật khẩu gửi lên trong trường hợp này bị bỏ qua vì tài khoản đã có mật khẩu
+ * riêng rồi). Chỉ tạo tài khoản Auth THẬT SỰ MỚI khi SĐT này chưa từng đăng ký role nào.
+ */
+async function resolveOrCreateAuthIdentity(phone, password) {
+  const existing = await db.queryOne('SELECT auth_user_id FROM users WHERE phone = $1 LIMIT 1', [phone]);
+  if (existing) return existing.auth_user_id;
+  return createAuthUser(phone, password);
+}
+
+module.exports = { createAuthUser, deleteAuthUser, updateUserPassword, phoneToAuthEmail, resolveOrCreateAuthIdentity };

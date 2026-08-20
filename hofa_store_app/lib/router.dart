@@ -76,13 +76,6 @@ final routerProvider = Provider<GoRouter>((ref) {
         // auth.syncProfile). Gom chung với "chưa có cửa hàng": CreateStoreScreen lo cả 2.
         if (profile == null) return onOnboarding ? null : '/onboarding';
 
-        // Tài khoản đăng ký role khác (khách hàng, tài xế...) không được dùng app Cửa hàng —
-        // 1 tài khoản Supabase Auth có thể tự do đăng nhập mọi app nếu không chặn ở đây.
-        if (!profile.isMerchant) {
-          await Supabase.instance.client.auth.signOut();
-          return '/login';
-        }
-
         final merchant = await ref.read(myMerchantProvider.future);
         if (merchant == null && !onOnboarding) return '/onboarding';
         if (merchant != null && onOnboarding) return '/home';

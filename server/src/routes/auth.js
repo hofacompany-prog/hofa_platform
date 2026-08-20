@@ -18,8 +18,10 @@ const DEFAULT_RESET_PASSWORD = '123123';
 router.post('/auth/forgot-password', asyncHandler(async (req, res) => {
   requireFields(req.body, ['phone']);
   const digits = String(req.body.phone).replace(/[^0-9]/g, '');
+  // 1 SĐT có thể có nhiều hồ sơ role (xem hofa-db/90_multi_role_accounts.sql) nhưng đều dùng
+  // chung 1 tài khoản Auth (auth_user_id) — lấy đại diện 1 dòng bất kỳ là đủ để đổi mật khẩu.
   const user = await db.queryOne(
-    `SELECT id FROM users WHERE regexp_replace(phone, '[^0-9]', '', 'g') = $1 AND deleted_at IS NULL`,
+    `SELECT auth_user_id FROM users WHERE regexp_replace(phone, '[^0-9]', '', 'g') = $1 AND deleted_at IS NULL LIMIT 1`,
     [digits]
   );
   if (!user) throw new ApiError('NOT_FOUND', 'Không tìm thấy tài khoản với số điện thoại này', 404);
@@ -27,7 +29,7 @@ router.post('/auth/forgot-password', asyncHandler(async (req, res) => {
   const newPassword = typeof req.body.new_password === 'string' && req.body.new_password.length >= 6
     ? req.body.new_password
     : DEFAULT_RESET_PASSWORD;
-  await supabaseAdmin.updateUserPassword(user.id, newPassword);
+  await supabaseAdmin.updateUserPassword(user.auth_user_id, newPassword);
   res.json({ ok: true, data: { reset: true, used_default: newPassword === DEFAULT_RESET_PASSWORD } });
 }));
 

@@ -23,6 +23,9 @@ class ApiClient {
     final token = Supabase.instance.client.auth.currentSession?.accessToken;
     return {
       'Content-Type': 'application/json',
+      // Bắt buộc trên mọi request kể từ khi middleware yêu cầu — admin đăng nhập email/mật
+      // khẩu riêng, không đi qua luồng đa role cùng SĐT, nhưng vẫn phải khai báo scope.
+      'X-App-Scope': 'admin',
       if (token != null) 'Authorization': 'Bearer $token',
     };
   }

@@ -5,6 +5,7 @@ const { ApiError } = require('../errors');
 const { pickFields, requireFields, pagination, requireAuth, requireRole, requireOwnRow } = require('../utils');
 const push = require('../push');
 const supabaseAdmin = require('../supabaseAdmin');
+const { SCOPE_DEFAULT_ROLE } = require('../appScope');
 
 const ADDRESS_FIELDS = [
   'label', 'recipient_name', 'recipient_phone', 'line1', 'ward', 'district',
@@ -28,24 +29,28 @@ router.get('/me', asyncHandler(async (req, res) => {
   res.json({ ok: true, data: req.ctx.profile });
 }));
 
-/** Gọi ngay sau lần đăng nhập/đăng ký đầu tiên qua Supabase Auth để tạo hồ sơ trong public.users. */
+/** Gọi ngay sau lần đăng nhập/đăng ký đầu tiên qua Supabase Auth để tạo hồ sơ trong public.users
+ * — hoặc khi 1 SĐT đã có tài khoản Auth (role khác) nhưng CHƯA có hồ sơ cho role/app hiện tại
+ * (req.ctx.userId null dù đã authenticated, xem middleware/auth.js): tạo hồ sơ MỚI, tách biệt,
+ * role mặc định theo đúng scope app đang gọi (X-App-Scope), không đụng tới hồ sơ role khác. */
 router.post('/me/sync', asyncHandler(async (req, res) => {
   requireAuth(req.ctx);
   requireFields(req.body, ['full_name', 'phone']);
 
-  const existing = await db.findById('users', req.ctx.userId);
-  if (existing) {
+  if (req.ctx.profile) {
     const patch = pickFields(req.body, ['full_name', 'email', 'avatar_url', 'date_of_birth']);
-    const updated = Object.keys(patch).length ? await db.updateById('users', req.ctx.userId, patch) : existing;
+    const updated = Object.keys(patch).length
+      ? await db.updateById('users', req.ctx.userId, patch)
+      : req.ctx.profile;
     return res.json({ ok: true, data: updated });
   }
 
   const created = await db.insertRow('users', {
-    id: req.ctx.userId,
+    auth_user_id: req.ctx.authUserId,
     phone: req.body.phone,
     full_name: req.body.full_name,
     email: req.body.email || null,
-    role: 'customer', // nâng role phải qua action admin, không tự nhận
+    role: SCOPE_DEFAULT_ROLE[req.ctx.appScope],
     status: 'active'
   });
   res.status(201).json({ ok: true, data: created });
@@ -147,7 +152,17 @@ router.delete('/admin/users/:id', asyncHandler(async (req, res) => {
     throw new ApiError('USER_HAS_DEPENDENTS', `Không thể xoá triệt để: tài khoản ${blocks.join('; ')}.`, 409);
   }
 
-  await supabaseAdmin.deleteAuthUser(req.params.id);
+  // 1 SĐT có thể có NHIỀU hồ sơ role dùng chung 1 tài khoản Auth (auth_user_id) — chỉ xoá thẳng
+  // tài khoản Auth khi đây là hồ sơ role CUỐI CÙNG của auth_user_id đó, nếu không sẽ xoá luôn
+  // đăng nhập của những role KHÁC không liên quan (vd xoá hồ sơ driver nhưng lại mất luôn tài
+  // khoản customer cùng SĐT).
+  const siblingCount = await db.queryOne(
+    'SELECT COUNT(*) AS count FROM users WHERE auth_user_id = $1 AND id != $2',
+    [existing.auth_user_id, req.params.id]
+  );
+  if (Number(siblingCount.count) === 0) {
+    await supabaseAdmin.deleteAuthUser(existing.auth_user_id);
+  }
   await db.deleteById('users', req.params.id);
   res.json({ ok: true, data: { deleted: true } });
 }));

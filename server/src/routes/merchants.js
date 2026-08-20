@@ -311,57 +311,76 @@ router.get('/merchants/:id', asyncHandler(async (req, res) => {
   res.json({ ok: true, data: { ...row, owner, branches } });
 }));
 
+/**
+ * Admin gắn/tạo chủ cửa hàng theo SĐT — dùng chung cho POST /merchants và PATCH /merchants/:id.
+ * (1) owner_password có → SĐT HOÀN TOÀN MỚI, chưa từng có hồ sơ nào: tạo thẳng tài khoản
+ *     Supabase Auth + 1 dòng users role='merchant_owner' mới. SĐT trùng tài khoản đã có thì báo
+ *     lỗi rõ ràng để admin đổi SĐT khác hoặc bỏ trống mật khẩu, không âm thầm gắn nhầm.
+ * (2) owner_password không có → SĐT ĐÃ có hồ sơ (role bất kỳ, kể cả customer/driver — xem
+ *     hofa-db/90_multi_role_accounts.sql): nếu đã có sẵn hồ sơ merchant_owner cho SĐT đó thì
+ *     dùng lại, chưa có thì tạo THÊM 1 hồ sơ merchant_owner mới, TÁI SỬ DỤNG đúng auth_user_id
+ *     hiện có (không đụng/không xoá hồ sơ role khác của cùng SĐT).
+ */
+async function resolveOwnerIdByPhone(phone, password, fullNameFallback) {
+  if (password) {
+    const existing = await db.queryOne('SELECT id FROM users WHERE phone = $1', [phone]);
+    if (existing) {
+      throw new ApiError(
+        'CONFLICT',
+        'Số điện thoại này đã có tài khoản — dùng số khác, hoặc để trống mật khẩu để gắn vào tài khoản có sẵn',
+        409
+      );
+    }
+    if (String(password).length < 6) {
+      throw new ApiError('BAD_REQUEST', 'Mật khẩu ban đầu phải từ 6 ký tự', 400);
+    }
+    let authUserId;
+    try {
+      authUserId = await supabaseAdmin.createAuthUser(phone, password);
+    } catch (err) {
+      throw new ApiError('CONFLICT', `Không tạo được tài khoản mới: ${err.message}`, 409);
+    }
+    const created = await db.insertRow('users', {
+      auth_user_id: authUserId,
+      phone,
+      full_name: fullNameFallback,
+      role: 'merchant_owner',
+      status: 'active'
+    });
+    return created.id;
+  }
+
+  const existingOwnerRow = await db.queryOne(`SELECT id FROM users WHERE phone = $1 AND role = 'merchant_owner'`, [phone]);
+  if (existingOwnerRow) return existingOwnerRow.id;
+
+  const anyRow = await db.queryOne('SELECT auth_user_id, full_name FROM users WHERE phone = $1 LIMIT 1', [phone]);
+  if (!anyRow) throw new ApiError('NOT_FOUND', 'Không tìm thấy người dùng với SĐT này', 404);
+  const created = await db.insertRow('users', {
+    auth_user_id: anyRow.auth_user_id,
+    phone,
+    full_name: anyRow.full_name,
+    role: 'merchant_owner',
+    status: 'active'
+  });
+  return created.id;
+}
+
 router.post('/merchants', asyncHandler(async (req, res) => {
   requireAuth(req.ctx);
   requireFields(req.body, ['name', 'slug']);
   const data = pickFields(req.body, MERCHANT_FIELDS);
 
-  // Admin tạo hộ cửa hàng — 2 trường hợp theo SĐT (owner_phone):
-  // (1) có owner_password kèm theo → chủ HOÀN TOÀN MỚI, chưa từng có tài khoản: tự tạo
-  //     thẳng tài khoản Supabase Auth + public.users, không đụng gì tới tài khoản có sẵn.
-  //     SĐT trùng tài khoản đã có thì báo lỗi rõ ràng để admin đổi SĐT khác, không âm thầm
-  //     gắn nhầm vào tài khoản người khác.
-  // (2) không có owner_password → giữ nguyên hành vi cũ: gắn vào 1 chủ đã có tài khoản sẵn.
-  // Mọi role khác (không phải admin) luôn tự làm owner của chính mình.
+  // Admin tạo hộ cửa hàng theo SĐT (owner_phone) — xem resolveOwnerIdByPhone. Mọi role khác
+  // (không phải admin) luôn tự làm owner của chính mình — hồ sơ đã đúng role='merchant_owner'
+  // sẵn (tạo qua /me/sync scope=merchant), không cần gán gì thêm.
   let ownerId = req.ctx.userId;
   if (req.ctx.role === 'admin' && req.body.owner_phone) {
-    if (req.body.owner_password) {
-      const existing = await db.queryOne('SELECT id FROM users WHERE phone = $1', [req.body.owner_phone]);
-      if (existing) {
-        throw new ApiError(
-          'CONFLICT',
-          'Số điện thoại này đã có tài khoản — dùng số khác, hoặc để trống mật khẩu để gắn vào tài khoản có sẵn',
-          409
-        );
-      }
-      if (String(req.body.owner_password).length < 6) {
-        throw new ApiError('BAD_REQUEST', 'Mật khẩu ban đầu phải từ 6 ký tự', 400);
-      }
-      let authUserId;
-      try {
-        authUserId = await supabaseAdmin.createAuthUser(req.body.owner_phone, req.body.owner_password);
-      } catch (err) {
-        throw new ApiError('CONFLICT', `Không tạo được tài khoản mới: ${err.message}`, 409);
-      }
-      const created = await db.insertRow('users', {
-        id: authUserId,
-        phone: req.body.owner_phone,
-        full_name: req.body.owner_full_name || req.body.name,
-        role: 'customer',
-        status: 'active'
-      });
-      ownerId = created.id;
-    } else {
-      const owner = await db.queryOne('SELECT id FROM users WHERE phone = $1', [req.body.owner_phone]);
-      if (!owner) throw new ApiError('NOT_FOUND', 'Không tìm thấy người dùng với SĐT này', 404);
-      ownerId = owner.id;
-    }
+    ownerId = await resolveOwnerIdByPhone(req.body.owner_phone, req.body.owner_password, req.body.owner_full_name || req.body.name);
   }
   data.owner_id = ownerId;
   data.status = 'draft';
   const merchant = await db.insertRow('merchants', data);
 
-  await db.query(`UPDATE users SET role = 'merchant_owner' WHERE id = $1 AND role = 'customer'`, [ownerId]);
   if (merchant.merchant_type === 'buy_on_behalf') await applyPlatformFeeDefaults(merchant.id);
   res.status(201).json({ ok: true, data: merchant });
 }));
@@ -376,43 +395,10 @@ router.patch('/merchants/:id', asyncHandler(async (req, res) => {
   // với owner_phone/owner_password ở POST /merchants — chỉ khác là ở đây chạy trong PATCH nên
   // giới hạn admin (owner/staff PATCH cửa hàng của chính mình không được đổi chủ).
   if (req.ctx.role === 'admin' && req.body.owner_phone) {
-    let ownerId;
-    if (req.body.owner_password) {
-      const existing = await db.queryOne('SELECT id FROM users WHERE phone = $1', [req.body.owner_phone]);
-      if (existing) {
-        throw new ApiError(
-          'CONFLICT',
-          'Số điện thoại này đã có tài khoản — dùng số khác, hoặc để trống mật khẩu để gắn vào tài khoản có sẵn',
-          409
-        );
-      }
-      if (String(req.body.owner_password).length < 6) {
-        throw new ApiError('BAD_REQUEST', 'Mật khẩu ban đầu phải từ 6 ký tự', 400);
-      }
-      let authUserId;
-      try {
-        authUserId = await supabaseAdmin.createAuthUser(req.body.owner_phone, req.body.owner_password);
-      } catch (err) {
-        throw new ApiError('CONFLICT', `Không tạo được tài khoản mới: ${err.message}`, 409);
-      }
-      const created = await db.insertRow('users', {
-        id: authUserId,
-        phone: req.body.owner_phone,
-        full_name: req.body.owner_full_name || req.body.name,
-        role: 'customer',
-        status: 'active'
-      });
-      ownerId = created.id;
-    } else {
-      const owner = await db.queryOne('SELECT id FROM users WHERE phone = $1', [req.body.owner_phone]);
-      if (!owner) throw new ApiError('NOT_FOUND', 'Không tìm thấy người dùng với SĐT này', 404);
-      ownerId = owner.id;
-    }
-    data.owner_id = ownerId;
+    data.owner_id = await resolveOwnerIdByPhone(req.body.owner_phone, req.body.owner_password, req.body.owner_full_name || req.body.name);
     // Đã có chủ thật tự quản lý — không còn để GAS đồng bộ/tự dọn "mồ côi" vào cửa hàng này nữa
     // (xem is_gas_synced ở hofa-db/85_merchant_gas_sync.sql, requireGasMerchant ở gasSync.js).
     data.is_gas_synced = false;
-    await db.query(`UPDATE users SET role = 'merchant_owner' WHERE id = $1 AND role = 'customer'`, [ownerId]);
   }
 
   const updated = await db.updateById('merchants', req.params.id, data);
@@ -728,13 +714,12 @@ router.post('/merchants/:merchantId/staff', asyncHandler(async (req, res) => {
   requireFields(req.body, ['full_name', 'phone', 'password']);
   await requireOwnerAccess(req.ctx, req.params.merchantId);
 
-  const existing = await db.queryOne('SELECT id FROM users WHERE phone = $1', [req.body.phone]);
-  if (existing) {
-    throw new ApiError(
-      'CONFLICT',
-      'Số điện thoại này đã có tài khoản HOFA — không thể tạo tài khoản nhân viên mới với SĐT này',
-      409
-    );
+  // Đã là nhân viên cửa hàng nào đó rồi (role='merchant_staff') thì chặn tạo trùng — nhưng SĐT
+  // đã có hồ sơ role KHÁC (customer/driver/merchant_owner...) vẫn cho tạo thêm hồ sơ
+  // merchant_staff riêng, tái dùng chung tài khoản Auth (xem hofa-db/90_multi_role_accounts.sql).
+  const existingStaff = await db.queryOne(`SELECT id FROM users WHERE phone = $1 AND role = 'merchant_staff'`, [req.body.phone]);
+  if (existingStaff) {
+    throw new ApiError('CONFLICT', 'Số điện thoại này đã là nhân viên của 1 cửa hàng — không thể tạo trùng', 409);
   }
   if (String(req.body.password).length < 6) {
     throw new ApiError('BAD_REQUEST', 'Mật khẩu ban đầu phải từ 6 ký tự', 400);
@@ -742,12 +727,12 @@ router.post('/merchants/:merchantId/staff', asyncHandler(async (req, res) => {
 
   let authUserId;
   try {
-    authUserId = await supabaseAdmin.createAuthUser(req.body.phone, req.body.password);
+    authUserId = await supabaseAdmin.resolveOrCreateAuthIdentity(req.body.phone, req.body.password);
   } catch (err) {
     throw new ApiError('CONFLICT', `Không tạo được tài khoản mới: ${err.message}`, 409);
   }
   const user = await db.insertRow('users', {
-    id: authUserId,
+    auth_user_id: authUserId,
     phone: req.body.phone,
     full_name: req.body.full_name,
     role: 'merchant_staff',
@@ -776,8 +761,9 @@ router.patch('/merchants/:merchantId/staff/:id', asyncHandler(async (req, res) =
 }));
 
 /** Gỡ khỏi cửa hàng — không xoá tài khoản Supabase Auth (họ vẫn còn tài khoản HOFA bình
- * thường). Hạ role về lại 'customer' nếu không còn thuộc merchant_staff nào khác, tránh role
- * 'merchant_staff' mồ côi không gắn cửa hàng nào. */
+ * thường, kể cả hồ sơ role khác cùng SĐT nếu có). Hồ sơ role='merchant_staff' không còn
+ * khái niệm "hạ về customer" (mỗi role độc lập, xem hofa-db/90_multi_role_accounts.sql) —
+ * hết gắn cửa hàng nào thì xoá mềm (deleted_at) đúng convention chung của users. */
 router.delete('/merchants/:merchantId/staff/:id', asyncHandler(async (req, res) => {
   await requireOwnerAccess(req.ctx, req.params.merchantId);
   const staff = await db.queryOne('SELECT user_id FROM merchant_staff WHERE id = $1', [req.params.id]);
@@ -785,7 +771,7 @@ router.delete('/merchants/:merchantId/staff/:id', asyncHandler(async (req, res) 
   await db.deleteById('merchant_staff', req.params.id);
   const remaining = await db.queryOne('SELECT id FROM merchant_staff WHERE user_id = $1', [staff.user_id]);
   if (!remaining) {
-    await db.query(`UPDATE users SET role = 'customer' WHERE id = $1 AND role = 'merchant_staff'`, [staff.user_id]);
+    await db.query(`UPDATE users SET deleted_at = now() WHERE id = $1 AND role = 'merchant_staff'`, [staff.user_id]);
   }
   res.json({ ok: true, data: { deleted: true } });
 }));

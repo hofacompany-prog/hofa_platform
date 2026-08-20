@@ -23,6 +23,9 @@ class ApiClient {
     final token = Supabase.instance.client.auth.currentSession?.accessToken;
     return {
       'Content-Type': 'application/json',
+      // Server chỉ trả đúng hồ sơ role của app Khách (dù cùng SĐT có thể còn hồ sơ role khác
+      // — vd cũng là tài xế), xem server/src/middleware/auth.js + hofa-db/90_multi_role_accounts.sql.
+      'X-App-Scope': 'customer',
       if (token != null) 'Authorization': 'Bearer $token',
     };
   }

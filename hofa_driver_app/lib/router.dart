@@ -9,6 +9,7 @@ import 'main.dart' show navigatorKey;
 import 'providers/auth_provider.dart';
 import 'providers/delivery_providers.dart';
 import 'screens/auth/login_screen.dart';
+import 'screens/auth/complete_profile_screen.dart';
 import 'screens/auth/register_driver_screen.dart';
 import 'screens/install/install_pwa_screen.dart';
 import 'screens/shell/driver_shell.dart';
@@ -55,6 +56,7 @@ final routerProvider = Provider<GoRouter>((ref) {
 
       final session = Supabase.instance.client.auth.currentSession;
       final loggingIn = state.matchedLocation == '/login';
+      final completingProfile = state.matchedLocation == '/complete-profile';
       final onRegister = state.matchedLocation == '/register-driver';
 
       if (session == null) return loggingIn ? null : '/login';
@@ -62,19 +64,16 @@ final routerProvider = Provider<GoRouter>((ref) {
 
       try {
         final profile = await ref.read(userProfileProvider.future);
-        // Tài khoản đăng ký role khác (khách hàng, cửa hàng...) không được dùng app Tài xế —
-        // 1 tài khoản Supabase Auth có thể tự do đăng nhập mọi app nếu không chặn ở đây, dẫn
-        // tới lẫn role lúc test/dùng thật (vd tài khoản merchant_owner lại đặt đơn ở app Khách
-        // rồi mở app Tài xế bằng chính tài khoản đó).
-        if (profile != null && profile.role != 'driver') {
-          await Supabase.instance.client.auth.signOut();
-          return '/login';
+        // SĐT này có thể đã có tài khoản Auth (đã là khách/chủ cửa hàng ở app khác) nhưng CHƯA
+        // có hồ sơ users role='driver' — vd vừa bấm "Đăng nhập" (không phải "Đăng ký") ở app
+        // Tài xế lần đầu. Tạo hồ sơ driver riêng trước khi vào /register-driver, xem
+        // hofa-db/90_multi_role_accounts.sql.
+        if (profile == null) {
+          return completingProfile ? null : '/complete-profile';
         }
-        final driver = profile == null
-            ? null
-            : await ref.read(myDriverProvider.future);
+        final driver = await ref.read(myDriverProvider.future);
         if (driver == null) return onRegister ? null : '/register-driver';
-        if (onRegister) return '/';
+        if (onRegister || completingProfile) return '/';
       } catch (_) {
         // lỗi mạng tạm thời — đừng khoá cứng người dùng
       }
@@ -94,6 +93,10 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const InstallPwaScreen(),
       ),
       GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
+      GoRoute(
+        path: '/complete-profile',
+        builder: (context, state) => const CompleteProfileScreen(),
+      ),
       GoRoute(
         path: '/register-driver',
         builder: (context, state) => const RegisterDriverScreen(),

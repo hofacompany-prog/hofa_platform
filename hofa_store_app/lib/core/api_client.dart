@@ -59,6 +59,9 @@ class ApiClient {
     final deviceId = DeviceSession.headerFor(session?.user.id);
     return {
       'Content-Type': 'application/json',
+      // Server chỉ trả đúng hồ sơ role của app Cửa hàng (dù cùng SĐT có thể còn hồ sơ role
+      // khác) — xem server/src/middleware/auth.js + hofa-db/90_multi_role_accounts.sql.
+      'X-App-Scope': 'merchant',
       if (session != null) 'Authorization': 'Bearer ${session.accessToken}',
       if (deviceId != null) 'X-Device-Id': deviceId,
     };
