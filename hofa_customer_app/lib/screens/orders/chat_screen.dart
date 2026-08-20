@@ -32,6 +32,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   final _bodyCtrl = TextEditingController();
   final _scrollController = ScrollController();
   List<ChatMessage> _messages = [];
+  DateTime? _otherPartyLastReadAt;
   bool _loading = true;
   bool _sending = false;
   bool _uploadingImage = false;
@@ -61,12 +62,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   Future<void> _load({bool silent = false}) async {
     if (!silent) setState(() => _loading = true);
     try {
-      final messages = await ref
+      final (messages, otherPartyLastReadAt) = await ref
           .read(orderRepoProvider)
           .chatMessages(widget.orderId, widget.channel);
       if (!mounted) return;
       setState(() {
         _messages = messages;
+        _otherPartyLastReadAt = otherPartyLastReadAt;
         _error = null;
       });
       WidgetsBinding.instance.addPostFrameCallback((_) => _scrollToBottom());
@@ -166,6 +168,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     itemBuilder: (context, i) => _MessageBubble(
                       message: _messages[i],
                       isMe: _messages[i].senderId == _myUserId,
+                      otherPartyLastReadAt: _otherPartyLastReadAt,
                     ),
                   ),
           ),
@@ -238,7 +241,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 class _MessageBubble extends StatelessWidget {
   final ChatMessage message;
   final bool isMe;
-  const _MessageBubble({required this.message, required this.isMe});
+  // Mốc "đã đọc tới lúc nào" của đầu bên kia — chỉ dùng cho tin CỦA MÌNH (isMe), để hiện
+  // "Đã gửi"/"Đã xem" thay vì ngày giờ. Tin nhận từ đối phương vẫn hiện ngày giờ như cũ.
+  final DateTime? otherPartyLastReadAt;
+  const _MessageBubble({
+    required this.message,
+    required this.isMe,
+    this.otherPartyLastReadAt,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -284,7 +294,12 @@ class _MessageBubble extends StatelessWidget {
             ],
             const SizedBox(height: 4),
             Text(
-              formatDateTime(message.createdAt),
+              isMe
+                  ? ((otherPartyLastReadAt != null &&
+                            !message.createdAt.isAfter(otherPartyLastReadAt!))
+                        ? 'Đã xem'
+                        : 'Đã gửi')
+                  : formatDateTime(message.createdAt),
               style: theme.textTheme.bodySmall?.copyWith(
                 color: textColor.withValues(alpha: 0.7),
                 fontSize: 10,

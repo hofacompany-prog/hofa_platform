@@ -64,19 +64,27 @@ class OrderRepository {
 
   // ---- Nhắn tin trong đơn — xem hofa-db/74_order_chat.sql ----
 
-  Future<List<ChatMessage>> chatMessages(
+  /// Trả về (danh sách tin nhắn, mốc "đã đọc tới lúc nào" của ĐẦU BÊN KIA) — mốc này dùng hiện
+  /// "Đã gửi"/"Đã xem" cho tin CỦA MÌNH ở chat_screen.dart, null nếu chưa xác định được đầu bên
+  /// kia hoặc họ chưa từng mở màn chat.
+  Future<(List<ChatMessage>, DateTime?)> chatMessages(
     String orderId,
     ChatChannel channel,
   ) async {
-    final list =
+    final data =
         await _api.get(
               '/orders/$orderId/messages',
               query: {'channel': channel.apiValue},
             )
-            as List;
-    return list
+            as Map<String, dynamic>;
+    final list = data['messages'] as List;
+    final messages = list
         .map((e) => ChatMessage.fromJson(e as Map<String, dynamic>))
         .toList();
+    final otherPartyLastReadAt = DateTime.tryParse(
+      data['other_party_last_read_at']?.toString() ?? '',
+    );
+    return (messages, otherPartyLastReadAt);
   }
 
   Future<ChatMessage> sendChatMessage(

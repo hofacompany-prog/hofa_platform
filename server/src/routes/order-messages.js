@@ -45,6 +45,36 @@ async function requireChannelAccess(ctx, order, channel) {
   }
 }
 
+/** ID của (những) người "đầu bên kia" kênh này so với req.ctx — dùng tính other_party_last_read_at
+ * để client hiện trạng thái "Đã gửi/Đã xem" cho tin của CHÍNH MÌNH. Kênh customer_merchant có
+ * thể nhiều nhân viên cùng đọc — coi cửa hàng "đã xem" nếu BẤT KỲ ai trong đó đã xem
+ * (MAX(last_read_at) trong danh sách). Trả về [] nếu ctx không phải 1 trong 2 đầu thường gặp
+ * (vd admin xem hộ) — khi đó other_party_last_read_at trả về null, client không hiện "Đã xem".
+ */
+async function otherPartyUserIds(order, channel, ctx) {
+  if (channel === 'customer_driver') {
+    if (ctx.userId === order.customer_id) {
+      const delivery = await db.queryOne('SELECT driver_id FROM deliveries WHERE order_id = $1', [order.id]);
+      const driver = delivery?.driver_id
+        ? await db.queryOne('SELECT user_id FROM drivers WHERE id = $1', [delivery.driver_id])
+        : null;
+      return driver?.user_id ? [driver.user_id] : [];
+    }
+    return [order.customer_id];
+  }
+  if (channel === 'customer_merchant') {
+    if (ctx.userId === order.customer_id) {
+      const merchant = await db.queryOne('SELECT owner_id FROM merchants WHERE id = $1', [order.merchant_id]);
+      const staff = await db.query('SELECT user_id FROM merchant_staff WHERE merchant_id = $1', [order.merchant_id]);
+      const ids = new Set(staff.map((s) => s.user_id));
+      if (merchant?.owner_id) ids.add(merchant.owner_id);
+      return [...ids];
+    }
+    return [order.customer_id];
+  }
+  return [];
+}
+
 router.get('/orders/:orderId/messages', asyncHandler(async (req, res) => {
   const order = await requireOrderAccess(req.ctx, req.params.orderId);
   const channel = req.query.channel;
@@ -56,6 +86,17 @@ router.get('/orders/:orderId/messages', asyncHandler(async (req, res) => {
     [order.id, channel]
   );
 
+  const otherIds = await otherPartyUserIds(order, channel, req.ctx);
+  let otherPartyLastReadAt = null;
+  if (otherIds.length) {
+    const row = await db.queryOne(
+      `SELECT MAX(last_read_at) AS t FROM order_message_reads
+        WHERE order_id = $1 AND channel = $2 AND user_id = ANY($3::uuid[])`,
+      [order.id, channel, otherIds]
+    );
+    otherPartyLastReadAt = row?.t ?? null;
+  }
+
   // Mở màn chat (gọi API này) coi như đã đọc hết tới hiện tại — cập nhật mốc để
   // GET /orders/:orderId/messages/unread-counts tính đúng số CÒN chưa đọc lần sau.
   await db.query(
@@ -65,7 +106,7 @@ router.get('/orders/:orderId/messages', asyncHandler(async (req, res) => {
     [order.id, channel, req.ctx.userId]
   );
 
-  res.json({ ok: true, data: rows });
+  res.json({ ok: true, data: { messages: rows, other_party_last_read_at: otherPartyLastReadAt } });
 }));
 
 /** Số tin nhắn CHƯA ĐỌC theo từng kênh — dùng hiện badge nhỏ ở nút nhắn tin trong chi tiết đơn,
