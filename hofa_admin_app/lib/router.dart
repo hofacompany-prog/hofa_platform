@@ -4,12 +4,15 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'core/go_router_refresh_stream.dart';
 import 'providers/admin_providers.dart';
+import 'models/merchant.dart';
 import 'screens/auth/admin_login_screen.dart';
 import 'screens/dashboard/admin_shell.dart';
 import 'screens/dashboard/dashboard_screen.dart';
 import 'screens/merchants/merchant_hub_screen.dart';
 import 'screens/merchants/merchant_form_screen.dart';
 import 'screens/merchants/merchant_detail_screen.dart';
+import 'screens/merchants/merchant_products_screen.dart';
+import 'screens/merchants/merchant_product_form_screen.dart';
 import 'screens/merchants/featured_merchants_screen.dart';
 import 'screens/merchants/branch_hours_screen.dart';
 import 'screens/orders/orders_screen.dart';
@@ -85,6 +88,25 @@ final routerProvider = Provider<GoRouter>((ref) {
             path: '/merchants/:id',
             builder: (context, state) =>
                 MerchantDetailScreen(merchantId: state.pathParameters['id']!),
+          ),
+          GoRoute(
+            path: '/merchants/:id/products',
+            builder: (context, state) => MerchantProductsScreen(
+              merchant: state.extra as Merchant,
+            ),
+          ),
+          GoRoute(
+            path: '/merchants/:id/products/new',
+            builder: (context, state) => MerchantProductFormScreen(
+              merchant: state.extra as Merchant,
+            ),
+          ),
+          GoRoute(
+            path: '/merchants/:id/products/:productId/edit',
+            builder: (context, state) => MerchantProductFormScreen(
+              merchant: state.extra as Merchant,
+              productId: state.pathParameters['productId']!,
+            ),
           ),
           GoRoute(
             path: '/merchants/:id/branches/:branchId/hours',

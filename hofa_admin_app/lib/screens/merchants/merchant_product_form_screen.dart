@@ -1,0 +1,1484 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import '../../core/format.dart';
+import '../../core/vnd_input_formatter.dart';
+import '../../models/category.dart';
+import '../../models/merchant.dart';
+import '../../models/product.dart';
+import '../../models/topping.dart';
+import '../../providers/admin_providers.dart';
+import '../../widgets/image_upload_field.dart';
+
+const productStatusLabels = {
+  'draft': 'Nháp (chưa hiển thị)',
+  'active': 'Đang bán',
+  'out_of_stock': 'Hết hàng',
+  'hidden': 'Đã ẩn',
+  'archived': 'Đã xoá',
+};
+
+Map<String, dynamic> _tierPayload(WholesaleTier t) => {
+  'min_quantity': t.minQuantity,
+  if (t.maxQuantity != null) 'max_quantity': t.maxQuantity,
+  'unit_price': t.unitPrice,
+  'min_days_per_week': t.minDaysPerWeek,
+  if (t.unitPriceDays != null) 'unit_price_days': t.unitPriceDays,
+  if (t.unitPriceBoth != null) 'unit_price_both': t.unitPriceBoth,
+  if (t.minOrderQuantity != null) 'min_order_quantity': t.minOrderQuantity,
+};
+
+/// Tạo/sửa 1 sản phẩm của 1 cửa hàng — admin làm đầy đủ như chính cửa hàng tự quản lý (xem
+/// hofa_store_app/lib/screens/products/product_form_screen.dart, bản gốc). Khác bản gốc:
+/// nhận [merchant] tường minh thay vì đọc từ session đăng nhập của chính cửa hàng; không có
+/// "Dán sản phẩm" (chỉ hữu ích khi thao tác nhanh trên chính app Cửa hàng); nút "Tạo nhóm
+/// topping mới" bỏ, vì admin tạo nhóm ở merchant_topping_groups_card.dart (màn chi tiết cửa
+/// hàng), form này chỉ GẮN nhóm có sẵn.
+class MerchantProductFormScreen extends ConsumerStatefulWidget {
+  final Merchant merchant;
+  final String? productId;
+  const MerchantProductFormScreen({
+    super.key,
+    required this.merchant,
+    this.productId,
+  });
+
+  @override
+  ConsumerState<MerchantProductFormScreen> createState() =>
+      _MerchantProductFormScreenState();
+}
+
+class _MerchantProductFormScreenState
+    extends ConsumerState<MerchantProductFormScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final _nameCtrl = TextEditingController();
+  final _descCtrl = TextEditingController();
+  final _defaultVariantNameCtrl = TextEditingController();
+  final _priceCtrl = TextEditingController();
+  final _stockCtrl = TextEditingController();
+  String _salesModel = 'instant';
+  String _status = 'active';
+  String? _imageUrl;
+
+  Product? _product;
+  Branch? _branch;
+  Map<String, int> _stockByVariant = {};
+  // Tồn kho ban đầu cho biến thể THÊM lúc tạo mới (chưa có id thật) — khoá theo id tạm
+  // trong _pendingVariants, áp dụng sau khi sản phẩm + biến thể được tạo xong (xem _submit).
+  Map<String, int> _stockByPendingVariant = {};
+  // Nhóm topping là thư viện dùng chung của cửa hàng (xem merchant_topping_groups_card.dart)
+  // — form sản phẩm chỉ chọn nhóm nào gắn vào sản phẩm này, không tự tạo/sửa nhóm ở đây.
+  List<ToppingGroup> _availableToppingGroups = [];
+  List<String> _selectedToppingGroupIds = [];
+  // _tiersByVariant: khi sửa sản phẩm khoá bằng id biến thể thật; khi tạo mới khoá bằng
+  // 'default' (biến thể mặc định lấy giá từ khung "Giá bán") hoặc id tạm của _pendingVariants.
+  Map<String, List<WholesaleTier>> _tiersByVariant = {};
+  List<ProductVariant> _pendingVariants =
+      []; // biến thể thêm lúc tạo mới, chưa có id thật
+  String _tierTab = 'wholesale'; // wholesale (Giá sỉ) | preorder (Đặt trước)
+  bool _loading = false;
+  bool _loadingProduct = false;
+  String? _error;
+
+  /// Cửa hàng mua hộ: tài xế tự đi mua theo yêu cầu, không có tồn kho thật để quản lý — ẩn
+  /// hẳn ô nhập tồn kho (server cũng bỏ qua giữ chỗ tồn kho cho loại này, xem
+  /// hofa-db/77_buy_on_behalf_unlimited_stock.sql).
+  bool get _isBuyOnBehalf => widget.merchant.merchantType == 'buy_on_behalf';
+
+  List<Category> _allCategories = [];
+  List<MerchantCategory> _merchantCategories = [];
+  String? _parentCategoryId;
+  String? _childCategoryId;
+  String? _merchantCategoryId;
+
+  List<Category> get _rootCategories =>
+      _allCategories.where((c) => c.parentId == null).toList();
+
+  List<Category> _childCategoriesOf(String parentId) =>
+      _allCategories.where((c) => c.parentId == parentId).toList();
+
+  bool get _isEdit => widget.productId != null;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBranch();
+    _loadAvailableToppingGroups();
+    if (_isEdit) {
+      _load();
+    } else {
+      _initCategoryPicker();
+    }
+  }
+
+  @override
+  void dispose() {
+    _nameCtrl.dispose();
+    _descCtrl.dispose();
+    _defaultVariantNameCtrl.dispose();
+    _priceCtrl.dispose();
+    _stockCtrl.dispose();
+    super.dispose();
+  }
+
+  /// Merchant.branches đã có sẵn kèm theo GET /merchants/:id (server/src/routes/merchants.js)
+  /// — khỏi cần gọi API riêng như bản gốc (MerchantRepository().branches(merchantId)).
+  void _loadBranch() {
+    final branches = widget.merchant.branches ?? [];
+    if (branches.isEmpty) return;
+    final branch = branches.firstWhere(
+      (b) => b.isMain,
+      orElse: () => branches.first,
+    );
+    setState(() => _branch = branch);
+    if (_isEdit) _loadStock();
+  }
+
+  Future<void> _loadStock() async {
+    if (_branch == null) return;
+    try {
+      final items = await ref.read(adminRepoProvider).inventory(_branch!.id);
+      setState(
+        () => _stockByVariant = {
+          for (final i in items) i.variantId: i.quantityOnHand,
+        },
+      );
+    } catch (_) {
+      // bỏ qua — phần tồn kho chỉ là thông tin thêm, không chặn sửa sản phẩm
+    }
+  }
+
+  Future<void> _load() async {
+    setState(() => _loadingProduct = true);
+    try {
+      final p = await ref.read(adminRepoProvider).product(widget.productId!);
+      setState(() {
+        _product = p;
+        _nameCtrl.text = p.name;
+        _descCtrl.text = p.description ?? '';
+        _salesModel = p.salesModel;
+        _status = p.status;
+        _imageUrl = p.images.isNotEmpty ? p.images.first : null;
+      });
+      await _loadStock();
+      await _loadLinkedToppingGroups();
+      await _loadWholesaleTiers();
+      await _initCategoryPicker();
+    } catch (e) {
+      setState(() => _error = 'Không tải được sản phẩm: $e');
+    } finally {
+      if (mounted) setState(() => _loadingProduct = false);
+    }
+  }
+
+  Future<void> _loadWholesaleTiers() async {
+    if (_product == null || _salesModel != 'scheduled') return;
+    try {
+      final entries = await Future.wait(
+        _product!.variants.map(
+          (v) async =>
+              MapEntry(v.id, await ref.read(adminRepoProvider).wholesaleTiers(v.id)),
+        ),
+      );
+      if (mounted) {
+        setState(
+          () => _tiersByVariant = {for (final e in entries) e.key: e.value},
+        );
+      }
+    } catch (_) {
+      // bậc giá chỉ là thông tin thêm, không chặn sửa sản phẩm
+    }
+  }
+
+  Future<void> _tierDialog({String? variantId, WholesaleTier? existing}) async {
+    final minQtyCtrl = TextEditingController(
+      text: existing?.minQuantity.toString() ?? '',
+    );
+    final maxQtyCtrl = TextEditingController(
+      text: existing?.maxQuantity?.toString() ?? '',
+    );
+    final priceCtrl = TextEditingController(
+      text: VndInputFormatter.display(existing?.unitPrice),
+    );
+    final minDaysCtrl = TextEditingController(
+      text:
+          existing?.minDaysPerWeek.toString() ??
+          (_tierTab == 'preorder' ? '' : '0'),
+    );
+    final priceDaysCtrl = TextEditingController(
+      text: VndInputFormatter.display(existing?.unitPriceDays),
+    );
+    final priceBothCtrl = TextEditingController(
+      text: VndInputFormatter.display(existing?.unitPriceBoth),
+    );
+    final minOrderQtyCtrl = TextEditingController(
+      text: existing?.minOrderQuantity?.toString() ?? '',
+    );
+    final isPreorder = _tierTab == 'preorder';
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(existing == null ? 'Thêm bậc giá' : 'Sửa bậc giá'),
+        content: SizedBox(
+          width: 380,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: minQtyCtrl,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Số lượng tối thiểu',
+                    border: OutlineInputBorder(),
+                  ),
+                  keyboardType: TextInputType.number,
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: maxQtyCtrl,
+                  decoration: const InputDecoration(
+                    labelText: 'Số lượng tối đa (để trống = không giới hạn)',
+                    border: OutlineInputBorder(),
+                  ),
+                  keyboardType: TextInputType.number,
+                ),
+                if (isPreorder) ...[
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: minDaysCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Số ngày đặt tối thiểu trong tuần',
+                      helperText:
+                          'Tính theo TỔNG số ngày khác nhau của cả đơn đặt trước (gộp mọi sản phẩm khách đặt cùng đơn), không phải riêng sản phẩm này',
+                      helperMaxLines: 2,
+                      border: OutlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.number,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Giá theo từng điều kiện đạt được',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: priceCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Chỉ đạt điều kiện số lượng (VNĐ)',
+                      border: OutlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [VndInputFormatter()],
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: priceDaysCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Chỉ đạt điều kiện số ngày tối thiểu (VNĐ)',
+                      border: OutlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [VndInputFormatter()],
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: priceBothCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Đạt cả 2 điều kiện (VNĐ)',
+                      border: OutlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [VndInputFormatter()],
+                  ),
+                ] else ...[
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: priceCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Đơn giá (VNĐ)',
+                      border: OutlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [VndInputFormatter()],
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: minOrderQtyCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Hoặc số lượng tối thiểu CẢ ĐƠN (không bắt buộc)',
+                      helperText:
+                          'Nếu tổng số lượng mọi sản phẩm trong đơn đạt số này, sản phẩm '
+                          'vẫn được giá bậc này dù số lượng riêng chưa đạt ở trên',
+                      border: OutlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.number,
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Huỷ'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Lưu'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    final minQty = int.tryParse(minQtyCtrl.text.trim());
+    final price = VndInputFormatter.parse(priceCtrl.text);
+    if (minQty == null || price == null) return;
+    final maxQty = int.tryParse(maxQtyCtrl.text.trim());
+    final minDays = isPreorder ? (int.tryParse(minDaysCtrl.text.trim()) ?? 0) : 0;
+    final priceDays = isPreorder ? VndInputFormatter.parse(priceDaysCtrl.text) : null;
+    final priceBoth = isPreorder ? VndInputFormatter.parse(priceBothCtrl.text) : null;
+    final minOrderQty = isPreorder ? null : int.tryParse(minOrderQtyCtrl.text.trim());
+
+    if (minQty <= 0) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Số lượng tối thiểu phải lớn hơn 0')),
+        );
+      }
+      return;
+    }
+    if (maxQty != null && maxQty < minQty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Số lượng tối đa phải lớn hơn hoặc bằng số lượng tối thiểu'),
+          ),
+        );
+      }
+      return;
+    }
+    if (minOrderQty != null && minOrderQty <= 0) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Số lượng tối thiểu cả đơn phải lớn hơn 0')),
+        );
+      }
+      return;
+    }
+    if (isPreorder && (priceDays == null || priceBoth == null)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Vui lòng nhập đủ 3 mức giá theo điều kiện')),
+        );
+      }
+      return;
+    }
+
+    // Chưa tạo sản phẩm (đang ở màn "Thêm sản phẩm") — chưa có variant_id thật để gọi API,
+    // giữ tạm bậc giá trong bộ nhớ theo khoá 'default'/id tạm của biến thể, gửi kèm lên
+    // cùng lúc tạo sản phẩm lúc bấm "Tạo sản phẩm" (xem _submit).
+    if (!_isEdit) {
+      final key = variantId ?? 'default';
+      setState(() {
+        final current = _tiersByVariant[key] ?? [];
+        if (existing == null) {
+          _tiersByVariant = {
+            ..._tiersByVariant,
+            key: [
+              ...current,
+              WholesaleTier(
+                id: 'local-${DateTime.now().microsecondsSinceEpoch}',
+                variantId: key,
+                minQuantity: minQty,
+                maxQuantity: maxQty,
+                unitPrice: price,
+                minDaysPerWeek: minDays,
+                unitPriceDays: priceDays,
+                unitPriceBoth: priceBoth,
+                minOrderQuantity: minOrderQty,
+              ),
+            ],
+          };
+        } else {
+          _tiersByVariant = {
+            ..._tiersByVariant,
+            key: current
+                .map(
+                  (t) => t.id == existing.id
+                      ? WholesaleTier(
+                          id: t.id,
+                          variantId: t.variantId,
+                          minQuantity: minQty,
+                          maxQuantity: maxQty,
+                          unitPrice: price,
+                          minDaysPerWeek: minDays,
+                          unitPriceDays: priceDays,
+                          unitPriceBoth: priceBoth,
+                          minOrderQuantity: minOrderQty,
+                        )
+                      : t,
+                )
+                .toList(),
+          };
+        }
+      });
+      return;
+    }
+
+    try {
+      final data = {
+        'min_quantity': minQty,
+        'max_quantity': maxQty,
+        'unit_price': price,
+        'min_days_per_week': minDays,
+        'unit_price_days': priceDays,
+        'unit_price_both': priceBoth,
+        'min_order_quantity': minOrderQty,
+      };
+      if (existing == null) {
+        await ref.read(adminRepoProvider).createWholesaleTier(variantId!, data);
+      } else {
+        await ref.read(adminRepoProvider).updateWholesaleTier(existing.id, data);
+      }
+      await _loadWholesaleTiers();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      }
+    }
+  }
+
+  Future<void> _deleteTier(WholesaleTier tier) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Xoá bậc giá?'),
+        content: Text('Xoá bậc giá cho số lượng từ ${tier.minQuantity} trở lên?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Huỷ'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Xoá'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+
+    if (!_isEdit) {
+      final key = tier.variantId;
+      setState(
+        () => _tiersByVariant = {
+          ..._tiersByVariant,
+          key: (_tiersByVariant[key] ?? []).where((t) => t.id != tier.id).toList(),
+        },
+      );
+      return;
+    }
+
+    try {
+      await ref.read(adminRepoProvider).deleteWholesaleTier(tier.id);
+      await _loadWholesaleTiers();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      }
+    }
+  }
+
+  /// [variantId] là id thật (đang sửa sản phẩm) hoặc 'default'/id tạm của biến thể đang
+  /// chờ tạo (đang thêm sản phẩm) — cả 2 trường hợp đều đọc/ghi vào [_tiersByVariant].
+  Widget _tierVariantCard({
+    required String? variantId,
+    required String? title,
+    required List<WholesaleTier> allTiers,
+  }) {
+    final tiers =
+        allTiers
+            .where(
+              (t) => _tierTab == 'preorder' ? t.minDaysPerWeek > 0 : t.minDaysPerWeek == 0,
+            )
+            .toList()
+          ..sort((a, b) => a.minQuantity.compareTo(b.minQuantity));
+    final addButton = TextButton.icon(
+      onPressed: () => _tierDialog(variantId: variantId),
+      icon: const Icon(Icons.add, size: 18),
+      label: const Text('Thêm bậc'),
+    );
+
+    return Card(
+      elevation: 0,
+      color: Theme.of(context).colorScheme.surfaceContainerLow,
+      margin: const EdgeInsets.only(bottom: 12),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (title != null)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: Theme.of(context).textTheme.titleSmall,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  addButton,
+                ],
+              )
+            else
+              Align(alignment: Alignment.centerRight, child: addButton),
+            if (tiers.isEmpty)
+              Padding(
+                padding: const EdgeInsets.only(left: 4, bottom: 4),
+                child: Text(
+                  'Chưa có bậc giá nào.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              )
+            else
+              ...tiers.map(
+                (t) => ListTile(
+                  dense: true,
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(
+                    t.maxQuantity != null
+                        ? 'Số lượng ${t.minQuantity}–${t.maxQuantity}'
+                        : 'Số lượng từ ${t.minQuantity}',
+                  ),
+                  subtitle: _tierTab == 'preorder'
+                      ? Text(
+                          'SL: ${formatVnd(t.unitPrice)} · '
+                          '≥${t.minDaysPerWeek} ngày/tuần: ${formatVnd(t.unitPriceDays ?? 0)} · '
+                          'Cả 2: ${formatVnd(t.unitPriceBoth ?? 0)}',
+                        )
+                      : Text(
+                          t.minOrderQuantity != null
+                              ? '${formatVnd(t.unitPrice)} (hoặc cả đơn ≥ ${t.minOrderQuantity})'
+                              : formatVnd(t.unitPrice),
+                        ),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: const Icon(Icons.edit_outlined, size: 20),
+                        onPressed: () => _tierDialog(variantId: variantId, existing: t),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.delete_outline, size: 20),
+                        onPressed: () => _deleteTier(t),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Nạp cây danh mục hệ thống (chính/con) + nếu đang sửa sản phẩm đã có danh mục cửa
+  /// hàng, dò ngược lại danh mục con → danh mục chính tương ứng để chọn sẵn 3 tầng.
+  Future<void> _initCategoryPicker() async {
+    try {
+      final all = await ref.read(adminRepoProvider).categories();
+      if (!mounted) return;
+      setState(() => _allCategories = all);
+
+      final mcId = _product?.merchantCategoryId;
+      if (mcId == null) return;
+      final mine = await ref
+          .read(adminRepoProvider)
+          .merchantCategories(merchantId: widget.merchant.id);
+      final matched = mine.where((m) => m.id == mcId);
+      if (matched.isEmpty) return;
+      final childId = matched.first.categoryId;
+      final child = all.where((c) => c.id == childId);
+      if (!mounted) return;
+      setState(() {
+        _childCategoryId = childId;
+        _parentCategoryId = child.isNotEmpty ? child.first.parentId : null;
+        _merchantCategoryId = mcId;
+        _merchantCategories = mine.where((m) => m.categoryId == childId).toList();
+      });
+    } catch (_) {
+      // danh mục chỉ là thông tin thêm, không chặn thêm/sửa sản phẩm
+    }
+  }
+
+  Future<void> _loadMerchantCategoriesFor(String categoryId) async {
+    try {
+      final list = await ref
+          .read(adminRepoProvider)
+          .merchantCategories(merchantId: widget.merchant.id, categoryId: categoryId);
+      if (mounted) setState(() => _merchantCategories = list);
+    } catch (_) {
+      // bỏ qua — chọn danh mục cửa hàng không bắt buộc
+    }
+  }
+
+  Future<void> _addMerchantCategoryDialog() async {
+    if (_childCategoryId == null) return;
+    final nameCtrl = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Thêm danh mục cửa hàng'),
+        content: TextField(
+          controller: nameCtrl,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: 'Tên danh mục (VD: Cà phê máy, Trà trái cây)',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Huỷ'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Tạo'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || nameCtrl.text.trim().isEmpty) return;
+    try {
+      final created = await ref.read(adminRepoProvider).createMerchantCategory(
+            merchantId: widget.merchant.id,
+            categoryId: _childCategoryId!,
+            name: nameCtrl.text.trim(),
+          );
+      if (mounted) {
+        setState(() {
+          _merchantCategories = [..._merchantCategories, created];
+          _merchantCategoryId = created.id;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      }
+    }
+  }
+
+  /// Nhóm topping đang gắn vào sản phẩm này (chỉ có ở màn sửa sản phẩm — sản phẩm chưa
+  /// tạo thì chưa có gì để gắn).
+  Future<void> _loadLinkedToppingGroups() async {
+    try {
+      final groups =
+          await ref.read(adminRepoProvider).productToppingGroups(widget.productId!);
+      if (mounted) {
+        setState(() => _selectedToppingGroupIds = groups.map((g) => g.id).toList());
+      }
+    } catch (_) {
+      // bỏ qua — phần topping chỉ là tuỳ chọn thêm, không chặn sửa sản phẩm
+    }
+  }
+
+  /// Toàn bộ nhóm topping (thư viện dùng chung) của cửa hàng, để chọn gắn vào sản phẩm này.
+  Future<void> _loadAvailableToppingGroups() async {
+    try {
+      final groups =
+          await ref.read(adminRepoProvider).merchantToppingGroups(widget.merchant.id);
+      if (mounted) setState(() => _availableToppingGroups = groups);
+    } catch (_) {
+      // bỏ qua — phần topping chỉ là tuỳ chọn thêm, không chặn thêm/sửa sản phẩm
+    }
+  }
+
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) return;
+    if (_imageUrl == null) {
+      setState(() => _error = 'Vui lòng thêm ảnh sản phẩm');
+      return;
+    }
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      if (_isEdit) {
+        await ref.read(adminRepoProvider).updateProduct(widget.productId!, {
+          'name': _nameCtrl.text.trim(),
+          'description': _descCtrl.text.trim(),
+          'sales_model': _salesModel,
+          'status': _status,
+          'images': [_imageUrl],
+          'merchant_category_id': _merchantCategoryId,
+        });
+        await ref
+            .read(adminRepoProvider)
+            .setProductToppingGroups(widget.productId!, _selectedToppingGroupIds);
+        await _load();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Đã lưu')));
+        }
+      } else {
+        final defaultVariantTiers = _tiersByVariant['default'] ?? [];
+        final data = {
+          'merchant_id': widget.merchant.id,
+          if (_merchantCategoryId != null) 'merchant_category_id': _merchantCategoryId,
+          'name': _nameCtrl.text.trim(),
+          if (_descCtrl.text.trim().isNotEmpty) 'description': _descCtrl.text.trim(),
+          'sales_model': _salesModel,
+          'status': _status,
+          'images': [_imageUrl],
+          if (_selectedToppingGroupIds.isNotEmpty)
+            'topping_group_ids': _selectedToppingGroupIds,
+          'variants': [
+            {
+              'name': _defaultVariantNameCtrl.text.trim(),
+              'price': VndInputFormatter.parse(_priceCtrl.text)!,
+              'is_default': true,
+              if (defaultVariantTiers.isNotEmpty)
+                'wholesale_tiers': defaultVariantTiers.map(_tierPayload).toList(),
+            },
+            for (final v in _pendingVariants)
+              {
+                'name': v.name,
+                'price': v.price,
+                'is_default': false,
+                if ((_tiersByVariant[v.id] ?? []).isNotEmpty)
+                  'wholesale_tiers':
+                      _tiersByVariant[v.id]!.map(_tierPayload).toList(),
+              },
+          ],
+        };
+        final created = await ref.read(adminRepoProvider).createProduct(data);
+        final stock = int.tryParse(_stockCtrl.text.trim());
+        if (stock != null && stock > 0 && _branch != null && created.variants.isNotEmpty) {
+          try {
+            await ref.read(adminRepoProvider).adjustInventory(
+                  branchId: _branch!.id,
+                  variantId: created.variants.first.id,
+                  moveType: 'purchase_in',
+                  quantity: stock,
+                  note: 'Tồn kho ban đầu khi tạo sản phẩm',
+                );
+          } catch (_) {
+            // sản phẩm đã tạo thành công — lỗi nhập kho không nên chặn điều hướng
+          }
+        }
+        // Biến thể thêm (extraVariants) — server tạo theo đúng thứ tự gửi lên nên
+        // created.variants[i + 1] khớp với _pendingVariants[i] (index 0 là biến thể mặc định).
+        if (_branch != null) {
+          for (var i = 0; i < _pendingVariants.length; i++) {
+            final pendingStock = _stockByPendingVariant[_pendingVariants[i].id];
+            if (pendingStock == null || pendingStock <= 0) continue;
+            if (created.variants.length <= i + 1) continue;
+            try {
+              await ref.read(adminRepoProvider).adjustInventory(
+                    branchId: _branch!.id,
+                    variantId: created.variants[i + 1].id,
+                    moveType: 'purchase_in',
+                    quantity: pendingStock,
+                    note: 'Tồn kho ban đầu khi tạo sản phẩm',
+                  );
+            } catch (_) {
+              // như trên — không chặn điều hướng vì sản phẩm/biến thể đã tạo xong
+            }
+          }
+        }
+        if (mounted) {
+          context.pushReplacement(
+            '/merchants/${widget.merchant.id}/products/${created.id}/edit',
+            extra: widget.merchant,
+          );
+        }
+      }
+    } catch (e) {
+      setState(() => _error = 'Có lỗi xảy ra: $e');
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _variantDialog({ProductVariant? existing}) async {
+    final nameCtrl = TextEditingController(text: existing?.name ?? '');
+    final priceCtrl = TextEditingController(text: VndInputFormatter.display(existing?.price));
+    final currentStock = existing != null
+        ? (_isEdit
+              ? (_stockByVariant[existing.id] ?? 0)
+              : (_stockByPendingVariant[existing.id] ?? 0))
+        : 0;
+    final stockCtrl = TextEditingController(
+      text: existing != null ? currentStock.toString() : '',
+    );
+    var isActive = existing?.isActive ?? true;
+    var isDefault = existing?.isDefault ?? false;
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setInner) => AlertDialog(
+          title: Text(existing == null ? 'Thêm biến thể' : 'Sửa biến thể'),
+          content: SizedBox(
+            width: 380,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: nameCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Tên (VD: 500g, 1kg)',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: priceCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Giá bán (VNĐ)',
+                      border: OutlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [VndInputFormatter()],
+                  ),
+                  if (_branch != null && !_isBuyOnBehalf) ...[
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: stockCtrl,
+                      decoration: InputDecoration(
+                        labelText: existing == null || !_isEdit
+                            ? 'Tồn kho ban đầu (không bắt buộc)'
+                            : 'Tồn kho hiện tại',
+                        border: const OutlineInputBorder(),
+                      ),
+                      keyboardType: TextInputType.number,
+                    ),
+                  ],
+                  if (existing != null && _isEdit) ...[
+                    const SizedBox(height: 8),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Đặt làm mặc định'),
+                      subtitle: const Text(
+                        'Biến thể mặc định hiển thị đầu tiên — bật sẽ tự tắt mặc định của biến thể khác',
+                      ),
+                      value: isDefault,
+                      onChanged: (v) => setInner(() => isDefault = v),
+                    ),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Đang bán'),
+                      value: isActive,
+                      onChanged: (v) => setInner(() => isActive = v),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Huỷ'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Lưu'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (ok != true) return;
+    final price = VndInputFormatter.parse(priceCtrl.text);
+    if (nameCtrl.text.trim().isEmpty || price == null) return;
+
+    // Chưa tạo sản phẩm (đang ở màn "Thêm sản phẩm") — chưa có product_id để gọi API,
+    // giữ tạm biến thể trong bộ nhớ, gửi kèm lên cùng lúc tạo sản phẩm lúc bấm "Tạo sản
+    // phẩm" (xem _submit). Đây luôn là biến thể THÊM (biến thể mặc định lấy từ khung
+    // "Giá bán" phía trên).
+    if (!_isEdit) {
+      final stock = int.tryParse(stockCtrl.text.trim());
+      final variantId = existing?.id ?? 'local-${DateTime.now().microsecondsSinceEpoch}';
+      setState(() {
+        if (existing == null) {
+          _pendingVariants = [
+            ..._pendingVariants,
+            ProductVariant(
+              id: variantId,
+              productId: '',
+              name: nameCtrl.text.trim(),
+              price: price,
+              isDefault: false,
+              isActive: true,
+            ),
+          ];
+        } else {
+          _pendingVariants = _pendingVariants
+              .map(
+                (v) => v.id == existing.id
+                    ? ProductVariant(
+                        id: v.id,
+                        productId: v.productId,
+                        name: nameCtrl.text.trim(),
+                        price: price,
+                        isDefault: v.isDefault,
+                        isActive: v.isActive,
+                      )
+                    : v,
+              )
+              .toList();
+        }
+        if (stock != null && stock > 0) {
+          _stockByPendingVariant = {..._stockByPendingVariant, variantId: stock};
+        } else {
+          _stockByPendingVariant = {..._stockByPendingVariant}..remove(variantId);
+        }
+      });
+      return;
+    }
+
+    try {
+      if (existing == null) {
+        final created = await ref.read(adminRepoProvider).createVariant(
+              widget.productId!,
+              {
+                'name': nameCtrl.text.trim(),
+                'price': price,
+                'is_default': _product?.variants.isEmpty ?? true,
+              },
+            );
+        final stock = int.tryParse(stockCtrl.text.trim());
+        if (stock != null && stock > 0 && _branch != null) {
+          await ref.read(adminRepoProvider).adjustInventory(
+                branchId: _branch!.id,
+                variantId: created.id,
+                moveType: 'purchase_in',
+                quantity: stock,
+                note: 'Tồn kho ban đầu khi thêm biến thể',
+              );
+        }
+      } else {
+        await ref.read(adminRepoProvider).updateVariant(existing.id, {
+          'name': nameCtrl.text.trim(),
+          'price': price,
+          'is_active': isActive,
+          'is_default': isDefault,
+        });
+        final newStock = int.tryParse(stockCtrl.text.trim());
+        final delta = (newStock ?? currentStock) - currentStock;
+        if (delta != 0 && _branch != null) {
+          await ref.read(adminRepoProvider).adjustInventory(
+                branchId: _branch!.id,
+                variantId: existing.id,
+                moveType: 'adjustment',
+                quantity: delta,
+                note: 'Cập nhật tồn kho từ trang sản phẩm',
+              );
+        }
+      }
+      await _load();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      }
+    }
+  }
+
+  Future<void> _deleteVariant(String id) async {
+    if (!_isEdit) {
+      setState(() {
+        _pendingVariants = _pendingVariants.where((v) => v.id != id).toList();
+        _stockByPendingVariant = {..._stockByPendingVariant}..remove(id);
+      });
+      return;
+    }
+    try {
+      await ref.read(adminRepoProvider).deleteVariant(id);
+      await _load();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(_isEdit ? 'Sửa sản phẩm' : 'Thêm sản phẩm'),
+      ),
+      body: _loadingProduct
+          ? const Center(child: CircularProgressIndicator())
+          : Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(24),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 560),
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        TextFormField(
+                          controller: _nameCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Tên sản phẩm',
+                            border: OutlineInputBorder(),
+                          ),
+                          validator: (v) =>
+                              (v == null || v.trim().isEmpty) ? 'Nhập tên sản phẩm' : null,
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: _descCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'Mô tả (không bắt buộc)',
+                            border: OutlineInputBorder(),
+                          ),
+                          maxLines: 3,
+                        ),
+                        const SizedBox(height: 16),
+                        ImageUploadField(
+                          label: 'Ảnh sản phẩm (bắt buộc)',
+                          folder: 'products',
+                          initialUrl: _imageUrl,
+                          onChanged: (url) => setState(() => _imageUrl = url),
+                        ),
+                        const SizedBox(height: 12),
+                        DropdownButtonFormField<String>(
+                          initialValue: _salesModel,
+                          decoration: const InputDecoration(
+                            labelText: 'Hình thức bán',
+                            border: OutlineInputBorder(),
+                          ),
+                          items: const [
+                            DropdownMenuItem(value: 'instant', child: Text('Giao ngay')),
+                            DropdownMenuItem(
+                              value: 'scheduled',
+                              child: Text('Đặt trước / bán sỉ'),
+                            ),
+                          ],
+                          onChanged: (v) {
+                            setState(() => _salesModel = v ?? 'instant');
+                            if (_isEdit && _salesModel == 'scheduled') {
+                              _loadWholesaleTiers();
+                            }
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        DropdownButtonFormField<String>(
+                          initialValue: _status,
+                          decoration: const InputDecoration(
+                            labelText: 'Trạng thái sản phẩm',
+                            border: OutlineInputBorder(),
+                          ),
+                          items: productStatusLabels.entries
+                              .map(
+                                (e) => DropdownMenuItem(value: e.key, child: Text(e.value)),
+                              )
+                              .toList(),
+                          onChanged: (v) => setState(() => _status = v ?? _status),
+                        ),
+                        const Divider(height: 32),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text('Danh mục', style: Theme.of(context).textTheme.labelLarge),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Chọn danh mục chính → danh mục con của hệ thống, sau đó chọn hoặc tạo danh mục riêng của cửa hàng — khách chỉ thấy danh mục cửa hàng, không thấy danh mục chính/con.',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                        const SizedBox(height: 12),
+                        DropdownButtonFormField<String>(
+                          initialValue: _parentCategoryId,
+                          decoration: const InputDecoration(
+                            labelText: 'Danh mục chính',
+                            border: OutlineInputBorder(),
+                          ),
+                          items: _rootCategories
+                              .map((c) => DropdownMenuItem(value: c.id, child: Text(c.name)))
+                              .toList(),
+                          onChanged: (v) => setState(() {
+                            _parentCategoryId = v;
+                            _childCategoryId = null;
+                            _merchantCategoryId = null;
+                            _merchantCategories = [];
+                          }),
+                        ),
+                        if (_parentCategoryId != null) ...[
+                          const SizedBox(height: 12),
+                          DropdownButtonFormField<String>(
+                            initialValue: _childCategoryId,
+                            decoration: const InputDecoration(
+                              labelText: 'Danh mục con',
+                              border: OutlineInputBorder(),
+                            ),
+                            items: _childCategoriesOf(_parentCategoryId!)
+                                .map((c) => DropdownMenuItem(value: c.id, child: Text(c.name)))
+                                .toList(),
+                            onChanged: (v) {
+                              setState(() {
+                                _childCategoryId = v;
+                                _merchantCategoryId = null;
+                                _merchantCategories = [];
+                              });
+                              if (v != null) _loadMerchantCategoriesFor(v);
+                            },
+                          ),
+                        ],
+                        if (_childCategoryId != null) ...[
+                          const SizedBox(height: 12),
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Expanded(
+                                child: DropdownButtonFormField<String>(
+                                  initialValue: _merchantCategoryId,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Danh mục cửa hàng',
+                                    border: OutlineInputBorder(),
+                                  ),
+                                  items: _merchantCategories
+                                      .map(
+                                        (c) => DropdownMenuItem(value: c.id, child: Text(c.name)),
+                                      )
+                                      .toList(),
+                                  onChanged: (v) => setState(() => _merchantCategoryId = v),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              IconButton.filledTonal(
+                                tooltip: 'Thêm danh mục cửa hàng mới',
+                                icon: const Icon(Icons.add),
+                                onPressed: _addMerchantCategoryDialog,
+                              ),
+                            ],
+                          ),
+                          if (_merchantCategories.isEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4),
+                              child: Text(
+                                'Cửa hàng chưa có danh mục nào trong nhóm này — bấm nút + để tạo mới.',
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ),
+                        ],
+                        if (!_isEdit) ...[
+                          const Divider(height: 32),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text('Biến thể', style: Theme.of(context).textTheme.labelLarge),
+                          ),
+                          const SizedBox(height: 12),
+                          TextFormField(
+                            controller: _defaultVariantNameCtrl,
+                            decoration: const InputDecoration(
+                              labelText: 'Tên (VD: 500g, 1kg)',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          TextFormField(
+                            controller: _priceCtrl,
+                            decoration: const InputDecoration(
+                              labelText: 'Giá bán (VNĐ)',
+                              border: OutlineInputBorder(),
+                            ),
+                            keyboardType: TextInputType.number,
+                            inputFormatters: [VndInputFormatter()],
+                            validator: (v) => (VndInputFormatter.parse(v ?? '') == null)
+                                ? 'Nhập giá bán hợp lệ'
+                                : null,
+                          ),
+                          if (_branch != null && !_isBuyOnBehalf) ...[
+                            const SizedBox(height: 12),
+                            TextFormField(
+                              controller: _stockCtrl,
+                              decoration: const InputDecoration(
+                                labelText: 'Tồn kho ban đầu (không bắt buộc)',
+                                border: OutlineInputBorder(),
+                              ),
+                              keyboardType: TextInputType.number,
+                            ),
+                          ],
+                          if (_isBuyOnBehalf) ...[
+                            const SizedBox(height: 12),
+                            Text(
+                              'Cửa hàng mua hộ: tồn kho không giới hạn, khỏi cần nhập.',
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: Theme.of(context).colorScheme.outline,
+                                  ),
+                            ),
+                          ],
+                          const SizedBox(height: 24),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  'Biến thể khác (không bắt buộc)',
+                                  style: Theme.of(context).textTheme.titleMedium,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              TextButton.icon(
+                                onPressed: () => _variantDialog(),
+                                icon: const Icon(Icons.add),
+                                label: const Text('Thêm biến thể'),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Ở trên là biến thể mặc định — thêm biến thể khác nếu sản phẩm có nhiều lựa chọn (VD: 1kg, 2kg) ngay từ lúc tạo.',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                          const SizedBox(height: 8),
+                          if (_pendingVariants.isEmpty)
+                            const Text('Chưa có biến thể nào khác.')
+                          else
+                            ..._pendingVariants.map(
+                              (v) => Card(
+                                child: ListTile(
+                                  title: Text(v.name),
+                                  subtitle: Text(formatVnd(v.price)),
+                                  trailing: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      IconButton(
+                                        icon: const Icon(Icons.edit_outlined),
+                                        onPressed: () => _variantDialog(existing: v),
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(Icons.delete_outline),
+                                        onPressed: () => _deleteVariant(v.id),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                        if (_isEdit) ...[
+                          const Divider(height: 32),
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              'Biến thể & giá',
+                              style: Theme.of(context).textTheme.labelLarge,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  'Danh sách biến thể',
+                                  style: Theme.of(context).textTheme.titleMedium,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              TextButton.icon(
+                                onPressed: () => _variantDialog(),
+                                icon: const Icon(Icons.add),
+                                label: const Text('Thêm biến thể'),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          if ((_product?.variants ?? []).isEmpty)
+                            const Text(
+                              'Chưa có biến thể nào. Khách sẽ không mua được nếu chưa có giá.',
+                            )
+                          else
+                            ...(_product!.variants.map((v) {
+                              final stock = _stockByVariant[v.id];
+                              final lowStock = stock != null && stock <= 5;
+                              return Card(
+                                child: ListTile(
+                                  title: Row(
+                                    children: [
+                                      Flexible(child: Text(v.name)),
+                                      if (v.isDefault) ...[
+                                        const SizedBox(width: 6),
+                                        const Chip(
+                                          label: Text('Mặc định'),
+                                          visualDensity: VisualDensity.compact,
+                                        ),
+                                      ],
+                                      if (!v.isActive) ...[
+                                        const SizedBox(width: 6),
+                                        Chip(
+                                          label: const Text('Ngừng bán'),
+                                          visualDensity: VisualDensity.compact,
+                                          backgroundColor:
+                                              Theme.of(context).colorScheme.errorContainer,
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                  subtitle: Text(
+                                    [
+                                      formatVnd(v.price),
+                                      if (v.comparePrice != null)
+                                        'Giá gốc ${formatVnd(v.comparePrice!)}',
+                                      if (v.sku != null && v.sku!.isNotEmpty) 'SKU ${v.sku}',
+                                      if (stock != null)
+                                        'Tồn kho: $stock${lowStock ? ' (sắp hết)' : ''}',
+                                    ].join(' · '),
+                                  ),
+                                  leading: lowStock
+                                      ? const Icon(Icons.warning_amber, color: Colors.orange)
+                                      : null,
+                                  trailing: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      IconButton(
+                                        icon: const Icon(Icons.edit_outlined),
+                                        onPressed: () => _variantDialog(existing: v),
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(Icons.delete_outline),
+                                        onPressed: () => _deleteVariant(v.id),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            })),
+                        ],
+                        if (_salesModel == 'scheduled') ...[
+                          const SizedBox(height: 32),
+                          Text(
+                            'Bậc giá theo số lượng',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '"Giá sỉ" chỉ theo số lượng mua · "Đặt trước" có thêm điều kiện số ngày đặt tối thiểu trong tuần, mỗi bậc có 3 giá tuỳ đạt điều kiện nào. Mỗi biến thể tự cài đặt bậc giá riêng.',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              ChoiceChip(
+                                label: const Text('Giá sỉ'),
+                                selected: _tierTab == 'wholesale',
+                                onSelected: (_) => setState(() => _tierTab = 'wholesale'),
+                              ),
+                              const SizedBox(width: 8),
+                              ChoiceChip(
+                                label: const Text('Đặt trước'),
+                                selected: _tierTab == 'preorder',
+                                onSelected: (_) => setState(() => _tierTab = 'preorder'),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          if (_isEdit)
+                            if ((_product?.variants ?? []).isEmpty)
+                              const Text('Chưa có biến thể nào — thêm biến thể ở trên trước.')
+                            else
+                              ...(_product!.variants.map(
+                                (v) => _tierVariantCard(
+                                  variantId: v.id,
+                                  title: v.name,
+                                  allTiers: _tiersByVariant[v.id] ?? [],
+                                ),
+                              ))
+                          else
+                            ...[
+                              ProductVariant(
+                                id: 'default',
+                                productId: '',
+                                name: _defaultVariantNameCtrl.text.trim().isEmpty
+                                    ? 'Mặc định'
+                                    : _defaultVariantNameCtrl.text.trim(),
+                                price: VndInputFormatter.parse(_priceCtrl.text) ?? 0,
+                                isDefault: true,
+                                isActive: true,
+                              ),
+                              ..._pendingVariants,
+                            ].map(
+                              (v) => _tierVariantCard(
+                                variantId: v.id,
+                                title: v.name,
+                                allTiers: _tiersByVariant[v.id] ?? [],
+                              ),
+                            ),
+                        ],
+                        const SizedBox(height: 32),
+                        Text(
+                          'Topping & tuỳ chọn thêm',
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Chọn nhóm topping có sẵn của cửa hàng để gắn vào sản phẩm này — '
+                          'tạo/sửa nội dung nhóm ở màn "Chi tiết cửa hàng".',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                        const SizedBox(height: 8),
+                        if (_availableToppingGroups.isEmpty)
+                          const Text(
+                            'Cửa hàng chưa có nhóm topping nào. Sản phẩm vẫn bán bình thường nếu không cần.',
+                          )
+                        else
+                          ..._availableToppingGroups.map(
+                            (g) => CheckboxListTile(
+                              contentPadding: EdgeInsets.zero,
+                              value: _selectedToppingGroupIds.contains(g.id),
+                              title: Text(g.name),
+                              subtitle: Text(
+                                '${g.toppings.length} lựa chọn'
+                                '${g.isRequired ? ' · Bắt buộc' : ''}'
+                                '${g.allowMultiple ? ' · Chọn nhiều' : ' · Chọn 1'}',
+                              ),
+                              onChanged: (v) => setState(() {
+                                _selectedToppingGroupIds = v == true
+                                    ? [..._selectedToppingGroupIds, g.id]
+                                    : _selectedToppingGroupIds
+                                          .where((id) => id != g.id)
+                                          .toList();
+                              }),
+                            ),
+                          ),
+                        if (_error != null) ...[
+                          const SizedBox(height: 16),
+                          Text(_error!, style: TextStyle(color: Theme.of(context).colorScheme.error)),
+                        ],
+                        const SizedBox(height: 20),
+                        FilledButton(
+                          onPressed: _loading ? null : _submit,
+                          child: _loading
+                              ? const SizedBox(
+                                  height: 20,
+                                  width: 20,
+                                  child: CircularProgressIndicator(strokeWidth: 2),
+                                )
+                              : Text(_isEdit ? 'Lưu thay đổi' : 'Tạo sản phẩm'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+    );
+  }
+}

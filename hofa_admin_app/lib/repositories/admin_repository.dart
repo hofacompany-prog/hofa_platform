@@ -14,6 +14,8 @@ import '../models/driver_wallet_request.dart';
 import '../models/admin_delivery.dart';
 import '../models/order.dart';
 import '../models/category.dart';
+import '../models/product.dart';
+import '../models/inventory_item.dart';
 import '../models/shipping_fee_settings.dart';
 import '../models/delivery_radius_settings.dart';
 import '../models/voucher.dart';
@@ -452,6 +454,174 @@ class AdminRepository {
 
   Future<void> deleteTopping(String id) async {
     await _api.delete('/toppings/$id');
+  }
+
+  // ---- Sản phẩm/menu 1 cửa hàng — cùng endpoint với
+  // hofa_store_app/lib/repositories/product_repository.dart (đã nhận merchantId/productId/
+  // variantId tường minh sẵn từ trước), admin qua được nhờ requireMerchantAccess() cho role
+  // admin luôn qua (xem server/src/utils.js). Dùng ở merchant_products_screen.dart +
+  // merchant_product_form_screen.dart. ----
+
+  Future<List<MerchantCategory>> merchantCategories({
+    required String merchantId,
+    String? categoryId,
+  }) async {
+    final list =
+        await _api.get(
+              '/merchant-categories',
+              query: {
+                'merchant_id': merchantId,
+                if (categoryId != null) 'category_id': categoryId,
+              },
+            )
+            as List;
+    return list
+        .map((e) => MerchantCategory.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<MerchantCategory> createMerchantCategory({
+    required String merchantId,
+    required String categoryId,
+    required String name,
+  }) async => MerchantCategory.fromJson(
+    await _api.post(
+          '/merchant-categories',
+          body: {
+            'merchant_id': merchantId,
+            'category_id': categoryId,
+            'name': name,
+          },
+        )
+        as Map<String, dynamic>,
+  );
+
+  Future<void> updateMerchantCategory(
+    String id,
+    Map<String, dynamic> data,
+  ) async {
+    await _api.patch('/merchant-categories/$id', body: data);
+  }
+
+  Future<void> deleteMerchantCategory(String id) async {
+    await _api.delete('/merchant-categories/$id');
+  }
+
+  Future<List<Product>> merchantProducts(String merchantId) async {
+    final list =
+        await _api.get(
+              '/products',
+              query: {'merchant_id': merchantId, 'limit': 100},
+            )
+            as List;
+    return list
+        .map((e) => Product.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<Product> product(String id) async =>
+      Product.fromJson(await _api.get('/products/$id') as Map<String, dynamic>);
+
+  Future<Product> createProduct(Map<String, dynamic> data) async =>
+      Product.fromJson(
+        await _api.post('/products', body: data) as Map<String, dynamic>,
+      );
+
+  Future<void> updateProduct(String id, Map<String, dynamic> data) async {
+    await _api.patch('/products/$id', body: data);
+  }
+
+  Future<void> deleteProduct(String id) async {
+    await _api.delete('/products/$id');
+  }
+
+  Future<ProductVariant> createVariant(
+    String productId,
+    Map<String, dynamic> data,
+  ) async => ProductVariant.fromJson(
+    await _api.post('/products/$productId/variants', body: data)
+        as Map<String, dynamic>,
+  );
+
+  Future<void> updateVariant(String id, Map<String, dynamic> data) async {
+    await _api.patch('/variants/$id', body: data);
+  }
+
+  Future<void> deleteVariant(String id) async {
+    await _api.delete('/variants/$id');
+  }
+
+  Future<List<WholesaleTier>> wholesaleTiers(String variantId) async {
+    final list = await _api.get('/variants/$variantId/wholesale-tiers') as List;
+    return list
+        .map((e) => WholesaleTier.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<WholesaleTier> createWholesaleTier(
+    String variantId,
+    Map<String, dynamic> data,
+  ) async => WholesaleTier.fromJson(
+    await _api.post('/variants/$variantId/wholesale-tiers', body: data)
+        as Map<String, dynamic>,
+  );
+
+  Future<void> updateWholesaleTier(String id, Map<String, dynamic> data) async {
+    await _api.patch('/wholesale-tiers/$id', body: data);
+  }
+
+  Future<void> deleteWholesaleTier(String id) async {
+    await _api.delete('/wholesale-tiers/$id');
+  }
+
+  /// Nhóm topping đang gắn vào 1 sản phẩm.
+  Future<List<ToppingGroup>> productToppingGroups(String productId) async {
+    final list = await _api.get('/products/$productId/topping-groups') as List;
+    return list
+        .map((e) => ToppingGroup.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Đặt lại toàn bộ danh sách nhóm topping gắn vào 1 sản phẩm (thay thế, không cộng dồn).
+  Future<void> setProductToppingGroups(
+    String productId,
+    List<String> groupIds,
+  ) async {
+    await _api.put(
+      '/products/$productId/topping-groups',
+      body: {'group_ids': groupIds},
+    );
+  }
+
+  // ---- Tồn kho (dùng trong merchant_product_form_screen.dart) ----
+
+  Future<List<InventoryItem>> inventory(String branchId) async {
+    final list = await _api.get('/branches/$branchId/inventory') as List;
+    return list
+        .map((e) => InventoryItem.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<int> adjustInventory({
+    required String branchId,
+    required String variantId,
+    required String moveType,
+    required int quantity,
+    String? note,
+  }) async {
+    final data =
+        await _api.post(
+              '/inventory/adjust',
+              body: {
+                'branch_id': branchId,
+                'variant_id': variantId,
+                'move_type': moveType,
+                'quantity': quantity,
+                if (note != null && note.isNotEmpty) 'note': note,
+              },
+            )
+            as Map<String, dynamic>;
+    return (data['balance_after'] as num).toInt();
   }
 
   // ---- Tài xế ----

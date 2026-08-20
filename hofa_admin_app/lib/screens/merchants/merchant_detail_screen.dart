@@ -1247,6 +1247,17 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
                       MerchantFeeTiersCard(merchant: m),
                     ],
                     const SizedBox(height: 16),
+                    // Xem/sửa menu (danh mục/sản phẩm/biến thể/tồn kho) đầy đủ như chính cửa
+                    // hàng tự quản lý — xem merchant_products_screen.dart.
+                    OutlinedButton.icon(
+                      onPressed: () => context.push(
+                        '/merchants/${m.id}/products',
+                        extra: m,
+                      ),
+                      icon: const Icon(Icons.storefront_outlined),
+                      label: const Text('Quản lý menu'),
+                    ),
+                    const SizedBox(height: 16),
                     MerchantToppingGroupsCard(merchant: m),
                     const SizedBox(height: 16),
                     MerchantDevicesCard(merchant: m),

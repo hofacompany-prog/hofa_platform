@@ -27,3 +27,34 @@ class Category {
         sortOrder: (json['sort_order'] as num?)?.toInt() ?? 0,
       );
 }
+
+/// Danh mục riêng của cửa hàng — nằm dưới 1 danh mục con hệ thống ([Category] có
+/// [Category.parentId] khác null). Khách xem trang cửa hàng chỉ thấy danh mục này. Khác
+/// [Category] (danh mục hệ thống, admin quản lý ở catalog/categories_screen.dart) — bảng
+/// riêng merchant_categories, xem hofa_store_app/lib/models/category.dart (bản gốc).
+class MerchantCategory {
+  final String id;
+  final String merchantId;
+  final String categoryId;
+  final String name;
+  final int sortOrder;
+  final bool isActive;
+
+  MerchantCategory({
+    required this.id,
+    required this.merchantId,
+    required this.categoryId,
+    required this.name,
+    required this.sortOrder,
+    required this.isActive,
+  });
+
+  factory MerchantCategory.fromJson(Map<String, dynamic> json) => MerchantCategory(
+        id: json['id'] as String,
+        merchantId: json['merchant_id'] as String,
+        categoryId: json['category_id'] as String,
+        name: json['name'] as String,
+        sortOrder: (json['sort_order'] as num?)?.toInt() ?? 0,
+        isActive: json['is_active'] as bool? ?? true,
+      );
+}

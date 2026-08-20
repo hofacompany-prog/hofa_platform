@@ -16,6 +16,7 @@ import '../models/driver_wallet_request.dart';
 import '../models/admin_delivery.dart';
 import '../models/order.dart';
 import '../models/category.dart';
+import '../models/product.dart';
 import '../models/shipping_fee_settings.dart';
 import '../models/delivery_radius_settings.dart';
 import '../models/voucher.dart';
@@ -95,6 +96,24 @@ final merchantToppingGroupsProvider = FutureProvider.autoDispose
       (ref, merchantId) =>
           ref.watch(adminRepoProvider).merchantToppingGroups(merchantId),
     );
+
+// categoriesProvider (danh mục hệ thống) đã có sẵn phía trên — dùng lại, không định nghĩa lại.
+
+final merchantCategoriesProvider = FutureProvider.autoDispose
+    .family<List<MerchantCategory>, String>(
+      (ref, merchantId) =>
+          ref.watch(adminRepoProvider).merchantCategories(merchantId: merchantId),
+    );
+
+final merchantProductsProvider = FutureProvider.autoDispose
+    .family<List<Product>, String>(
+      (ref, merchantId) =>
+          ref.watch(adminRepoProvider).merchantProducts(merchantId),
+    );
+
+final productDetailProvider = FutureProvider.autoDispose.family<Product, String>(
+  (ref, productId) => ref.watch(adminRepoProvider).product(productId),
+);
 
 final merchantDevicesProvider = FutureProvider.autoDispose
     .family<List<MerchantDevice>, String>(
