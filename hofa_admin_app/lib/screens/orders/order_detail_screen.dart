@@ -205,8 +205,9 @@ class _AdminOrderDetailScreenState
     }
   }
 
-  /// Quét NGAY 1 lượt tìm tài xế online gần nhất — chủ yếu dùng cho đơn mua hộ chưa có ai
-  /// nhận (khác _continueDriverSearch: đó chỉ reset để chờ sweep tự động chạy ở chu kỳ sau).
+  /// Quét NGAY 1 lượt tìm tài xế online gần nhất — dùng cho MỌI đơn (mua hộ lẫn bình thường)
+  /// chưa có ai nhận (khác _continueDriverSearch: đó chỉ reset để chờ sweep tự động chạy ở chu
+  /// kỳ sau). Cùng logic offerToNearestDriver với nút "Tìm tài xế" phía cửa hàng.
   Future<void> _rescanDriver(Order o) async {
     setState(() => _busy = true);
     try {
@@ -458,11 +459,13 @@ class _AdminOrderDetailScreenState
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     if (_busy) const LinearProgressIndicator(),
-                    // Đơn mua hộ chưa có tài xế nhận — hiện ngay khi vừa vào chờ tài xế lấy,
-                    // không cần đợi sweepDriverSearch báo động (driverSearchAlertedAt, card
-                    // riêng bên dưới) mới xử lý được.
-                    if (o.merchantType == 'buy_on_behalf' &&
-                        o.status == 'ready_for_pickup' &&
+                    // Đơn (mua hộ HOẶC bình thường) chưa có tài xế nhận — hiện ngay khi vừa vào
+                    // chờ tài xế lấy, không cần đợi sweepDriverSearch báo động (driverSearchAlertedAt,
+                    // card riêng bên dưới) mới xử lý được. "Chọn tài xế" (tự chỉ định) chỉ áp dụng
+                    // cho đơn mua hộ — POST /orders/:id/select-driver chặn đơn thường (phải qua
+                    // đúng luồng offer/chấp nhận bình thường), "Quét tài xế" (offerToNearestDriver)
+                    // thì dùng chung được cho mọi loại đơn, xem driver-dispatch-settings.js.
+                    if (o.status == 'ready_for_pickup' &&
                         o.deliveryDriverId == null) ...[
                       Card(
                         elevation: 0,
@@ -483,7 +486,9 @@ class _AdminOrderDetailScreenState
                                   const SizedBox(width: 8),
                                   Expanded(
                                     child: Text(
-                                      'Đơn mua hộ chưa có tài xế',
+                                      o.merchantType == 'buy_on_behalf'
+                                          ? 'Đơn mua hộ chưa có tài xế'
+                                          : 'Đơn chưa có tài xế nhận',
                                       style: theme.textTheme.titleSmall,
                                     ),
                                   ),
@@ -493,11 +498,15 @@ class _AdminOrderDetailScreenState
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.end,
                                 children: [
-                                  OutlinedButton(
-                                    onPressed: _busy ? null : () => _pickDriver(o),
-                                    child: const Text('Chọn tài xế'),
-                                  ),
-                                  const SizedBox(width: 8),
+                                  if (o.merchantType == 'buy_on_behalf') ...[
+                                    OutlinedButton(
+                                      onPressed: _busy
+                                          ? null
+                                          : () => _pickDriver(o),
+                                      child: const Text('Chọn tài xế'),
+                                    ),
+                                    const SizedBox(width: 8),
+                                  ],
                                   FilledButton(
                                     onPressed: _busy ? null : () => _rescanDriver(o),
                                     child: const Text('Quét tài xế'),
