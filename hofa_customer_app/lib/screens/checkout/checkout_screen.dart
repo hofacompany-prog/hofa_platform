@@ -350,13 +350,13 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     if (_appliedVouchers.isNotEmpty)
       'voucher_codes': _appliedVouchers.map((v) => v.code).toList(),
     if (cart.salesModel == 'scheduled' && scheduledFor != null)
-      'scheduled_for': scheduledFor.toIso8601String(),
+      'scheduled_for': scheduledFor.toUtc().toIso8601String(),
     // Đơn giao ngay "Đặt trước" — vẫn mang mã HF, chỉ ngủ chờ tới gần giờ chuẩn bị mới báo cửa
     // hàng (xem hofa-db/84_instant_scheduled_order.sql).
     if (cart.salesModel != 'scheduled' &&
         _instantScheduleEnabled &&
         _scheduledFor != null)
-      'scheduled_for': _scheduledFor!.toIso8601String(),
+      'scheduled_for': _scheduledFor!.toUtc().toIso8601String(),
     if (_noteCtrl.text.trim().isNotEmpty)
       'customer_note': _noteCtrl.text.trim(),
   };

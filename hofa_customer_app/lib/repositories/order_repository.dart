@@ -41,7 +41,7 @@ class OrderRepository {
       Order.fromJson(
         await _api.patch(
               '/orders/$id/scheduled-for',
-              body: {'scheduled_for': scheduledFor.toIso8601String()},
+              body: {'scheduled_for': scheduledFor.toUtc().toIso8601String()},
             )
             as Map<String, dynamic>,
       );
