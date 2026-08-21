@@ -316,11 +316,16 @@ class _AddressPickerScreenState extends State<AddressPickerScreen> {
                   Positioned(
                     right: 16,
                     bottom: 16,
-                    child: Row(
+                    child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        FloatingActionButton.small(
+                          heroTag: 'locate-me',
+                          onPressed: () => _tryLocateMe(),
+                          child: const Icon(Icons.my_location),
+                        ),
                         Container(
-                          margin: const EdgeInsets.only(right: 8),
+                          margin: const EdgeInsets.only(top: 6),
                           padding: const EdgeInsets.symmetric(
                             horizontal: 10,
                             vertical: 6,
@@ -342,11 +347,6 @@ class _AddressPickerScreenState extends State<AddressPickerScreen> {
                               fontWeight: FontWeight.w500,
                             ),
                           ),
-                        ),
-                        FloatingActionButton.small(
-                          heroTag: 'locate-me',
-                          onPressed: () => _tryLocateMe(),
-                          child: const Icon(Icons.my_location),
                         ),
                       ],
                     ),
