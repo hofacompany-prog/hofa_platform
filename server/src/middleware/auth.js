@@ -68,15 +68,15 @@ const attachContext = asyncHandler(async (req, res, next) => {
     role: profile ? profile.role : null
   };
 
-  // Gỡ từ xa 1 thiết bị (màn "Thiết bị đăng nhập" ở admin, "Thiết bị đã đăng nhập" ở store
-  // app) — server không tự quản lý session Supabase nên không thu hồi được access_token đang
-  // có ngay lập tức; thay vào đó CHẶN NGAY từ request kế tiếp của đúng thiết bị đó, buộc app
-  // tự đăng xuất + xoá session cục bộ khi thấy DEVICE_REVOKED (xem ApiClient._handle — hiện
-  // chỉ hofa_store_app gửi header này, các app khác không có màn quản lý thiết bị nên bỏ
-  // qua). Client CHỈ gửi header SAU KHI đã đăng ký thiết bị thành công ít nhất 1 lần trong
-  // phiên hiện tại (DeviceSession.markRegistered) — tránh chặn nhầm ngay sau khi vừa đăng
-  // nhập, lúc POST /devices đầu tiên còn chưa kịp chạy xong. Khoá theo req.ctx.userId (hồ sơ
-  // ĐÚNG role/scope) chứ không phải claims.sub — /devices POST cũng ghi theo userId này.
+  // Gỡ từ xa 1 thiết bị (màn "Thiết bị đăng nhập" ở admin/store app, tab "Thiết bị admin" ở
+  // admin app) — server không tự quản lý session Supabase nên không thu hồi được access_token
+  // đang có ngay lập tức; thay vào đó CHẶN NGAY từ request kế tiếp của đúng thiết bị đó, buộc
+  // app tự đăng xuất + xoá session cục bộ khi thấy DEVICE_REVOKED (xem ApiClient._handle —
+  // cả 4 app đều gửi header này). Client CHỈ gửi header SAU KHI đã đăng ký thiết bị thành công
+  // ít nhất 1 lần trong phiên hiện tại (DeviceSession.markRegistered) — tránh chặn nhầm ngay
+  // sau khi vừa đăng nhập, lúc POST /devices đầu tiên còn chưa kịp chạy xong. Khoá theo
+  // req.ctx.userId (hồ sơ ĐÚNG role/scope) chứ không phải claims.sub — /devices POST cũng ghi
+  // theo userId này.
   const deviceId = req.headers['x-device-id'];
   if (deviceId && req.ctx.userId) {
     const device = await db.queryOne(
