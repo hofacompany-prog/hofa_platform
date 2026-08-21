@@ -9,6 +9,7 @@ import '../../providers/admin_providers.dart';
 import 'users_screen.dart' show roleLabels, statusLabels;
 import 'user_devices_card.dart';
 import '../../core/responsive.dart';
+import '../merchants/location_picker_screen.dart';
 
 class UserDetailScreen extends ConsumerStatefulWidget {
   final String userId;
@@ -506,41 +507,72 @@ class _UserDetailScreenState extends ConsumerState<UserDetailScreen> {
     }
   }
 
-  Widget _addressTile(Address a, ThemeData theme) => InkWell(
-    onTap: () => _openInMaps(a),
-    child: Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(
-            Icons.location_on_outlined,
-            size: 18,
-            color: theme.colorScheme.primary,
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '${a.label ?? 'Địa chỉ'} · ${a.recipientName} · ${a.recipientPhone}',
-                  style: const TextStyle(fontWeight: FontWeight.w500),
-                ),
-                Text(a.fullLine, style: theme.textTheme.bodySmall),
-              ],
-            ),
-          ),
-          if (a.isDefault)
-            const Padding(
-              padding: EdgeInsets.only(left: 8),
-              child: Chip(
-                label: Text('Mặc định'),
-                visualDensity: VisualDensity.compact,
-              ),
-            ),
-        ],
+  /// Mở bản đồ chọn điểm với vị trí hiện tại của địa chỉ (nếu có toạ độ) để admin kéo ghim sửa
+  /// lại — dùng chung LocationPickerScreen với sửa vị trí chi nhánh cửa hàng.
+  Future<void> _editAddressLocation(Address a) async {
+    final picked = await Navigator.of(context).push<PickedLocation>(
+      MaterialPageRoute(
+        builder: (_) => LocationPickerScreen(
+          initialLatitude: a.latitude,
+          initialLongitude: a.longitude,
+        ),
       ),
+    );
+    if (picked == null) return;
+    await _run(
+      () => ref.read(adminRepoProvider).updateUserAddress(widget.userId, a.id, {
+        'latitude': picked.latitude,
+        'longitude': picked.longitude,
+        'line1': picked.line1,
+        if (picked.ward != null) 'ward': picked.ward,
+        if (picked.district != null) 'district': picked.district,
+        'province': picked.province,
+      }),
+    );
+  }
+
+  Widget _addressTile(Address a, ThemeData theme) => Padding(
+    padding: const EdgeInsets.symmetric(vertical: 6),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(
+          Icons.location_on_outlined,
+          size: 18,
+          color: theme.colorScheme.primary,
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '${a.label ?? 'Địa chỉ'} · ${a.recipientName} · ${a.recipientPhone}',
+                style: const TextStyle(fontWeight: FontWeight.w500),
+              ),
+              Text(a.fullLine, style: theme.textTheme.bodySmall),
+            ],
+          ),
+        ),
+        if (a.isDefault)
+          const Padding(
+            padding: EdgeInsets.only(left: 8),
+            child: Chip(
+              label: Text('Mặc định'),
+              visualDensity: VisualDensity.compact,
+            ),
+          ),
+        IconButton(
+          tooltip: 'Sửa vị trí trên bản đồ',
+          icon: const Icon(Icons.edit_location_alt_outlined, size: 20),
+          onPressed: _busy ? null : () => _editAddressLocation(a),
+        ),
+        IconButton(
+          tooltip: 'Xem trên Google Maps',
+          icon: const Icon(Icons.map_outlined, size: 20),
+          onPressed: () => _openInMaps(a),
+        ),
+      ],
     ),
   );
 }

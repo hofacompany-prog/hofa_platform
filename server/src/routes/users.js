@@ -212,6 +212,28 @@ router.delete('/addresses/:id', asyncHandler(async (req, res) => {
   res.json({ ok: true, data: { deleted: true } });
 }));
 
+/** Admin sửa địa chỉ CỦA NGƯỜI KHÁC (màn chi tiết người dùng, web admin) — không dùng
+ * requireOwnRow (đó là để chính chủ tự sửa địa chỉ của mình, req.ctx.userId ở đây là admin chứ
+ * không phải chủ địa chỉ). Chủ yếu để sửa lại toạ độ/địa chỉ chữ khi khách bấm nhầm lúc chọn
+ * bản đồ hoặc địa chỉ nhập tay từ trước khi có bản đồ chọn điểm — dùng chung màn chọn bản đồ
+ * LocationPickerScreen (merchants/location_picker_screen.dart) như sửa vị trí chi nhánh. */
+router.patch('/admin/users/:userId/addresses/:addressId', asyncHandler(async (req, res) => {
+  requireRole(req.ctx, ['admin']);
+  const address = await db.queryOne(
+    'SELECT id FROM addresses WHERE id = $1 AND user_id = $2',
+    [req.params.addressId, req.params.userId]
+  );
+  if (!address) throw new ApiError('NOT_FOUND', 'Không tìm thấy địa chỉ', 404);
+  const data = pickFields(req.body, ADDRESS_FIELDS);
+  // Cùng lý do với PATCH /addresses/:id — idx_addresses_one_default (01_schema.sql) chỉ cho
+  // phép đúng 1 địa chỉ mặc định/user.
+  if (data.is_default === true) {
+    await db.query('UPDATE addresses SET is_default = false WHERE user_id = $1 AND is_default AND id != $2', [req.params.userId, req.params.addressId]);
+  }
+  const updated = await db.updateById('addresses', req.params.addressId, data);
+  res.json({ ok: true, data: updated });
+}));
+
 // ---- Thiết bị (push notification) ----
 
 router.get('/devices', asyncHandler(async (req, res) => {

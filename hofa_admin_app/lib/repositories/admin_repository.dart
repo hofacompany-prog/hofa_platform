@@ -1,4 +1,5 @@
 import '../core/api_client.dart';
+import '../models/address.dart';
 import '../models/admin_stats.dart';
 import '../models/user_profile.dart';
 import '../models/user_detail.dart';
@@ -97,6 +98,20 @@ class AdminRepository {
 
   Future<UserDetail> userDetail(String userId) async => UserDetail.fromJson(
     await _api.get('/admin/users/$userId') as Map<String, dynamic>,
+  );
+
+  /// Sửa 1 địa chỉ CỦA NGƯỜI DÙNG KHÁC — chủ yếu để sửa lại toạ độ trên bản đồ khi khách chọn
+  /// nhầm, xem PATCH /admin/users/:userId/addresses/:addressId.
+  Future<Address> updateUserAddress(
+    String userId,
+    String addressId,
+    Map<String, dynamic> data,
+  ) async => Address.fromJson(
+    await _api.patch(
+          '/admin/users/$userId/addresses/$addressId',
+          body: data,
+        )
+        as Map<String, dynamic>,
   );
 
   // ---- Thiết bị đã đăng nhập của 1 người dùng (khách/tài xế/cửa hàng...) ----
