@@ -84,11 +84,24 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen>
   bool _sweepIsAutoAccept = true;
   bool _confirmResolved = false;
   int? _prepMinutes;
+  // Mốc bắt đầu đếm ngược ở màn nhận đơn (= o.createdAt, chốt 1 lần) — _confirmPrepTime() dùng
+  // để tính lại đúng SỐ PHÚT CÒN LẠI tại thời điểm trượt xác nhận, khớp với con số đang nhảy
+  // trên màn hình (RollingCountdown ở _buildPlacedBottom), không gửi _prepMinutes gốc chưa đổi.
+  DateTime? _prepAnchor;
 
   @override
   void dispose() {
     _sweepController?.dispose();
     super.dispose();
+  }
+
+  /// Số phút CÒN LẠI tính tới thời điểm gọi (khớp đúng con số đang nhảy trên RollingCountdown ở
+  /// _buildPlacedBottom, neo từ _prepAnchor + _prepMinutes) — không phải _prepMinutes gốc.
+  int _remainingPrepMinutes() {
+    final anchor = _prepAnchor ?? DateTime.now();
+    final deadline = anchor.add(Duration(minutes: _prepMinutes ?? 0));
+    final remaining = deadline.difference(DateTime.now());
+    return remaining.isNegative ? 0 : remaining.inMinutes;
   }
 
   Future<void> _confirmPrepTime() async {
@@ -99,7 +112,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen>
       await OrderRepository().updateStatus(
         widget.orderId,
         'confirmed',
-        estimatedPrepMinutes: _prepMinutes,
+        estimatedPrepMinutes: _remainingPrepMinutes(),
       );
       ref.invalidate(_orderProvider(widget.orderId));
     } catch (e) {
@@ -403,6 +416,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen>
       // prep_default_*) ngay lúc tạo đơn, xem hofa-db/39_prep_time_tiers.sql — ổn định dù admin
       // có sửa Thông số sau đó, không tính lại ở client.
       _prepMinutes ??= o.defaultPrepMinutes ?? _fallbackPrepMinutes;
+      _prepAnchor ??= o.createdAt;
       final branchAsync = ref.watch(
         _orderBranchProvider((merchantId: o.merchantId, branchId: o.branchId)),
       );
@@ -995,31 +1009,16 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen>
                     ? () => setState(() => _prepMinutes = _prepMinutes! - 1)
                     : null,
               ),
-              // Hiện ĐÚNG số phút sẽ gửi lúc trượt xác nhận (_prepMinutes, xem _confirmPrepTime) —
-              // KHÔNG dùng RollingCountdown đếm từ o.createdAt như trước (đã gây hiểu lầm: số
-              // hiện trên màn cứ tự giảm dần theo thời gian chờ xác nhận, nhưng lúc trượt xác
-              // nhận lại gửi _prepMinutes CHƯA ĐỔI — nhìn như "tự nhảy ngược lên" giá trị gốc).
-              // Đồng hồ đếm ngược THẬT chỉ bắt đầu SAU khi xác nhận, neo theo confirmedAt (xem
-              // _buildPrepPhaseBottom + server orders.js tính trễ cũng neo theo confirmed_at).
+              // Đếm ngược thật (mm:ss) từ _prepAnchor + _prepMinutes — trượt xác nhận sẽ gửi ĐÚNG
+              // số phút còn lại tại đúng thời điểm đó (_remainingPrepMinutes, _confirmPrepTime),
+              // không còn gửi _prepMinutes gốc chưa đổi như trước (từng gây hiểu lầm "nhảy ngược").
               SizedBox(
                 width: 160,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      '$_prepMinutes phút',
-                      style: theme.textTheme.headlineMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Thời gian chuẩn bị',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.outline,
-                      ),
-                    ),
-                  ],
+                child: RollingCountdown(
+                  deadline: (_prepAnchor ?? o.createdAt).add(
+                    Duration(minutes: _prepMinutes!),
+                  ),
+                  alignment: CrossAxisAlignment.center,
                 ),
               ),
               _StepperButton(
