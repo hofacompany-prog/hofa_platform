@@ -793,7 +793,12 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen>
                         );
                       },
                     ),
-                    if (o.status == 'ready_for_pickup') ...[
+                    // deliveryAsync có giá trị (khác null) nghĩa là ĐÃ có tài xế nhận (bảng
+                    // deliveries chỉ được tạo lúc gán tài xế thành công, xem
+                    // hofa-db/05_driver_dispatch.sql assign_driver) — ẩn nút tìm ngay khi đã
+                    // có người nhận, tránh cửa hàng bấm nhầm tìm thêm khi không cần nữa.
+                    if (o.status == 'ready_for_pickup' &&
+                        deliveryAsync.valueOrNull == null) ...[
                       const SizedBox(height: 16),
                       OutlinedButton.icon(
                         onPressed: _updating ? null : _findDriver,
