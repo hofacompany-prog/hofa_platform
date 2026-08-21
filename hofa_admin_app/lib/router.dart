@@ -29,6 +29,7 @@ import 'screens/catalog/categories_hub_screen.dart';
 import 'screens/settings/finance_hub_screen.dart';
 import 'screens/notifications/notifications_screen.dart';
 import 'screens/notifications/my_notifications_screen.dart';
+import 'screens/reports/reports_screen.dart';
 
 final adminNavigatorKey = GlobalKey<NavigatorState>();
 
@@ -185,6 +186,10 @@ final routerProvider = Provider<GoRouter>((ref) {
               initialTab:
                   int.tryParse(state.uri.queryParameters['tab'] ?? '') ?? 0,
             ),
+          ),
+          GoRoute(
+            path: '/reports',
+            builder: (context, state) => const ReportsScreen(),
           ),
           GoRoute(
             path: '/notifications',

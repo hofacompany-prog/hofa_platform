@@ -81,6 +81,13 @@ class AdminShell extends ConsumerWidget {
       path: '/finance',
     ),
     (
+      tabKey: 'reports',
+      icon: Icons.flag_outlined,
+      selected: Icons.flag,
+      label: 'Báo cáo',
+      path: '/reports',
+    ),
+    (
       tabKey: 'notifications',
       icon: Icons.notifications_outlined,
       selected: Icons.notifications,

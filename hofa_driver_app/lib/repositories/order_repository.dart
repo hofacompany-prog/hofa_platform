@@ -8,6 +8,27 @@ class OrderRepository {
   Future<Order> get(String id) async =>
       Order.fromJson(await _api.get('/orders/$id') as Map<String, dynamic>);
 
+  /// Báo cáo sự cố cửa hàng (kèm đánh giá khách hàng tuỳ chọn) — xem
+  /// server/src/routes/issue-reports.js, hofa-db/92_issue_reports.sql.
+  Future<void> reportIssue(
+    String orderId, {
+    required List<String> issueTypes,
+    int? waitMinutes,
+    String? note,
+    int? customerRating,
+  }) async {
+    await _api.post(
+      '/issue-reports',
+      body: {
+        'order_id': orderId,
+        'issue_types': issueTypes,
+        if (waitMinutes != null) 'wait_minutes': waitMinutes,
+        if (note != null && note.isNotEmpty) 'note': note,
+        if (customerRating != null) 'customer_rating': customerRating,
+      },
+    );
+  }
+
   // ---- Nhắn tin trong đơn — xem hofa-db/74_order_chat.sql ----
 
   /// Trả về (danh sách tin nhắn, mốc "đã đọc tới lúc nào" của ĐẦU BÊN KIA) — mốc này dùng hiện

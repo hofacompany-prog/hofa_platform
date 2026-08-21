@@ -114,6 +114,163 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
     }
   }
 
+  /// Báo cáo vấn đề của cửa hàng cho đơn này (làm lâu/không chỗ để xe/khác) — kèm đánh giá
+  /// khách hàng tuỳ chọn cùng 1 lượt gửi, xem OrderRepository.reportIssue.
+  Future<void> _reportIssue(String orderId) async {
+    final selected = <String>{};
+    final minutesCtrl = TextEditingController();
+    final noteCtrl = TextEditingController();
+    var customerRating = 0;
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setInner) => AlertDialog(
+          title: const Text('Báo cáo sự cố'),
+          content: SizedBox(
+            width: 360,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Vấn đề của cửa hàng',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: selected.contains('slow'),
+                    title: const Text('Cửa hàng làm lâu'),
+                    onChanged: (v) => setInner(
+                      () => v == true
+                          ? selected.add('slow')
+                          : selected.remove('slow'),
+                    ),
+                  ),
+                  if (selected.contains('slow'))
+                    Padding(
+                      padding: const EdgeInsets.only(left: 12, bottom: 8),
+                      child: TextField(
+                        controller: minutesCtrl,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Chờ khoảng bao nhiêu phút?',
+                          isDense: true,
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    ),
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: selected.contains('no_parking'),
+                    title: const Text('Không có chỗ để xe'),
+                    onChanged: (v) => setInner(
+                      () => v == true
+                          ? selected.add('no_parking')
+                          : selected.remove('no_parking'),
+                    ),
+                  ),
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: selected.contains('other'),
+                    title: const Text('Khác'),
+                    onChanged: (v) => setInner(
+                      () => v == true
+                          ? selected.add('other')
+                          : selected.remove('other'),
+                    ),
+                  ),
+                  if (selected.contains('other'))
+                    Padding(
+                      padding: const EdgeInsets.only(left: 12, bottom: 8),
+                      child: TextField(
+                        controller: noteCtrl,
+                        maxLines: 2,
+                        decoration: const InputDecoration(
+                          labelText: 'Mô tả vấn đề',
+                          isDense: true,
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    ),
+                  const Divider(height: 24),
+                  Text(
+                    'Đánh giá khách hàng (không bắt buộc)',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                  const SizedBox(height: 4),
+                  Row(
+                    children: List.generate(
+                      5,
+                      (i) => IconButton(
+                        onPressed: () =>
+                            setInner(() => customerRating = i + 1),
+                        icon: Icon(
+                          i < customerRating
+                              ? Icons.star
+                              : Icons.star_border,
+                          color: Colors.amber,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Huỷ'),
+            ),
+            FilledButton(
+              onPressed: () {
+                if (selected.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Chọn ít nhất 1 vấn đề'),
+                    ),
+                  );
+                  return;
+                }
+                Navigator.pop(context, true);
+              },
+              child: const Text('Gửi báo cáo'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (ok != true) return;
+
+    setState(() => _busy = true);
+    try {
+      await OrderRepository().reportIssue(
+        orderId,
+        issueTypes: selected.toList(),
+        waitMinutes: selected.contains('slow')
+            ? int.tryParse(minutesCtrl.text.trim())
+            : null,
+        note: noteCtrl.text.trim().isEmpty ? null : noteCtrl.text.trim(),
+        customerRating: customerRating > 0 ? customerRating : null,
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Đã gửi báo cáo')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _promptOtp(String title, String nextStatus) async {
     final ctrl = TextEditingController();
     final ok = await showDialog<bool>(
@@ -454,6 +611,12 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
           ],
         ),
         actions: [
+          if (_order != null)
+            IconButton(
+              tooltip: 'Báo cáo sự cố',
+              icon: const Icon(Icons.flag_outlined),
+              onPressed: _busy ? null : () => _reportIssue(_order!.id),
+            ),
           IconButton(
             tooltip: 'Bản đồ',
             icon: const Icon(Icons.map_outlined),

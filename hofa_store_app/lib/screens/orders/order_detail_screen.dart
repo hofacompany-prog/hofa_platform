@@ -224,6 +224,140 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen>
     if (await canLaunchUrl(uri)) await launchUrl(uri);
   }
 
+  /// Báo cáo sự cố tài xế cho đơn này — xem OrderRepository.reportIssue.
+  Future<void> _reportDriverIssue(String orderId) async {
+    final selected = <String>{};
+    final minutesCtrl = TextEditingController();
+    final noteCtrl = TextEditingController();
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setInner) => AlertDialog(
+          title: const Text('Báo cáo sự cố tài xế'),
+          content: SizedBox(
+            width: 360,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: selected.contains('late'),
+                    title: const Text('Tài xế đến trễ'),
+                    onChanged: (v) => setInner(
+                      () => v == true
+                          ? selected.add('late')
+                          : selected.remove('late'),
+                    ),
+                  ),
+                  if (selected.contains('late'))
+                    Padding(
+                      padding: const EdgeInsets.only(left: 12, bottom: 8),
+                      child: TextField(
+                        controller: minutesCtrl,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: 'Trễ khoảng bao nhiêu phút?',
+                          isDense: true,
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    ),
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: selected.contains('attitude'),
+                    title: const Text('Thái độ không tốt'),
+                    onChanged: (v) => setInner(
+                      () => v == true
+                          ? selected.add('attitude')
+                          : selected.remove('attitude'),
+                    ),
+                  ),
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: selected.contains('no_show'),
+                    title: const Text('Không tới lấy hàng'),
+                    onChanged: (v) => setInner(
+                      () => v == true
+                          ? selected.add('no_show')
+                          : selected.remove('no_show'),
+                    ),
+                  ),
+                  CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: selected.contains('other'),
+                    title: const Text('Khác'),
+                    onChanged: (v) => setInner(
+                      () => v == true
+                          ? selected.add('other')
+                          : selected.remove('other'),
+                    ),
+                  ),
+                  if (selected.contains('other'))
+                    Padding(
+                      padding: const EdgeInsets.only(left: 12, bottom: 8),
+                      child: TextField(
+                        controller: noteCtrl,
+                        maxLines: 2,
+                        decoration: const InputDecoration(
+                          labelText: 'Mô tả vấn đề',
+                          isDense: true,
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Huỷ'),
+            ),
+            FilledButton(
+              onPressed: () {
+                if (selected.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Chọn ít nhất 1 vấn đề')),
+                  );
+                  return;
+                }
+                Navigator.pop(context, true);
+              },
+              child: const Text('Gửi báo cáo'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (ok != true) return;
+
+    try {
+      await OrderRepository().reportIssue(
+        orderId,
+        issueTypes: selected.toList(),
+        waitMinutes: selected.contains('late')
+            ? int.tryParse(minutesCtrl.text.trim())
+            : null,
+        note: noteCtrl.text.trim().isEmpty ? null : noteCtrl.text.trim(),
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Đã gửi báo cáo')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final orderAsync = ref.watch(_orderProvider(widget.orderId));
@@ -344,7 +478,12 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen>
 
     return Column(
       children: [
-        _buildHeader(context, o, canCancel),
+        _buildHeader(
+          context,
+          o,
+          canCancel,
+          hasDriver: deliveryAsync.valueOrNull != null,
+        ),
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
           child: Row(
@@ -681,7 +820,12 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen>
     );
   }
 
-  Widget _buildHeader(BuildContext context, Order o, bool canCancel) {
+  Widget _buildHeader(
+    BuildContext context,
+    Order o,
+    bool canCancel, {
+    required bool hasDriver,
+  }) {
     final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
@@ -704,6 +848,12 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen>
               overflow: TextOverflow.ellipsis,
             ),
           ),
+          if (hasDriver)
+            IconButton(
+              tooltip: 'Báo cáo tài xế',
+              icon: const Icon(Icons.flag_outlined),
+              onPressed: () => _reportDriverIssue(o.id),
+            ),
           IconButton(
             tooltip: 'Gọi khách',
             icon: const Icon(Icons.call_outlined),

@@ -13,6 +13,25 @@ class OrderRepository {
     return json == null ? null : Delivery.fromJson(json);
   }
 
+  /// Báo cáo sự cố tài xế cho đơn này — xem server/src/routes/issue-reports.js,
+  /// hofa-db/92_issue_reports.sql.
+  Future<void> reportIssue(
+    String orderId, {
+    required List<String> issueTypes,
+    int? waitMinutes,
+    String? note,
+  }) async {
+    await _api.post(
+      '/issue-reports',
+      body: {
+        'order_id': orderId,
+        'issue_types': issueTypes,
+        if (waitMinutes != null) 'wait_minutes': waitMinutes,
+        if (note != null && note.isNotEmpty) 'note': note,
+      },
+    );
+  }
+
   Future<List<Order>> listForMerchant(
     String merchantId, {
     String? status,

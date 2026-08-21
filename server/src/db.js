@@ -82,6 +82,7 @@ const NATIVE_ARRAY_COLUMNS = new Set([
   'applicable_merchant_types',
   'p_voucher_codes',
   'p_order_ids',
+  'issue_types',
 ]);
 
 /** jsonb/object cần JSON.stringify trước khi gửi qua pg; mảng TEXT[] gốc thì để nguyên. */

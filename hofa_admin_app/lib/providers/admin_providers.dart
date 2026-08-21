@@ -30,6 +30,7 @@ import '../models/bank_account_settings.dart';
 import '../models/admin_contact_settings.dart';
 import '../models/pwa_reminder_settings.dart';
 import '../models/price_report.dart';
+import '../models/issue_report.dart';
 import '../models/admin_notification.dart';
 import '../models/notification_settings.dart';
 import '../models/nav_tab_icon.dart';
@@ -368,6 +369,25 @@ final pwaReminderSettingsProvider =
 final pendingPriceReportsProvider = FutureProvider.autoDispose<List<PriceReport>>(
   (ref) => ref.watch(adminRepoProvider).priceReports(status: 'pending'),
 );
+
+/// null = tất cả trạng thái, 'open'/'resolved' = lọc theo — mặc định 'open' để tab Báo cáo mở
+/// lên thấy ngay việc cần xử lý, giống pattern statusFilter các màn khác.
+final issueReportStatusFilterProvider = StateProvider.autoDispose<String?>(
+  (ref) => 'open',
+);
+final issueReportReporterFilterProvider = StateProvider.autoDispose<String?>(
+  (ref) => null,
+);
+
+final issueReportsProvider = FutureProvider.autoDispose<List<IssueReport>>((
+  ref,
+) {
+  final status = ref.watch(issueReportStatusFilterProvider);
+  final reporterType = ref.watch(issueReportReporterFilterProvider);
+  return ref
+      .watch(adminRepoProvider)
+      .issueReports(status: status, reporterType: reporterType);
+});
 
 final pendingPaymentOrdersProvider = FutureProvider.autoDispose<List<Order>>(
   (ref) => ref.watch(adminRepoProvider).orders(status: 'pending_payment'),

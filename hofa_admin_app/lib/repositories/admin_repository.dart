@@ -29,6 +29,7 @@ import '../models/bank_account_settings.dart';
 import '../models/admin_contact_settings.dart';
 import '../models/pwa_reminder_settings.dart';
 import '../models/price_report.dart';
+import '../models/issue_report.dart';
 import '../models/admin_notification.dart';
 import '../models/notification_inbox_item.dart';
 import '../models/notification_settings.dart';
@@ -1300,6 +1301,34 @@ class AdminRepository {
 
   Future<void> rejectPriceReport(String id) async {
     await _api.patch('/admin/price-reports/$id', body: {'status': 'rejected'});
+  }
+
+  // ---- Báo cáo sự cố tài xế/cửa hàng ----
+
+  Future<List<IssueReport>> issueReports({
+    String? status,
+    String? reporterType,
+  }) async {
+    final list =
+        await _api.get(
+              '/admin/issue-reports',
+              query: {
+                'limit': 100,
+                if (status != null) 'status': status,
+                if (reporterType != null) 'reporter_type': reporterType,
+              },
+            )
+            as List;
+    return list
+        .map((e) => IssueReport.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<void> resolveIssueReport(String id, {String? adminNote}) async {
+    await _api.patch(
+      '/admin/issue-reports/$id',
+      body: {if (adminNote != null) 'admin_note': adminNote},
+    );
   }
 
   Future<BankAccountSettings> updateBankAccountSettings(
