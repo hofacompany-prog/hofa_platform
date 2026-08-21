@@ -507,10 +507,9 @@ router.patch('/orders/:id/scheduled-for', asyncHandler(async (req, res) => {
     if (!['pending_payment', 'placed', 'confirmed'].includes(order.status)) {
       throw new ApiError('BAD_REQUEST', 'Đơn đã sang giai đoạn chuẩn bị, không tự đổi giờ được nữa — liên hệ cửa hàng', 400);
     }
-    if (!scheduledFor) {
-      throw new ApiError('BAD_REQUEST', 'Cần chọn giờ hẹn giao mới', 400);
-    }
-    if (scheduledFor.getTime() <= Date.now()) {
+    // scheduledFor = null hợp lệ ở đây — khách tự chuyển đơn về giao ngay (bỏ hẳn giờ hẹn),
+    // xem nút "Giao ngay" cạnh "Đổi giờ" trên order_detail_screen.dart.
+    if (scheduledFor && scheduledFor.getTime() <= Date.now()) {
       throw new ApiError('BAD_REQUEST', 'Giờ hẹn giao phải ở tương lai', 400);
     }
   }

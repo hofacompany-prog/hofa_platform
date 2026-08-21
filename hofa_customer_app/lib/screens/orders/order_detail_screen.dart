@@ -177,6 +177,53 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
     }
   }
 
+  /// Bỏ hẳn giờ hẹn giao, chuyển đơn về giao ngay bình thường — không thể hoàn tác (không đặt
+  /// lại giờ hẹn cũ được nữa) nên luôn xác nhận trước, cùng ràng buộc trạng thái với
+  /// _editScheduledFor (Order.canEditScheduledFor).
+  Future<void> _switchToInstant(Order o) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Chuyển sang giao ngay?'),
+        content: Text(
+          'Đơn ${o.orderCode} sẽ bỏ giờ hẹn giao và chuyển sang giao ngay như bình thường. '
+          'Hành động này không thể hoàn tác.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Không'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Giao ngay'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+
+    setState(() => _busy = true);
+    try {
+      await ref.read(orderRepoProvider).updateScheduledFor(o.id, null);
+      ref.invalidate(orderDetailProvider(widget.orderId));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Đã chuyển đơn sang giao ngay')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   /// Đơn đặt trước/giá sỉ khách không tự huỷ được (xem Order.canContactMerchantToCancel) —
   /// thay bằng gọi thẳng cho cửa hàng để nhờ huỷ/hỏi hộ, không mở popup xác nhận huỷ nào cả.
   Future<void> _contactMerchant(String? phone) async {
@@ -398,8 +445,9 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                         Text('Đặt lúc ${formatDateTime(o.createdAt)}'),
                         if (o.scheduledFor != null)
                           Row(
+                            crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
-                              Flexible(
+                              Expanded(
                                 child: Text(
                                   'Hẹn giao lúc ${formatDateTime(o.scheduledFor!)}',
                                   style: TextStyle(
@@ -409,17 +457,47 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                 ),
                               ),
                               if (o.canEditScheduledFor)
-                                TextButton(
-                                  onPressed: _busy
-                                      ? null
-                                      : () => _editScheduledFor(o),
-                                  child: Text(
-                                    'Đổi giờ',
-                                    style: TextStyle(
-                                      color: theme.colorScheme.secondary,
-                                      fontWeight: FontWeight.bold,
+                                Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                  children: [
+                                    TextButton(
+                                      style: TextButton.styleFrom(
+                                        minimumSize: Size.zero,
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 4,
+                                        ),
+                                        tapTargetSize:
+                                            MaterialTapTargetSize.shrinkWrap,
+                                      ),
+                                      onPressed: _busy
+                                          ? null
+                                          : () => _editScheduledFor(o),
+                                      child: Text(
+                                        'Đổi giờ',
+                                        style: TextStyle(
+                                          color: theme.colorScheme.secondary,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
                                     ),
-                                  ),
+                                    TextButton(
+                                      style: TextButton.styleFrom(
+                                        minimumSize: Size.zero,
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 4,
+                                        ),
+                                        tapTargetSize:
+                                            MaterialTapTargetSize.shrinkWrap,
+                                      ),
+                                      onPressed: _busy
+                                          ? null
+                                          : () => _switchToInstant(o),
+                                      child: const Text('Giao ngay'),
+                                    ),
+                                  ],
                                 ),
                             ],
                           ),
