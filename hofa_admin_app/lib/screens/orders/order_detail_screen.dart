@@ -237,8 +237,10 @@ class _AdminOrderDetailScreenState
     }
   }
 
-  /// Admin tự chỉ định 1 tài xế online cho đơn mua hộ, thay vì để hệ thống tự quét — mở dialog
-  /// chọn từ danh sách tài xế đang online (GET /admin/drivers?status=online).
+  /// Admin tự chỉ định 1 tài xế online cho đơn (mọi loại — mua hộ hay bình thường), thay vì để
+  /// hệ thống tự quét — mở dialog chọn từ danh sách tài xế đang online (GET
+  /// /admin/drivers?status=online). POST /orders/:id/select-driver chỉ mở cho admin ở đơn
+  /// thường (khách hàng không tự chọn được, khác đơn mua hộ) — dùng khi quét không ra ai phù hợp.
   Future<void> _pickDriver(Order o) async {
     final driversAsync = await ref.read(adminRepoProvider).drivers(status: 'online');
     if (!mounted) return;
@@ -498,15 +500,11 @@ class _AdminOrderDetailScreenState
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.end,
                                 children: [
-                                  if (o.merchantType == 'buy_on_behalf') ...[
-                                    OutlinedButton(
-                                      onPressed: _busy
-                                          ? null
-                                          : () => _pickDriver(o),
-                                      child: const Text('Chọn tài xế'),
-                                    ),
-                                    const SizedBox(width: 8),
-                                  ],
+                                  OutlinedButton(
+                                    onPressed: _busy ? null : () => _pickDriver(o),
+                                    child: const Text('Chọn tài xế'),
+                                  ),
+                                  const SizedBox(width: 8),
                                   FilledButton(
                                     onPressed: _busy ? null : () => _rescanDriver(o),
                                     child: const Text('Quét tài xế'),

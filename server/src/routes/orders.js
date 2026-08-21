@@ -357,7 +357,9 @@ router.get('/orders/:id', asyncHandler(async (req, res) => {
 /**
  * Khách tự chọn (hoặc chọn LẠI, sau khi tài xế trước từ chối/hết hạn) 1 tài xế cho đơn mua hộ
  * — chỉ chủ đơn mới gọi được. Validate tài xế đang online rồi gán ngay (dispatchToSelectedDriver
- * dùng lại đúng logic gọi lúc thanh toán xong, xem orderOffer.js).
+ * dùng lại đúng logic gọi lúc thanh toán xong, xem orderOffer.js). ADMIN gọi được cho MỌI đơn
+ * (kể cả đơn thường, không riêng mua hộ) — dùng ở màn "Quét tài xế" web admin khi quét tự động
+ * không ra ai, admin tự chỉ định tài xế phù hợp hơn.
  */
 router.post('/orders/:id/select-driver', asyncHandler(async (req, res) => {
   requireProfile(req.ctx);
@@ -366,8 +368,12 @@ router.post('/orders/:id/select-driver', asyncHandler(async (req, res) => {
   if (order.customer_id !== req.ctx.userId && req.ctx.role !== 'admin') {
     throw new ApiError('FORBIDDEN', 'Không phải đơn của bạn', 403);
   }
+  // Đơn thường (không phải mua hộ) mặc định để hệ thống tự tìm tài xế gần nhất — chỉ ADMIN mới
+  // được tự chỉ định tay (vd quét không ra ai, admin can thiệp chọn tài xế phù hợp hơn ở màn
+  // chi tiết đơn), khách hàng KHÔNG tự chọn được cho đơn thường (khác đơn mua hộ, khách được
+  // chọn thẳng — merchant_type check dưới đây bỏ qua nếu đã là admin).
   const merchant = await db.queryOne('SELECT merchant_type FROM merchants WHERE id = $1', [order.merchant_id]);
-  if (merchant?.merchant_type !== 'buy_on_behalf') {
+  if (merchant?.merchant_type !== 'buy_on_behalf' && req.ctx.role !== 'admin') {
     throw new ApiError('BAD_REQUEST', 'Chỉ đơn mua hộ mới cần chọn tài xế', 400);
   }
   const driver = await db.queryOne(`SELECT id FROM drivers WHERE id = $1 AND status = 'online'`, [req.body.driver_id]);
