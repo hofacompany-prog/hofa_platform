@@ -442,11 +442,21 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen>
         // (forward(from: ...)) để thanh tiếp tục đúng chỗ đã thoát ra, cùng tốc độ như ban đầu.
         final Duration totalDuration;
         final double startValue;
+        // Đã hết giờ HẲN trước khi màn này kịp mở (cửa hàng thoát app đúng lúc sweep chạy xong)
+        // — cơ chế này thuần phía client (không có server tự quét), nên nếu vẫn forward() +
+        // addStatusListener như bình thường, controller sẽ NHẢY THẲNG tới "completed" ngay khi
+        // vừa build xong và tự bấm hộ _confirmPrepTime()/_cancelDueToTimeout() với
+        // _prepMinutes vừa bị reset về mặc định gốc (vd 10p) — cửa hàng thấy như thời gian chuẩn
+        // bị "tự nhảy ngược" lên lại, dù thực ra đã trễ từ lâu. Phải đóng băng ở trạng thái hết
+        // giờ (thanh đầy 100%, không tự kích hoạt callback) và để cửa hàng tự trượt xác nhận.
+        final bool alreadyExpired;
         if (o.confirmSweepDeadline != null) {
           // confirmSweepDeadline và createdAt được chốt CÙNG 1 now() trong create_order() (cùng
           // 1 transaction Postgres) — hiệu số này chính XÁC là tổng thời lượng ban đầu.
           totalDuration = o.confirmSweepDeadline!.difference(o.createdAt);
           final elapsed = DateTime.now().difference(o.createdAt);
+          alreadyExpired =
+              totalDuration.inMilliseconds > 0 && elapsed >= totalDuration;
           startValue = totalDuration.inMilliseconds > 0
               ? (elapsed.inMilliseconds / totalDuration.inMilliseconds).clamp(
                   0.0,
@@ -461,6 +471,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen>
                 : (manualSweepAsync.valueOrNull ?? _defaultManualSweepSeconds),
           );
           startValue = 0.0;
+          alreadyExpired = false;
         }
         _sweepStarted = true;
         _sweepIsAutoAccept = autoAccept;
@@ -469,16 +480,19 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen>
           duration: totalDuration > Duration.zero
               ? totalDuration
               : const Duration(milliseconds: 1),
+          value: alreadyExpired ? 1.0 : 0.0,
         );
-        _sweepController!.addStatusListener((status) {
-          if (status != AnimationStatus.completed) return;
-          if (autoAccept) {
-            _confirmPrepTime();
-          } else {
-            _cancelDueToTimeout(branch, closeBranch: !isScheduled);
-          }
-        });
-        _sweepController!.forward(from: startValue);
+        if (!alreadyExpired) {
+          _sweepController!.addStatusListener((status) {
+            if (status != AnimationStatus.completed) return;
+            if (autoAccept) {
+              _confirmPrepTime();
+            } else {
+              _cancelDueToTimeout(branch, closeBranch: !isScheduled);
+            }
+          });
+          _sweepController!.forward(from: startValue);
+        }
       }
     }
 
