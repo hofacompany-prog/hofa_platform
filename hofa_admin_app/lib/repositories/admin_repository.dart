@@ -759,6 +759,20 @@ class AdminRepository {
         as Map<String, dynamic>,
   );
 
+  /// Đổi giờ hẹn giao của đơn giao ngay có đặt trước (salesModel='instant') — [scheduledFor]
+  /// null để bỏ hẳn giờ hẹn (chuyển về giao ngay bình thường). Không áp dụng cho đơn Đặt
+  /// trước/Giá sỉ (salesModel='scheduled'), server tự chặn nếu gọi nhầm.
+  Future<Order> updateOrderScheduledFor(
+    String id,
+    DateTime? scheduledFor,
+  ) async => Order.fromJson(
+    await _api.patch(
+          '/orders/$id/scheduled-for',
+          body: {'scheduled_for': scheduledFor?.toIso8601String()},
+        )
+        as Map<String, dynamic>,
+  );
+
   /// Xoá thẳng, không chặn theo trạng thái/thanh toán (giai đoạn MVP). Nếu đơn còn bị ràng
   /// buộc khoá ngoại (vd đã có giao dịch thanh toán) thì server trả lỗi cụ thể từ Postgres —
   /// dùng orderBlockingRecords/deleteOrderBlockingRecords bên dưới để dọn trước khi xoá lại.

@@ -446,4 +446,65 @@ router.patch('/orders/:id/status', asyncHandler(async (req, res) => {
   res.json({ ok: true, data: updated });
 }));
 
+/** Đổi giờ hẹn giao của đơn GIAO NGAY có đặt trước (sales_model='instant', scheduled_for khác
+ * NULL — khác hẳn đơn "Đặt trước/Giá sỉ" sales_model='scheduled', route này KHÔNG áp dụng cho
+ * loại đó, đã có luồng xác nhận riêng). Khách tự đổi được giờ đơn CỦA MÌNH khi còn sớm (trước
+ * khi cửa hàng xác nhận/bắt đầu chuẩn bị); admin đổi được bất kỳ lúc nào cho bất kỳ đơn nào.
+ * Nếu đơn đã "activated" (order.scheduled_activated_at khác NULL — cửa hàng đã được báo, xem
+ * orderOffer.sweepDueScheduledInstant) thì báo luôn cho cửa hàng biết giờ mới vì họ có thể đã
+ * tính giờ bắt tay vào làm theo giờ cũ; chưa activated thì không cần báo gì, lượt quét định kỳ
+ * kế tiếp tự tính lại theo giờ mới. */
+router.patch('/orders/:id/scheduled-for', asyncHandler(async (req, res) => {
+  requireProfile(req.ctx);
+  const order = await db.findById('orders', req.params.id);
+  if (!order) throw new ApiError('NOT_FOUND', 'Không tìm thấy đơn hàng', 404);
+
+  const isAdmin = req.ctx.role === 'admin';
+  if (!isAdmin && order.customer_id !== req.ctx.userId) {
+    throw new ApiError('FORBIDDEN', 'Không phải đơn của bạn', 403);
+  }
+  if (order.sales_model !== 'instant') {
+    throw new ApiError('BAD_REQUEST', 'Chỉ áp dụng cho đơn giao ngay có đặt giờ trước, không phải đơn Đặt trước/Giá sỉ', 400);
+  }
+
+  let scheduledFor = null;
+  if (req.body.scheduled_for) {
+    scheduledFor = new Date(req.body.scheduled_for);
+    if (Number.isNaN(scheduledFor.getTime())) {
+      throw new ApiError('BAD_REQUEST', 'scheduled_for không hợp lệ', 400);
+    }
+  }
+  if (!isAdmin) {
+    if (!['pending_payment', 'placed', 'confirmed'].includes(order.status)) {
+      throw new ApiError('BAD_REQUEST', 'Đơn đã sang giai đoạn chuẩn bị, không tự đổi giờ được nữa — liên hệ cửa hàng', 400);
+    }
+    if (!scheduledFor) {
+      throw new ApiError('BAD_REQUEST', 'Cần chọn giờ hẹn giao mới', 400);
+    }
+    if (scheduledFor.getTime() <= Date.now()) {
+      throw new ApiError('BAD_REQUEST', 'Giờ hẹn giao phải ở tương lai', 400);
+    }
+  }
+
+  const updated = await db.updateById('orders', req.params.id, {
+    scheduled_for: scheduledFor ? scheduledFor.toISOString() : null
+  });
+
+  if (order.scheduled_activated_at) {
+    push.resolveMerchantUserIds([order.merchant_id]).then((userIds) =>
+      Promise.all(userIds.map((uid) => push.sendPushToUser(uid, {
+        title: 'Đơn hàng đổi giờ hẹn giao',
+        body: scheduledFor
+          ? `${order.order_code} — giờ giao mới: ${scheduledFor.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}`
+          : `${order.order_code} — đã bỏ giờ hẹn giao, chuyển về giao ngay`,
+        data: { type: 'order_offer', order_id: req.params.id }
+      })))
+    ).catch((err) => {
+      console.error('[push] Không báo được cho cửa hàng về đổi giờ hẹn giao', req.params.id, err.message);
+    });
+  }
+
+  res.json({ ok: true, data: updated });
+}));
+
 module.exports = router;

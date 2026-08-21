@@ -114,6 +114,69 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
     }
   }
 
+  /// Đổi giờ hẹn giao đơn giao ngay có đặt trước — xem Order.canEditScheduledFor. Cùng ràng
+  /// buộc "phải sau ít nhất ceilingMinutes phút" như lúc chọn giờ ở checkout_screen.dart, để
+  /// server luôn tính "nổ cho cửa hàng" không rơi vào quá khứ.
+  Future<void> _editScheduledFor(Order o) async {
+    final ceilingMinutes =
+        ref.read(prepDefaultMaxMinutesProvider).valueOrNull ?? 60;
+    final now = DateTime.now();
+    final earliestAllowed = now.add(Duration(minutes: ceilingMinutes));
+    final initial = (o.scheduledFor ?? earliestAllowed).isBefore(
+      earliestAllowed,
+    )
+        ? earliestAllowed
+        : o.scheduledFor!;
+    final pickedDate = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: now,
+      lastDate: now.add(const Duration(days: 30)),
+    );
+    if (pickedDate == null || !mounted) return;
+    final pickedTime = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(initial),
+    );
+    if (pickedTime == null || !mounted) return;
+    final combined = DateTime(
+      pickedDate.year,
+      pickedDate.month,
+      pickedDate.day,
+      pickedTime.hour,
+      pickedTime.minute,
+    );
+    if (combined.isBefore(now.add(Duration(minutes: ceilingMinutes)))) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Giờ giao phải sau ít nhất $ceilingMinutes phút kể từ bây giờ',
+          ),
+        ),
+      );
+      return;
+    }
+
+    setState(() => _busy = true);
+    try {
+      await ref.read(orderRepoProvider).updateScheduledFor(o.id, combined);
+      ref.invalidate(orderDetailProvider(widget.orderId));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Đã đổi giờ hẹn giao')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   /// Đơn đặt trước/giá sỉ khách không tự huỷ được (xem Order.canContactMerchantToCancel) —
   /// thay bằng gọi thẳng cho cửa hàng để nhờ huỷ/hỏi hộ, không mở popup xác nhận huỷ nào cả.
   Future<void> _contactMerchant(String? phone) async {
@@ -334,12 +397,25 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                         const SizedBox(height: 4),
                         Text('Đặt lúc ${formatDateTime(o.createdAt)}'),
                         if (o.scheduledFor != null)
-                          Text(
-                            'Hẹn giao lúc ${formatDateTime(o.scheduledFor!)}',
-                            style: TextStyle(
-                              color: theme.colorScheme.primary,
-                              fontWeight: FontWeight.w600,
-                            ),
+                          Row(
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  'Hẹn giao lúc ${formatDateTime(o.scheduledFor!)}',
+                                  style: TextStyle(
+                                    color: theme.colorScheme.primary,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                              if (o.canEditScheduledFor)
+                                TextButton(
+                                  onPressed: _busy
+                                      ? null
+                                      : () => _editScheduledFor(o),
+                                  child: const Text('Đổi giờ'),
+                                ),
+                            ],
                           ),
                         if (o.merchantName != null) Text(o.merchantName!),
                         const Divider(height: 24),

@@ -35,6 +35,17 @@ class OrderRepository {
   Future<Order> order(String id) async =>
       Order.fromJson(await _api.get('/orders/$id') as Map<String, dynamic>);
 
+  /// Tự đổi giờ hẹn giao của đơn giao ngay có đặt trước — xem Order.canEditScheduledFor,
+  /// PATCH /orders/:id/scheduled-for.
+  Future<Order> updateScheduledFor(String id, DateTime scheduledFor) async =>
+      Order.fromJson(
+        await _api.patch(
+              '/orders/$id/scheduled-for',
+              body: {'scheduled_for': scheduledFor.toIso8601String()},
+            )
+            as Map<String, dynamic>,
+      );
+
   /// null nếu đơn chưa được gán tài xế (chưa tới lúc có mã giao hàng).
   Future<Delivery?> delivery(String orderId) async {
     final json =

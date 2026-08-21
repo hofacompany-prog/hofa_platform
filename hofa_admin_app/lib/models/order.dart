@@ -54,6 +54,7 @@ class Order {
   final String merchantId;
   final String branchId;
   final String status;
+  final String salesModel;
   final String shipRecipientName;
   final String shipRecipientPhone;
   final String shipLine1;
@@ -65,6 +66,11 @@ class Order {
   final String paymentMethod;
   final String paymentStatus;
   final DateTime createdAt;
+  // Giờ hẹn giao cho đơn GIAO NGAY có đặt trước (salesModel='instant', khác đơn "Đặt trước/Giá
+  // sỉ" salesModel='scheduled') — xem PATCH /orders/:id/scheduled-for. scheduledActivatedAt
+  // khác null nghĩa là cửa hàng đã được báo (xem orderOffer.sweepDueScheduledInstant).
+  final DateTime? scheduledFor;
+  final DateTime? scheduledActivatedAt;
   final List<OrderItem> items;
   // Chỉ có khi gọi GET /admin/orders (server join sẵn để hiển thị thẳng trong bảng)
   final String? merchantName;
@@ -86,6 +92,7 @@ class Order {
     required this.merchantId,
     required this.branchId,
     required this.status,
+    this.salesModel = 'instant',
     required this.shipRecipientName,
     required this.shipRecipientPhone,
     required this.shipLine1,
@@ -97,6 +104,8 @@ class Order {
     required this.paymentMethod,
     required this.paymentStatus,
     required this.createdAt,
+    this.scheduledFor,
+    this.scheduledActivatedAt,
     required this.items,
     this.merchantName,
     this.customerName,
@@ -113,6 +122,7 @@ class Order {
     merchantId: json['merchant_id'] as String,
     branchId: json['branch_id'] as String,
     status: json['status'] as String,
+    salesModel: json['sales_model'] as String? ?? 'instant',
     shipRecipientName: json['ship_recipient_name'] as String? ?? '',
     shipRecipientPhone: json['ship_recipient_phone'] as String? ?? '',
     shipLine1: json['ship_line1'] as String? ?? '',
@@ -126,6 +136,12 @@ class Order {
     createdAt:
         DateTime.tryParse(json['created_at']?.toString() ?? '') ??
         DateTime.now(),
+    scheduledFor: json['scheduled_for'] != null
+        ? DateTime.tryParse(json['scheduled_for'].toString())
+        : null,
+    scheduledActivatedAt: json['scheduled_activated_at'] != null
+        ? DateTime.tryParse(json['scheduled_activated_at'].toString())
+        : null,
     items:
         (json['items'] as List?)
             ?.map((e) => OrderItem.fromJson(e as Map<String, dynamic>))

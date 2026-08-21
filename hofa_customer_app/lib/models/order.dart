@@ -138,6 +138,14 @@ class Order {
       ? ['pending_payment', 'placed'].contains(status)
       : ['pending_payment', 'placed', 'confirmed'].contains(status);
 
+  /// Đơn giao ngay có đặt giờ hẹn trước (salesModel='instant', khác hẳn đơn "Đặt trước/Giá sỉ"
+  /// salesModel='scheduled') — khách tự đổi được giờ hẹn khi còn sớm (trước khi cửa hàng bắt
+  /// tay vào chuẩn bị), cùng ngưỡng trạng thái với canCancel phía "instant". Xem PATCH
+  /// /orders/:id/scheduled-for.
+  bool get canEditScheduledFor =>
+      salesModel == 'instant' &&
+      ['pending_payment', 'placed', 'confirmed'].contains(status);
+
   /// Đơn "đặt trước"/"giá sỉ" đã qua giai đoạn tự huỷ được (cửa hàng đã xác nhận, đang giữ
   /// chỗ/chuẩn bị) nhưng chưa bàn giao cho tài xế — khách không tự huỷ được nhưng vẫn cần 1 lối
   /// liên hệ cửa hàng để nhờ huỷ hộ.

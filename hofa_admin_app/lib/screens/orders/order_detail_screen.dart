@@ -93,6 +93,94 @@ class _AdminOrderDetailScreenState
     }
   }
 
+  /// Đặt/đổi giờ hẹn giao cho đơn giao ngay có đặt trước (salesModel='instant') — KHÔNG dùng
+  /// cho đơn Đặt trước/Giá sỉ (salesModel='scheduled', đã có luồng xác nhận riêng), nút này chỉ
+  /// hiện khi salesModel=='instant'. Server tự báo cho cửa hàng nếu đơn đã "activated" (cửa
+  /// hàng đã biết) — xem PATCH /orders/:id/scheduled-for.
+  Future<void> _editScheduledFor(Order o) async {
+    final now = DateTime.now();
+    final initial = (o.scheduledFor != null && o.scheduledFor!.isAfter(now))
+        ? o.scheduledFor!
+        : now.add(const Duration(hours: 1));
+    final pickedDate = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(now.year - 1),
+      lastDate: DateTime(now.year + 1),
+    );
+    if (pickedDate == null || !mounted) return;
+    final pickedTime = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(initial),
+    );
+    if (pickedTime == null || !mounted) return;
+    final combined = DateTime(
+      pickedDate.year,
+      pickedDate.month,
+      pickedDate.day,
+      pickedTime.hour,
+      pickedTime.minute,
+    );
+
+    setState(() => _busy = true);
+    try {
+      await ref
+          .read(adminRepoProvider)
+          .updateOrderScheduledFor(o.id, combined);
+      ref.invalidate(orderDetailProvider(widget.orderId));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Đã cập nhật giờ hẹn giao')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _clearScheduledFor(Order o) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Bỏ giờ hẹn giao?'),
+        content: const Text(
+          'Đơn sẽ chuyển về giao ngay bình thường, không còn hẹn giờ nữa.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Huỷ'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Bỏ giờ hẹn'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+
+    setState(() => _busy = true);
+    try {
+      await ref.read(adminRepoProvider).updateOrderScheduledFor(o.id, null);
+      ref.invalidate(orderDetailProvider(widget.orderId));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   /// Đơn đang kẹt chờ tài xế (đã báo qua notifyAdmins, xem
   /// dispatch.js#sweepDriverSearch) — chọn quét tiếp thì reset về 0 lần, sweep tự thử lại
   /// từ chu kỳ kế tiếp.
@@ -602,6 +690,63 @@ class _AdminOrderDetailScreenState
                         ),
                       ),
                     ),
+                    if (o.salesModel == 'instant') ...[
+                      const SizedBox(height: 16),
+                      Card(
+                        elevation: 0,
+                        color: theme.colorScheme.surfaceContainerLow,
+                        child: Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Giờ hẹn giao',
+                                style: theme.textTheme.titleSmall,
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                o.scheduledFor != null
+                                    ? formatDateTime(o.scheduledFor!)
+                                    : 'Chưa đặt — giao ngay bình thường',
+                              ),
+                              if (o.scheduledFor != null)
+                                Text(
+                                  o.scheduledActivatedAt != null
+                                      ? 'Cửa hàng đã được báo'
+                                      : 'Cửa hàng chưa được báo — sẽ tự báo gần tới giờ',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.outline,
+                                  ),
+                                ),
+                              const SizedBox(height: 12),
+                              Wrap(
+                                spacing: 8,
+                                children: [
+                                  OutlinedButton(
+                                    onPressed: _busy
+                                        ? null
+                                        : () => _editScheduledFor(o),
+                                    child: Text(
+                                      o.scheduledFor != null
+                                          ? 'Đổi giờ'
+                                          : 'Đặt giờ hẹn giao',
+                                    ),
+                                  ),
+                                  if (o.scheduledFor != null)
+                                    TextButton(
+                                      onPressed: _busy
+                                          ? null
+                                          : () => _clearScheduledFor(o),
+                                      child: const Text('Bỏ giờ hẹn'),
+                                    ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 24),
                     OutlinedButton.icon(
                       onPressed: _busy ? null : () => _forceStatus(o),
