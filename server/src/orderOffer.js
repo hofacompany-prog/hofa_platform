@@ -29,23 +29,36 @@ async function offerOrderToMerchant(orderId) {
     data: { type: 'order_offer', order_id: orderId },
     tag: `order-offer-${orderId}`
   })));
+  // Đánh dấu mốc gửi đầu tiên để remindUnconfirmedOrders tính đúng order_reminder_interval_seconds
+  // kể từ NGAY LẦN NÀY, không nhắc lại ngay ở chu kỳ quét kế tiếp.
+  await db.updateById('orders', orderId, { order_reminder_last_sent_at: new Date().toISOString() });
 }
 
-/** Nhắc LẠI cho cửa hàng mỗi ORDER_REMIND_INTERVAL_MS (xem index.js) các đơn CHƯA XÁC NHẬN
- * (status='placed', đã lộ cho cửa hàng — loại đơn mua hộ vì hệ thống tự xử lý không cần xác
- * nhận, loại đơn giao ngay đặt trước còn "ngủ" chưa tới lúc báo) — tới khi cửa hàng bấm xác
+/** Nhắc LẠI cho cửa hàng các đơn CHƯA XÁC NHẬN (status='placed', đã lộ cho cửa hàng — loại đơn
+ * mua hộ vì hệ thống tự xử lý không cần xác nhận, loại đơn giao ngay đặt trước còn "ngủ" chưa
+ * tới lúc báo) — gọi định kỳ từ setInterval (index.js), tần suất quét Node cố định nhưng chỉ
+ * THẬT SỰ gửi lại cho 1 đơn khi đã đủ auto_accept_settings.order_reminder_interval_seconds kể
+ * từ lần gửi trước (order_reminder_last_sent_at), admin chỉnh được ở "Thông số" — cùng nhịp với
+ * driver_dispatch_settings.rescan_interval_seconds/sweepDriverSearch. Tới khi cửa hàng bấm xác
  * nhận (đơn rời khỏi 'placed') thì tự hết bị quét trúng, không cần cờ đánh dấu riêng. Gửi LẠI
  * qua resendPushToUser (không ghi thêm dòng notifications mới, tránh nhân bản hộp thư trong
  * app) — cùng tag với offerOrderToMerchant để thiết bị thay banner cũ, không xếp chồng, chỉ lặp
  * lại chuông/rung nhắc cửa hàng chứ không tạo thêm thông báo nào mới. */
 async function remindUnconfirmedOrders() {
+  const settings = await db.queryOne(
+    'SELECT order_reminder_interval_seconds FROM auto_accept_settings ORDER BY updated_at DESC LIMIT 1'
+  );
+  const intervalSeconds = settings?.order_reminder_interval_seconds ?? 20;
   const rows = await db.query(
     `SELECT o.id, o.merchant_id, o.order_code, o.total_amount
        FROM orders o
        JOIN merchants m ON m.id = o.merchant_id
       WHERE o.status = 'placed'
         AND m.merchant_type != 'buy_on_behalf'
-        AND NOT (o.sales_model = 'instant' AND o.scheduled_for IS NOT NULL AND o.scheduled_activated_at IS NULL)`
+        AND NOT (o.sales_model = 'instant' AND o.scheduled_for IS NOT NULL AND o.scheduled_activated_at IS NULL)
+        AND (o.order_reminder_last_sent_at IS NULL
+             OR o.order_reminder_last_sent_at < now() - ($1 || ' seconds')::interval)`,
+    [intervalSeconds]
   );
   if (!rows.length) return;
   const merchantIds = [...new Set(rows.map((r) => r.merchant_id))];
@@ -54,6 +67,7 @@ async function remindUnconfirmedOrders() {
   );
   for (const row of rows) {
     const userIds = userIdsByMerchant[row.merchant_id] || [];
+    await db.updateById('orders', row.id, { order_reminder_last_sent_at: new Date().toISOString() });
     await Promise.all(userIds.map((uid) => push.resendPushToUser(uid, {
       title: 'Đơn hàng mới!',
       body: `${row.order_code} · ${Number(row.total_amount).toLocaleString('vi-VN')}đ — trượt để nhận đơn`,

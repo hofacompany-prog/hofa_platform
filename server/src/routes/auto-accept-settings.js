@@ -7,7 +7,8 @@ const FIELDS = [
   'confirm_sweep_seconds', 'manual_confirm_sweep_seconds',
   'prep_tier_items', 'prep_tier_value_vnd',
   'prep_default_base_minutes', 'prep_default_increment_minutes', 'prep_default_max_minutes',
-  'prep_ceiling_base_minutes', 'prep_ceiling_increment_minutes', 'prep_ceiling_max_minutes'
+  'prep_ceiling_base_minutes', 'prep_ceiling_increment_minutes', 'prep_ceiling_max_minutes',
+  'order_reminder_interval_seconds'
 ];
 
 /** Chỉ giữ 1 dòng đang áp dụng — dòng mới nhất theo updated_at. */

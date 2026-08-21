@@ -12,6 +12,7 @@ class AutoAcceptSettings {
   final int prepCeilingBaseMinutes;
   final int prepCeilingIncrementMinutes;
   final int prepCeilingMaxMinutes;
+  final int orderReminderIntervalSeconds;
 
   AutoAcceptSettings({
     this.id,
@@ -25,6 +26,7 @@ class AutoAcceptSettings {
     required this.prepCeilingBaseMinutes,
     required this.prepCeilingIncrementMinutes,
     required this.prepCeilingMaxMinutes,
+    required this.orderReminderIntervalSeconds,
   });
 
   factory AutoAcceptSettings.fromJson(Map<String, dynamic> json) => AutoAcceptSettings(
@@ -39,6 +41,7 @@ class AutoAcceptSettings {
         prepCeilingBaseMinutes: (json['prep_ceiling_base_minutes'] as num?)?.toInt() ?? 30,
         prepCeilingIncrementMinutes: (json['prep_ceiling_increment_minutes'] as num?)?.toInt() ?? 10,
         prepCeilingMaxMinutes: (json['prep_ceiling_max_minutes'] as num?)?.toInt() ?? 120,
+        orderReminderIntervalSeconds: (json['order_reminder_interval_seconds'] as num?)?.toInt() ?? 20,
       );
 
   /// Mặc định dùng khi server chưa có dòng cấu hình nào (chưa từng chạy migration).
@@ -53,6 +56,7 @@ class AutoAcceptSettings {
         prepCeilingBaseMinutes: 30,
         prepCeilingIncrementMinutes: 10,
         prepCeilingMaxMinutes: 120,
+        orderReminderIntervalSeconds: 20,
       );
 
   Map<String, dynamic> toJson() => {
@@ -66,5 +70,6 @@ class AutoAcceptSettings {
         'prep_ceiling_base_minutes': prepCeilingBaseMinutes,
         'prep_ceiling_increment_minutes': prepCeilingIncrementMinutes,
         'prep_ceiling_max_minutes': prepCeilingMaxMinutes,
+        'order_reminder_interval_seconds': orderReminderIntervalSeconds,
       };
 }

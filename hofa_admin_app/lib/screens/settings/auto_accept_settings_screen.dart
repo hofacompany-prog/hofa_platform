@@ -31,6 +31,7 @@ class _AutoAcceptSettingsScreenState
   final _prepCeilingBaseCtrl = TextEditingController();
   final _prepCeilingIncrementCtrl = TextEditingController();
   final _prepCeilingMaxCtrl = TextEditingController();
+  final _reminderIntervalCtrl = TextEditingController();
   bool _initialized = false;
   bool _saving = false;
 
@@ -46,6 +47,7 @@ class _AutoAcceptSettingsScreenState
     _prepCeilingBaseCtrl.dispose();
     _prepCeilingIncrementCtrl.dispose();
     _prepCeilingMaxCtrl.dispose();
+    _reminderIntervalCtrl.dispose();
     super.dispose();
   }
 
@@ -60,6 +62,7 @@ class _AutoAcceptSettingsScreenState
     _prepCeilingBaseCtrl.text = s.prepCeilingBaseMinutes.toString();
     _prepCeilingIncrementCtrl.text = s.prepCeilingIncrementMinutes.toString();
     _prepCeilingMaxCtrl.text = s.prepCeilingMaxMinutes.toString();
+    _reminderIntervalCtrl.text = s.orderReminderIntervalSeconds.toString();
   }
 
   Future<void> _save(String? id) async {
@@ -127,6 +130,11 @@ class _AutoAcceptSettingsScreenState
       );
       return;
     }
+    final reminderInterval = int.tryParse(_reminderIntervalCtrl.text.trim());
+    if (reminderInterval == null || reminderInterval <= 0) {
+      _showError('Khoảng cách nhắc lại đơn chưa xác nhận không hợp lệ');
+      return;
+    }
 
     setState(() => _saving = true);
     try {
@@ -145,6 +153,7 @@ class _AutoAcceptSettingsScreenState
               prepCeilingBaseMinutes: prepCeilingBase,
               prepCeilingIncrementMinutes: prepCeilingIncrement,
               prepCeilingMaxMinutes: prepCeilingMax,
+              orderReminderIntervalSeconds: reminderInterval,
             ),
           );
       ref.invalidate(autoAcceptSettingsProvider);
@@ -363,6 +372,18 @@ class _AutoAcceptSettingsScreenState
                             helper: 'Trần tuyệt đối, bất kể bậc cao đến đâu.',
                           ),
                         ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    _SectionCard(
+                      title: 'Nhắc lại đơn chưa xác nhận',
+                      child: _NumberField(
+                        controller: _reminderIntervalCtrl,
+                        label: 'Khoảng cách giữa các lần nhắc (giây)',
+                        helper:
+                            'Đơn "placed" chưa được cửa hàng xác nhận sẽ được PUSH nhắc lại đúng chu kỳ '
+                            'này cho tới khi xác nhận — chỉ gửi lại thông báo cũ (không tạo thêm dòng mới '
+                            'trong hộp thư), thiết bị chỉ kêu/rung lại.',
                       ),
                     ),
                     const SizedBox(height: 16),
