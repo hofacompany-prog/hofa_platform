@@ -22,6 +22,8 @@ import 'screens/users/users_screen.dart';
 import 'screens/users/user_detail_screen.dart';
 import 'screens/users/user_blocking_records_screen.dart';
 import 'screens/drivers/driver_hub_screen.dart';
+import 'screens/drivers/driver_detail_screen.dart';
+import 'screens/drivers/driver_blocking_records_screen.dart';
 import 'screens/deliveries/delivery_detail_screen.dart';
 import 'screens/catalog/categories_hub_screen.dart';
 import 'screens/settings/finance_hub_screen.dart';
@@ -151,6 +153,18 @@ final routerProvider = Provider<GoRouter>((ref) {
             builder: (context, state) => DriverHubScreen(
               initialTab:
                   int.tryParse(state.uri.queryParameters['tab'] ?? '') ?? 0,
+            ),
+          ),
+          GoRoute(
+            path: '/drivers/:id',
+            builder: (context, state) => DriverDetailScreen(
+              driverId: state.pathParameters['id']!,
+            ),
+          ),
+          GoRoute(
+            path: '/drivers/:id/blocking-records',
+            builder: (context, state) => DriverBlockingRecordsScreen(
+              driverId: state.pathParameters['id']!,
             ),
           ),
           GoRoute(

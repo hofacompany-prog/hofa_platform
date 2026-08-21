@@ -11,6 +11,10 @@ const DRIVER_PROFILE_FIELDS = [
   'vehicle_capacity_kg', 'document_urls', 'bank_name', 'bank_bin', 'bank_account_number', 'bank_account_holder'
 ];
 
+// Riêng admin được sửa thêm auto_accept (tài xế tự đổi qua PATCH /drivers/me/auto-accept) — gộp
+// vào đây để admin sửa hộ được khi tài xế nhờ, dùng chung route PATCH /admin/drivers/:id.
+const ADMIN_DRIVER_EDIT_FIELDS = [...DRIVER_PROFILE_FIELDS, 'auto_accept'];
+
 async function requireOwnDriverRow(ctx) {
   requireRole(ctx, ['driver']);
   const driver = await db.queryOne('SELECT * FROM drivers WHERE user_id = $1', [ctx.userId]);
@@ -235,7 +239,8 @@ router.post('/drivers/me/wallet/withdrawals', asyncHandler(async (req, res) => {
 
 /** Kèm cod_balance (Ví trên)/earning_balance (Ví thu nhập) mỗi tài xế trong 1 lần gọi (LEFT JOIN
  * driver_wallet_balances, xem hofa-db/69_driver_wallet_vi_tren.sql) — DriversScreen (admin app)
- * cần cả 2 số, không phải gọi thêm round-trip riêng. */
+ * cần cả 2 số, không phải gọi thêm round-trip riêng. Kèm luôn full_name/phone/avatar_url (JOIN
+ * users, luôn có vì user_id NOT NULL) để danh sách hiện được TÊN tài xế thay vì chỉ loại xe. */
 router.get('/admin/drivers', asyncHandler(async (req, res) => {
   requireRole(req.ctx, ['admin']);
   const { limit, offset } = pagination(req.query);
@@ -245,8 +250,10 @@ router.get('/admin/drivers', asyncHandler(async (req, res) => {
   const where = clauses.length ? `WHERE ${clauses.join(' AND ')}` : '';
   params.push(limit, offset);
   const rows = await db.query(
-    `SELECT d.*, COALESCE(w.cod_balance, 0) AS cod_balance, COALESCE(w.earning_balance, 0) AS earning_balance
+    `SELECT d.*, u.full_name, u.phone, u.avatar_url,
+            COALESCE(w.cod_balance, 0) AS cod_balance, COALESCE(w.earning_balance, 0) AS earning_balance
        FROM drivers d
+       JOIN users u ON u.id = d.user_id
        LEFT JOIN driver_wallet_balances w ON w.driver_id = d.id
       ${where}
       ORDER BY d.created_at DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
@@ -255,14 +262,71 @@ router.get('/admin/drivers', asyncHandler(async (req, res) => {
   res.json({ ok: true, data: rows });
 }));
 
-/** Admin sửa trực tiếp hồ sơ tài xế (CCCD, GPLX, xe, ngân hàng) — không đụng verified_at/
- * rejected_at, dùng khi tài xế nhờ admin chỉnh hộ thay vì tự sửa/nộp lại qua PATCH /drivers/me. */
+/** Chi tiết đầy đủ 1 tài xế cho màn "Chi tiết tài xế" ở admin — mọi cột drivers + thông tin
+ * người dùng (full_name/phone/email/avatar_url/user status) để sửa được TẤT CẢ ở 1 màn, không
+ * phải nhảy qua màn Người dùng riêng. */
+router.get('/admin/drivers/:id', asyncHandler(async (req, res) => {
+  requireRole(req.ctx, ['admin']);
+  const row = await db.queryOne(
+    `SELECT d.*, u.full_name, u.phone, u.email, u.avatar_url, u.status AS user_status,
+            COALESCE(w.cod_balance, 0) AS cod_balance, COALESCE(w.earning_balance, 0) AS earning_balance
+       FROM drivers d
+       JOIN users u ON u.id = d.user_id
+       LEFT JOIN driver_wallet_balances w ON w.driver_id = d.id
+      WHERE d.id = $1`,
+    [req.params.id]
+  );
+  if (!row) throw new ApiError('NOT_FOUND', 'Không tìm thấy tài xế', 404);
+  res.json({ ok: true, data: row });
+}));
+
+/** Admin sửa trực tiếp hồ sơ tài xế (CCCD, GPLX, xe, ngân hàng, auto_accept) — không đụng
+ * verified_at/rejected_at, dùng khi tài xế nhờ admin chỉnh hộ thay vì tự sửa/nộp lại qua
+ * PATCH /drivers/me. Thông tin người dùng (họ tên/SĐT/email/ảnh đại diện) sửa qua
+ * PATCH /admin/users/:id (users.js) — drivers chỉ giữ dữ liệu chuyên môn tài xế. */
 router.patch('/admin/drivers/:id', asyncHandler(async (req, res) => {
   requireRole(req.ctx, ['admin']);
-  const data = pickFields(req.body, DRIVER_PROFILE_FIELDS);
+  const data = pickFields(req.body, ADMIN_DRIVER_EDIT_FIELDS);
   const updated = await db.updateById('drivers', req.params.id, data);
   if (!updated) throw new ApiError('NOT_FOUND', 'Không tìm thấy tài xế', 404);
   res.json({ ok: true, data: updated });
+}));
+
+/**
+ * Xoá hồ sơ tài xế (chỉ dòng drivers, KHÔNG đụng users — tài khoản đăng nhập vẫn còn, admin có
+ * thể đăng ký lại làm tài xế sau hoặc tài khoản đang dùng cho role khác). Các bảng ví/quyết
+ * toán COD (driver_wallet_transactions, driver_cod_settlements...) đều ON DELETE CASCADE (xem hofa-db/62_driver_wallet_ledger.sql,
+ * 47_driver_wallet_deposits_withdrawals.sql) — xoá ngay không cần dọn tay, NHƯNG chủ động chặn
+ * nếu còn chuyến giao CHƯA xong hoặc còn giữ tiền (COD/thu nhập chưa rút) để tránh mất dấu tiền
+ * bạc/đơn đang chạy một cách âm thầm — xem GET .../blocking-records để admin xem chi tiết trước.
+ */
+router.delete('/admin/drivers/:id', asyncHandler(async (req, res) => {
+  requireRole(req.ctx, ['admin']);
+  const driver = await db.queryOne('SELECT id FROM drivers WHERE id = $1', [req.params.id]);
+  if (!driver) throw new ApiError('NOT_FOUND', 'Không tìm thấy tài xế', 404);
+
+  const [activeCount, wallet] = await Promise.all([
+    db.queryOne(
+      `SELECT COUNT(*) AS count FROM deliveries
+        WHERE driver_id = $1 AND status NOT IN ('delivered', 'failed', 'returned')`,
+      [req.params.id]
+    ),
+    db.queryOne('SELECT cod_balance, earning_balance FROM driver_wallet_balances WHERE driver_id = $1', [req.params.id])
+  ]);
+  const blocks = [];
+  if (Number(activeCount.count) > 0) {
+    blocks.push(`đang có ${activeCount.count} chuyến giao chưa hoàn tất — xử lý (gán tài xế khác/huỷ) trước ở màn Chuyến giao hàng`);
+  }
+  const cod = Number(wallet?.cod_balance ?? 0);
+  const earning = Number(wallet?.earning_balance ?? 0);
+  if (cod !== 0) blocks.push(`còn giữ ${cod.toLocaleString('vi-VN')}đ tiền COD chưa nộp — quyết toán trước ở tab Ví tài xế`);
+  if (earning !== 0) blocks.push(`còn ${earning.toLocaleString('vi-VN')}đ thu nhập chưa rút — cho rút hết trước`);
+  if (blocks.length) {
+    throw new ApiError('DRIVER_HAS_DEPENDENTS', `Không thể xoá: tài xế ${blocks.join('; ')}.`, 409);
+  }
+
+  await db.deleteById('drivers', req.params.id);
+  res.json({ ok: true, data: { deleted: true } });
 }));
 
 router.post('/admin/drivers/:id/verify', asyncHandler(async (req, res) => {

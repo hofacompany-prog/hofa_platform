@@ -152,6 +152,17 @@ final driversProvider = FutureProvider.autoDispose<List<Driver>>(
   (ref) => ref.watch(adminRepoProvider).drivers(),
 );
 
+final driverDetailProvider = FutureProvider.autoDispose
+    .family<Driver, String>(
+      (ref, id) => ref.watch(adminRepoProvider).driverDetail(id),
+    );
+
+/// Dữ liệu chặn "Xoá tài xế" — xem driver_blocking_records_screen.dart.
+final driverBlockingRecordsProvider = FutureProvider.autoDispose
+    .family<Map<String, dynamic>, String>(
+      (ref, id) => ref.watch(adminRepoProvider).driverBlockingRecords(id),
+    );
+
 final orderStatusFilterProvider = StateProvider.autoDispose<String?>(
   (ref) => null,
 );

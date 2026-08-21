@@ -676,6 +676,21 @@ class AdminRepository {
             as Map<String, dynamic>,
       );
 
+  /// Chi tiết đầy đủ 1 tài xế (kèm thông tin người dùng) cho driver_detail_screen.dart.
+  Future<Driver> driverDetail(String id) async => Driver.fromJson(
+    await _api.get('/admin/drivers/$id') as Map<String, dynamic>,
+  );
+
+  Future<void> deleteDriver(String id) async {
+    await _api.delete('/admin/drivers/$id');
+  }
+
+  /// Xem trước dữ liệu chặn "Xoá tài xế" (chuyến giao chưa xong, số dư ví) — xem
+  /// driver_blocking_records_screen.dart.
+  Future<Map<String, dynamic>> driverBlockingRecords(String id) async =>
+      await _api.get('/admin/drivers/$id/blocking-records')
+          as Map<String, dynamic>;
+
   // ---- Đơn hàng ----
 
   Future<List<Order>> orders({

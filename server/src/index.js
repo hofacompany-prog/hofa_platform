@@ -32,6 +32,7 @@ app.use('/', require('./routes/wholesale'));
 app.use('/', require('./routes/orders'));
 app.use('/', require('./routes/order-blocking-records'));
 app.use('/', require('./routes/drivers'));
+app.use('/', require('./routes/driver-blocking-records'));
 app.use('/', require('./routes/driver-wallet'));
 app.use('/', require('./routes/driver-finance-settings'));
 app.use('/', require('./routes/deliveries'));

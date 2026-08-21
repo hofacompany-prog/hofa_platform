@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../../models/bank.dart';
 import '../../models/driver.dart';
 import '../../providers/admin_providers.dart';
@@ -472,7 +473,9 @@ class _DriversScreenState extends ConsumerState<DriversScreen> {
                     return Card(
                       elevation: 0,
                       color: theme.colorScheme.surfaceContainerLow,
-                      child: Padding(
+                      child: InkWell(
+                        onTap: () => context.push('/drivers/${d.id}'),
+                        child: Padding(
                         padding: const EdgeInsets.symmetric(
                           horizontal: 16,
                           vertical: 12,
@@ -503,10 +506,17 @@ class _DriversScreenState extends ConsumerState<DriversScreen> {
                                         CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        '${d.vehicleType ?? "Xe"} · ${d.vehiclePlate ?? "—"}',
+                                        d.fullName?.isNotEmpty == true
+                                            ? d.fullName!
+                                            : (d.phone ?? 'Tài xế'),
                                         style: const TextStyle(
                                           fontWeight: FontWeight.w500,
                                         ),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      Text(
+                                        '${d.vehicleType ?? "Xe"} · ${d.vehiclePlate ?? "—"} · ${d.phone ?? "—"}',
                                         maxLines: 2,
                                         overflow: TextOverflow.ellipsis,
                                       ),
@@ -577,6 +587,7 @@ class _DriversScreenState extends ConsumerState<DriversScreen> {
                               ],
                             ),
                           ],
+                        ),
                         ),
                       ),
                     );
