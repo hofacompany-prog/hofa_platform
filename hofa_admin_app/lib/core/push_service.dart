@@ -50,6 +50,18 @@ class PushService {
     }
   }
 
+  /// Xin lại quyền thông báo trình duyệt (nếu trước đó bị từ chối/chưa hỏi) rồi đăng ký token
+  /// — dùng cho nút "Bật thông báo" ở _AdminDevicesTab, CHỈ tác dụng lên chính máy đang mở
+  /// (không thể bật hộ máy khác từ xa vì token phải do đúng trình duyệt đó tạo ra).
+  Future<void> requestAndRegister() async {
+    await FirebaseMessaging.instance.requestPermission(
+      alert: true,
+      badge: true,
+      sound: true,
+    );
+    await _registerTokenIfLoggedIn();
+  }
+
   Future<void> _registerTokenIfLoggedIn() async {
     if (Supabase.instance.client.auth.currentSession == null) return;
     try {

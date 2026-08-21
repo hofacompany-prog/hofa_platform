@@ -7,6 +7,7 @@ import '../models/user_detail.dart';
 import '../models/user_device.dart';
 import '../models/merchant.dart';
 import '../models/merchant_device.dart';
+import '../models/admin_device.dart';
 import '../models/merchant_fee_tier.dart';
 import '../models/platform_fee_settings.dart';
 import '../models/topping.dart';
@@ -122,6 +123,10 @@ final merchantDevicesProvider = FutureProvider.autoDispose
       (ref, merchantId) =>
           ref.watch(adminRepoProvider).merchantDevices(merchantId),
     );
+
+final adminDevicesProvider = FutureProvider.autoDispose<List<AdminDevice>>(
+  (ref) => ref.watch(adminRepoProvider).adminDevices(),
+);
 
 final userRoleFilterProvider = StateProvider.autoDispose<String?>(
   (ref) => null,

@@ -25,6 +25,11 @@ Future<String> _localDeviceId() async {
 class DeviceRepository {
   final _api = ApiClient.instance;
 
+  /// Mã máy của TRÌNH DUYỆT ĐANG MỞ — dùng để đánh dấu "Thiết bị này" trong danh sách thiết bị
+  /// admin (xem notifications_screen.dart _AdminDevicesTab), so khớp với device_id trả về từ
+  /// GET /admin/admin-devices.
+  Future<String> currentDeviceId() => _localDeviceId();
+
   Future<void> registerPushToken(String pushToken) async {
     final deviceId = await _localDeviceId();
     await _api.post(

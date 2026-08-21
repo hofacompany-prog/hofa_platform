@@ -5,6 +5,7 @@ import '../models/user_detail.dart';
 import '../models/user_device.dart';
 import '../models/merchant.dart';
 import '../models/merchant_device.dart';
+import '../models/admin_device.dart';
 import '../models/merchant_fee_tier.dart';
 import '../models/platform_fee_settings.dart';
 import '../models/branch_hours.dart';
@@ -291,6 +292,24 @@ class AdminRepository {
 
   Future<void> deleteMerchantDevice(String merchantId, String deviceId) async {
     await _api.delete('/merchants/$merchantId/devices/$deviceId');
+  }
+
+  // ---- Thiết bị đăng nhập admin (mọi tài khoản role=admin) ----
+
+  Future<List<AdminDevice>> adminDevices() async {
+    final list = await _api.get('/admin/admin-devices') as List;
+    return list
+        .map((e) => AdminDevice.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// "Tắt" — xoá push_token, ngừng gửi thông báo tới máy đó nhưng vẫn giữ lịch sử đăng nhập.
+  Future<void> disableAdminDevice(String deviceId) async {
+    await _api.patch('/admin/admin-devices/$deviceId');
+  }
+
+  Future<void> deleteAdminDevice(String deviceId) async {
+    await _api.delete('/admin/admin-devices/$deviceId');
   }
 
   Future<Branch> createBranch(

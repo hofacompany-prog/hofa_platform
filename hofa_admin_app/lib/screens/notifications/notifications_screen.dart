@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/format.dart';
+import '../../core/push_service.dart';
+import '../../models/admin_device.dart';
 import '../../models/admin_notification.dart';
 import '../../models/merchant.dart';
 import '../../models/notification_inbox_item.dart';
 import '../../models/user_profile.dart';
 import '../../providers/admin_providers.dart';
+import '../../repositories/device_repository.dart';
 import '../../widgets/stat_card.dart';
 import '../../core/responsive.dart';
 
@@ -45,7 +48,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     _loadAllAudienceCount();
   }
 
@@ -345,12 +348,17 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
           tabs: const [
             Tab(text: 'Gửi thông báo'),
             Tab(text: 'Hộp thư theo cửa hàng'),
+            Tab(text: 'Thiết bị admin'),
           ],
         ),
       ),
       body: TabBarView(
         controller: _tabController,
-        children: [_buildSendTab(theme, historyAsync), const _InboxTab()],
+        children: [
+          _buildSendTab(theme, historyAsync),
+          const _InboxTab(),
+          const _AdminDevicesTab(),
+        ],
       ),
     );
   }
@@ -1837,6 +1845,342 @@ class _TtlSettingsCardState extends ConsumerState<_TtlSettingsCard> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Thiết bị đã đăng nhập của MỌI tài khoản admin — tự soát máy lạ, tắt/xoá, và tự bật lại
+/// thông báo cho đúng máy đang mở (không bật hộ được máy khác, xem PushService.requestAndRegister).
+class _AdminDevicesTab extends ConsumerStatefulWidget {
+  const _AdminDevicesTab();
+
+  @override
+  ConsumerState<_AdminDevicesTab> createState() => _AdminDevicesTabState();
+}
+
+class _AdminDevicesTabState extends ConsumerState<_AdminDevicesTab> {
+  String? _currentDeviceId;
+  bool _busyEnabling = false;
+  final Set<String> _busyIds = {};
+
+  @override
+  void initState() {
+    super.initState();
+    DeviceRepository().currentDeviceId().then((id) {
+      if (mounted) setState(() => _currentDeviceId = id);
+    });
+  }
+
+  Future<void> _enableThisDevice() async {
+    setState(() => _busyEnabling = true);
+    try {
+      await PushService.instance.requestAndRegister();
+      ref.invalidate(adminDevicesProvider);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _busyEnabling = false);
+    }
+  }
+
+  Future<void> _disable(AdminDevice d) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Tắt thiết bị này?'),
+        content: Text(
+          'Ngừng gửi thông báo tới '
+          '"${d.deviceName?.isNotEmpty == true ? d.deviceName : 'Thiết bị không tên'}" '
+          'của ${d.userFullName}. Thiết bị vẫn đăng nhập bình thường, chỉ không nhận thông báo nữa.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Huỷ'),
+          ),
+          FilledButton.tonal(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Tắt'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    setState(() => _busyIds.add(d.id));
+    try {
+      await ref.read(adminRepoProvider).disableAdminDevice(d.id);
+      ref.invalidate(adminDevicesProvider);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _busyIds.remove(d.id));
+    }
+  }
+
+  Future<void> _delete(AdminDevice d) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Xoá thiết bị này?'),
+        content: Text(
+          'Xoá hẳn "${d.deviceName?.isNotEmpty == true ? d.deviceName : 'Thiết bị không tên'}" '
+          'của ${d.userFullName} — thiết bị đó sẽ bị đăng xuất khi thực hiện thao tác kế tiếp.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Huỷ'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Xoá'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    setState(() => _busyIds.add(d.id));
+    try {
+      await ref.read(adminRepoProvider).deleteAdminDevice(d.id);
+      ref.invalidate(adminDevicesProvider);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _busyIds.remove(d.id));
+    }
+  }
+
+  IconData _platformIcon(String? platform) {
+    switch (platform) {
+      case 'ios':
+        return Icons.phone_iphone_outlined;
+      case 'android':
+        return Icons.phone_android_outlined;
+      default:
+        return Icons.computer_outlined;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final devicesAsync = ref.watch(adminDevicesProvider);
+
+    return ListView(
+      padding: const EdgeInsets.all(24),
+      children: [
+        Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 720),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Mọi thiết bị đã đăng nhập bằng tài khoản admin (của bạn hoặc admin khác) — '
+                  'soát máy lạ, tắt hoặc xoá nếu cần. Chỉ đúng máy đang mở mới tự "Bật thông '
+                  'báo" lại được, không bật hộ máy khác từ xa.',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.outline,
+                  ),
+                ),
+                const SizedBox(height: 20),
+                devicesAsync.when(
+                  loading: () => const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 24),
+                    child: Center(child: CircularProgressIndicator()),
+                  ),
+                  error: (e, _) => Text('Lỗi: $e'),
+                  data: (devices) {
+                    if (devices.isEmpty) {
+                      return Text(
+                        'Chưa có thiết bị admin nào đăng nhập.',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.outline,
+                        ),
+                      );
+                    }
+                    return Column(
+                      children: [
+                        ...devices.map((d) {
+                          final isThisDevice =
+                              _currentDeviceId != null &&
+                              d.deviceId == _currentDeviceId;
+                          final busy = _busyIds.contains(d.id);
+                          return Container(
+                            margin: const EdgeInsets.only(bottom: 8),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 14,
+                              vertical: 10,
+                            ),
+                            decoration: BoxDecoration(
+                              color: isThisDevice
+                                  ? theme.colorScheme.primaryContainer
+                                        .withValues(alpha: 0.3)
+                                  : theme.colorScheme.surface,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: isThisDevice
+                                    ? theme.colorScheme.primary
+                                    : theme.colorScheme.outlineVariant,
+                              ),
+                            ),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Icon(
+                                  _platformIcon(d.platform),
+                                  color: theme.colorScheme.outline,
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              d.deviceName?.isNotEmpty == true
+                                                  ? d.deviceName!
+                                                  : 'Thiết bị không tên',
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                          if (isThisDevice)
+                                            Chip(
+                                              visualDensity:
+                                                  VisualDensity.compact,
+                                              materialTapTargetSize:
+                                                  MaterialTapTargetSize
+                                                      .shrinkWrap,
+                                              label: const Text('Thiết bị này'),
+                                              backgroundColor:
+                                                  theme.colorScheme.primary
+                                                      .withValues(alpha: 0.15),
+                                              labelStyle: TextStyle(
+                                                color:
+                                                    theme.colorScheme.primary,
+                                              ),
+                                            ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        '${d.userFullName} · '
+                                        '${adminDevicePlatformLabels[d.platform] ?? d.platform ?? 'Không rõ'}',
+                                        style: theme.textTheme.bodySmall,
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        d.lastActiveAt != null
+                                            ? 'Hoạt động lần cuối: ${formatDateTime(d.lastActiveAt!)}'
+                                            : 'Chưa có hoạt động',
+                                        style: theme.textTheme.bodySmall
+                                            ?.copyWith(
+                                              color:
+                                                  theme.colorScheme.outline,
+                                            ),
+                                      ),
+                                      Text(
+                                        d.hasPushToken
+                                            ? 'Thông báo: đang bật'
+                                            : 'Thông báo: đã tắt',
+                                        style: theme.textTheme.bodySmall
+                                            ?.copyWith(
+                                              color: d.hasPushToken
+                                                  ? theme.colorScheme.primary
+                                                  : theme
+                                                        .colorScheme
+                                                        .secondary,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                if (!d.hasPushToken && isThisDevice)
+                                  TextButton.icon(
+                                    onPressed: _busyEnabling
+                                        ? null
+                                        : _enableThisDevice,
+                                    icon: _busyEnabling
+                                        ? const SizedBox(
+                                            height: 14,
+                                            width: 14,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                            ),
+                                          )
+                                        : const Icon(
+                                            Icons.notifications_active_outlined,
+                                            size: 16,
+                                          ),
+                                    label: const Text('Bật thông báo'),
+                                  ),
+                                if (d.hasPushToken)
+                                  IconButton(
+                                    tooltip: 'Tắt thông báo',
+                                    visualDensity: VisualDensity.compact,
+                                    icon: busy
+                                        ? const SizedBox(
+                                            height: 16,
+                                            width: 16,
+                                            child: CircularProgressIndicator(
+                                              strokeWidth: 2,
+                                            ),
+                                          )
+                                        : const Icon(
+                                            Icons.notifications_off_outlined,
+                                            size: 18,
+                                          ),
+                                    onPressed: busy ? null : () => _disable(d),
+                                  ),
+                                IconButton(
+                                  tooltip: 'Xoá thiết bị',
+                                  visualDensity: VisualDensity.compact,
+                                  icon: const Icon(
+                                    Icons.delete_outline,
+                                    size: 18,
+                                  ),
+                                  onPressed: busy ? null : () => _delete(d),
+                                ),
+                              ],
+                            ),
+                          );
+                        }),
+                        const SizedBox(height: 16),
+                        StatCard(
+                          label: 'Tổng thiết bị admin',
+                          value: '${devices.length}',
+                          icon: Icons.devices_other_outlined,
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
