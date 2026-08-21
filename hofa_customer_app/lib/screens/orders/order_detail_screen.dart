@@ -495,7 +495,13 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                       onPressed: _busy
                                           ? null
                                           : () => _switchToInstant(o),
-                                      child: const Text('Giao ngay'),
+                                      child: const Text(
+                                        'Giao ngay',
+                                        style: TextStyle(
+                                          color: Colors.red,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
                                     ),
                                   ],
                                 ),
