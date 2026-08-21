@@ -514,9 +514,32 @@ router.patch('/orders/:id/scheduled-for', asyncHandler(async (req, res) => {
     }
   }
 
-  const updated = await db.updateById('orders', req.params.id, {
-    scheduled_for: scheduledFor ? scheduledFor.toISOString() : null
-  });
+  const wasSleeping = order.scheduled_for && !order.scheduled_activated_at;
+  const patch = { scheduled_for: scheduledFor ? scheduledFor.toISOString() : null };
+
+  // Chuyển về giao ngay (scheduledFor null) — chốt lại confirm_sweep_deadline MỚI TINH y hệt 1
+  // đơn tức thời vừa đặt (cùng cách tính với orderOffer.sweepDueScheduledInstant), không để dính
+  // deadline cũ (đã chốt lúc tạo đơn hoặc lúc "nổ" theo giờ hẹn trước đó — nếu không đổi, thanh
+  // trượt xác nhận phía cửa hàng sẽ chạy sai, không phản ánh đúng "vừa chuyển sang giao ngay").
+  // Chỉ áp dụng khi đơn đã 'placed' (đã lộ cho cửa hàng) — 'pending_payment' chưa lộ, 'confirmed'
+  // cửa hàng đã xác nhận nên thanh trượt không còn ý nghĩa.
+  if (!scheduledFor && order.status === 'placed') {
+    const branch = await db.queryOne('SELECT auto_accept_orders FROM branches WHERE id = $1', [order.branch_id]);
+    const settings = await db.queryOne(
+      'SELECT confirm_sweep_seconds, manual_confirm_sweep_seconds FROM auto_accept_settings ORDER BY updated_at DESC LIMIT 1'
+    );
+    const seconds = (branch?.auto_accept_orders ? settings?.confirm_sweep_seconds : settings?.manual_confirm_sweep_seconds) ?? 10;
+    patch.scheduled_activated_at = new Date().toISOString();
+    patch.confirm_sweep_deadline = new Date(Date.now() + seconds * 1000).toISOString();
+  }
+
+  const updated = await db.updateById('orders', req.params.id, patch);
+
+  if (!scheduledFor && wasSleeping && order.status === 'placed') {
+    orderOffer.offerOrderToMerchant(order.id).catch((err) => {
+      console.error('[orderOffer] Không báo được cửa hàng cho đơn chuyển giao ngay', order.id, err.message);
+    });
+  }
 
   if (order.status !== 'pending_payment') {
     push.resolveMerchantUserIds([order.merchant_id]).then((userIds) =>
