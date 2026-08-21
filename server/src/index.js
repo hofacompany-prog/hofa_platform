@@ -122,3 +122,10 @@ setInterval(() => {
 setInterval(() => {
   dispatch.sweepDriverSearch().catch((e) => console.error('[sweep-driver-search]', e));
 }, 15_000);
+
+// Nhắc lại cửa hàng mỗi 20s cho tới khi xác nhận đơn (status rời khỏi 'placed') — gửi LẠI push
+// qua resendPushToUser, KHÔNG ghi thêm dòng notifications mới (không nhân bản hộp thư trong
+// app), chỉ lặp lại chuông/rung nhắc — xem orderOffer.remindUnconfirmedOrders.
+setInterval(() => {
+  orderOffer.remindUnconfirmedOrders().catch((e) => console.error('[remind-unconfirmed-orders]', e));
+}, 20_000);

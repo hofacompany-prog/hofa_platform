@@ -55,7 +55,14 @@ async function saveNotifications(userIds, { title, body, data = {}, category = '
  * theo từng user (sendPushToUser) lẫn gửi hàng loạt (sendBroadcastToCustomers).
  * Không throw — lỗi gửi push không bao giờ được làm hỏng luồng gọi nó.
  */
-async function sendToTokens(tokens, { title, body, data = {}, badge = false }) {
+/**
+ * [tag] (vd 'order-offer-<id>') để lần gửi SAU với CÙNG tag THAY THẾ banner cũ trên thiết bị
+ * thay vì xếp chồng thêm — dùng cho push nhắc lại nhiều lần cùng 1 sự kiện (xem
+ * resendPushToUser/orderOffer.remindUnconfirmedOrders). renotify:true bắt buộc kèm tag bên
+ * webpush, nếu không trình duyệt coi như "cùng thông báo, đã thấy rồi" và ÂM THẦM thay thế,
+ * không rung/kêu lại — mất tác dụng nhắc.
+ */
+async function sendToTokens(tokens, { title, body, data = {}, badge = false, tag = null }) {
   const firebaseApp = getApp();
   if (!firebaseApp || !tokens.length) return { sent: 0 };
 
@@ -73,7 +80,7 @@ async function sendToTokens(tokens, { title, body, data = {}, badge = false }) {
         tokens: batch,
         notification: { title, body },
         data: stringData,
-        android: { priority: 'high' },
+        android: { priority: 'high', ...(tag ? { notification: { tag } } : {}) },
         apns: { payload: { aps: { sound: 'default' } } },
         // Payload có cả notification lẫn data → firebase-messaging-compat.js phía web TỰ hiện
         // thông báo (đúng field notification này), independent với onBackgroundMessage —
@@ -81,7 +88,12 @@ async function sendToTokens(tokens, { title, body, data = {}, badge = false }) {
         // lần nữa nếu không sẽ hiện lặp 2 lần (bug đã xác nhận qua log server chỉ gửi 1 lần
         // nhưng máy hiện 2 banner). webpush.notification.icon để browser dùng đúng icon
         // thương hiệu thay vì icon mặc định khi Firebase tự hiển thị.
-        webpush: { notification: { icon: '/icons/Icon-192.png' } }
+        webpush: {
+          notification: {
+            icon: '/icons/Icon-192.png',
+            ...(tag ? { tag, renotify: true } : {})
+          }
+        }
       });
       sent += result.successCount;
     } catch (err) {
@@ -101,7 +113,7 @@ async function sendToTokens(tokens, { title, body, data = {}, badge = false }) {
  * với 1 payload chung) nên nhét thẳng được id dòng notifications vừa tạo vào data —
  * notification_id — để app đánh dấu đã đọc ngay khi bấm push, không cần thêm API tra cứu.
  */
-async function sendPushToUser(userId, { title, body, data = {}, badge = true, category = 'order' }) {
+async function sendPushToUser(userId, { title, body, data = {}, badge = true, category = 'order', tag = null }) {
   const devices = await db.query(
     'SELECT DISTINCT push_token FROM user_devices WHERE user_id = $1 AND push_token IS NOT NULL',
     [userId]
@@ -109,7 +121,23 @@ async function sendPushToUser(userId, { title, body, data = {}, badge = true, ca
   const tokens = devices.map((d) => d.push_token).filter(Boolean);
   const [saved] = await saveNotifications([userId], { title, body, data, category });
   const fcmData = { ...data, category, ...(saved ? { notification_id: saved.id } : {}) };
-  return sendToTokens(tokens, { title, body, data: fcmData, badge });
+  return sendToTokens(tokens, { title, body, data: fcmData, badge, tag });
+}
+
+/**
+ * Gửi LẠI push cho 1 user — KHÔNG ghi thêm dòng notifications mới (khác sendPushToUser), chỉ để
+ * "nhắc lại" cùng 1 thông báo đã có sẵn trong hộp thư (vd đơn hàng mới chưa xác nhận, xem
+ * orderOffer.remindUnconfirmedOrders) — tránh nhân bản hộp thư trong app dù push tới máy nhiều
+ * lần. [tag] nên trùng với lần gửi gốc (sendPushToUser) để thiết bị thay banner cũ, không xếp
+ * chồng — xem sendToTokens.
+ */
+async function resendPushToUser(userId, { title, body, data = {}, badge = true, category = 'order', tag = null }) {
+  const devices = await db.query(
+    'SELECT DISTINCT push_token FROM user_devices WHERE user_id = $1 AND push_token IS NOT NULL',
+    [userId]
+  );
+  const tokens = devices.map((d) => d.push_token).filter(Boolean);
+  return sendToTokens(tokens, { title, body, data: { ...data, category }, badge, tag });
 }
 
 /**
@@ -333,6 +361,7 @@ async function sweepOldNotifications() {
 
 module.exports = {
   sendPushToUser,
+  resendPushToUser,
   notifyCustomerOrderStatus,
   notifyCustomerRepickDriver,
   notifyDriverRejected,

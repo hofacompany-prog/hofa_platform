@@ -26,8 +26,43 @@ async function offerOrderToMerchant(orderId) {
   await Promise.all(userIds.map((uid) => push.sendPushToUser(uid, {
     title: 'Đơn hàng mới!',
     body: `${order.order_code} · ${order.total_amount.toLocaleString('vi-VN')}đ — trượt để nhận đơn`,
-    data: { type: 'order_offer', order_id: orderId }
+    data: { type: 'order_offer', order_id: orderId },
+    tag: `order-offer-${orderId}`
   })));
+}
+
+/** Nhắc LẠI cho cửa hàng mỗi ORDER_REMIND_INTERVAL_MS (xem index.js) các đơn CHƯA XÁC NHẬN
+ * (status='placed', đã lộ cho cửa hàng — loại đơn mua hộ vì hệ thống tự xử lý không cần xác
+ * nhận, loại đơn giao ngay đặt trước còn "ngủ" chưa tới lúc báo) — tới khi cửa hàng bấm xác
+ * nhận (đơn rời khỏi 'placed') thì tự hết bị quét trúng, không cần cờ đánh dấu riêng. Gửi LẠI
+ * qua resendPushToUser (không ghi thêm dòng notifications mới, tránh nhân bản hộp thư trong
+ * app) — cùng tag với offerOrderToMerchant để thiết bị thay banner cũ, không xếp chồng, chỉ lặp
+ * lại chuông/rung nhắc cửa hàng chứ không tạo thêm thông báo nào mới. */
+async function remindUnconfirmedOrders() {
+  const rows = await db.query(
+    `SELECT o.id, o.merchant_id, o.order_code, o.total_amount
+       FROM orders o
+       JOIN merchants m ON m.id = o.merchant_id
+      WHERE o.status = 'placed'
+        AND m.merchant_type != 'buy_on_behalf'
+        AND NOT (o.sales_model = 'instant' AND o.scheduled_for IS NOT NULL AND o.scheduled_activated_at IS NULL)`
+  );
+  if (!rows.length) return;
+  const merchantIds = [...new Set(rows.map((r) => r.merchant_id))];
+  const userIdsByMerchant = Object.fromEntries(
+    await Promise.all(merchantIds.map(async (mid) => [mid, await getMerchantUserIds(mid)]))
+  );
+  for (const row of rows) {
+    const userIds = userIdsByMerchant[row.merchant_id] || [];
+    await Promise.all(userIds.map((uid) => push.resendPushToUser(uid, {
+      title: 'Đơn hàng mới!',
+      body: `${row.order_code} · ${Number(row.total_amount).toLocaleString('vi-VN')}đ — trượt để nhận đơn`,
+      data: { type: 'order_offer', order_id: row.id },
+      tag: `order-offer-${row.id}`
+    }).catch((err) => {
+      console.error('[remind-unconfirmed-orders] Không gửi lại được', row.id, err.message);
+    })));
+  }
 }
 
 /** Quét định kỳ (xem index.js) các đơn đặt trước ĐÃ được cửa hàng xác nhận sớm (status=
@@ -148,5 +183,6 @@ module.exports = {
   dispatchBuyOnBehalfOrder,
   dispatchToSelectedDriver,
   sweepDuePreorders,
-  sweepDueScheduledInstant
+  sweepDueScheduledInstant,
+  remindUnconfirmedOrders
 };
