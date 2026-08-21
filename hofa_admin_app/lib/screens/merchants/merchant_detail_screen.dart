@@ -9,6 +9,7 @@ import '../../widgets/full_screen_gallery_viewer.dart';
 import '../../widgets/image_upload_field.dart';
 import '../../widgets/multi_image_upload_field.dart';
 import '../../widgets/merchant_classification_picker.dart';
+import '../../widgets/merchant_owner_dialogs.dart';
 import 'merchant_devices_card.dart';
 import 'merchant_fee_tiers_card.dart';
 import 'merchant_topping_groups_card.dart';
@@ -54,6 +55,38 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
     } finally {
       if (mounted) setState(() => _busy = false);
     }
+  }
+
+  /// Đổi chủ thật (chọn user có sẵn hoặc tạo tài khoản mới) — dùng chung với màn "Dữ liệu chặn
+  /// xoá người dùng" (user_blocking_records_screen.dart), xem widgets/merchant_owner_dialogs.dart.
+  Future<void> _changeOwner(Merchant m) async {
+    setState(() => _busy = true);
+    final changed = await changeMerchantOwnerFlow(
+      context,
+      ref,
+      merchantId: m.id,
+      merchantName: m.name,
+    );
+    if (changed) {
+      ref.invalidate(merchantDetailProvider(widget.merchantId));
+      ref.invalidate(merchantsProvider);
+    }
+    if (mounted) setState(() => _busy = false);
+  }
+
+  Future<void> _transferOwnerToAdmin(Merchant m) async {
+    setState(() => _busy = true);
+    final changed = await transferMerchantToAdminOwnerFlow(
+      context,
+      ref,
+      merchantId: m.id,
+      merchantName: m.name,
+    );
+    if (changed) {
+      ref.invalidate(merchantDetailProvider(widget.merchantId));
+      ref.invalidate(merchantsProvider);
+    }
+    if (mounted) setState(() => _busy = false);
   }
 
   Future<void> _editInfo(Merchant m) async {
@@ -1122,6 +1155,25 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
                               _row('Họ tên', m.owner!.fullName),
                               _row('SĐT', m.owner!.phone),
                               _row('Email', m.owner!.email ?? '—'),
+                              const SizedBox(height: 12),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: [
+                                  OutlinedButton(
+                                    onPressed: _busy
+                                        ? null
+                                        : () => _changeOwner(m),
+                                    child: const Text('Đổi chủ mới'),
+                                  ),
+                                  OutlinedButton(
+                                    onPressed: _busy
+                                        ? null
+                                        : () => _transferOwnerToAdmin(m),
+                                    child: const Text('Chuyển cho Admin'),
+                                  ),
+                                ],
+                              ),
                             ],
                           ),
                         ),
