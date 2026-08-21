@@ -183,6 +183,11 @@ router.post('/addresses', asyncHandler(async (req, res) => {
   requireFields(req.body, ['recipient_name', 'recipient_phone', 'line1', 'province']);
   const data = pickFields(req.body, ADDRESS_FIELDS);
   data.user_id = req.ctx.userId;
+  // idx_addresses_one_default (01_schema.sql) chỉ cho phép ĐÚNG 1 dòng is_default=true mỗi
+  // user — gỡ mặc định cũ TRƯỚC khi insert dòng mới is_default=true, tránh vi phạm unique index.
+  if (data.is_default === true) {
+    await db.query('UPDATE addresses SET is_default = false WHERE user_id = $1 AND is_default', [req.ctx.userId]);
+  }
   const created = await db.insertRow('addresses', data);
   res.status(201).json({ ok: true, data: created });
 }));
@@ -191,6 +196,11 @@ router.patch('/addresses/:id', asyncHandler(async (req, res) => {
   requireProfile(req.ctx);
   await requireOwnRow('addresses', req.params.id, req.ctx.userId, 'user_id');
   const data = pickFields(req.body, ADDRESS_FIELDS);
+  // Cùng lý do với POST /addresses ở trên — gỡ mặc định cũ (của DÒNG KHÁC) trước khi set dòng
+  // này thành mặc định, tránh vi phạm idx_addresses_one_default.
+  if (data.is_default === true) {
+    await db.query('UPDATE addresses SET is_default = false WHERE user_id = $1 AND is_default AND id != $2', [req.ctx.userId, req.params.id]);
+  }
   const updated = await db.updateById('addresses', req.params.id, data);
   res.json({ ok: true, data: updated });
 }));

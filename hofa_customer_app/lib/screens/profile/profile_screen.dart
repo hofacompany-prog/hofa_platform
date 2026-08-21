@@ -7,6 +7,7 @@ import '../../models/address.dart';
 import '../../providers/app_providers.dart';
 import '../../providers/auth_providers.dart';
 import '../address/address_picker_screen.dart';
+import '../../widgets/address_map_flow.dart';
 import '../../widgets/app_version_text.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
@@ -100,6 +101,25 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     }
   }
 
+  /// Thêm địa chỉ MỚI — chọn vị trí trên bản đồ trước, điền tên/SĐT/mô tả sau (xem
+  /// widgets/address_map_flow.dart). Sửa địa chỉ có sẵn vẫn dùng form cũ (_addOrEditAddress
+  /// bên dưới), vì lúc đó đã có toạ độ rồi, không cần bắt chọn lại bản đồ ngay từ đầu.
+  Future<void> _addAddress() async {
+    setState(() => _busy = true);
+    try {
+      await addAddressViaMap(context, ref);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// Sửa địa chỉ có sẵn (form nhập tay + nút "Chọn vị trí trên bản đồ" tuỳ chọn để đổi toạ độ).
   Future<void> _addOrEditAddress({Address? existing}) async {
     final formKey = GlobalKey<FormState>();
     final nameCtrl = TextEditingController(text: existing?.recipientName);
@@ -409,7 +429,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             children: [
               Text('Địa chỉ đã lưu', style: theme.textTheme.titleSmall),
               TextButton.icon(
-                onPressed: _busy ? null : () => _addOrEditAddress(),
+                onPressed: _busy ? null : _addAddress,
                 icon: const Icon(Icons.add),
                 label: const Text('Thêm'),
               ),

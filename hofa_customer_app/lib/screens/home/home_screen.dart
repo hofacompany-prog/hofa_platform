@@ -3,14 +3,24 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/format.dart';
+import '../../models/address.dart';
 import '../../models/product.dart';
 import '../../providers/app_providers.dart';
+import '../../widgets/address_map_flow.dart';
 import '../../widgets/favorites_icon.dart';
 import '../../widgets/notification_bell.dart';
 import '../../widgets/category_grid.dart';
 import '../../widgets/merchant_card.dart';
 import '../../widgets/network_image_box.dart';
 import '../../widgets/product_card.dart';
+
+/// Địa chỉ hiện lên thanh "Giao ngay" ở đầu trang chủ — ưu tiên địa chỉ mặc định, không có thì
+/// lấy địa chỉ đầu tiên (cùng quy tắc chọn địa chỉ tự động lúc vào checkout).
+Address? _pickDisplayAddress(List<Address>? addresses) {
+  if (addresses == null || addresses.isEmpty) return null;
+  final defaults = addresses.where((a) => a.isDefault);
+  return defaults.isNotEmpty ? defaults.first : addresses.first;
+}
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -114,15 +124,48 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final isSearching = searchQuery.isNotEmpty;
     final showSuggestions = _suggestions.isNotEmpty || _suggesting;
 
+    final displayAddress = _pickDisplayAddress(
+      ref.watch(addressesProvider).valueOrNull,
+    );
+
     return Scaffold(
       appBar: AppBar(
-        title: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Image.asset('assets/images/logo.png', height: 28),
-            const SizedBox(width: 8),
-            const Text('HOFA', style: TextStyle(fontWeight: FontWeight.bold)),
-          ],
+        title: InkWell(
+          borderRadius: BorderRadius.circular(8),
+          onTap: () => addAddressViaMap(context, ref),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Giao ngay',
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: Theme.of(context).colorScheme.outline,
+                      ),
+                    ),
+                    Icon(
+                      Icons.keyboard_arrow_down,
+                      size: 16,
+                      color: Theme.of(context).colorScheme.outline,
+                    ),
+                  ],
+                ),
+                Text(
+                  displayAddress?.fullLine ?? 'Vị trí hiện tại',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
         centerTitle: false,
         actions: const [FavoritesIcon(), NotificationBell()],
