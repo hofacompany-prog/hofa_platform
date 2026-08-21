@@ -995,11 +995,31 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen>
                     ? () => setState(() => _prepMinutes = _prepMinutes! - 1)
                     : null,
               ),
+              // Hiện ĐÚNG số phút sẽ gửi lúc trượt xác nhận (_prepMinutes, xem _confirmPrepTime) —
+              // KHÔNG dùng RollingCountdown đếm từ o.createdAt như trước (đã gây hiểu lầm: số
+              // hiện trên màn cứ tự giảm dần theo thời gian chờ xác nhận, nhưng lúc trượt xác
+              // nhận lại gửi _prepMinutes CHƯA ĐỔI — nhìn như "tự nhảy ngược lên" giá trị gốc).
+              // Đồng hồ đếm ngược THẬT chỉ bắt đầu SAU khi xác nhận, neo theo confirmedAt (xem
+              // _buildPrepPhaseBottom + server orders.js tính trễ cũng neo theo confirmed_at).
               SizedBox(
                 width: 160,
-                child: RollingCountdown(
-                  deadline: o.createdAt.add(Duration(minutes: _prepMinutes!)),
-                  alignment: CrossAxisAlignment.center,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '$_prepMinutes phút',
+                      style: theme.textTheme.headlineMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Thời gian chuẩn bị',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.outline,
+                      ),
+                    ),
+                  ],
                 ),
               ),
               _StepperButton(
