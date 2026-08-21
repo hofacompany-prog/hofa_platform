@@ -121,11 +121,10 @@ router.post('/admin/notifications', asyncHandler(async (req, res) => {
     ? await push.resolveMerchantUserIds(merchantIds)
     : userIds;
 
-  const { sent, total } = isSpecific
-    ? await push.sendToUserIds(resolvedUserIds, { title, body, badge: showBadge, screen: targetScreen, category })
-    : await push.sendBroadcastToRoles(AUDIENCE_ROLES[audienceType], { title, body, badge: showBadge, screen: targetScreen, category });
-
-  const saved = await db.insertRow('admin_notifications', {
+  // Tạo dòng log TRƯỚC khi gửi (sent_count/total_count tạm 0) — cần sẵn id để truyền vào
+  // saveNotifications làm source_notification_id (xem hofa-db/93_notifications_source_link.sql),
+  // cho phép DELETE /admin/notifications/:id sau này CASCADE xoá luôn hộp thư mọi người nhận.
+  let saved = await db.insertRow('admin_notifications', {
     title,
     body,
     audience_type: audienceType,
@@ -133,10 +132,16 @@ router.post('/admin/notifications', asyncHandler(async (req, res) => {
     show_badge: showBadge,
     target_screen: targetScreen,
     category,
-    sent_count: sent,
-    total_count: total,
+    sent_count: 0,
+    total_count: 0,
     created_by: req.ctx.userId
   });
+
+  const { sent, total } = isSpecific
+    ? await push.sendToUserIds(resolvedUserIds, { title, body, badge: showBadge, screen: targetScreen, category, sourceNotificationId: saved.id })
+    : await push.sendBroadcastToRoles(AUDIENCE_ROLES[audienceType], { title, body, badge: showBadge, screen: targetScreen, category, sourceNotificationId: saved.id });
+
+  saved = await db.updateById('admin_notifications', saved.id, { sent_count: sent, total_count: total });
 
   if (isSpecific && resolvedUserIds.length) {
     await db.insertRows('admin_notification_recipients', resolvedUserIds.map((userId) => ({
@@ -152,6 +157,28 @@ router.post('/admin/notifications', asyncHandler(async (req, res) => {
   }
 
   res.status(201).json({ ok: true, data: saved });
+}));
+
+/** Xoá TOÀN BỘ lịch sử đợt gửi — admin_notification_recipients/target_merchants ON DELETE
+ * CASCADE dọn theo, và mọi dòng hộp thư người nhận có source_notification_id trỏ về các đợt
+ * này cũng tự mất theo (xem hofa-db/93_notifications_source_link.sql). Bắt buộc ?confirm=all
+ * để tránh gọi nhầm xoá sạch toàn bộ lịch sử chỉ vì thiếu tham số. */
+router.delete('/admin/notifications', asyncHandler(async (req, res) => {
+  requireRole(req.ctx, ['admin']);
+  if (req.query.confirm !== 'all') {
+    throw new ApiError('BAD_REQUEST', 'Cần ?confirm=all để xoá toàn bộ lịch sử gửi', 400);
+  }
+  const deleted = await db.query('DELETE FROM admin_notifications RETURNING id');
+  res.json({ ok: true, data: { deleted: deleted.length } });
+}));
+
+/** Xoá 1 đợt gửi — CASCADE xoá luôn mọi dòng hộp thư người nhận tương ứng (xem
+ * hofa-db/93_notifications_source_link.sql), không chỉ mất dòng log. */
+router.delete('/admin/notifications/:id', asyncHandler(async (req, res) => {
+  requireRole(req.ctx, ['admin']);
+  const deleted = await db.deleteById('admin_notifications', req.params.id);
+  if (!deleted) throw new ApiError('NOT_FOUND', 'Không tìm thấy thông báo', 404);
+  res.json({ ok: true, data: { deleted: true } });
 }));
 
 /** Hộp thư CỦA TỪNG NGƯỜI NHẬN (bảng notifications) lọc theo 1 phạm vi đối tượng — khác hẳn

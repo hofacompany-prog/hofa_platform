@@ -1379,6 +1379,17 @@ class AdminRepository {
         .toList();
   }
 
+  /// Xoá 1 đợt gửi khỏi "Lịch sử đã gửi" — server CASCADE xoá luôn thông báo này khỏi hộp thư
+  /// của MỌI người đã nhận (source_notification_id, xem hofa-db/93_notifications_source_link.sql).
+  Future<void> deleteNotification(String id) async {
+    await _api.delete('/admin/notifications/$id');
+  }
+
+  /// Xoá TOÀN BỘ lịch sử đã gửi (kèm hộp thư người nhận tương ứng) — dùng cẩn thận.
+  Future<void> deleteAllNotifications() async {
+    await _api.delete('/admin/notifications', query: {'confirm': 'all'});
+  }
+
   Future<AdminNotification> sendNotification({
     required String title,
     required String body,

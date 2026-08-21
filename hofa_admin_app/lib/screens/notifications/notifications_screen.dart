@@ -255,6 +255,81 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
     ).showSnackBar(SnackBar(content: Text(message)));
   }
 
+  final Set<String> _deletingIds = {};
+  bool _deletingAll = false;
+
+  /// Xoá 1 dòng ở "Lịch sử đã gửi" — server CASCADE xoá luôn khỏi hộp thư của MỌI người đã
+  /// nhận đợt này (source_notification_id), không chỉ mất dòng log.
+  Future<void> _deleteNotification(AdminNotification n) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Xoá thông báo này?'),
+        content: const Text(
+          'Thông báo cũng sẽ bị xoá khỏi hộp thư của mọi người đã nhận (trên máy của họ), '
+          'không chỉ mất dòng lịch sử này. Không thể hoàn tác.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Huỷ'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Xoá'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+
+    setState(() => _deletingIds.add(n.id));
+    try {
+      await ref.read(adminRepoProvider).deleteNotification(n.id);
+      ref.invalidate(notificationsProvider);
+    } catch (e) {
+      if (mounted) _showError('Lỗi: $e');
+    } finally {
+      if (mounted) setState(() => _deletingIds.remove(n.id));
+    }
+  }
+
+  Future<void> _deleteAllHistory() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Xoá TOÀN BỘ lịch sử đã gửi?'),
+        content: const Text(
+          'Xoá hết mọi đợt gửi trong lịch sử — thông báo cũng bị xoá luôn khỏi hộp thư của '
+          'mọi người đã nhận (trên máy của họ). Không thể hoàn tác.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Huỷ'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Xoá tất cả'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+
+    setState(() => _deletingAll = true);
+    try {
+      await ref.read(adminRepoProvider).deleteAllNotifications();
+      ref.invalidate(notificationsProvider);
+    } catch (e) {
+      if (mounted) _showError('Lỗi: $e');
+    } finally {
+      if (mounted) setState(() => _deletingAll = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -565,8 +640,37 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
                   ),
                 ),
                 const SizedBox(height: 28),
-                Text('Lịch sử đã gửi', style: theme.textTheme.titleMedium),
-                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Lịch sử đã gửi',
+                        style: theme.textTheme.titleMedium,
+                      ),
+                    ),
+                    if ((historyAsync.valueOrNull ?? const []).isNotEmpty)
+                      TextButton.icon(
+                        onPressed: _deletingAll ? null : _deleteAllHistory,
+                        style: TextButton.styleFrom(
+                          foregroundColor: theme.colorScheme.error,
+                        ),
+                        icon: _deletingAll
+                            ? const SizedBox(
+                                height: 16,
+                                width: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(
+                                Icons.delete_sweep_outlined,
+                                size: 18,
+                              ),
+                        label: const Text('Xoá tất cả'),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 4),
                 historyAsync.when(
                   loading: () => const Padding(
                     padding: EdgeInsets.symmetric(vertical: 24),
@@ -586,7 +690,11 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen>
                       : Column(
                           children: [
                             ...items.map(
-                              (n) => _NotificationCard(notification: n),
+                              (n) => _NotificationCard(
+                                notification: n,
+                                deleting: _deletingIds.contains(n.id),
+                                onDelete: () => _deleteNotification(n),
+                              ),
                             ),
                             const SizedBox(height: 16),
                             StatCard(
@@ -837,7 +945,13 @@ class _MerchantPickerDialogState extends ConsumerState<_MerchantPickerDialog> {
 
 class _NotificationCard extends StatelessWidget {
   final AdminNotification notification;
-  const _NotificationCard({required this.notification});
+  final bool deleting;
+  final VoidCallback onDelete;
+  const _NotificationCard({
+    required this.notification,
+    required this.deleting,
+    required this.onDelete,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -858,11 +972,34 @@ class _NotificationCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              notification.title,
-              style: theme.textTheme.titleSmall?.copyWith(
-                fontWeight: FontWeight.w600,
-              ),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(
+                    notification.title,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                IconButton(
+                  tooltip: 'Xoá thông báo này',
+                  visualDensity: VisualDensity.compact,
+                  icon: deleting
+                      ? const SizedBox(
+                          height: 16,
+                          width: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Icon(
+                          Icons.delete_outline,
+                          size: 18,
+                          color: theme.colorScheme.error,
+                        ),
+                  onPressed: deleting ? null : onDelete,
+                ),
+              ],
             ),
             const SizedBox(height: 4),
             Text(notification.body, style: theme.textTheme.bodyMedium),
