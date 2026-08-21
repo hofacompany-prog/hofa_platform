@@ -275,6 +275,11 @@ async function sweepExpiredOffers() {
  * max_rescan_attempts lần liên tiếp không tìm được ai, báo admin (notifyAdmins) quyết định
  * huỷ đơn hay quét tiếp — trong lúc chờ admin phản hồi (driver_search_alerted_at có giá trị),
  * sweep bỏ qua đơn đó, không tự quét thêm nữa.
+ * status phải khớp CẢ 'ready_for_pickup' LẪN 'assigned' — assign_driver (hofa-db/
+ * 05_driver_dispatch.sql) chỉ đổi orders.status sang 'assigned' Ở LẦN GÁN ĐẦU TIÊN rồi để
+ * nguyên vĩnh viễn, kể cả sau khi tài xế từ chối (chỉ deliveries.status/driver_id đổi lại về
+ * pending/NULL) — nếu chỉ lọc 'ready_for_pickup' thì đơn đã qua 1 lần gán mà
+ * reassignAfterDecline không tìm được ai thay thế sẽ KẸT VĨNH VIỄN, sweep không bao giờ thấy lại.
  */
 async function sweepDriverSearch() {
   const settings = await currentDriverDispatchSettings();
@@ -282,7 +287,7 @@ async function sweepDriverSearch() {
     `SELECT o.id, o.order_code, o.total_amount, o.driver_search_attempts, d.declined_driver_ids
        FROM orders o
        LEFT JOIN deliveries d ON d.order_id = o.id
-      WHERE o.status = 'ready_for_pickup'
+      WHERE o.status IN ('ready_for_pickup', 'assigned')
         AND o.selected_driver_id IS NULL
         AND o.driver_search_alerted_at IS NULL
         AND (d.id IS NULL OR (d.status = 'pending' AND d.driver_id IS NULL))
