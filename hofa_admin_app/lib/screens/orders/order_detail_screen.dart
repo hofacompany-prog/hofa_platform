@@ -727,10 +727,17 @@ class _AdminOrderDetailScreenState
                                     onPressed: _busy
                                         ? null
                                         : () => _editScheduledFor(o),
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor:
+                                          theme.colorScheme.secondary,
+                                    ),
                                     child: Text(
                                       o.scheduledFor != null
                                           ? 'Đổi giờ'
                                           : 'Đặt giờ hẹn giao',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                      ),
                                     ),
                                   ),
                                   if (o.scheduledFor != null)

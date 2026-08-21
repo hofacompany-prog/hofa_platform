@@ -413,7 +413,13 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                   onPressed: _busy
                                       ? null
                                       : () => _editScheduledFor(o),
-                                  child: const Text('Đổi giờ'),
+                                  child: Text(
+                                    'Đổi giờ',
+                                    style: TextStyle(
+                                      color: theme.colorScheme.secondary,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
                                 ),
                             ],
                           ),
