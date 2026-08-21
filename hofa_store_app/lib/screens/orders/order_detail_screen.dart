@@ -384,7 +384,13 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen>
     final theme = Theme.of(context);
     final isPlaced = o.status == 'placed';
     final isPrepPhase = o.status == 'confirmed' || o.status == 'preparing';
-    final canCancel = isPlaced || isPrepPhase;
+    // Đơn giao ngay đặt trước còn "ngủ" (xem hofa-db/84_instant_scheduled_order.sql) — cửa hàng
+    // xem TRƯỚC ở tab "Sắp tới" nhưng CHƯA thao tác gì được (chưa xác nhận/huỷ/đếm giờ tự huỷ),
+    // tới lúc orderOffer.sweepDueScheduledInstant "nổ" đơn (scheduledActivatedAt có giá trị)
+    // mới coi như 1 đơn 'placed' bình thường.
+    final isSleepingScheduled =
+        o.scheduledFor != null && o.scheduledActivatedAt == null;
+    final canCancel = (isPlaced || isPrepPhase) && !isSleepingScheduled;
     // Cửa hàng mua hộ không xác nhận/chuẩn bị gì cả — đơn không qua cửa hàng, hệ thống tự
     // chuyển thẳng cho tài xế (xem server/src/orderOffer.js dispatchBuyOnBehalfOrder). Không
     // được chạy thanh trượt xác nhận/đếm giờ tự huỷ cho loại cửa hàng này.
@@ -392,7 +398,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen>
         ref.watch(myMerchantProvider).valueOrNull?.merchantType ==
         'buy_on_behalf';
 
-    if (isPlaced && !isBuyOnBehalf) {
+    if (isPlaced && !isBuyOnBehalf && !isSleepingScheduled) {
       // Thời gian chuẩn bị mặc định đã được server chốt theo bậc (auto_accept_settings.
       // prep_default_*) ngay lúc tạo đơn, xem hofa-db/39_prep_time_tiers.sql — ổn định dù admin
       // có sửa Thông số sau đó, không tính lại ở client.
@@ -535,6 +541,40 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen>
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: theme.colorScheme.primary,
                             fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    if (isSleepingScheduled)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8),
+                        child: Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.secondary.withValues(
+                              alpha: 0.12,
+                            ),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(
+                                Icons.visibility_outlined,
+                                size: 16,
+                                color: theme.colorScheme.secondary,
+                              ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  'Đơn đặt trước — chỉ xem trước, chưa tới lúc chuẩn bị nên chưa thao tác được gì. Hệ thống sẽ tự báo lại khi gần tới giờ.',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.secondary,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ),
@@ -819,7 +859,8 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen>
             ),
           ),
         ),
-        if (isPlaced && !isBuyOnBehalf) _buildPlacedBottom(context, o),
+        if (isPlaced && !isBuyOnBehalf && !isSleepingScheduled)
+          _buildPlacedBottom(context, o),
         if (isPrepPhase) _buildPrepPhaseBottom(context, o),
       ],
     );

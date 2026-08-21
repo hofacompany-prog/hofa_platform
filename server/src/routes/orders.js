@@ -134,6 +134,19 @@ router.post('/orders', asyncHandler(async (req, res) => {
     }).catch((err) => {
       console.error('[push] Không báo được admin cho đơn mới', order.id, err.message);
     });
+  } else if (order.status === 'placed' && isSleepingScheduledInstant) {
+    // Báo TRƯỚC cho cửa hàng ngay lúc đặt — chỉ để xem trước (order_detail_screen.dart tự ẩn
+    // hết nút hành động khi scheduled_activated_at NULL), CHƯA phải lượt "nổ" đơn thật sự (đó
+    // là việc của orderOffer.sweepDueScheduledInstant khi gần tới giờ).
+    push.resolveMerchantUserIds([order.merchant_id]).then((userIds) =>
+      Promise.all(userIds.map((uid) => push.sendPushToUser(uid, {
+        title: 'Đơn đặt trước mới',
+        body: `${order.order_code} — hẹn giao ${new Date(order.scheduled_for).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })} (chỉ xem trước, chưa cần chuẩn bị)`,
+        data: { type: 'order_upcoming', order_id: order.id }
+      })))
+    ).catch((err) => {
+      console.error('[push] Không báo trước được cửa hàng cho đơn đặt trước', order.id, err.message);
+    });
   } else if (order.status === 'pending_payment') {
     // Đơn chuyển khoản — chờ admin xác nhận đã nhận tiền (_PendingOrdersTab ở web admin) trước
     // khi cửa hàng được báo có đơn mới (xem POST /payments).
@@ -250,13 +263,26 @@ router.patch('/admin/orders/:id/shipping', asyncHandler(async (req, res) => {
 router.get('/merchants/:merchantId/orders', asyncHandler(async (req, res) => {
   await requireMerchantAccess(req.ctx, req.params.merchantId);
   const { limit, offset } = pagination(req.query);
-  // Đơn giao ngay đặt trước ở màn thanh toán còn đang "ngủ" (chưa tới ngưỡng báo cửa hàng, xem
-  // hofa-db/84_instant_scheduled_order.sql) — ẩn hẳn khỏi danh sách, cửa hàng chỉ thấy khi
-  // orderOffer.sweepDueScheduledInstant "nổ" đơn (scheduled_activated_at có giá trị).
-  const clauses = [
-    'merchant_id = $1',
-    "NOT (sales_model = 'instant' AND scheduled_for IS NOT NULL AND scheduled_activated_at IS NULL)"
-  ];
+  // upcoming_scheduled=true — tab "Sắp tới" (store app) xem TRƯỚC các đơn giao ngay đặt trước
+  // còn đang "ngủ" (chưa tới ngưỡng báo/chưa "nổ", xem hofa-db/84_instant_scheduled_order.sql):
+  // chỉ xem, KHÔNG thao tác được gì (order_detail_screen.dart tự ẩn hết nút hành động khi
+  // scheduled_activated_at NULL) — không giới hạn theo created_at như luồng mặc định vì khách
+  // có thể đặt trước nhiều ngày, cửa hàng cần thấy ngay từ lúc đặt chứ không chỉ đúng ngày đặt.
+  const upcomingScheduled = req.query.upcoming_scheduled === 'true';
+  const clauses = ['merchant_id = $1'];
+  if (upcomingScheduled) {
+    // pending_payment (chuyển khoản chưa được admin xác nhận) cũng loại — cùng nguyên tắc với
+    // đơn thường: chưa có tiền thì cửa hàng chưa cần biết, kể cả để xem trước.
+    clauses.push(
+      "sales_model = 'instant' AND scheduled_for IS NOT NULL AND scheduled_activated_at IS NULL " +
+      "AND status NOT IN ('cancelled', 'refunded', 'pending_payment')"
+    );
+  } else {
+    // Đơn đang "ngủ" ẩn hẳn khỏi danh sách mặc định — cửa hàng chỉ thấy ở đây khi
+    // orderOffer.sweepDueScheduledInstant "nổ" đơn (scheduled_activated_at có giá trị), hoặc
+    // xem trước qua upcoming_scheduled=true ở trên.
+    clauses.push("NOT (sales_model = 'instant' AND scheduled_for IS NOT NULL AND scheduled_activated_at IS NULL)");
+  }
   const params = [req.params.merchantId];
   if (req.query.status) { params.push(req.query.status); clauses.push(`status = $${params.length}`); }
   if (req.query.branch_id) { params.push(req.query.branch_id); clauses.push(`branch_id = $${params.length}`); }
@@ -279,8 +305,11 @@ router.get('/merchants/:merchantId/orders', asyncHandler(async (req, res) => {
     clauses.push(`(${dateColumn} AT TIME ZONE 'Asia/Ho_Chi_Minh')::date <= $${params.length}::date`);
   }
   params.push(limit, offset);
+  // upcoming_scheduled: sắp xếp theo giờ hẹn giao SẮP TỚI trước (không phải mới đặt trước) —
+  // cửa hàng cần thấy đơn nào gần tới giờ nhất lên đầu để chuẩn bị tinh thần trước.
+  const orderBy = upcomingScheduled ? 'scheduled_for ASC' : 'created_at DESC';
   const rows = await db.query(
-    `SELECT * FROM orders WHERE ${clauses.join(' AND ')} ORDER BY created_at DESC LIMIT $${params.length - 1} OFFSET $${params.length}`,
+    `SELECT * FROM orders WHERE ${clauses.join(' AND ')} ORDER BY ${orderBy} LIMIT $${params.length - 1} OFFSET $${params.length}`,
     params
   );
   res.json({ ok: true, data: rows });
@@ -450,10 +479,10 @@ router.patch('/orders/:id/status', asyncHandler(async (req, res) => {
  * NULL — khác hẳn đơn "Đặt trước/Giá sỉ" sales_model='scheduled', route này KHÔNG áp dụng cho
  * loại đó, đã có luồng xác nhận riêng). Khách tự đổi được giờ đơn CỦA MÌNH khi còn sớm (trước
  * khi cửa hàng xác nhận/bắt đầu chuẩn bị); admin đổi được bất kỳ lúc nào cho bất kỳ đơn nào.
- * Nếu đơn đã "activated" (order.scheduled_activated_at khác NULL — cửa hàng đã được báo, xem
- * orderOffer.sweepDueScheduledInstant) thì báo luôn cho cửa hàng biết giờ mới vì họ có thể đã
- * tính giờ bắt tay vào làm theo giờ cũ; chưa activated thì không cần báo gì, lượt quét định kỳ
- * kế tiếp tự tính lại theo giờ mới. */
+ * Cửa hàng thấy đơn này ngay từ lúc đặt (tab "Sắp tới", xem trước — GET /merchants/:id/orders?
+ * upcoming_scheduled=true), trừ lúc còn pending_payment (chưa xác nhận chuyển khoản, chưa lộ
+ * cho cửa hàng) — nên hễ đơn đã qua giai đoạn đó là báo luôn giờ mới, không đợi tới lúc
+ * "activated" (order_offer nếu đã activated, order_upcoming nếu còn đang xem trước). */
 router.patch('/orders/:id/scheduled-for', asyncHandler(async (req, res) => {
   requireProfile(req.ctx);
   const order = await db.findById('orders', req.params.id);
@@ -490,14 +519,17 @@ router.patch('/orders/:id/scheduled-for', asyncHandler(async (req, res) => {
     scheduled_for: scheduledFor ? scheduledFor.toISOString() : null
   });
 
-  if (order.scheduled_activated_at) {
+  if (order.status !== 'pending_payment') {
     push.resolveMerchantUserIds([order.merchant_id]).then((userIds) =>
       Promise.all(userIds.map((uid) => push.sendPushToUser(uid, {
         title: 'Đơn hàng đổi giờ hẹn giao',
         body: scheduledFor
           ? `${order.order_code} — giờ giao mới: ${scheduledFor.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}`
           : `${order.order_code} — đã bỏ giờ hẹn giao, chuyển về giao ngay`,
-        data: { type: 'order_offer', order_id: req.params.id }
+        data: {
+          type: order.scheduled_activated_at ? 'order_offer' : 'order_upcoming',
+          order_id: req.params.id
+        }
       })))
     ).catch((err) => {
       console.error('[push] Không báo được cho cửa hàng về đổi giờ hẹn giao', req.params.id, err.message);

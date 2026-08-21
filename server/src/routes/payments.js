@@ -5,6 +5,7 @@ const asyncHandler = require('../asyncHandler');
 const { ApiError } = require('../errors');
 const { requireFields, requireProfile, requireRole, requireMerchantAccess, requireOrderAccess } = require('../utils');
 const orderOffer = require('../orderOffer');
+const push = require('../push');
 
 router.get('/orders/:orderId/payments', asyncHandler(async (req, res) => {
   await requireOrderAccess(req.ctx, req.params.orderId);
@@ -64,6 +65,19 @@ router.post('/payments', asyncHandler(async (req, res) => {
   if (wasPendingPayment && merchant?.merchant_type !== 'buy_on_behalf' && !isSleepingScheduledInstant) {
     orderOffer.offerOrderToMerchant(req.body.order_id).catch((err) => {
       console.error('[orderOffer] Không báo được cửa hàng cho đơn chuyển khoản', req.body.order_id, err.message);
+    });
+  } else if (wasPendingPayment && isSleepingScheduledInstant) {
+    // Vừa xác nhận chuyển khoản cho 1 đơn đặt trước còn đang "ngủ" — đây là lần ĐẦU TIÊN đủ
+    // điều kiện báo cho cửa hàng xem trước (lúc POST /orders tạo đơn còn pending_payment nên
+    // chưa báo), cùng nội dung với nhánh "Đơn đặt trước mới" ở POST /orders.
+    push.resolveMerchantUserIds([order.merchant_id]).then((userIds) =>
+      Promise.all(userIds.map((uid) => push.sendPushToUser(uid, {
+        title: 'Đơn đặt trước mới',
+        body: `${order.order_code} — hẹn giao ${new Date(order.scheduled_for).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })} (chỉ xem trước, chưa cần chuẩn bị)`,
+        data: { type: 'order_upcoming', order_id: req.body.order_id }
+      })))
+    ).catch((err) => {
+      console.error('[push] Không báo trước được cửa hàng cho đơn đặt trước sau khi xác nhận thanh toán', req.body.order_id, err.message);
     });
   }
   orderOffer.dispatchBuyOnBehalfOrder(req.body.order_id).catch((err) => {

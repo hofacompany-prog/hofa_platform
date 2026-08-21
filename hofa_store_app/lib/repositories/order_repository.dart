@@ -38,6 +38,10 @@ class OrderRepository {
     String? from,
     String? to,
     bool payoutOnly = false,
+    // true = CHỈ trả đơn giao ngay đặt trước còn "ngủ" (chưa tới lúc báo/thao tác được) — cho
+    // tab "Sắp tới" xem trước, không giới hạn theo ngày đặt vì khách có thể đặt trước nhiều
+    // ngày. Xem GET /merchants/:id/orders?upcoming_scheduled=true.
+    bool upcomingScheduled = false,
   }) async {
     final list =
         await _api.get(
@@ -48,6 +52,7 @@ class OrderRepository {
                 if (from != null) 'from': from,
                 if (to != null) 'to': to,
                 if (payoutOnly) 'payout_only': 'true',
+                if (upcomingScheduled) 'upcoming_scheduled': 'true',
               },
             )
             as List;

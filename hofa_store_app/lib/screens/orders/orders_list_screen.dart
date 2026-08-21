@@ -54,6 +54,20 @@ final _ordersProvider = FutureProvider.autoDispose<List<Order>>((ref) async {
   return OrderRepository().listForMerchant(merchant.id, from: from, to: to);
 });
 
+/// Đơn giao ngay đặt trước còn "ngủ" (chưa tới giờ báo/thao tác được) — chỉ xem trước, gộp vào
+/// cuối danh sách tab "Sắp tới" (không giới hạn theo ngày đặt như _ordersProvider ở trên, vì
+/// khách có thể đặt trước nhiều ngày mà cửa hàng vẫn cần thấy ngay từ lúc đặt).
+final _upcomingScheduledOrdersProvider = FutureProvider.autoDispose<List<Order>>(
+  (ref) async {
+    final merchant = await ref.watch(myMerchantProvider.future);
+    if (merchant == null) return [];
+    return OrderRepository().listForMerchant(
+      merchant.id,
+      upcomingScheduled: true,
+    );
+  },
+);
+
 /// order_id của mọi thông báo danh mục "Đơn hàng" CHƯA ĐỌC — dùng để chấm đỏ đúng dòng đơn
 /// tương ứng trong danh sách, không phải cờ riêng trên bảng orders (không có cột nào như vậy).
 final _unreadOrderIdsProvider = FutureProvider.autoDispose<Set<String>>((
@@ -78,6 +92,10 @@ class OrdersListScreen extends ConsumerWidget {
     final selectedGroup = ref.watch(_selectedGroupProvider);
     final unreadOrderIds =
         ref.watch(_unreadOrderIdsProvider).valueOrNull ?? const <String>{};
+    // Chỉ cần tải khi đang xem đúng tab "Sắp tới" — tránh gọi API thừa cho 4 tab còn lại.
+    final upcomingScheduled = selectedGroup == 'Sắp tới'
+        ? ref.watch(_upcomingScheduledOrdersProvider).valueOrNull ?? const []
+        : const <Order>[];
 
     return Scaffold(
       appBar: AppBar(
@@ -113,16 +131,24 @@ class OrdersListScreen extends ConsumerWidget {
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (e, _) => Center(child: Text('Lỗi tải đơn hàng: $e')),
               data: (allOrders) {
-                final orders = allOrders
-                    .where(
-                      (o) => _statusGroups[selectedGroup]!.contains(o.status),
-                    )
-                    .toList();
+                final orders = [
+                  ...allOrders.where(
+                    (o) => _statusGroups[selectedGroup]!.contains(o.status),
+                  ),
+                  // Đặt sau các đơn cần thao tác thật (pending_payment/placed) — đơn đặt trước
+                  // còn "ngủ" chỉ để xem trước, không cần thấy trước tiên.
+                  if (selectedGroup == 'Sắp tới') ...upcomingScheduled,
+                ];
                 if (orders.isEmpty) {
                   return const Center(child: Text('Không có đơn nào'));
                 }
                 return RefreshIndicator(
-                  onRefresh: () async => ref.invalidate(_ordersProvider),
+                  onRefresh: () async {
+                    ref.invalidate(_ordersProvider);
+                    if (selectedGroup == 'Sắp tới') {
+                      ref.invalidate(_upcomingScheduledOrdersProvider);
+                    }
+                  },
                   child: ListView.separated(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                     itemCount: orders.length + 1,
@@ -188,7 +214,34 @@ class OrdersListScreen extends ConsumerWidget {
                           subtitle: Text(
                             '${formatVnd(o.totalAmount)} · ${formatDateTime(o.createdAt)}',
                           ),
-                          trailing: (o.lateMinutes ?? 0) > 0
+                          // Đơn đặt trước còn "ngủ" — chưa phải trạng thái thật cần thao tác,
+                          // hiện rõ giờ hẹn giao thay vì chip trạng thái để khỏi hiểu nhầm là
+                          // đơn mới cần xác nhận ngay (order_detail_screen.dart tự ẩn hết nút
+                          // hành động khi bấm vào xem).
+                          trailing:
+                              o.scheduledFor != null &&
+                                  o.scheduledActivatedAt == null
+                              ? Chip(
+                                  avatar: const Icon(
+                                    Icons.schedule_outlined,
+                                    size: 16,
+                                  ),
+                                  label: Text(
+                                    formatDateTime(o.scheduledFor!),
+                                  ),
+                                  backgroundColor: Theme.of(
+                                    context,
+                                  ).colorScheme.secondary.withValues(
+                                    alpha: 0.15,
+                                  ),
+                                  labelStyle: TextStyle(
+                                    color: Theme.of(
+                                      context,
+                                    ).colorScheme.secondary,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                )
+                              : (o.lateMinutes ?? 0) > 0
                               ? Chip(
                                   label: Text(
                                     '${orderStatusLabels[o.status] ?? o.status} · Trễ ${o.lateMinutes}p',

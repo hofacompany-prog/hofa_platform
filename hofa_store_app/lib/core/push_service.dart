@@ -229,6 +229,10 @@ class PushService {
       case 'order_offer':
       case 'order_auto_confirmed':
       case 'order_auto_cancelled':
+      // Đơn đặt trước còn "ngủ" — chỉ xem trước, order_detail_screen.dart tự ẩn hết nút hành
+      // động (scheduled_activated_at NULL), không auto-mở khi app đang foreground (khác
+      // order_offer ở nhánh trên, xem _onForegroundMessage) vì chưa cần gấp.
+      case 'order_upcoming':
         context.go('/orders/$orderId');
         break;
       case 'chat_message':
