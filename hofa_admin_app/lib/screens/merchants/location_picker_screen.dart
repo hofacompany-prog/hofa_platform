@@ -328,10 +328,39 @@ class _LocationPickerScreenState extends State<LocationPickerScreen> {
                   Positioned(
                     right: 16,
                     bottom: 16,
-                    child: FloatingActionButton.small(
-                      heroTag: 'locate-me',
-                      onPressed: () => _tryLocateMe(),
-                      child: const Icon(Icons.my_location),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          margin: const EdgeInsets.only(right: 8),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.surface,
+                            borderRadius: BorderRadius.circular(8),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.15),
+                                blurRadius: 4,
+                              ),
+                            ],
+                          ),
+                          child: const Text(
+                            'Giao ở vị trí hiện tại!',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                        FloatingActionButton.small(
+                          heroTag: 'locate-me',
+                          onPressed: () => _tryLocateMe(),
+                          child: const Icon(Icons.my_location),
+                        ),
+                      ],
                     ),
                   ),
                 ],
