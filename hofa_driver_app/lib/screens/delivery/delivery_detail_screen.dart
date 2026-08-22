@@ -761,19 +761,47 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
                           padding: const EdgeInsets.only(left: 32),
                           child: Text(order.shipFullAddress),
                         ),
-                      if (order?.shipNote != null &&
-                          order!.shipNote!.isNotEmpty)
-                        Padding(
-                          padding: const EdgeInsets.only(left: 32, top: 4),
-                          child: Text(
-                            'Ghi chú: ${order.shipNote}',
-                            style: theme.textTheme.bodySmall,
-                          ),
-                        ),
                     ],
                   ),
                 ),
               ),
+              // Ghi chú địa điểm giao (mô tả nhà/cổng/gọi trước...) — trước đây chỉ hiện chữ xám
+              // nhỏ lẫn dưới địa chỉ, dễ bị tài xế lướt qua. Đổi thành khung màu in đậm, cùng kiểu
+              // với thẻ ghi chú đơn hàng bên dưới, đúng như bên app Cửa hàng/Khách hàng đang hiện.
+              if (order?.shipNote != null && order!.shipNote!.trim().isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primaryContainer.withValues(
+                        alpha: 0.5,
+                      ),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          Icons.location_on_outlined,
+                          size: 18,
+                          color: theme.colorScheme.primary,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Ghi chú địa điểm: ${order.shipNote}',
+                            style: TextStyle(
+                              color: theme.colorScheme.primary,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
               if (order?.customerNote != null &&
                   order!.customerNote!.trim().isNotEmpty)
                 Padding(
@@ -801,6 +829,7 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
                             order.customerNote!,
                             style: TextStyle(
                               color: theme.colorScheme.secondary,
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
                         ),

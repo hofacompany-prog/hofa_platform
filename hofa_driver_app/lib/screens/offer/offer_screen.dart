@@ -549,7 +549,10 @@ class _OfferDetails extends ConsumerWidget {
                 Expanded(
                   child: Text(
                     order.shipNote!,
-                    style: TextStyle(color: theme.colorScheme.secondary),
+                    style: TextStyle(
+                      color: theme.colorScheme.secondary,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
               ],
