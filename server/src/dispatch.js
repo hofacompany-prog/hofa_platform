@@ -154,11 +154,17 @@ async function assignDriverAndNotify(order, driver, distanceKm) {
   // đồng hồ với assigned_at (cũng do Postgres set trong RPC assign_driver) — tránh lệch giờ giữa
   // 2 server (Render/Node và Supabase/Postgres) làm thanh màu phía tài xế tính sai % đã trôi qua.
   const deadlineRow = await db.queryOne(
-    `UPDATE deliveries SET accept_deadline = now() + ($1 || ' seconds')::interval,
-       offer_reminder_last_sent_at = now() WHERE id = $2 RETURNING accept_deadline`,
+    `UPDATE deliveries SET accept_deadline = now() + ($1 || ' seconds')::interval WHERE id = $2 RETURNING accept_deadline`,
     [windowSeconds, delivery.id]
   );
   const deadline = deadlineRow.accept_deadline.toISOString();
+  // Cột phụ (chỉ phục vụ remindPendingDriverOffers) — tách khỏi UPDATE accept_deadline ở trên
+  // (bắt buộc, cốt lõi luồng gán tài xế) để lỡ migration 96 (hofa-db/96_driver_offer_reminder.sql)
+  // chưa chạy trên Supabase thì CHỈ mỗi việc nhắc lại bị bỏ qua, không làm hỏng cả việc gán tài
+  // xế + gửi push mời nhận đơn lần đầu.
+  db.query('UPDATE deliveries SET offer_reminder_last_sent_at = now() WHERE id = $1', [delivery.id]).catch((err) => {
+    console.error('[dispatch] Không ghi được offer_reminder_last_sent_at (đã chạy migration 96 chưa?)', err.message);
+  });
   // Báo ngay từ tiêu đề thông báo là đơn mua hộ — tài xế cần biết TRƯỚC khi mở app ra xem chi
   // tiết (có thêm phí mua hộ, xem hofa-db/79_driver_buy_on_behalf_fee_share.sql; badge "MUA HỘ
   // +PHÍ" cạnh mã đơn ở offer_screen.dart/delivery_detail_screen.dart chỉ thấy SAU khi mở app).
