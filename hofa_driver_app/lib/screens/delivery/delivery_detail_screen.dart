@@ -574,40 +574,41 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        // Nổi bật ngay cạnh mã đơn — cùng lý do với offer_screen.dart, tài xế cần thấy ngay là
-        // đơn mua hộ (có thêm phí, xem hofa-db/79_driver_buy_on_behalf_fee_share.sql) mà không
-        // cần cuộn xuống đọc thẻ chi tiết mua hộ ở dưới.
-        title: Row(
+        // Nổi bật ngay dưới mã đơn (KHÔNG đặt cùng hàng — che mất/làm ellipsis mã đơn ở màn
+        // hẹp) — tài xế cần thấy ngay là đơn mua hộ (có thêm phí, xem
+        // hofa-db/79_driver_buy_on_behalf_fee_share.sql) mà không cần cuộn xuống đọc thẻ chi
+        // tiết mua hộ ở dưới.
+        toolbarHeight: deliveryAsync.valueOrNull?.isBuyOnBehalf == true ? 64 : kToolbarHeight,
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Flexible(
-              child: Text(
-                _order != null
-                    ? 'Đơn ${_order!.orderCode}'
-                    : 'Chuyến giao hàng',
-                overflow: TextOverflow.ellipsis,
-              ),
+            Text(
+              _order != null ? 'Đơn ${_order!.orderCode}' : 'Chuyến giao hàng',
+              overflow: TextOverflow.ellipsis,
             ),
-            if (deliveryAsync.valueOrNull?.isBuyOnBehalf == true) ...[
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 3,
-                ),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.secondary,
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  'MUA HỘ +PHÍ',
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: theme.colorScheme.onSecondary,
-                    fontWeight: FontWeight.bold,
-                    letterSpacing: 0.3,
+            if (deliveryAsync.valueOrNull?.isBuyOnBehalf == true)
+              Padding(
+                padding: const EdgeInsets.only(top: 3),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.secondary,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    'MUA HỘ +PHÍ',
+                    style: theme.textTheme.labelSmall?.copyWith(
+                      color: theme.colorScheme.onSecondary,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 0.3,
+                    ),
                   ),
                 ),
               ),
-            ],
           ],
         ),
         actions: [
