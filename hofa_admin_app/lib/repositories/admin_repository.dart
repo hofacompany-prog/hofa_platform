@@ -135,6 +135,13 @@ class AdminRepository {
         as Map<String, dynamic>,
   );
 
+  /// Tạo thẳng 1 người dùng mới kèm mật khẩu, đăng nhập được ngay — xem POST /admin/users
+  /// (role='merchant_owner' không tạo được ở đây, dùng createMerchant thay).
+  Future<UserProfile> createUser(Map<String, dynamic> data) async =>
+      UserProfile.fromJson(
+        await _api.post('/admin/users', body: data) as Map<String, dynamic>,
+      );
+
   Future<void> deleteUser(String userId) async {
     await _api.delete('/admin/users/$userId');
   }

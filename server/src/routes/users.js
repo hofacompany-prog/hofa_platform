@@ -65,6 +65,84 @@ router.patch('/me', asyncHandler(async (req, res) => {
 
 // ---- Quản trị (admin) ----
 
+/** Admin tạo thẳng 1 người dùng mới (kèm mật khẩu, đăng nhập được ngay) — status='active' luôn,
+ * không qua bước 'pending' như tự đăng ký. role='merchant_owner' KHÔNG tạo được ở đây — chủ cửa
+ * hàng luôn gắn kèm 1 merchants row, dùng POST /merchants (màn "Thêm cửa hàng") để tạo cả 2 cùng
+ * lúc, tránh tạo ra hồ sơ chủ cửa hàng "mồ côi" không có cửa hàng nào. role='driver' cần đủ
+ * thông tin xe/ngân hàng như POST /drivers/register (tự đăng ký) — admin nhập tay thay tài xế
+ * nên coi như đã xác minh luôn (verified_at=now()), không cần duyệt lại qua
+ * POST /admin/drivers/:id/verify. role='merchant_staff' cần merchant_id (chọn cửa hàng gắn vào,
+ * cùng bảng merchant_staff với POST /merchants/:merchantId/staff — gộp chung vào đây cho 1 màn
+ * "Tạo người dùng" duy nhất thay vì phải vào tận màn chi tiết cửa hàng). resolveOrCreateAuthIdentity
+ * tái dùng chung tài khoản Auth nếu SĐT đã có hồ sơ role KHÁC (multi-role, hofa-db/90_multi_role_accounts.sql). */
+router.post('/admin/users', asyncHandler(async (req, res) => {
+  requireRole(req.ctx, ['admin']);
+  requireFields(req.body, ['full_name', 'phone', 'password', 'role']);
+  const role = req.body.role;
+  if (!['customer', 'merchant_staff', 'driver', 'admin'].includes(role)) {
+    throw new ApiError('BAD_REQUEST', 'Vai trò không hợp lệ — chủ cửa hàng tạo qua màn "Thêm cửa hàng"', 400);
+  }
+  if (String(req.body.password).length < 6) {
+    throw new ApiError('BAD_REQUEST', 'Mật khẩu ban đầu phải từ 6 ký tự', 400);
+  }
+  if (role === 'merchant_staff' && !req.body.merchant_id) {
+    throw new ApiError('BAD_REQUEST', 'Cần chọn cửa hàng cho nhân viên', 400);
+  }
+  if (role === 'driver') {
+    requireFields(req.body, [
+      'national_id', 'license_no', 'vehicle_type', 'vehicle_plate',
+      'bank_name', 'bank_bin', 'bank_account_number', 'bank_account_holder'
+    ]);
+  }
+
+  const existingSameRole = await db.queryOne('SELECT id FROM users WHERE phone = $1 AND role = $2', [req.body.phone, role]);
+  if (existingSameRole) {
+    throw new ApiError('CONFLICT', 'Số điện thoại này đã có hồ sơ với vai trò này', 409);
+  }
+
+  let authUserId;
+  try {
+    authUserId = await supabaseAdmin.resolveOrCreateAuthIdentity(req.body.phone, req.body.password);
+  } catch (err) {
+    throw new ApiError('CONFLICT', `Không tạo được tài khoản mới: ${err.message}`, 409);
+  }
+
+  const user = await db.insertRow('users', {
+    auth_user_id: authUserId,
+    phone: req.body.phone,
+    full_name: req.body.full_name,
+    email: req.body.email || null,
+    date_of_birth: req.body.date_of_birth || null,
+    role,
+    status: 'active'
+  });
+
+  if (role === 'driver') {
+    await db.insertRow('drivers', {
+      user_id: user.id,
+      national_id: req.body.national_id,
+      license_no: req.body.license_no,
+      license_expiry: req.body.license_expiry || null,
+      vehicle_type: req.body.vehicle_type,
+      vehicle_plate: req.body.vehicle_plate,
+      bank_name: req.body.bank_name,
+      bank_bin: req.body.bank_bin,
+      bank_account_number: req.body.bank_account_number,
+      bank_account_holder: req.body.bank_account_holder,
+      verified_at: new Date().toISOString()
+    });
+  } else if (role === 'merchant_staff') {
+    await db.insertRow('merchant_staff', {
+      merchant_id: req.body.merchant_id,
+      user_id: user.id,
+      position: req.body.position || null
+    });
+  }
+
+  const full = await db.findById('users', user.id, ADMIN_USER_COLUMNS);
+  res.status(201).json({ ok: true, data: full });
+}));
+
 router.get('/admin/users', asyncHandler(async (req, res) => {
   requireRole(req.ctx, ['admin']);
   const { limit, offset } = pagination(req.query);
