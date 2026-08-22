@@ -200,9 +200,10 @@ async function remindPendingDriverOffers() {
   const intervalSeconds = settings?.offer_reminder_interval_seconds ?? 5;
   const rows = await db.query(
     `SELECT d.id, d.driver_id, d.distance_km, d.driver_fee, d.accept_deadline,
-            o.id AS order_id, o.order_code, o.merchant_type
+            o.id AS order_id, o.order_code, m.merchant_type
        FROM deliveries d
        JOIN orders o ON o.id = d.order_id
+       JOIN merchants m ON m.id = o.merchant_id
       WHERE d.status = 'assigned' AND d.accept_deadline IS NOT NULL AND d.accept_deadline > now()
         AND (d.offer_reminder_last_sent_at IS NULL
              OR d.offer_reminder_last_sent_at < now() - ($1 || ' seconds')::interval)`,
