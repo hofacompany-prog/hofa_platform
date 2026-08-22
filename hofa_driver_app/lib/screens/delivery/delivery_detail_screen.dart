@@ -361,7 +361,8 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
   /// Đơn mua hộ — tài xế tự đi mua, không có nhân viên cửa hàng nào đọc OTP cho tài xế, nên
   /// bước "picked_up" ở đây không hỏi OTP mà bắt buộc 1 ảnh hoá đơn/hàng đã mua làm bằng chứng
   /// (xem update_delivery_status trong hofa-db/43_buy_on_behalf_driver_dispatch.sql — server
-  /// chặn hẳn nếu thiếu ảnh). Ví tài xế được hoàn tiền hàng ngay khi xác nhận thành công.
+  /// chặn hẳn nếu thiếu ảnh). Ví tài xế được hoàn tiền hàng SAU KHI GIAO XONG (delivered), không
+  /// còn hoàn ngay lúc này nữa — xem hofa-db/97_buy_on_behalf_reimburse_on_delivered.sql.
   /// Kèm thêm toạ độ GPS hiện tại — server so với toạ độ chi nhánh, cách quá bán kính admin cấu
   /// hình (mặc định 100m, xem PickupProximitySettings/hofa-db/91_buy_on_behalf_pickup_
   /// proximity.sql) thì chặn, tránh chụp ảnh khống từ xa.
@@ -1320,7 +1321,7 @@ class _OrderItemsCard extends StatelessWidget {
 }
 
 /// Danh sách cần mua giúp khách — chỉ hiện cho đơn mua hộ, để tài xế biết chính xác cần mua gì
-/// và mang đủ tiền trước khi đến quán (tiền hàng được hoàn ngay vào ví lúc xác nhận đã mua).
+/// và mang đủ tiền trước khi đến quán (tiền hàng được trả vào ví SAU KHI GIAO HÀNG XONG).
 class _BuyOnBehalfShoppingCard extends StatelessWidget {
   final model.Order order;
   const _BuyOnBehalfShoppingCard({required this.order});
@@ -1387,7 +1388,7 @@ class _BuyOnBehalfShoppingCard extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              'Bạn ứng tiền mua tại quán, hoàn ngay vào ví khi bấm "Đã mua xong hàng" (kèm ảnh hoá đơn).',
+              'Bạn ứng tiền mua tại quán, tiền sẽ trả vào ví SAU KHI GIAO HÀNG XONG (bấm "Đã mua xong hàng" kèm ảnh hoá đơn để tiếp tục giao).',
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.outline,
               ),

@@ -272,13 +272,32 @@ class _OfferScreenState extends ConsumerState<OfferScreen>
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: Text(
-                  'Đơn giao hàng mới',
-                  style: theme.textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Đơn giao hàng mới',
+                      style: theme.textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    // Mã đơn to rõ ngang hàng với "Đơn giao hàng mới" — tài xế đọc được ngay,
+                    // không cần cuộn xuống tận cuối _OfferDetails như trước.
+                    orderAsync.when(
+                      data: (order) => Text(
+                        order.orderCode,
+                        style: theme.textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: theme.colorScheme.primary,
+                        ),
+                      ),
+                      loading: () => const SizedBox(),
+                      error: (_, _) => const SizedBox(),
+                    ),
+                  ],
                 ),
               ),
               orderAsync.when(
@@ -489,7 +508,7 @@ class _OfferDetails extends ConsumerWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Đơn mua hộ — bạn cần ứng tiền mua hàng tại quán, được hoàn ngay vào ví khi xác nhận đã mua xong (không cần OTP, chỉ cần ảnh hoá đơn).',
+                    'Đơn mua hộ — bạn cần ứng tiền mua hàng tại quán, tiền sẽ trả vào ví SAU KHI GIAO HÀNG XONG (không cần OTP lấy hàng, chỉ cần ảnh hoá đơn).',
                     style: TextStyle(color: theme.colorScheme.primary),
                   ),
                 ),
@@ -568,7 +587,8 @@ class _OfferDetails extends ConsumerWidget {
             ],
             Expanded(
               child: Text(
-                '${order.orderCode} · ${order.totalQuantity} món · '
+                // Mã đơn đã hiện to rõ ở đầu màn (cạnh "Đơn giao hàng mới") — không lặp lại ở đây.
+                '${order.totalQuantity} món · '
                 '${order.paymentMethod == 'cod' ? 'Thu hộ ${formatVnd(order.totalAmount)}' : 'Đã thanh toán'}',
                 style: theme.textTheme.bodySmall,
               ),
