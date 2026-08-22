@@ -154,7 +154,8 @@ async function assignDriverAndNotify(order, driver, distanceKm) {
   // đồng hồ với assigned_at (cũng do Postgres set trong RPC assign_driver) — tránh lệch giờ giữa
   // 2 server (Render/Node và Supabase/Postgres) làm thanh màu phía tài xế tính sai % đã trôi qua.
   const deadlineRow = await db.queryOne(
-    `UPDATE deliveries SET accept_deadline = now() + ($1 || ' seconds')::interval WHERE id = $2 RETURNING accept_deadline`,
+    `UPDATE deliveries SET accept_deadline = now() + ($1 || ' seconds')::interval,
+       offer_reminder_last_sent_at = now() WHERE id = $2 RETURNING accept_deadline`,
     [windowSeconds, delivery.id]
   );
   const deadline = deadlineRow.accept_deadline.toISOString();
@@ -171,9 +172,58 @@ async function assignDriverAndNotify(order, driver, distanceKm) {
       order_id: order.id,
       accept_deadline: deadline,
       accept_window_seconds: windowSeconds
-    }
+    },
+    tag: `delivery-offer-${delivery.id}`
   });
   return { delivery: { ...delivery, accept_deadline: deadline }, driver };
+}
+
+/** Nhắc LẠI tài xế mời nhận đơn CHƯA XÁC NHẬN/TỪ CHỐI (deliveries.status='assigned', còn trong
+ * accept_deadline) — gọi định kỳ từ setInterval (index.js), tần suất quét Node cố định nhưng chỉ
+ * THẬT SỰ gửi lại cho 1 chuyến khi đã đủ driver_accept_settings.offer_reminder_interval_seconds
+ * kể từ lần gửi trước (offer_reminder_last_sent_at), admin chỉnh được ở "Thông số tài xế" — cùng
+ * nhịp orderOffer.remindUnconfirmedOrders phía cửa hàng. Tự dừng khi tài xế nhận/từ chối (status
+ * đổi khỏi 'assigned') hoặc hết accept_deadline (sweepExpiredOffers tự chuyển tài xế khác, không
+ * còn nghĩa để nhắc tài xế cũ nữa). Gửi LẠI qua resendPushToUser (không ghi thêm dòng
+ * notifications mới) — cùng tag với assignDriverAndNotify để thiết bị thay banner cũ, chỉ lặp
+ * lại chuông/rung nhắc chứ không tạo thêm thông báo nào mới. */
+async function remindPendingDriverOffers() {
+  const settings = await db.queryOne(
+    'SELECT offer_reminder_interval_seconds FROM driver_accept_settings ORDER BY updated_at DESC LIMIT 1'
+  );
+  const intervalSeconds = settings?.offer_reminder_interval_seconds ?? 5;
+  const rows = await db.query(
+    `SELECT d.id, d.driver_id, d.distance_km, d.driver_fee, d.accept_deadline,
+            o.id AS order_id, o.order_code, o.merchant_type
+       FROM deliveries d
+       JOIN orders o ON o.id = d.order_id
+      WHERE d.status = 'assigned' AND d.accept_deadline IS NOT NULL AND d.accept_deadline > now()
+        AND (d.offer_reminder_last_sent_at IS NULL
+             OR d.offer_reminder_last_sent_at < now() - ($1 || ' seconds')::interval)`,
+    [intervalSeconds]
+  );
+  if (!rows.length) return;
+  for (const row of rows) {
+    const driver = await db.queryOne('SELECT user_id FROM drivers WHERE id = $1', [row.driver_id]);
+    if (!driver) continue;
+    await db.query('UPDATE deliveries SET offer_reminder_last_sent_at = now() WHERE id = $1', [row.id]);
+    const windowSeconds = Math.max(0, Math.round((new Date(row.accept_deadline).getTime() - Date.now()) / 1000));
+    const isBuyOnBehalf = row.merchant_type === 'buy_on_behalf';
+    await push.resendPushToUser(driver.user_id, {
+      title: isBuyOnBehalf ? 'Đơn mới gần bạn! (Mua hộ +phí)' : 'Đơn mới gần bạn!',
+      body: `${row.order_code} · ${row.distance_km != null ? Number(row.distance_km).toFixed(1) + ' km' : ''} · ${Number(row.driver_fee).toLocaleString('vi-VN')}đ — xác nhận trong ${windowSeconds}s`,
+      data: {
+        type: 'delivery_offer',
+        delivery_id: row.id,
+        order_id: row.order_id,
+        accept_deadline: row.accept_deadline,
+        accept_window_seconds: windowSeconds
+      },
+      tag: `delivery-offer-${row.id}`
+    }).catch((err) => {
+      console.error('[remind-pending-driver-offers] Không gửi lại được', row.id, err.message);
+    });
+  }
 }
 
 /** Tài xế từ chối, hoặc hết hạn accept_deadline mà TẮT "Tự động nhận đơn" — trả tài xế cũ về
@@ -343,5 +393,6 @@ module.exports = {
   autoAcceptExpiredOffer,
   sweepExpiredOffers,
   sweepDriverSearch,
+  remindPendingDriverOffers,
   computeDriverFee
 };

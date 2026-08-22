@@ -22,6 +22,7 @@ class _DriverAcceptSettingsScreenState
     extends ConsumerState<DriverAcceptSettingsScreen> {
   final _autoCtrl = TextEditingController();
   final _manualCtrl = TextEditingController();
+  final _offerReminderIntervalCtrl = TextEditingController();
   final _rescanIntervalCtrl = TextEditingController();
   final _maxRescanAttemptsCtrl = TextEditingController();
   final _pickupRadiusCtrl = TextEditingController();
@@ -36,6 +37,7 @@ class _DriverAcceptSettingsScreenState
   void dispose() {
     _autoCtrl.dispose();
     _manualCtrl.dispose();
+    _offerReminderIntervalCtrl.dispose();
     _rescanIntervalCtrl.dispose();
     _maxRescanAttemptsCtrl.dispose();
     _pickupRadiusCtrl.dispose();
@@ -45,6 +47,7 @@ class _DriverAcceptSettingsScreenState
   void _fillFrom(DriverAcceptSettings s) {
     _autoCtrl.text = s.autoAcceptSweepSeconds.toString();
     _manualCtrl.text = s.manualAcceptSweepSeconds.toString();
+    _offerReminderIntervalCtrl.text = s.offerReminderIntervalSeconds.toString();
   }
 
   void _fillDispatchFrom(DriverDispatchSettings s) {
@@ -132,6 +135,13 @@ class _DriverAcceptSettingsScreenState
       _showError('Thời gian thanh chạy màu (khi tắt) không hợp lệ');
       return;
     }
+    final offerReminderInterval = int.tryParse(
+      _offerReminderIntervalCtrl.text.trim(),
+    );
+    if (offerReminderInterval == null || offerReminderInterval <= 0) {
+      _showError('Khoảng cách nhắc lại mời nhận đơn không hợp lệ');
+      return;
+    }
 
     setState(() => _saving = true);
     try {
@@ -142,6 +152,7 @@ class _DriverAcceptSettingsScreenState
               id: id,
               autoAcceptSweepSeconds: auto,
               manualAcceptSweepSeconds: manual,
+              offerReminderIntervalSeconds: offerReminderInterval,
             ),
           );
       ref.invalidate(driverAcceptSettingsProvider);
@@ -217,6 +228,18 @@ class _DriverAcceptSettingsScreenState
                             'Cùng vị trí thanh trượt như trên nhưng đổi màu cam. Hết giờ mà tài '
                             'xế chưa trượt, đơn tự CHUYỂN cho tài xế gần nhất tiếp theo. Nên đặt dài '
                             'hơn hẳn thời gian ở trên (mặc định 25 giây).',
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    _SectionCard(
+                      title: 'Nhắc lại mời nhận đơn',
+                      child: _NumberField(
+                        controller: _offerReminderIntervalCtrl,
+                        label: 'Khoảng cách giữa các lần nhắc (giây)',
+                        helper:
+                            'Chuyến chưa được tài xế nhận/từ chối sẽ được PUSH nhắc lại đúng chu '
+                            'kỳ này cho tới khi tài xế xử lý (nhận, từ chối, hoặc hết giờ tự chuyển '
+                            'tài xế khác) — chỉ gửi lại thông báo cũ, thiết bị chỉ kêu/rung lại.',
                       ),
                     ),
                     const SizedBox(height: 24),

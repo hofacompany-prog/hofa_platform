@@ -132,3 +132,14 @@ setInterval(() => {
 setInterval(() => {
   orderOffer.remindUnconfirmedOrders().catch((e) => console.error('[remind-unconfirmed-orders]', e));
 }, 10_000);
+
+// Nhắc lại tài xế cho tới khi nhận hoặc từ chối đơn mời (deliveries.status rời khỏi 'assigned')
+// — cùng cơ chế remindUnconfirmedOrders ở trên nhưng phía tài xế, gửi LẠI qua resendPushToUser
+// (không nhân bản hộp thư trong app). Quét Node mỗi 3s (accept_deadline mặc định chỉ 8-25s, cần
+// mịn hơn hẳn phía cửa hàng) nhưng chỉ THẬT SỰ gửi lại khi đã đủ
+// driver_accept_settings.offer_reminder_interval_seconds (admin chỉnh ở "Thông số tài xế", mặc
+// định 5s) kể từ lần gửi trước. Tự dừng khi tài xế nhận/từ chối hoặc hết accept_deadline (
+// sweepExpiredOffers tự chuyển tài xế khác) — xem dispatch.remindPendingDriverOffers.
+setInterval(() => {
+  dispatch.remindPendingDriverOffers().catch((e) => console.error('[remind-pending-driver-offers]', e));
+}, 3_000);

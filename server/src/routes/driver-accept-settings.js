@@ -3,7 +3,7 @@ const db = require('../db');
 const asyncHandler = require('../asyncHandler');
 const { pickFields, requireRole } = require('../utils');
 
-const FIELDS = ['auto_accept_sweep_seconds', 'manual_accept_sweep_seconds'];
+const FIELDS = ['auto_accept_sweep_seconds', 'manual_accept_sweep_seconds', 'offer_reminder_interval_seconds'];
 
 /** Chỉ giữ 1 dòng đang áp dụng — dòng mới nhất theo updated_at. */
 async function currentSettings() {
