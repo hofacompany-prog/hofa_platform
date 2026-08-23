@@ -203,6 +203,14 @@ class AdminShell extends ConsumerWidget {
                   ),
                 ),
                 ListTile(
+                  leading: const Icon(Icons.perm_device_information_outlined),
+                  title: const Text('Quyền thiết bị'),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    context.push('/device-permissions');
+                  },
+                ),
+                ListTile(
                   leading: const Icon(Icons.logout),
                   title: const Text('Đăng xuất'),
                   onTap: () => Supabase.instance.client.auth.signOut(),

@@ -9,6 +9,7 @@ import '../../providers/auth_providers.dart';
 import '../address/address_picker_screen.dart';
 import '../../widgets/address_map_flow.dart';
 import '../../widgets/app_version_text.dart';
+import '../../widgets/permission_settings_section.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -478,6 +479,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               );
             },
           ),
+          const SizedBox(height: 24),
+          const PermissionSettingsSection(),
           const SizedBox(height: 24),
           OutlinedButton.icon(
             onPressed: () => Supabase.instance.client.auth.signOut(),

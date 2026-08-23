@@ -28,6 +28,7 @@ import 'screens/drivers/driver_blocking_records_screen.dart';
 import 'screens/deliveries/delivery_detail_screen.dart';
 import 'screens/catalog/categories_hub_screen.dart';
 import 'screens/settings/finance_hub_screen.dart';
+import 'screens/settings/device_permissions_screen.dart';
 import 'screens/notifications/notifications_screen.dart';
 import 'screens/notifications/my_notifications_screen.dart';
 import 'screens/reports/reports_screen.dart';
@@ -203,6 +204,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: '/my-notifications',
             builder: (context, state) => const MyNotificationsScreen(),
+          ),
+          GoRoute(
+            path: '/device-permissions',
+            builder: (context, state) => const DevicePermissionsScreen(),
           ),
         ],
       ),

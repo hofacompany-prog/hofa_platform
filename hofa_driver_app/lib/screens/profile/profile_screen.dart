@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../providers/auth_provider.dart';
 import '../../widgets/app_version_text.dart';
+import '../../widgets/permission_settings_section.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -91,6 +92,8 @@ class ProfileScreen extends ConsumerWidget {
                   ),
                 ),
               ),
+              const SizedBox(height: 16),
+              const PermissionSettingsSection(),
               const SizedBox(height: 16),
               OutlinedButton.icon(
                 onPressed: () => context.push('/edit-driver-profile'),

@@ -9,6 +9,7 @@ import '../../repositories/merchant_repository.dart';
 import '../../widgets/app_version_text.dart';
 import '../../widgets/branch_break_dialogs.dart';
 import '../../widgets/nav_back_button.dart';
+import '../../widgets/permission_settings_section.dart';
 import '../../widgets/stat_card.dart';
 
 final _branchesProvider = FutureProvider.autoDispose<List<Branch>>((ref) async {
@@ -310,6 +311,8 @@ class BranchSettingsScreen extends ConsumerWidget {
                     trailing: const Icon(Icons.chevron_right),
                   ),
                 ),
+                const SizedBox(height: 24),
+                const PermissionSettingsSection(),
                 const SizedBox(height: 24),
                 // Bottom bar mobile không có nút đăng xuất riêng (khác NavigationRail ở màn
                 // rộng đã có sẵn icon logout) — đây là cách duy nhất đăng xuất được trên điện
