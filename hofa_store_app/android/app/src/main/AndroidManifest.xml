@@ -2,8 +2,12 @@
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <!-- Android 13+ (API 33) bắt buộc quyền này riêng để hiện được prompt xin thông báo —
+         thiếu thì FirebaseMessaging.requestPermission() không hiện gì cả, coi như bị từ chối
+         âm thầm. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <application
-        android:label="hofa_store"
+        android:label="HOFA Cửa hàng"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

@@ -39,6 +39,47 @@ màn hình, chỉ là không có thông báo đẩy).
 `google-services.json`, `GoogleService-Info.plist` đã được thêm vào `.gitignore` — không
 commit lên git vì gắn với project Firebase thật.
 
+## Đưa lên Google Play / App Store
+
+### Android — đã có sẵn keystore ký release
+
+Keystore ký bản release đã tạo sẵn tại `android/app/upload-keystore.jks`, mật khẩu lưu ở
+`android/key.properties` (2 file này **không** commit vào git, xem `android/.gitignore`).
+
+**QUAN TRỌNG — sao lưu ngay**: mất `upload-keystore.jks` hoặc mật khẩu trong `key.properties`
+thì **không bao giờ cập nhật được app đã lên Play Store nữa** (Google bắt buộc mọi bản cập nhật
+phải ký cùng 1 khoá với bản đầu tiên) — copy 2 file này ra nơi lưu trữ an toàn NGOÀI máy này
+(trình quản lý mật khẩu, ổ cứng ngoài mã hoá...) trước khi làm gì khác.
+
+```bash
+flutter build appbundle   # ra file .aab để nộp Play Console (khuyến nghị)
+```
+
+### iOS — đã có bundle ID + chuỗi quyền, còn thiếu gán Team trong Xcode
+
+`ios/` đã cấu hình sẵn Bundle ID (`com.hofa.hofaDriver`) và các mô tả quyền tiếng Việt, nhưng
+**chưa từng chạy `pod install`/mở Xcode thật** — làm theo thứ tự:
+
+```bash
+cd ios && pod install && cd ..
+open ios/Runner.xcworkspace
+```
+Trong Xcode: chọn target `Runner` → tab "Signing & Capabilities" → đăng nhập Apple ID → chọn
+đúng Team (cần Apple Developer Program, $99/năm) → Xcode tự tạo Provisioning Profile. Build:
+
+```bash
+flutter build ipa
+```
+
+### Nội dung cần chuẩn bị trước khi nộp
+
+- Icon 1024×1024 không nền trong suốt — đã sinh sẵn từ `assets/icon/icon.png` (chạy lại
+  `dart run flutter_launcher_icons` nếu đổi ảnh gốc, cấu hình ở `pubspec.yaml`).
+- Screenshot đúng kích cỡ store yêu cầu, mô tả app, **chính sách bảo mật** (bắt buộc — app có
+  xin quyền vị trí/camera/thông báo).
+- Trả lời bảng câu hỏi Data Safety (Google Play) / App Privacy (App Store) về dữ liệu thu thập
+  (vị trí realtime, số điện thoại, ảnh xác nhận giao hàng, thông báo đẩy).
+
 ## Chạy cron quét đơn quá hạn (khuyến nghị, không bắt buộc)
 
 Khi tài xế không xác nhận kịp trong khung giờ cho phép (mặc định 25s,
