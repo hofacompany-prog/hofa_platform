@@ -2,7 +2,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/format.dart';
+import '../../core/permission_helper.dart';
 import '../../models/address.dart';
 import '../../models/product.dart';
 import '../../providers/app_providers.dart';
@@ -40,6 +42,53 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
+    // Chỉ nhắc khi ĐÃ đăng nhập — khách còn đang lướt trang chủ trước khi đăng nhập (xem
+    // requireLogin) chưa cần bị hỏi quyền, dễ gây khó chịu ngay lần đầu mở app.
+    if (Supabase.instance.client.auth.currentSession != null) {
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _checkPermissionsOnStart(),
+      );
+    }
+  }
+
+  Future<void> _checkPermissionsOnStart() async {
+    final notif = await PermissionHelper.notificationState();
+    final loc = await PermissionHelper.locationState();
+    if (!mounted) return;
+    final missing = <String>[
+      if (notif != PermissionState.granted) 'Thông báo đẩy',
+      if (loc != PermissionState.granted) 'Vị trí',
+    ];
+    if (missing.isEmpty) return;
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Cần cấp quyền để dùng app tốt hơn'),
+        content: Text(
+          'Ứng dụng cần quyền ${missing.join(' và ')} để báo cập nhật đơn hàng kịp thời và gợi ý '
+          'đúng địa chỉ giao hàng gần bạn.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Để sau'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              Navigator.pop(dialogContext);
+              if (notif != PermissionState.granted) {
+                await PermissionHelper.requestNotification(context);
+              }
+              if (loc != PermissionState.granted && mounted) {
+                await PermissionHelper.requestLocation(context);
+              }
+            },
+            child: const Text('Cấp quyền ngay'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override

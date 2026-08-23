@@ -2,16 +2,70 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/format.dart';
+import '../../core/permission_helper.dart';
 import '../../models/order.dart';
 import '../../providers/admin_providers.dart';
 import '../../widgets/stat_card.dart';
 import '../orders/orders_screen.dart' show statusColor;
 
-class DashboardScreen extends ConsumerWidget {
+class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends ConsumerState<DashboardScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _checkPermissionsOnStart(),
+    );
+  }
+
+  Future<void> _checkPermissionsOnStart() async {
+    final notif = await PermissionHelper.notificationState();
+    final loc = await PermissionHelper.locationState();
+    if (!mounted) return;
+    final missing = <String>[
+      if (notif != PermissionState.granted) 'Thông báo đẩy',
+      if (loc != PermissionState.granted) 'Vị trí',
+    ];
+    if (missing.isEmpty) return;
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Cần cấp quyền để dùng app tốt hơn'),
+        content: Text(
+          'Web admin cần quyền ${missing.join(' và ')} để báo có đơn/yêu cầu cần xử lý kịp thời '
+          'và xác định đúng vị trí lúc chọn toạ độ trên bản đồ.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Để sau'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              Navigator.pop(dialogContext);
+              if (notif != PermissionState.granted) {
+                await PermissionHelper.requestNotification(context);
+              }
+              if (loc != PermissionState.granted && mounted) {
+                await PermissionHelper.requestLocation(context);
+              }
+            },
+            child: const Text('Cấp quyền ngay'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final statsAsync = ref.watch(statsProvider);
     final theme = Theme.of(context);
 

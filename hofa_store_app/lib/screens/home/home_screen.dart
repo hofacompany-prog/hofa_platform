@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/format.dart';
 import '../../core/nav_destinations.dart';
+import '../../core/permission_helper.dart';
 import '../../models/branch.dart';
 import '../../models/finance_summary.dart';
 import '../../models/merchant_today_stats.dart';
@@ -23,8 +24,63 @@ final _homeBranchesProvider = FutureProvider.autoDispose<List<Branch>>((
 /// Trang chủ — tổng quan nhanh (đơn đang chuẩn bị, thu nhập hôm nay) + lối tắt tới mọi mục
 /// quản lý, thay cho việc phải mở app luôn vào thẳng màn Sản phẩm như trước. Route đầu tiên
 /// của ShellRoute (xem router.dart) và cũng là tab đầu trong bottom bar/NavigationRail.
-class HomeScreen extends ConsumerWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Kiểm tra ngay lúc mở Trang chủ — thiếu quyền Thông báo thì có thể lỡ đơn mới, thiếu quyền
+    // Vị trí thì lỡ luôn các tính năng cần toạ độ chi nhánh (chọn vị trí trên bản đồ...).
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _checkPermissionsOnStart(),
+    );
+  }
+
+  Future<void> _checkPermissionsOnStart() async {
+    final notif = await PermissionHelper.notificationState();
+    final loc = await PermissionHelper.locationState();
+    if (!mounted) return;
+    final missing = <String>[
+      if (notif != PermissionState.granted) 'Thông báo đẩy',
+      if (loc != PermissionState.granted) 'Vị trí',
+    ];
+    if (missing.isEmpty) return;
+
+    await showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Cần cấp quyền để dùng app tốt hơn'),
+        content: Text(
+          'Ứng dụng cần quyền ${missing.join(' và ')} để báo đơn mới kịp thời và xác định đúng '
+          'vị trí chi nhánh.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Để sau'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              Navigator.pop(dialogContext);
+              if (notif != PermissionState.granted) {
+                await PermissionHelper.requestNotification(context);
+              }
+              if (loc != PermissionState.granted && mounted) {
+                await PermissionHelper.requestLocation(context);
+              }
+            },
+            child: const Text('Cấp quyền ngay'),
+          ),
+        ],
+      ),
+    );
+  }
 
   Future<void> _toggleOpen(
     WidgetRef ref,
@@ -45,7 +101,7 @@ class HomeScreen extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final merchantAsync = ref.watch(myMerchantProvider);
     final statsAsync = ref.watch(merchantTodayStatsProvider);
