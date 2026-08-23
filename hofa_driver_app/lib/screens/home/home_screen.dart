@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/format.dart';
 import '../../core/location_tracker.dart';
+import '../../core/permission_helper.dart';
 import '../../models/delivery.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/delivery_providers.dart';
@@ -22,6 +23,51 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   bool _busy = false;
   String? _locationError;
   String? _lastSyncedStatus;
+
+  @override
+  void initState() {
+    super.initState();
+    // Kiểm tra NGAY lúc mở màn chính — tài xế thiếu 1 trong 2 quyền này thì không nhận được đơn
+    // mới (thông báo) hoặc không tìm được (vị trí), nhắc trước khi họ tự hỏi sao không có đơn.
+    // addPostFrameCallback để context sẵn sàng hiện dialog ngay sau khung hình đầu tiên.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkPermissionsOnStart());
+  }
+
+  Future<void> _checkPermissionsOnStart() async {
+    final notif = await PermissionHelper.notificationState();
+    final loc = await PermissionHelper.locationState();
+    if (!mounted) return;
+    final missing = <String>[
+      if (notif != PermissionState.granted) 'Thông báo đẩy',
+      if (loc != PermissionState.granted) 'Vị trí',
+    ];
+    if (missing.isEmpty) return;
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Cần cấp quyền để nhận đơn'),
+        content: Text(
+          'Ứng dụng cần quyền ${missing.join(' và ')} để báo đơn mới kịp thời và xác định đúng '
+          'vị trí giao hàng. Thiếu quyền này bạn sẽ không nhận được đơn mới hoặc không tìm được '
+          'khách gần bạn.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Để sau'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(context);
+              context.push('/profile');
+            },
+            child: const Text('Cấp quyền ngay'),
+          ),
+        ],
+      ),
+    );
+  }
 
   void _syncTrackingWithStatus(String status) {
     final shouldTrack = status == 'online' || status == 'busy';
