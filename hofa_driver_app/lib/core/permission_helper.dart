@@ -16,24 +16,24 @@ const _kLocationGrantedKey = 'permission_location_granted';
 class PermissionHelper {
   PermissionHelper._();
 
-  /// Đã từng xác nhận CẤP RỒI (lưu SharedPreferences) thì tin luôn, KHÔNG hỏi lại hệ thống mỗi
-  /// lần mở app nữa — vừa tránh phiền khi quyền thật sự đã có, vừa tránh trường hợp
-  /// getNotificationSettings()/checkPermission() lỡ chậm/lỗi thoáng qua lúc web mới khởi động
-  /// khiến tưởng nhầm là chưa cấp (rơi về notDetermined ở nhánh catch) rồi hỏi lại oan. Chỉ khi
-  /// CHƯA từng lưu "đã cấp" mới thật sự hỏi hệ thống — cấp rồi thì ghi nhớ luôn từ đây.
+  /// LUÔN thử hỏi hệ thống trước (để phát hiện đúng lúc quyền bị THU HỒI sau khi đã từng cấp —
+  /// vd người dùng tự tắt lại trong cài đặt trình duyệt — mà hỏi lại), chỉ khi việc hỏi đó THẤT
+  /// BẠI (lỗi/timeout thoáng qua lúc web mới khởi động) mới rơi về tin theo SharedPreferences đã
+  /// lưu từ lần cấp gần nhất, tránh hỏi lại oan vì 1 lần kiểm tra bị trục trặc tạm thời.
   static Future<PermissionState> notificationState() async {
     final prefs = await SharedPreferences.getInstance();
-    if (prefs.getBool(_kNotificationGrantedKey) == true) {
-      return PermissionState.granted;
+    final live = await _liveNotificationState();
+    if (live != null) {
+      await prefs.setBool(_kNotificationGrantedKey, live == PermissionState.granted);
+      return live;
     }
-    final state = await _liveNotificationState();
-    if (state == PermissionState.granted) {
-      await prefs.setBool(_kNotificationGrantedKey, true);
-    }
-    return state;
+    return prefs.getBool(_kNotificationGrantedKey) == true
+        ? PermissionState.granted
+        : PermissionState.notDetermined;
   }
 
-  static Future<PermissionState> _liveNotificationState() async {
+  /// null = không hỏi được hệ thống (lỗi/timeout) — khác với 1 kết quả xác định (kể cả denied).
+  static Future<PermissionState?> _liveNotificationState() async {
     try {
       final status =
           (await FirebaseMessaging.instance.getNotificationSettings())
@@ -48,24 +48,24 @@ class PermissionHelper {
           return PermissionState.notDetermined;
       }
     } catch (_) {
-      return PermissionState.notDetermined;
+      return null;
     }
   }
 
-  /// Cùng lý do notificationState() — quyền vị trí đã xác nhận cấp thì nhớ luôn, không hỏi lại.
+  /// Cùng lý do notificationState() — luôn hỏi hệ thống trước để bắt được lúc quyền bị thu hồi.
   static Future<PermissionState> locationState() async {
     final prefs = await SharedPreferences.getInstance();
-    if (prefs.getBool(_kLocationGrantedKey) == true) {
-      return PermissionState.granted;
+    final live = await _liveLocationState();
+    if (live != null) {
+      await prefs.setBool(_kLocationGrantedKey, live == PermissionState.granted);
+      return live;
     }
-    final state = await _liveLocationState();
-    if (state == PermissionState.granted) {
-      await prefs.setBool(_kLocationGrantedKey, true);
-    }
-    return state;
+    return prefs.getBool(_kLocationGrantedKey) == true
+        ? PermissionState.granted
+        : PermissionState.notDetermined;
   }
 
-  static Future<PermissionState> _liveLocationState() async {
+  static Future<PermissionState?> _liveLocationState() async {
     try {
       final permission = await Geolocator.checkPermission();
       switch (permission) {
@@ -78,7 +78,7 @@ class PermissionHelper {
           return PermissionState.notDetermined;
       }
     } catch (_) {
-      return PermissionState.notDetermined;
+      return null;
     }
   }
 
@@ -117,8 +117,8 @@ class PermissionHelper {
   }
 
   /// Quyền chưa quyết định → bật popup xin quyền của trình duyệt/hệ thống, ghi nhớ nếu vừa được
-  /// cấp. Quyền đã có (kể cả từ cache) → thử mở thẳng Cài đặt hệ thống để xem/chỉnh thêm (chỉ mở
-  /// được thật trên bản cài native). Quyền đã bị từ chối/web không mở được cài đặt → chỉ dẫn tay.
+  /// cấp. Quyền đã có → thử mở thẳng Cài đặt hệ thống để xem/chỉnh thêm (chỉ mở được thật trên
+  /// bản cài native). Quyền đã bị từ chối/web không mở được cài đặt → chỉ dẫn tay.
   static Future<void> requestNotification(BuildContext context) async {
     final state = await notificationState();
     if (state != PermissionState.notDetermined) {
@@ -130,9 +130,9 @@ class PermissionHelper {
     }
     await FirebaseMessaging.instance.requestPermission();
     final after = await _liveNotificationState();
-    if (after == PermissionState.granted) {
+    if (after != null) {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(_kNotificationGrantedKey, true);
+      await prefs.setBool(_kNotificationGrantedKey, after == PermissionState.granted);
     }
   }
 
@@ -147,9 +147,9 @@ class PermissionHelper {
     }
     await Geolocator.requestPermission();
     final after = await _liveLocationState();
-    if (after == PermissionState.granted) {
+    if (after != null) {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(_kLocationGrantedKey, true);
+      await prefs.setBool(_kLocationGrantedKey, after == PermissionState.granted);
     }
   }
 }

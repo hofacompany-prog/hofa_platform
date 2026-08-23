@@ -45,58 +45,56 @@ class _PermissionSettingsSectionState
     await _refresh();
   }
 
-  String _label(PermissionState? state) {
-    switch (state) {
-      case PermissionState.granted:
-        return 'Đã bật';
-      case PermissionState.denied:
-        return 'Đã tắt — bấm để mở cài đặt';
-      default:
-        return 'Chưa cấp — bấm để cấp quyền';
-    }
-  }
+  String _label(PermissionState? state) => state == PermissionState.denied
+      ? 'Đã tắt — bấm để mở cài đặt'
+      : 'Chưa cấp — bấm để cấp quyền';
 
   @override
   Widget build(BuildContext context) {
+    if (_loading) return const SizedBox.shrink();
+    // Chỉ hiện Ô nào CHƯA CÓ quyền — đã cấp rồi thì ẩn hẳn, không cần chiếm chỗ màn hình nữa.
+    final showNotification = _notificationStatus != PermissionState.granted;
+    final showLocation = _locationStatus != PermissionState.granted;
+    if (!showNotification && !showLocation) return const SizedBox.shrink();
+
     final theme = Theme.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text('Quyền thiết bị', style: theme.textTheme.titleMedium),
         const SizedBox(height: 8),
-        Card(
-          elevation: 0,
-          color: theme.colorScheme.surfaceContainerLow,
-          child: ListTile(
-            onTap: _handleNotificationTap,
-            leading: Icon(
-              Icons.notifications_outlined,
-              color: theme.colorScheme.primary,
+        if (showNotification) ...[
+          Card(
+            elevation: 0,
+            color: theme.colorScheme.surfaceContainerLow,
+            child: ListTile(
+              onTap: _handleNotificationTap,
+              leading: Icon(
+                Icons.notifications_outlined,
+                color: theme.colorScheme.primary,
+              ),
+              title: const Text('Thông báo đẩy'),
+              subtitle: Text(_label(_notificationStatus)),
+              trailing: const Icon(Icons.chevron_right),
             ),
-            title: const Text('Thông báo đẩy'),
-            subtitle: Text(
-              _loading ? 'Đang kiểm tra...' : _label(_notificationStatus),
-            ),
-            trailing: const Icon(Icons.chevron_right),
           ),
-        ),
-        const SizedBox(height: 8),
-        Card(
-          elevation: 0,
-          color: theme.colorScheme.surfaceContainerLow,
-          child: ListTile(
-            onTap: _handleLocationTap,
-            leading: Icon(
-              Icons.location_on_outlined,
-              color: theme.colorScheme.primary,
+          if (showLocation) const SizedBox(height: 8),
+        ],
+        if (showLocation)
+          Card(
+            elevation: 0,
+            color: theme.colorScheme.surfaceContainerLow,
+            child: ListTile(
+              onTap: _handleLocationTap,
+              leading: Icon(
+                Icons.location_on_outlined,
+                color: theme.colorScheme.primary,
+              ),
+              title: const Text('Vị trí'),
+              subtitle: Text(_label(_locationStatus)),
+              trailing: const Icon(Icons.chevron_right),
             ),
-            title: const Text('Vị trí'),
-            subtitle: Text(
-              _loading ? 'Đang kiểm tra...' : _label(_locationStatus),
-            ),
-            trailing: const Icon(Icons.chevron_right),
           ),
-        ),
       ],
     );
   }
