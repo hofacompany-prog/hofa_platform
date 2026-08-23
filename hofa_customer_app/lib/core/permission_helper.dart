@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'pwa_install_service.dart';
 
 /// 3 mức duy nhất cần phân biệt để quyết định hành động khi bấm nút: đã cấp (không cần làm gì
 /// thêm), chưa quyết định (xin quyền lần đầu, trình duyệt/hệ thống tự hiện popup xin quyền), đã
@@ -16,11 +17,17 @@ const _kLocationGrantedKey = 'permission_location_granted';
 class PermissionHelper {
   PermissionHelper._();
 
+  /// Chỉ hỏi quyền thông báo khi khách đang chạy app ở chế độ PWA đã cài (standalone) — đặt hàng
+  /// thẳng trên website (mở bằng trình duyệt thường, chưa "Thêm vào màn hình chính") thì bỏ qua
+  /// hẳn, coi như granted để mọi nơi gọi (popup lúc mở app, PermissionSettingsSection) tự ẩn/bỏ
+  /// qua theo đúng yêu cầu — thông báo web tab thường vừa kém tác dụng vừa dễ gây khó chịu.
+  ///
   /// LUÔN thử hỏi hệ thống trước (để phát hiện đúng lúc quyền bị THU HỒI sau khi đã từng cấp —
   /// vd người dùng tự tắt lại trong cài đặt trình duyệt — mà hỏi lại), chỉ khi việc hỏi đó THẤT
   /// BẠI (lỗi/timeout thoáng qua lúc web mới khởi động) mới rơi về tin theo SharedPreferences đã
   /// lưu từ lần cấp gần nhất, tránh hỏi lại oan vì 1 lần kiểm tra bị trục trặc tạm thời.
   static Future<PermissionState> notificationState() async {
+    if (!PwaInstallService.isStandalone()) return PermissionState.granted;
     final prefs = await SharedPreferences.getInstance();
     final live = await _liveNotificationState();
     if (live != null) {
@@ -120,6 +127,7 @@ class PermissionHelper {
   /// cấp. Quyền đã có → thử mở thẳng Cài đặt hệ thống để xem/chỉnh thêm (chỉ mở được thật trên
   /// bản cài native). Quyền đã bị từ chối/web không mở được cài đặt → chỉ dẫn tay.
   static Future<void> requestNotification(BuildContext context) async {
+    if (!PwaInstallService.isStandalone()) return;
     final state = await notificationState();
     if (state != PermissionState.notDetermined) {
       final opened = await tryOpenNativeSettings(location: false);
