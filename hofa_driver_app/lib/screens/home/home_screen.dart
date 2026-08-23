@@ -45,7 +45,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     await showDialog<void>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (dialogContext) => AlertDialog(
         title: const Text('Cần cấp quyền để nhận đơn'),
         content: Text(
           'Ứng dụng cần quyền ${missing.join(' và ')} để báo đơn mới kịp thời và xác định đúng '
@@ -54,13 +54,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () => Navigator.pop(dialogContext),
             child: const Text('Để sau'),
           ),
           FilledButton(
-            onPressed: () {
-              Navigator.pop(context);
-              context.push('/profile');
+            onPressed: () async {
+              Navigator.pop(dialogContext);
+              // Xin quyền THẲNG tại đây (bật popup hệ thống/trình duyệt ngay) — cùng cách app Cửa
+              // hàng đang làm ở location_picker_screen.dart, không bắt bấm thêm lần nữa ở màn khác.
+              if (notif != PermissionState.granted) {
+                await PermissionHelper.requestNotification(context);
+              }
+              if (loc != PermissionState.granted && mounted) {
+                await PermissionHelper.requestLocation(context);
+              }
             },
             child: const Text('Cấp quyền ngay'),
           ),
