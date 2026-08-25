@@ -108,49 +108,69 @@ class MerchantCard extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                       const SizedBox(height: 4),
-                      Row(
+                      // Wrap thay vì Row — tên cửa hàng dài hoặc màn hình hẹp có thể khiến
+                      // tổng bề rộng rating + thời gian + khoảng cách vượt quá chỗ trống, Wrap
+                      // tự xuống dòng thay vì báo lỗi tràn (RenderFlex overflow).
+                      Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        runSpacing: 4,
                         children: [
-                          Icon(
-                            Icons.star,
-                            size: 14,
-                            color: Colors.amber.shade700,
-                          ),
-                          const SizedBox(width: 2),
-                          Text(
-                            '${merchant.ratingAvg.toStringAsFixed(1)} (${merchant.ratingCount})',
-                            style: theme.textTheme.bodySmall,
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.star,
+                                size: 14,
+                                color: Colors.amber.shade700,
+                              ),
+                              const SizedBox(width: 2),
+                              Text(
+                                '${merchant.ratingAvg.toStringAsFixed(1)} (${merchant.ratingCount})',
+                                style: theme.textTheme.bodySmall,
+                              ),
+                            ],
                           ),
                           const SizedBox(width: 12),
-                          Icon(
-                            Icons.timer_outlined,
-                            size: 14,
-                            color: theme.colorScheme.outline,
-                          ),
-                          const SizedBox(width: 2),
-                          Text(
-                            '${merchant.avgPrepMinutes} phút',
-                            style: theme.textTheme.bodySmall,
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.timer_outlined,
+                                size: 14,
+                                color: theme.colorScheme.outline,
+                              ),
+                              const SizedBox(width: 2),
+                              Text(
+                                '${merchant.avgPrepMinutes} phút',
+                                style: theme.textTheme.bodySmall,
+                              ),
+                            ],
                           ),
                           if (merchant.distanceKm != null) ...[
                             const SizedBox(width: 12),
-                            Icon(
-                              Icons.place_outlined,
-                              size: 14,
-                              color: merchant.beyondOwnRadius
-                                  ? theme.colorScheme.secondary
-                                  : theme.colorScheme.outline,
-                            ),
-                            const SizedBox(width: 2),
-                            Text(
-                              formatDistanceKm(merchant.distanceKm!),
-                              style: theme.textTheme.bodySmall?.copyWith(
-                                color: merchant.beyondOwnRadius
-                                    ? theme.colorScheme.secondary
-                                    : null,
-                                fontWeight: merchant.beyondOwnRadius
-                                    ? FontWeight.w600
-                                    : null,
-                              ),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.place_outlined,
+                                  size: 14,
+                                  color: merchant.beyondOwnRadius
+                                      ? theme.colorScheme.secondary
+                                      : theme.colorScheme.outline,
+                                ),
+                                const SizedBox(width: 2),
+                                Text(
+                                  formatDistanceKm(merchant.distanceKm!),
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: merchant.beyondOwnRadius
+                                        ? theme.colorScheme.secondary
+                                        : null,
+                                    fontWeight: merchant.beyondOwnRadius
+                                        ? FontWeight.w600
+                                        : null,
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ],

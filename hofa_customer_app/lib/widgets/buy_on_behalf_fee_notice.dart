@@ -4,7 +4,6 @@ import '../core/format.dart';
 import '../models/merchant.dart';
 import '../models/merchant_fee_tier.dart';
 import '../providers/app_providers.dart';
-import 'buy_on_behalf_badge.dart';
 
 /// Thông báo + bảng bậc phí mua hộ — đặt ở màn chi tiết cửa hàng và chi tiết sản phẩm để
 /// khách biết trước sẽ bị cộng thêm phí này trước khi vào thanh toán (nơi phí thật sự được
@@ -40,22 +39,9 @@ class BuyOnBehalfFeeNotice extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              const BuyOnBehalfBadge(iconSize: 14),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Cửa hàng mua hộ — lưu ý trước khi đặt',
-                  style: theme.textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          _NoticeLine(icon: Icons.payments_outlined, text: 'Có phụ phí mua hộ tính vào tổng thanh toán, xem bảng bên dưới'),
-          _NoticeLine(icon: Icons.schedule, text: 'Đơn có thể lâu hơn bình thường do cửa hàng phải đi mua hộ'),
-          _NoticeLine(icon: Icons.lock_clock, text: 'Bắt buộc thanh toán trước (chuyển khoản), không hỗ trợ trả khi nhận hàng (COD)'),
+          _NoticeLine(icon: Icons.payments_outlined, text: 'Có phụ phí mua hộ, xem bảng bên dưới'),
+          _NoticeLine(icon: Icons.schedule, text: 'Đơn có thể giao lâu hơn bình thường'),
+          _NoticeLine(icon: Icons.lock_clock, text: 'Chỉ thanh toán trước (chuyển khoản), không hỗ trợ COD'),
           const SizedBox(height: 8),
           tiersAsync.when(
             loading: () => const SizedBox(

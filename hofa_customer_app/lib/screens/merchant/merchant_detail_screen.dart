@@ -210,11 +210,21 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  NetworkImageBox(
-                    url: merchant.logoUrl,
-                    width: 72,
-                    height: 72,
-                    fallbackIcon: Icons.storefront_outlined,
+                  // Nhãn "Mua hộ" xếp NGAY DƯỚI avatar cửa hàng — dễ nhận biết ngay từ cụm
+                  // logo, thay vì lẫn trong cột chữ bên phải như trước.
+                  Column(
+                    children: [
+                      NetworkImageBox(
+                        url: merchant.logoUrl,
+                        width: 72,
+                        height: 72,
+                        fallbackIcon: Icons.storefront_outlined,
+                      ),
+                      if (merchant.isBuyOnBehalf) ...[
+                        const SizedBox(height: 4),
+                        const BuyOnBehalfBadge(),
+                      ],
+                    ],
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -236,10 +246,6 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
                               ),
                           ],
                         ),
-                        if (merchant.isBuyOnBehalf) ...[
-                          const SizedBox(height: 4),
-                          const BuyOnBehalfBadge(),
-                        ],
                         if (merchant.description != null &&
                             merchant.description!.isNotEmpty)
                           Padding(
@@ -252,7 +258,13 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
                             ),
                           ),
                         const SizedBox(height: 6),
-                        Row(
+                        // Wrap thay vì Row — số lượt đánh giá dài ("4.8 (1.234 đánh giá)") cộng
+                        // thời gian chuẩn bị có thể vượt bề rộng màn hình hẹp, Wrap tự xuống
+                        // dòng thay vì báo lỗi tràn (RenderFlex overflow) — cùng cách sửa với
+                        // widgets/merchant_card.dart.
+                        Wrap(
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          runSpacing: 4,
                           children: [
                             InkWell(
                               borderRadius: BorderRadius.circular(6),
@@ -260,6 +272,7 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
                                 '/merchants/${merchant.id}/reviews',
                               ),
                               child: Row(
+                                mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Icon(
                                     Icons.star,
@@ -279,13 +292,18 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
                               ),
                             ),
                             const SizedBox(width: 16),
-                            Icon(
-                              Icons.timer_outlined,
-                              size: 16,
-                              color: theme.colorScheme.outline,
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.timer_outlined,
+                                  size: 16,
+                                  color: theme.colorScheme.outline,
+                                ),
+                                const SizedBox(width: 4),
+                                Text('${merchant.avgPrepMinutes} phút'),
+                              ],
                             ),
-                            const SizedBox(width: 4),
-                            Text('${merchant.avgPrepMinutes} phút'),
                           ],
                         ),
                         if (merchant.distanceKm != null ||
@@ -487,7 +505,7 @@ class _ProductGridState extends State<_ProductGrid> {
       maxCrossAxisExtent: 220,
       mainAxisSpacing: 12,
       crossAxisSpacing: 12,
-      childAspectRatio: 0.68,
+      childAspectRatio: 0.6,
     ),
     itemBuilder: (context, i) {
       final p = items[i];
@@ -518,55 +536,55 @@ class _ProductGridState extends State<_ProductGrid> {
       );
     }
 
-    final categoryDropdown = widget.categories.isEmpty
+    // Gộp chung 1 hàng cuộn ngang thay cho dropdown + Wrap riêng trước đây: lọc theo hình
+    // thức bán (Tất cả/Giao ngay/Đặt trước) trước, danh mục cửa hàng tự đặt xếp ở cuối — khách
+    // thấy hết lựa chọn ngay, cuộn ngang khi nhiều thay vì phải bấm mở dropdown.
+    final filterChipList = <Widget>[
+      if (showFilter) ...[
+        ChoiceChip(
+          label: const Text('Tất cả'),
+          selected: _filter == 'all',
+          onSelected: (_) => setState(() => _filter = 'all'),
+        ),
+        ChoiceChip(
+          label: const Text('Giao ngay'),
+          selected: _filter == 'instant',
+          onSelected: (_) => setState(() => _filter = 'instant'),
+        ),
+        ChoiceChip(
+          label: const Text('Đặt trước'),
+          selected: _filter == 'scheduled',
+          onSelected: (_) => setState(() => _filter = 'scheduled'),
+        ),
+      ],
+      // Không có riêng chip "Tất cả danh mục" nữa — trùng nghĩa với "Tất cả" ở nhóm hình thức
+      // bán phía trước. Bấm lại đúng danh mục đang chọn để bỏ lọc (ChoiceChip tự báo `false`
+      // khi bấm chip đang selected), quay về xem đủ mọi danh mục.
+      if (widget.categories.isNotEmpty)
+        ...widget.categories.map(
+          (c) => ChoiceChip(
+            label: Text(c.name),
+            selected: _categoryFilter == c.id,
+            onSelected: (selected) =>
+                setState(() => _categoryFilter = selected ? c.id : null),
+          ),
+        ),
+    ];
+
+    final filterRow = filterChipList.isEmpty
         ? const SizedBox.shrink()
         : Padding(
             padding: const EdgeInsets.only(bottom: 12),
-            child: DropdownButtonFormField<String?>(
-              initialValue: _categoryFilter,
-              decoration: const InputDecoration(
-                labelText: 'Danh mục cửa hàng',
-                border: OutlineInputBorder(),
-                isDense: true,
+            child: SizedBox(
+              height: 36,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: filterChipList.length,
+                separatorBuilder: (_, _) => const SizedBox(width: 8),
+                itemBuilder: (_, i) => filterChipList[i],
               ),
-              items: [
-                const DropdownMenuItem(
-                  value: null,
-                  child: Text('Tất cả danh mục'),
-                ),
-                ...widget.categories.map(
-                  (c) => DropdownMenuItem(value: c.id, child: Text(c.name)),
-                ),
-              ],
-              onChanged: (v) => setState(() => _categoryFilter = v),
             ),
           );
-
-    final filterChips = showFilter
-        ? Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Wrap(
-              spacing: 8,
-              children: [
-                ChoiceChip(
-                  label: const Text('Tất cả'),
-                  selected: _filter == 'all',
-                  onSelected: (_) => setState(() => _filter = 'all'),
-                ),
-                ChoiceChip(
-                  label: const Text('Giao ngay'),
-                  selected: _filter == 'instant',
-                  onSelected: (_) => setState(() => _filter = 'instant'),
-                ),
-                ChoiceChip(
-                  label: const Text('Bán sỉ / Đặt trước'),
-                  selected: _filter == 'scheduled',
-                  onSelected: (_) => setState(() => _filter = 'scheduled'),
-                ),
-              ],
-            ),
-          )
-        : const SizedBox.shrink();
 
     // Cửa hàng chưa tự cài đặt danh mục nào, hoặc khách đã lọc còn đúng 1 danh mục cụ thể —
     // cả 2 trường hợp đều không cần chia nhóm nữa, hiện phẳng 1 lưới duy nhất.
@@ -579,8 +597,7 @@ class _ProductGridState extends State<_ProductGrid> {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          categoryDropdown,
-          filterChips,
+          filterRow,
           if (filtered.isEmpty)
             const Padding(
               padding: EdgeInsets.only(top: 12, bottom: 12),
@@ -608,8 +625,7 @@ class _ProductGridState extends State<_ProductGrid> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        categoryDropdown,
-        filterChips,
+        filterRow,
         for (final s in sections) ...[
           Padding(
             padding: const EdgeInsets.only(bottom: 8),

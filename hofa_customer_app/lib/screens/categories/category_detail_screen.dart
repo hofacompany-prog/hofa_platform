@@ -102,7 +102,7 @@ class _CategoryDetailScreenState extends ConsumerState<CategoryDetailScreen> {
                 maxCrossAxisExtent: 220,
                 mainAxisSpacing: 12,
                 crossAxisSpacing: 12,
-                childAspectRatio: 0.62,
+                childAspectRatio: 0.54,
               ),
               itemBuilder: (context, i) {
                 if (i == productsState.items.length) {

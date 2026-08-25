@@ -362,6 +362,67 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     }
   }
 
+  /// Yêu cầu xoá tài khoản — không thể hoàn tác nên bắt gõ đúng chữ "XOÁ" để xác nhận (nặng
+  /// tay hơn dialog Huỷ/Xoá thường, tránh bấm nhầm khi đây là hành động huỷ hẳn tài khoản).
+  Future<void> _deleteAccount() async {
+    final confirmCtrl = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Xoá tài khoản?'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Toàn bộ hồ sơ, địa chỉ đã lưu sẽ bị xoá vĩnh viễn và không đăng nhập lại được '
+                'bằng số điện thoại này nữa. Lịch sử đơn hàng vẫn được giữ lại (ẩn danh) để cửa '
+                'hàng đối chiếu doanh thu.',
+              ),
+              const SizedBox(height: 16),
+              const Text('Gõ "XOÁ" để xác nhận:'),
+              const SizedBox(height: 8),
+              TextField(
+                controller: confirmCtrl,
+                autofocus: true,
+                onChanged: (_) => setDialogState(() {}),
+                decoration: const InputDecoration(border: OutlineInputBorder(), isDense: true),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Huỷ'),
+            ),
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: Colors.red),
+              onPressed: confirmCtrl.text.trim().toUpperCase() == 'XOÁ'
+                  ? () => Navigator.pop(context, true)
+                  : null,
+              child: const Text('Xoá vĩnh viễn'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (ok != true) return;
+
+    setState(() => _busy = true);
+    try {
+      await ref.read(userRepoProvider).deleteAccount();
+      await Supabase.instance.client.auth.signOut();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+        setState(() => _busy = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final profileAsync = ref.watch(userProfileProvider);
@@ -486,6 +547,16 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             onPressed: () => Supabase.instance.client.auth.signOut(),
             icon: const Icon(Icons.logout),
             label: const Text('Đăng xuất'),
+          ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: _busy ? null : _deleteAccount,
+            style: OutlinedButton.styleFrom(
+              foregroundColor: theme.colorScheme.error,
+              side: BorderSide(color: theme.colorScheme.error),
+            ),
+            icon: const Icon(Icons.delete_forever_outlined),
+            label: const Text('Xoá tài khoản'),
           ),
           if (kIsWeb) ...[
             const SizedBox(height: 12),

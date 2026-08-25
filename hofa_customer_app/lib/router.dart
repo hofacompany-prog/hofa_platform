@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -35,6 +36,16 @@ final _uuidRe = RegExp(
   caseSensitive: false,
 );
 final _merchantSlugPathRe = RegExp(r'^/merchants/([^/]+)(/reviews)?$');
+
+/// Chuyển tab (5 mục ở thanh điều hướng dưới CustomerShell) không hiệu ứng — trượt/push mặc
+/// định của go_router hợp khi ĐI SÂU vào 1 màn con (vd mở chi tiết cửa hàng), nhưng chuyển tab
+/// ngang hàng thì không phải "đi vào" đâu cả nên trông giật. Từng thử fade nhưng 2 trang cùng
+/// mờ dần chồng lên nhau giữa chừng làm chữ 2 trang nhìn xuyên/chồng lên nhau — đổi hẳn sang
+/// không hiệu ứng (tức thì) giống cách phần lớn app thật xử lý chuyển tab gốc (Instagram,
+/// Facebook...), vừa mượt vừa không còn lỗi chồng chữ. Chỉ áp dụng cho đúng 5 route gốc này,
+/// các route con (merchant/product detail, checkout...) vẫn giữ nguyên hiệu ứng trượt mặc định.
+Page<void> _tabPage(GoRouterState state, Widget child) =>
+    NoTransitionPage<void>(key: state.pageKey, child: child);
 
 final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
@@ -124,7 +135,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       ShellRoute(
         builder: (context, state, child) => CustomerShell(child: child),
         routes: [
-          GoRoute(path: '/', builder: (context, state) => const HomeScreen()),
+          GoRoute(
+            path: '/',
+            pageBuilder: (context, state) =>
+                _tabPage(state, const HomeScreen()),
+          ),
           GoRoute(
             path: '/merchants/:id',
             builder: (context, state) =>
@@ -147,11 +162,13 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/cart',
-            builder: (context, state) => const CartScreen(),
+            pageBuilder: (context, state) =>
+                _tabPage(state, const CartScreen()),
           ),
           GoRoute(
             path: '/preorder',
-            builder: (context, state) => const PreorderScreen(),
+            pageBuilder: (context, state) =>
+                _tabPage(state, const PreorderScreen()),
           ),
           GoRoute(
             path: '/checkout',
@@ -166,7 +183,8 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/orders',
-            builder: (context, state) => const OrdersListScreen(),
+            pageBuilder: (context, state) =>
+                _tabPage(state, const OrdersListScreen()),
           ),
           GoRoute(
             path: '/orders/:id',
@@ -198,7 +216,8 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/profile',
-            builder: (context, state) => const ProfileScreen(),
+            pageBuilder: (context, state) =>
+                _tabPage(state, const ProfileScreen()),
           ),
           GoRoute(
             path: '/notifications',

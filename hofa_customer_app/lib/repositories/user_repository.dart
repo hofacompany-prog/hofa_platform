@@ -31,4 +31,8 @@ class UserRepository {
   Future<void> deleteAddress(String id) async {
     await _api.delete('/addresses/$id');
   }
+
+  Future<void> deleteAccount() async {
+    await _api.delete('/me');
+  }
 }

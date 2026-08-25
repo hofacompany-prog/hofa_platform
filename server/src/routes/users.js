@@ -63,6 +63,44 @@ router.patch('/me', asyncHandler(async (req, res) => {
   res.json({ ok: true, data: updated });
 }));
 
+/** Tự xoá tài khoản (khách tự bấm trong app, khác DELETE /admin/users/:id do admin làm) — ẩn
+ * danh hoá thông tin định danh thay vì xoá cứng dòng users, vì orders.customer_id vẫn phải trỏ
+ * tới 1 dòng users hợp lệ để cửa hàng còn xem được lịch sử đơn/doanh thu (ON DELETE RESTRICT,
+ * xem DELETE /admin/users/:id) — đúng như đã công bố ở web/delete-account.html (giữ lịch sử đơn
+ * ở dạng ẩn danh cho mục đích kế toán). Xoá hẳn: địa chỉ đã lưu, thiết bị/push token, và tài
+ * khoản đăng nhập Supabase Auth (chỉ khi đây là hồ sơ role CUỐI CÙNG dùng chung auth_user_id —
+ * 1 SĐT có thể có nhiều hồ sơ role khác nhau, xem giải thích ở DELETE /admin/users/:id).
+ * phone đổi sang giá trị giả duy nhất vì cột có UNIQUE + CHECK chỉ nhận chữ số/dấu +
+ * (users_phone_format, hofa-db/01_schema.sql) — không thể chỉ set NULL. */
+router.delete('/me', asyncHandler(async (req, res) => {
+  requireProfile(req.ctx);
+  const userId = req.ctx.userId;
+  const existing = req.ctx.profile;
+
+  await db.query('DELETE FROM addresses WHERE user_id = $1', [userId]);
+  await db.query('DELETE FROM user_devices WHERE user_id = $1', [userId]);
+
+  const siblingCount = await db.queryOne(
+    'SELECT COUNT(*) AS count FROM users WHERE auth_user_id = $1 AND id != $2',
+    [existing.auth_user_id, userId]
+  );
+  if (Number(siblingCount.count) === 0) {
+    await supabaseAdmin.deleteAuthUser(existing.auth_user_id);
+  }
+
+  await db.updateById('users', userId, {
+    full_name: 'Người dùng đã xoá',
+    phone: Date.now().toString(),
+    email: null,
+    avatar_url: null,
+    date_of_birth: null,
+    status: 'suspended',
+    deleted_at: new Date().toISOString()
+  });
+
+  res.json({ ok: true, data: { deleted: true } });
+}));
+
 // ---- Quản trị (admin) ----
 
 /** Admin tạo thẳng 1 người dùng mới (kèm mật khẩu, đăng nhập được ngay) — status='active' luôn,

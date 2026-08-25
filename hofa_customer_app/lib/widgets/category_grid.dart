@@ -34,7 +34,7 @@ class CategoryGrid extends StatelessWidget {
       itemCount: visible.length + 1,
       gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
         maxCrossAxisExtent: 84,
-        mainAxisExtent: 88,
+        mainAxisExtent: 100,
         mainAxisSpacing: 12,
         crossAxisSpacing: 4,
       ),
@@ -106,12 +106,14 @@ class CategoryTile extends StatelessWidget {
                         : Icon(Icons.category_outlined, color: theme.colorScheme.primary),
           ),
           const SizedBox(height: 6),
-          Text(
-            label,
-            textAlign: TextAlign.center,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-            style: theme.textTheme.bodySmall,
+          Flexible(
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodySmall,
+            ),
           ),
         ],
       ),
