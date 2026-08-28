@@ -39,9 +39,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    // Kiểm tra ngay lúc mở Trang chủ — thiếu quyền Thông báo thì lỡ đơn mới. Khác app Khách
-    // hàng (chỉ hỏi 1 lần, có thể bỏ qua): cửa hàng BẮT BUỘC phải cấp quyền Thông báo mới dùng
-    // được app (không có nút "Để sau"), hỏi lại mỗi lần vào Trang chủ tới khi được cấp.
+    // Kiểm tra ngay lúc mở Trang chủ — thiếu quyền Thông báo thì lỡ đơn mới. Hỏi lại mỗi lần vào
+    // Trang chủ tới khi được cấp, nhưng có nút "Để sau" để không bị kẹt nếu chưa muốn cấp ngay
+    // (khác trước đây bắt buộc, không có lối thoát).
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _ensureNotificationPermission();
       if (mounted) await _checkLocationPermissionOnStart();
@@ -74,26 +74,27 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     _notifDialogOpen = true;
     await showDialog<void>(
       context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) => PopScope(
-        canPop: false,
-        child: AlertDialog(
-          title: const Text('Cần bật thông báo để dùng app'),
-          content: const Text(
-            'Cửa hàng bắt buộc bật thông báo để nhận đơn mới kịp thời — bấm "Cấp quyền" để tiếp '
-            'tục. Nếu trước đó đã từ chối, nút này sẽ mở thẳng Cài đặt để bạn bật lại.',
-          ),
-          actions: [
-            FilledButton(
-              onPressed: () async {
-                await PermissionHelper.requestNotification(dialogContext);
-                if (dialogContext.mounted) Navigator.pop(dialogContext);
-                if (mounted) await _ensureNotificationPermission();
-              },
-              child: const Text('Cấp quyền'),
-            ),
-          ],
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Cần bật thông báo để dùng app'),
+        content: const Text(
+          'Cửa hàng nên bật thông báo để nhận đơn mới kịp thời — bấm "Cấp quyền" để tiếp tục. '
+          'Nếu trước đó đã từ chối, nút này sẽ mở thẳng Cài đặt để bạn bật lại. Chưa muốn cấp '
+          'ngay thì bấm "Để sau", lần sau vào Trang chủ sẽ hỏi lại.',
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Để sau'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              await PermissionHelper.requestNotification(dialogContext);
+              if (dialogContext.mounted) Navigator.pop(dialogContext);
+              if (mounted) await _ensureNotificationPermission();
+            },
+            child: const Text('Cấp quyền'),
+          ),
+        ],
       ),
     );
     _notifDialogOpen = false;

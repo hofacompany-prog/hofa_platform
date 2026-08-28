@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:permission_handler/permission_handler.dart' as ph;
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// 3 mức duy nhất cần phân biệt để quyết định hành động khi bấm nút: đã cấp (không cần làm gì
@@ -46,6 +47,16 @@ class PermissionHelper {
         case AuthorizationStatus.denied:
           return PermissionState.denied;
         default:
+          // FCM báo "chưa quyết định" — kiểm tra thêm bằng permission_handler (đọc thẳng quyền hệ
+          // thống Android qua ContextCompat, không qua lớp trung gian FCM hay bị trễ/báo sai trên
+          // vài thiết bị) trước khi kết luận thật sự chưa cấp, tránh hiện popup xin quyền oan dù
+          // người dùng đã bật rồi.
+          if (kIsWeb) return PermissionState.notDetermined;
+          final phStatus = await ph.Permission.notification.status;
+          if (phStatus.isGranted || phStatus.isLimited) {
+            return PermissionState.granted;
+          }
+          if (phStatus.isPermanentlyDenied) return PermissionState.denied;
           return PermissionState.notDetermined;
       }
     } catch (_) {
