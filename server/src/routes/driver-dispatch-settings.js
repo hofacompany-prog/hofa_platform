@@ -5,7 +5,7 @@ const { ApiError } = require('../errors');
 const { pickFields, requireRole } = require('../utils');
 const dispatch = require('../dispatch');
 
-const FIELDS = ['rescan_interval_seconds', 'max_rescan_attempts'];
+const FIELDS = ['rescan_interval_seconds', 'max_rescan_attempts', 'backup_pool_enabled'];
 
 /** Chỉ giữ 1 dòng đang áp dụng — dòng mới nhất theo updated_at. */
 async function currentSettings() {

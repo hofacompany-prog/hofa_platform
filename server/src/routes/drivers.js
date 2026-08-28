@@ -13,7 +13,9 @@ const DRIVER_PROFILE_FIELDS = [
 
 // Riêng admin được sửa thêm auto_accept (tài xế tự đổi qua PATCH /drivers/me/auto-accept) — gộp
 // vào đây để admin sửa hộ được khi tài xế nhờ, dùng chung route PATCH /admin/drivers/:id.
-const ADMIN_DRIVER_EDIT_FIELDS = [...DRIVER_PROFILE_FIELDS, 'auto_accept'];
+// is_backup_driver CHỈ admin đổi được (thêm/gỡ khỏi danh sách "Tài xế dự phòng") — không cho
+// vào DRIVER_PROFILE_FIELDS vì tài xế không tự bật/tắt được cờ này.
+const ADMIN_DRIVER_EDIT_FIELDS = [...DRIVER_PROFILE_FIELDS, 'auto_accept', 'is_backup_driver'];
 
 async function requireOwnDriverRow(ctx) {
   requireRole(ctx, ['driver']);

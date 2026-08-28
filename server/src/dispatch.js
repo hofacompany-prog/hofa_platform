@@ -35,25 +35,32 @@ async function currentDriverAcceptSettings() {
   return row || { auto_accept_sweep_seconds: 8, manual_accept_sweep_seconds: 25 };
 }
 
-/** Chỉ giữ 1 dòng đang áp dụng — dòng mới nhất theo updated_at. Fallback 60s/10 lần nếu chưa
- * từng chạy migration hofa-db/82_driver_dispatch_retry_settings.sql. */
+/** Chỉ giữ 1 dòng đang áp dụng — dòng mới nhất theo updated_at. Fallback 60s/10 lần/tắt dự phòng
+ * nếu chưa từng chạy migration hofa-db/82_driver_dispatch_retry_settings.sql +
+ * hofa-db/98_backup_driver_pool.sql. */
 async function currentDriverDispatchSettings() {
   const row = await db.queryOne('SELECT * FROM driver_dispatch_settings ORDER BY updated_at DESC LIMIT 1');
-  return row || { rescan_interval_seconds: 60, max_rescan_attempts: 10 };
+  return row || { rescan_interval_seconds: 60, max_rescan_attempts: 10, backup_pool_enabled: false };
 }
 
 /** [minViTrenBalance] — tài xế phải có Ví trên (wallet='cod', xem hofa-db/69_driver_wallet_vi_
  * tren.sql) ĐỦ LỚN HƠN giá trị đơn mới được nhận, áp dụng cho MỌI loại đơn (không riêng COD) —
  * coi như tiền vốn tối thiểu trước khi chạy đơn. Tài xế chưa đủ (kể cả tài xế mới, số dư 0)
  * phải tự nạp tiền vào Ví trên ("Nạp tiền", app tài xế) trước khi nhận được đơn đầu tiên. */
-async function findNearestOnlineDriver(pickupLat, pickupLng, excludeDriverIds, { minViTrenBalance = 0 } = {}) {
+async function findNearestOnlineDriver(
+  pickupLat,
+  pickupLng,
+  excludeDriverIds,
+  { minViTrenBalance = 0, backupPool = false } = {}
+) {
   const drivers = await db.query(
     `SELECT d.* FROM drivers d
        LEFT JOIN driver_wallet_balances w ON w.driver_id = d.id
       WHERE d.status = 'online' AND d.current_latitude IS NOT NULL AND d.current_longitude IS NOT NULL
         AND d.id <> ALL($1::uuid[])
-        AND COALESCE(w.cod_balance, 0) > $2`,
-    [excludeDriverIds, minViTrenBalance]
+        AND COALESCE(w.cod_balance, 0) > $2
+        AND d.is_backup_driver = $3`,
+    [excludeDriverIds, minViTrenBalance, backupPool]
   );
   if (!drivers.length) return null;
   if (pickupLat == null || pickupLng == null) return drivers[0];
@@ -78,7 +85,11 @@ async function findNearestOnlineDriver(pickupLat, pickupLng, excludeDriverIds, {
  *   chưa trượt thì sweepExpiredOffers() tự NHẬN hộ (autoAcceptExpiredOffer).
  * - auto_accept=false: accept_window dài hơn (manual_accept_sweep_seconds) — hết giờ thì
  *   reassignAfterDecline() chuyển cho tài xế gần nhất kế tiếp, y hệt khi tài xế tự bấm Từ chối.
- * Trả về { delivery, driver } hoặc null nếu không còn tài xế nào online phù hợp.
+ * Không tìm được tài xế THƯỜNG nào (is_backup_driver=false) VÀ đã bật
+ * driver_dispatch_settings.backup_pool_enabled thì thử tiếp nhóm "tài xế dự phòng"
+ * (is_backup_driver=true, nhận không giới hạn số đơn cùng lúc — xem
+ * hofa-db/98_backup_driver_pool.sql) trước khi bỏ cuộc hẳn.
+ * Trả về { delivery, driver } hoặc null nếu không còn tài xế nào (kể cả dự phòng) phù hợp.
  */
 async function offerToNearestDriver(orderId, { excludeDriverIds = [] } = {}) {
   const order = await db.queryOne(
@@ -88,9 +99,18 @@ async function offerToNearestDriver(orderId, { excludeDriverIds = [] } = {}) {
   if (!order) return null;
   const branch = await db.queryOne('SELECT * FROM branches WHERE id = $1', [order.branch_id]);
 
-  const driver = await findNearestOnlineDriver(branch?.latitude ?? null, branch?.longitude ?? null, excludeDriverIds, {
+  let driver = await findNearestOnlineDriver(branch?.latitude ?? null, branch?.longitude ?? null, excludeDriverIds, {
     minViTrenBalance: order.total_amount
   });
+  if (!driver) {
+    const settings = await currentDriverDispatchSettings();
+    if (settings.backup_pool_enabled) {
+      driver = await findNearestOnlineDriver(branch?.latitude ?? null, branch?.longitude ?? null, excludeDriverIds, {
+        minViTrenBalance: order.total_amount,
+        backupPool: true
+      });
+    }
+  }
   if (!driver) return null;
 
   const distanceKm =

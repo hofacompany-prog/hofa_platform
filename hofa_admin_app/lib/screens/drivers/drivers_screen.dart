@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../models/bank.dart';
 import '../../models/driver.dart';
+import '../../models/driver_dispatch_settings.dart';
 import '../../providers/admin_providers.dart';
 import '../../widgets/stat_card.dart';
 import '../../core/responsive.dart';
@@ -28,9 +29,23 @@ class DriversScreen extends ConsumerStatefulWidget {
   ConsumerState<DriversScreen> createState() => _DriversScreenState();
 }
 
-class _DriversScreenState extends ConsumerState<DriversScreen> {
+class _DriversScreenState extends ConsumerState<DriversScreen>
+    with SingleTickerProviderStateMixin {
   bool _busy = false;
   bool _onlyUnverified = false;
+  late final TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
 
   Future<void> _verify(Driver d) async {
     final ok = await showDialog<bool>(
@@ -387,9 +402,59 @@ class _DriversScreenState extends ConsumerState<DriversScreen> {
     }
   }
 
+  /// Thêm/gỡ 1 tài xế khỏi nhóm "Tài xế dự phòng" (drivers.is_backup_driver) — nhóm này nhận
+  /// không giới hạn đơn cùng lúc, chỉ được hệ thống mời khi không tìm được tài xế thường nào
+  /// (xem server/src/dispatch.js) VÀ công tắc backupPoolEnabled đang bật.
+  Future<void> _setBackup(Driver d, bool value) async {
+    setState(() => _busy = true);
+    try {
+      await ref.read(adminRepoProvider).updateDriver(d.id, {
+        'is_backup_driver': value,
+      });
+      ref.invalidate(driversProvider);
+    } catch (e) {
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  /// Bật/tắt CẢ NHÓM tài xế dự phòng cùng lúc — tắt thì dù có tài xế nào trong danh sách cũng
+  /// không được hệ thống mời, xem hofa-db/98_backup_driver_pool.sql.
+  Future<void> _toggleBackupPoolEnabled(
+    DriverDispatchSettings s,
+    bool value,
+  ) async {
+    setState(() => _busy = true);
+    try {
+      await ref
+          .read(adminRepoProvider)
+          .updateDriverDispatchSettings(
+            DriverDispatchSettings(
+              id: s.id,
+              rescanIntervalSeconds: s.rescanIntervalSeconds,
+              maxRescanAttempts: s.maxRescanAttempts,
+              backupPoolEnabled: value,
+            ),
+          );
+      ref.invalidate(driverDispatchSettingsProvider);
+    } catch (e) {
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final driversAsync = ref.watch(driversProvider);
+    final dispatchSettingsAsync = ref.watch(driverDispatchSettingsProvider);
     final theme = Theme.of(context);
 
     return Scaffold(
@@ -403,201 +468,283 @@ class _DriversScreenState extends ConsumerState<DriversScreen> {
           ),
           const SizedBox(width: 8),
         ],
+        bottom: TabBar(
+          controller: _tabController,
+          tabs: const [
+            Tab(text: 'Tài xế'),
+            Tab(text: 'Tài xế dự phòng'),
+          ],
+        ),
       ),
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(24, 12, 24, 4),
-            child: Row(
-              children: [
-                FilterChip(
-                  label: const Text('Chỉ hiện hồ sơ chưa duyệt'),
-                  selected: _onlyUnverified,
-                  onSelected: (v) => setState(() => _onlyUnverified = v),
-                ),
-              ],
-            ),
-          ),
           if (_busy) const LinearProgressIndicator(),
           Expanded(
             child: driversAsync.when(
               loading: () => const Center(child: CircularProgressIndicator()),
               error: (e, _) => Center(child: Text('Lỗi: $e')),
               data: (all) {
-                final list = _onlyUnverified
-                    ? all.where((d) => !d.isVerified).toList()
-                    : all;
-                if (list.isEmpty) {
-                  return Center(
-                    child: Text(
-                      _onlyUnverified
-                          ? 'Không có hồ sơ nào chờ duyệt'
-                          : 'Chưa có tài xế nào',
+                final normal = all.where((d) => !d.isBackupDriver).toList();
+                final backup = all.where((d) => d.isBackupDriver).toList();
+                return TabBarView(
+                  controller: _tabController,
+                  children: [
+                    Column(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(24, 12, 24, 4),
+                          child: Row(
+                            children: [
+                              FilterChip(
+                                label: const Text('Chỉ hiện hồ sơ chưa duyệt'),
+                                selected: _onlyUnverified,
+                                onSelected: (v) =>
+                                    setState(() => _onlyUnverified = v),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Expanded(
+                          child: _buildDriverList(
+                            _onlyUnverified
+                                ? normal.where((d) => !d.isVerified).toList()
+                                : normal,
+                            emptyMessage: _onlyUnverified
+                                ? 'Không có hồ sơ nào chờ duyệt'
+                                : 'Chưa có tài xế nào',
+                            statLabel: 'Tổng tài xế (đang lọc)',
+                            inBackupTab: false,
+                          ),
+                        ),
+                      ],
                     ),
-                  );
-                }
-                return ListView.separated(
-                  padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
-                  itemCount: list.length + 1,
-                  separatorBuilder: (_, _) => const SizedBox(height: 8),
-                  itemBuilder: (context, i) {
-                    if (i == list.length) {
-                      return Padding(
-                        padding: const EdgeInsets.only(top: 8),
-                        child: StatCard(
-                          label: 'Tổng tài xế (đang lọc)',
-                          value: '${list.length}',
-                          icon: Icons.two_wheeler_outlined,
-                        ),
-                      );
-                    }
-                    final d = list[i];
-                    final verification = driverVerificationState(d);
-                    final (statusIcon, statusColor) = switch (verification) {
-                      DriverVerificationState.verified => (
-                        Icons.verified_user,
-                        Colors.green,
-                      ),
-                      DriverVerificationState.rejected => (
-                        Icons.block,
-                        theme.colorScheme.error,
-                      ),
-                      DriverVerificationState.pending => (
-                        Icons.pending,
-                        Colors.orange,
-                      ),
-                    };
-                    // Card tự dựng (không dùng ListTile.trailing) — trailing kiểu Row cứng
-                    // (tối đa 5 nút/chip) tràn ra ngoài trên màn hẹp vì ListTile không co giãn
-                    // trailing được; Wrap bên dưới title/subtitle tự xuống dòng khi hết chỗ.
-                    return Card(
-                      elevation: 0,
-                      color: theme.colorScheme.surfaceContainerLow,
-                      child: InkWell(
-                        onTap: () => context.push('/drivers/${d.id}'),
-                        child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 12,
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Tooltip(
-                                  message:
-                                      verification ==
-                                          DriverVerificationState.rejected
-                                      ? 'Bị từ chối: ${d.rejectionReason ?? ""}'
-                                      : '',
-                                  child: CircleAvatar(
-                                    backgroundColor: statusColor.withValues(
-                                      alpha: 0.12,
-                                    ),
-                                    child: Icon(statusIcon, color: statusColor),
+                    Column(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(24, 12, 24, 4),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Tài xế trong danh sách này nhận KHÔNG GIỚI HẠN số đơn cùng lúc — '
+                                'chỉ được hệ thống mời khi không tìm được tài xế thường nào nhận đơn.',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.outline,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              dispatchSettingsAsync.when(
+                                loading: () => const SizedBox(
+                                  height: 24,
+                                  width: 24,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
                                   ),
                                 ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        d.fullName?.isNotEmpty == true
-                                            ? d.fullName!
-                                            : (d.phone ?? 'Tài xế'),
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      Text(
-                                        '${d.vehicleType ?? "Xe"} · ${d.vehiclePlate ?? "—"} · ${d.phone ?? "—"}',
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      Text(
-                                        '${d.totalDeliveries} chuyến · ${d.ratingAvg}★'
-                                        '${verification == DriverVerificationState.rejected ? ' · Bị từ chối: ${d.rejectionReason ?? ""}' : ''}',
-                                        style: TextStyle(
-                                          color:
-                                              verification ==
-                                                  DriverVerificationState
-                                                      .rejected
-                                              ? theme.colorScheme.error
-                                              : null,
-                                        ),
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                    ],
+                                error: (e, _) => Text('Lỗi: $e'),
+                                data: (s) => SwitchListTile(
+                                  contentPadding: EdgeInsets.zero,
+                                  title: const Text(
+                                    'Kích hoạt nhóm tài xế dự phòng',
                                   ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            Wrap(
-                              alignment: WrapAlignment.end,
-                              crossAxisAlignment: WrapCrossAlignment.center,
-                              spacing: 8,
-                              runSpacing: 4,
-                              children: [
-                                IconButton(
-                                  tooltip: 'Sửa hồ sơ',
-                                  icon: const Icon(Icons.edit_outlined),
-                                  onPressed: _busy
+                                  subtitle: Text(
+                                    s.backupPoolEnabled
+                                        ? 'Đang hoạt động — tự mời khi không tìm được tài xế thường'
+                                        : 'Đang tắt — nhóm này sẽ không được mời dù có tài xế trong danh sách',
+                                  ),
+                                  value: s.backupPoolEnabled,
+                                  onChanged: _busy
                                       ? null
-                                      : () => _editProfile(d),
+                                      : (v) => _toggleBackupPoolEnabled(s, v),
                                 ),
-                                ActionChip(
-                                  label: Text(
-                                    driverStatusLabels[d.status] ?? d.status,
-                                  ),
-                                  visualDensity: VisualDensity.compact,
-                                  onPressed: _busy
-                                      ? null
-                                      : () => _changeStatus(d),
-                                ),
-                                if (!d.isVerified) ...[
-                                  OutlinedButton(
-                                    style: OutlinedButton.styleFrom(
-                                      foregroundColor: theme.colorScheme.error,
-                                    ),
-                                    onPressed: _busy ? null : () => _reject(d),
-                                    child: const Text('Từ chối'),
-                                  ),
-                                  FilledButton(
-                                    onPressed: _busy ? null : () => _verify(d),
-                                    child: const Text('Duyệt hồ sơ'),
-                                  ),
-                                ] else
-                                  const Padding(
-                                    padding: EdgeInsets.symmetric(
-                                      horizontal: 8,
-                                    ),
-                                    child: Text(
-                                      'Đã duyệt',
-                                      style: TextStyle(color: Colors.green),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ],
+                              ),
+                            ],
+                          ),
                         ),
+                        Expanded(
+                          child: _buildDriverList(
+                            backup,
+                            emptyMessage:
+                                'Chưa có tài xế nào trong danh sách dự phòng',
+                            statLabel: 'Tổng tài xế dự phòng',
+                            inBackupTab: true,
+                          ),
                         ),
-                      ),
-                    );
-                  },
+                      ],
+                    ),
+                  ],
                 );
               },
             ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildDriverList(
+    List<Driver> list, {
+    required String emptyMessage,
+    required String statLabel,
+    required bool inBackupTab,
+  }) {
+    final theme = Theme.of(context);
+    if (list.isEmpty) {
+      return Center(child: Text(emptyMessage));
+    }
+    return ListView.separated(
+      padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
+      itemCount: list.length + 1,
+      separatorBuilder: (_, _) => const SizedBox(height: 8),
+      itemBuilder: (context, i) {
+        if (i == list.length) {
+          return Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: StatCard(
+              label: statLabel,
+              value: '${list.length}',
+              icon: Icons.two_wheeler_outlined,
+            ),
+          );
+        }
+        final d = list[i];
+        final verification = driverVerificationState(d);
+        final (statusIcon, statusColor) = switch (verification) {
+          DriverVerificationState.verified => (
+            Icons.verified_user,
+            Colors.green,
+          ),
+          DriverVerificationState.rejected => (
+            Icons.block,
+            theme.colorScheme.error,
+          ),
+          DriverVerificationState.pending => (Icons.pending, Colors.orange),
+        };
+        // Card tự dựng (không dùng ListTile.trailing) — trailing kiểu Row cứng
+        // (tối đa 5 nút/chip) tràn ra ngoài trên màn hẹp vì ListTile không co giãn
+        // trailing được; Wrap bên dưới title/subtitle tự xuống dòng khi hết chỗ.
+        return Card(
+          elevation: 0,
+          color: theme.colorScheme.surfaceContainerLow,
+          child: InkWell(
+            onTap: () => context.push('/drivers/${d.id}'),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 12,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Tooltip(
+                        message:
+                            verification == DriverVerificationState.rejected
+                            ? 'Bị từ chối: ${d.rejectionReason ?? ""}'
+                            : '',
+                        child: CircleAvatar(
+                          backgroundColor: statusColor.withValues(alpha: 0.12),
+                          child: Icon(statusIcon, color: statusColor),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              d.fullName?.isNotEmpty == true
+                                  ? d.fullName!
+                                  : (d.phone ?? 'Tài xế'),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w500,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            Text(
+                              '${d.vehicleType ?? "Xe"} · ${d.vehiclePlate ?? "—"} · ${d.phone ?? "—"}',
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            Text(
+                              '${d.totalDeliveries} chuyến · ${d.ratingAvg}★'
+                              '${verification == DriverVerificationState.rejected ? ' · Bị từ chối: ${d.rejectionReason ?? ""}' : ''}',
+                              style: TextStyle(
+                                color:
+                                    verification ==
+                                        DriverVerificationState.rejected
+                                    ? theme.colorScheme.error
+                                    : null,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    alignment: WrapAlignment.end,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 8,
+                    runSpacing: 4,
+                    children: [
+                      IconButton(
+                        tooltip: 'Sửa hồ sơ',
+                        icon: const Icon(Icons.edit_outlined),
+                        onPressed: _busy ? null : () => _editProfile(d),
+                      ),
+                      IconButton(
+                        tooltip: inBackupTab
+                            ? 'Gỡ khỏi danh sách dự phòng'
+                            : 'Thêm vào danh sách dự phòng',
+                        icon: Icon(
+                          inBackupTab
+                              ? Icons.remove_moderator_outlined
+                              : Icons.add_moderator_outlined,
+                        ),
+                        onPressed: _busy
+                            ? null
+                            : () => _setBackup(d, !inBackupTab),
+                      ),
+                      ActionChip(
+                        label: Text(driverStatusLabels[d.status] ?? d.status),
+                        visualDensity: VisualDensity.compact,
+                        onPressed: _busy ? null : () => _changeStatus(d),
+                      ),
+                      if (!d.isVerified) ...[
+                        OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: theme.colorScheme.error,
+                          ),
+                          onPressed: _busy ? null : () => _reject(d),
+                          child: const Text('Từ chối'),
+                        ),
+                        FilledButton(
+                          onPressed: _busy ? null : () => _verify(d),
+                          child: const Text('Duyệt hồ sơ'),
+                        ),
+                      ] else
+                        const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 8),
+                          child: Text(
+                            'Đã duyệt',
+                            style: TextStyle(color: Colors.green),
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

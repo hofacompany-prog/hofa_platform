@@ -18,6 +18,9 @@ class Driver {
   final List<String> documentUrls;
   final String status;
   final bool autoAccept;
+  // Thuộc nhóm "Tài xế dự phòng" — nhận không giới hạn đơn cùng lúc, chỉ được mời khi không tìm
+  // được tài xế thường nào (xem drivers_screen.dart, server/src/dispatch.js).
+  final bool isBackupDriver;
   final double? currentLatitude;
   final double? currentLongitude;
   final DateTime? locationUpdatedAt;
@@ -56,6 +59,7 @@ class Driver {
     this.documentUrls = const [],
     required this.status,
     this.autoAccept = false,
+    this.isBackupDriver = false,
     this.currentLatitude,
     this.currentLongitude,
     this.locationUpdatedAt,
@@ -98,6 +102,7 @@ class Driver {
         : const [],
     status: j['status'] as String? ?? 'offline',
     autoAccept: j['auto_accept'] as bool? ?? false,
+    isBackupDriver: j['is_backup_driver'] as bool? ?? false,
     currentLatitude: j['current_latitude'] != null
         ? double.tryParse('${j['current_latitude']}')
         : null,
