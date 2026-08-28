@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -18,6 +19,20 @@ class PushService {
 
   final _local = FlutterLocalNotificationsPlugin();
   GlobalKey<NavigatorState>? _navigatorKey;
+
+  // Đẩy tin nhắn mới cho đúng màn chat đang mở (nếu có) cập nhật ngay lập tức thay vì đợi
+  // polling — thay được nhờ giờ là app native thật, FCM foreground đáng tin cậy hơn hẳn PWA.
+  // Không dùng Supabase Realtime (dữ liệu nghiệp vụ chỉ đi qua Express API, xem CLAUDE.md),
+  // tận dụng thẳng hạ tầng push sẵn có (server/src/push.js đã gửi kèm order_id).
+  final _chatMessageController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get chatMessageStream =>
+      _chatMessageController.stream;
+
+  // order_id của khung chat đang mở trên màn hình — khỏi hiện thông báo hệ thống trùng lặp khi
+  // tài xế đang xem đúng đoạn chat đó (tin đã tự cập nhật ngay trong màn).
+  String? _openChatOrderId;
+  void setOpenChat(String? orderId) => _openChatOrderId = orderId;
 
   Future<void> init(GlobalKey<NavigatorState> navigatorKey) async {
     _navigatorKey = navigatorKey;
@@ -115,6 +130,12 @@ class PushService {
   }
 
   Future<void> _onForegroundMessage(RemoteMessage message) async {
+    if (message.data['type'] == 'chat_message') {
+      _chatMessageController.add(message.data);
+      // Đang mở đúng khung chat này — tin đã tự chèn vào màn qua chatMessageStream ở trên,
+      // khỏi hiện thêm thông báo hệ thống trùng lặp.
+      if (message.data['order_id'] == _openChatOrderId) return;
+    }
     // flutter_local_notifications không hỗ trợ web — trình duyệt tự lo lúc foreground.
     if (!kIsWeb) {
       final title = message.notification?.title ?? message.data['title'];

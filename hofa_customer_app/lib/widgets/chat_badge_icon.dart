@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../core/push_service.dart';
 import '../repositories/order_repository.dart';
 
-/// Icon nhắn tin kèm số nhỏ hiện số tin CHƯA ĐỌC — tự poll mỗi 10 giây, xem
-/// hofa-db/75_order_chat_read_state.sql.
+/// Icon nhắn tin kèm số nhỏ hiện số tin CHƯA ĐỌC — poll mỗi 10 giây làm lưới an toàn, cộng
+/// thêm tải lại ngay khi có push tin nhắn mới tới đúng đơn/kênh này (PushService.chatMessageStream)
+/// để số hiện đúng ngay lập tức thay vì đợi tới vòng poll kế — xem hofa-db/75_order_chat_read_state.sql.
 class ChatBadgeIcon extends StatefulWidget {
   final String orderId;
   final String channel; // 'customer_driver' | 'customer_merchant'
@@ -23,16 +25,24 @@ class ChatBadgeIcon extends StatefulWidget {
 class _ChatBadgeIconState extends State<ChatBadgeIcon> {
   int _count = 0;
   Timer? _timer;
+  StreamSubscription<Map<String, dynamic>>? _pushSub;
 
   @override
   void initState() {
     super.initState();
     _load();
     _timer = Timer.periodic(const Duration(seconds: 10), (_) => _load());
+    _pushSub = PushService.instance.chatMessageStream.listen((data) {
+      if (data['order_id'] == widget.orderId &&
+          data['channel'] == widget.channel) {
+        _load();
+      }
+    });
   }
 
   @override
   void dispose() {
+    _pushSub?.cancel();
     _timer?.cancel();
     super.dispose();
   }

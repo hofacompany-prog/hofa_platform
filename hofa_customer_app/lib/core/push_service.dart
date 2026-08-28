@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -19,6 +20,24 @@ class PushService {
 
   final _local = FlutterLocalNotificationsPlugin();
   GlobalKey<NavigatorState>? _navigatorKey;
+
+  // Đẩy tin nhắn mới cho đúng màn chat đang mở (nếu có) cập nhật ngay lập tức thay vì đợi
+  // polling — thay được nhờ giờ là app native thật, FCM foreground đáng tin cậy hơn hẳn PWA.
+  // Không dùng Supabase Realtime (dữ liệu nghiệp vụ chỉ đi qua Express API, xem CLAUDE.md),
+  // tận dụng thẳng hạ tầng push sẵn có (server/src/push.js đã gửi kèm order_id/channel).
+  final _chatMessageController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get chatMessageStream =>
+      _chatMessageController.stream;
+
+  // "order_id:channel" của khung chat đang mở trên màn hình — dùng để khỏi hiện thông báo hệ
+  // thống trùng lặp khi khách đang xem đúng đoạn chat đó (tin đã tự cập nhật ngay trong màn).
+  String? _openChatKey;
+  void setOpenChat(String? orderId, String? apiChannel) {
+    _openChatKey = (orderId != null && apiChannel != null)
+        ? '$orderId:$apiChannel'
+        : null;
+  }
 
   Future<void> init(GlobalKey<NavigatorState> navigatorKey) async {
     _navigatorKey = navigatorKey;
@@ -115,6 +134,13 @@ class PushService {
   Future<void> _onForegroundMessage(RemoteMessage message) async {
     // trình duyệt tự hiển thị qua service worker, xem init()
     if (kIsWeb) return;
+    if (message.data['type'] == 'chat_message') {
+      _chatMessageController.add(message.data);
+      final key = '${message.data['order_id']}:${message.data['channel']}';
+      // Đang mở đúng khung chat này — tin đã tự chèn vào màn qua chatMessageStream ở trên,
+      // khỏi hiện thêm thông báo hệ thống trùng lặp.
+      if (key == _openChatKey) return;
+    }
     final title = message.notification?.title ?? message.data['title'];
     final body = message.notification?.body ?? message.data['body'];
     if (title != null) {

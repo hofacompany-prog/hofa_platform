@@ -5,13 +5,15 @@ import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/cloudinary_uploader.dart';
 import '../../core/format.dart';
+import '../../core/push_service.dart';
 import '../../models/chat_message.dart';
 import '../../providers/app_providers.dart';
 
-/// Nhắn tin trong 1 đơn hàng — CHỈ truy cập được từ chi tiết đơn (không có hộp thư riêng). Tải
-/// lại bằng polling (không có hạ tầng realtime) — mở màn tự tải lại mỗi 5 giây trong lúc đang
-/// mở, dừng khi rời màn. Đóng nhắn tin (window hết hạn/đơn đã huỷ) thì ẩn ô nhập, chỉ xem lại
-/// lịch sử — xem hofa-db/74_order_chat.sql.
+/// Nhắn tin trong 1 đơn hàng — CHỈ truy cập được từ chi tiết đơn (không có hộp thư riêng). Cập
+/// nhật thời gian thực qua push FCM (PushService.chatMessageStream, xem core/push_service.dart)
+/// — tin mới tự chèn vào ngay khi push tới, không cần đợi hết vòng polling. Vẫn giữ polling mỗi
+/// 5 giây làm lưới an toàn (push có thể trễ/rớt), dừng khi rời màn. Đóng nhắn tin (window hết
+/// hạn/đơn đã huỷ) thì ẩn ô nhập, chỉ xem lại lịch sử — xem hofa-db/74_order_chat.sql.
 class ChatScreen extends ConsumerStatefulWidget {
   final String orderId;
   final ChatChannel channel;
@@ -38,6 +40,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   bool _uploadingImage = false;
   String? _error;
   Timer? _pollTimer;
+  StreamSubscription<Map<String, dynamic>>? _pushSub;
 
   String? get _myUserId => Supabase.instance.client.auth.currentUser?.id;
 
@@ -49,10 +52,21 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       const Duration(seconds: 5),
       (_) => _load(silent: true),
     );
+    // Đăng ký khung chat đang mở để PushService khỏi hiện thông báo hệ thống trùng lặp, và
+    // lắng nghe push tới đúng đơn/kênh này để tải lại NGAY thay vì đợi vòng polling kế tiếp.
+    PushService.instance.setOpenChat(widget.orderId, widget.channel.apiValue);
+    _pushSub = PushService.instance.chatMessageStream.listen((data) {
+      if (data['order_id'] == widget.orderId &&
+          data['channel'] == widget.channel.apiValue) {
+        _load(silent: true);
+      }
+    });
   }
 
   @override
   void dispose() {
+    PushService.instance.setOpenChat(null, null);
+    _pushSub?.cancel();
     _pollTimer?.cancel();
     _bodyCtrl.dispose();
     _scrollController.dispose();
