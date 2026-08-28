@@ -426,13 +426,20 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(
-                              o.orderCode,
-                              style: theme.textTheme.titleLarge,
+                            Expanded(
+                              child: Text(
+                                o.orderCode,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.titleMedium,
+                              ),
                             ),
+                            const SizedBox(width: 8),
                             Chip(
                               label: Text(
                                 orderStatusLabels[o.status] ?? o.status,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                               backgroundColor: color.withValues(alpha: 0.12),
                               side: BorderSide(
@@ -838,16 +845,25 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text(
-              label,
-              style: TextStyle(
-                fontWeight: bold ? FontWeight.bold : null,
-                color: color,
+            Expanded(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: bold ? null : 13,
+                  fontWeight: bold ? FontWeight.bold : null,
+                  color: color,
+                ),
               ),
             ),
+            const SizedBox(width: 8),
             Text(
               value,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
+                fontSize: bold ? null : 13,
                 fontWeight: bold ? FontWeight.bold : null,
                 color: color,
               ),

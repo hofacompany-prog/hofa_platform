@@ -168,9 +168,13 @@ class CartScreen extends ConsumerWidget {
                         color: theme.colorScheme.primary,
                       ),
                       const SizedBox(width: 6),
-                      Text(
-                        cart.merchantName ?? '',
-                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      Expanded(
+                        child: Text(
+                          cart.merchantName ?? '',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
                       ),
                     ],
                   ),
@@ -315,7 +319,9 @@ class CartScreen extends ConsumerWidget {
                               ),
                               Text(
                                 formatVnd(cart.subtotal),
-                                style: theme.textTheme.titleLarge?.copyWith(
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.titleMedium?.copyWith(
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
@@ -324,6 +330,8 @@ class CartScreen extends ConsumerWidget {
                                 Text(
                                   'Phí giao hàng (ước tính): '
                                   '${shippingFee == 0 ? 'Miễn phí' : formatVnd(shippingFee)}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                   style: theme.textTheme.bodySmall?.copyWith(
                                     color: theme.colorScheme.outline,
                                   ),

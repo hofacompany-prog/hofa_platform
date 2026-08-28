@@ -141,10 +141,14 @@ showToppingPickerDialog(
                         for (final g in groups) ...[
                           Row(
                             children: [
-                              Text(
-                                g.name,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w600,
+                              Expanded(
+                                child: Text(
+                                  g.name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                  ),
                                 ),
                               ),
                               if (g.isRequired)

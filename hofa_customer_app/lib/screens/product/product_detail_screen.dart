@@ -388,16 +388,24 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                     const SizedBox(height: 8),
                     Row(
                       children: [
-                        Text(
-                          formatVnd(unitPrice),
-                          style: theme.textTheme.titleLarge?.copyWith(
-                            color: theme.colorScheme.primary,
-                            fontWeight: FontWeight.bold,
+                        Flexible(
+                          child: Text(
+                            formatVnd(unitPrice),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              color: theme.colorScheme.primary,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
-                        Text(
-                          ' / ${product.unit}',
-                          style: theme.textTheme.bodyMedium,
+                        Flexible(
+                          child: Text(
+                            ' / ${product.unit}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodySmall,
+                          ),
                         ),
                       ],
                     ),
@@ -411,8 +419,13 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                             color: Colors.amber.shade700,
                           ),
                           const SizedBox(width: 4),
-                          Text(
-                            '${product.ratingAvg.toStringAsFixed(1)} (${product.ratingCount} đánh giá) · Đã bán ${product.soldCount}',
+                          Expanded(
+                            child: Text(
+                              '${product.ratingAvg.toStringAsFixed(1)} (${product.ratingCount} đánh giá) · Đã bán ${product.soldCount}',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.bodySmall,
+                            ),
                           ),
                         ],
                       ),

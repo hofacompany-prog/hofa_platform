@@ -1170,10 +1170,17 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        'Tổng cộng ngày ${_weekdayLabelOf(viewDay)}',
-                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      Expanded(
+                        child: Text(
+                          'Tổng cộng ngày ${_weekdayLabelOf(viewDay)}',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ),
+                      const SizedBox(width: 8),
                       Text(
                         formatVnd(
                           itemsForViewDay.fold<int>(
@@ -1181,7 +1188,9 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
                             (sum, i) => sum + lineTotalFor(i),
                           ),
                         ),
-                        style: TextStyle(
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: theme.textTheme.bodyMedium?.copyWith(
                           fontWeight: FontWeight.bold,
                           color: theme.colorScheme.primary,
                         ),
@@ -1197,10 +1206,20 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
         Row(
           mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
-            Text('Tổng tuần', style: theme.textTheme.titleSmall),
+            Expanded(
+              child: Text(
+                'Tổng tuần',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.bodyMedium,
+              ),
+            ),
+            const SizedBox(width: 8),
             Text(
               formatVnd(_weekTotal(items)),
-              style: theme.textTheme.titleSmall?.copyWith(
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodyMedium?.copyWith(
                 fontWeight: FontWeight.bold,
                 color: theme.colorScheme.primary,
               ),
@@ -1249,16 +1268,23 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text(
-                  'Tổng tiền',
-                  style: TextStyle(fontWeight: FontWeight.bold),
+                const Expanded(
+                  child: Text(
+                    'Tổng tiền',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
                 ),
+                const SizedBox(width: 8),
                 Text(
                   formatVnd(total),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontWeight: FontWeight.bold,
                     color: theme.colorScheme.primary,
-                    fontSize: 18,
+                    fontSize: 16,
                   ),
                 ),
               ],
@@ -1295,9 +1321,13 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
                 color: theme.colorScheme.primary,
               ),
               const SizedBox(width: 6),
-              Text(
-                cart.merchantName ?? '',
-                style: const TextStyle(fontWeight: FontWeight.w600),
+              Expanded(
+                child: Text(
+                  cart.merchantName ?? '',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
               ),
             ],
           ),
@@ -1436,9 +1466,13 @@ class _PreorderScreenState extends ConsumerState<PreorderScreen>
                 color: theme.colorScheme.primary,
               ),
               const SizedBox(width: 6),
-              Text(
-                cart.merchantName ?? '',
-                style: const TextStyle(fontWeight: FontWeight.w600),
+              Expanded(
+                child: Text(
+                  cart.merchantName ?? '',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
               ),
             ],
           ),

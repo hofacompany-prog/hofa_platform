@@ -1139,8 +1139,19 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('Tạm tính'),
-                      Text(formatVnd(itemsSubtotal)),
+                      const Expanded(
+                        child: Text(
+                          'Tạm tính',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        formatVnd(itemsSubtotal),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ],
                   ),
                   Padding(
@@ -1148,15 +1159,22 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          orderCount > 1
-                              ? 'Phí giao hàng (x$orderCount lần giao)'
-                              : 'Phí giao hàng',
+                        Expanded(
+                          child: Text(
+                            orderCount > 1
+                                ? 'Phí giao hàng (x$orderCount lần giao)'
+                                : 'Phí giao hàng',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
+                        const SizedBox(width: 8),
                         Text(
                           totalShippingFee == 0
                               ? 'Miễn phí'
                               : formatVnd(totalShippingFee),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ],
                     ),
@@ -1167,8 +1185,19 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          const Text('Phí mua hộ'),
-                          Text(formatVnd(buyOnBehalfFee)),
+                          const Expanded(
+                            child: Text(
+                              'Phí mua hộ',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            formatVnd(buyOnBehalfFee),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ],
                       ),
                     ),
@@ -1178,14 +1207,21 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(
-                            'Giảm giá',
-                            style: TextStyle(
-                              color: theme.colorScheme.secondary,
+                          Expanded(
+                            child: Text(
+                              'Giảm giá',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: theme.colorScheme.secondary,
+                              ),
                             ),
                           ),
+                          const SizedBox(width: 8),
                           Text(
                             '-${formatVnd(_voucherDiscount)}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                               color: theme.colorScheme.secondary,
                             ),
@@ -1198,16 +1234,23 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text(
-                          'Tổng cộng',
-                          style: TextStyle(fontWeight: FontWeight.bold),
+                        const Expanded(
+                          child: Text(
+                            'Tổng cộng',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
                         ),
+                        const SizedBox(width: 8),
                         Text(
                           formatVnd(total),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             fontWeight: FontWeight.bold,
                             color: theme.colorScheme.primary,
-                            fontSize: 18,
+                            fontSize: 16,
                           ),
                         ),
                       ],

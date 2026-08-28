@@ -164,13 +164,24 @@ class _DriverTile extends StatelessWidget {
                     children: [
                       Icon(Icons.star, size: 14, color: Colors.amber.shade700),
                       const SizedBox(width: 2),
-                      Text(
-                        driver.ratingCount > 0 ? '${driver.ratingAvg.toStringAsFixed(1)} (${driver.ratingCount})' : 'Chưa có đánh giá',
-                        style: theme.textTheme.bodySmall,
+                      Flexible(
+                        child: Text(
+                          driver.ratingCount > 0 ? '${driver.ratingAvg.toStringAsFixed(1)} (${driver.ratingCount})' : 'Chưa có đánh giá',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: theme.textTheme.bodySmall,
+                        ),
                       ),
                       if (driver.vehicleType != null) ...[
                         const SizedBox(width: 8),
-                        Text('· ${driver.vehicleType}', style: theme.textTheme.bodySmall),
+                        Flexible(
+                          child: Text(
+                            '· ${driver.vehicleType}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: theme.textTheme.bodySmall,
+                          ),
+                        ),
                       ],
                     ],
                   ),

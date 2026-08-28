@@ -26,9 +26,12 @@ class _MerchantPhotoStrip extends StatelessWidget {
   Widget build(BuildContext context) {
     final shown = photoUrls.take(1).toList();
     final hasMore = photoUrls.length > shown.length;
+    // Cao đúng 34 (bằng đúng 1 ảnh) — trước đây cố định 72 để xếp NGANG cạnh avatar 72px,
+    // giờ xếp DỌC bên dưới avatar (xem build() của MerchantDetailScreen) nên chừa cao 72 dư
+    // hẳn nửa khung, gây khoảng trống rỗng phía dưới không cần thiết.
     return SizedBox(
       width: 72,
-      height: 72,
+      height: 34,
       child: Wrap(
         spacing: 4,
         runSpacing: 4,
@@ -210,8 +213,8 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Nhãn "Mua hộ" xếp NGAY DƯỚI avatar cửa hàng — dễ nhận biết ngay từ cụm
-                  // logo, thay vì lẫn trong cột chữ bên phải như trước.
+                  // Ảnh thực tế cửa hàng xếp NGAY DƯỚI avatar, nhãn "Mua hộ" xếp dưới cùng —
+                  // cùng 1 cụm với logo, thay vì tách rời như trước.
                   Column(
                     children: [
                       NetworkImageBox(
@@ -220,6 +223,10 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
                         height: 72,
                         fallbackIcon: Icons.storefront_outlined,
                       ),
+                      if (merchant.photoUrls.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        _MerchantPhotoStrip(photoUrls: merchant.photoUrls),
+                      ],
                       if (merchant.isBuyOnBehalf) ...[
                         const SizedBox(height: 4),
                         const BuyOnBehalfBadge(),
@@ -331,36 +338,49 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
                                           )
                                         : null,
                                   ),
+                                  const SizedBox(width: 12),
                                 ],
-                                const Spacer(),
                                 if (merchant.branchLatitude != null &&
                                     merchant.branchLongitude != null)
-                                  InkWell(
-                                    borderRadius: BorderRadius.circular(6),
-                                    onTap: () => launchDirections(
-                                      merchant.branchLatitude!,
-                                      merchant.branchLongitude!,
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(
-                                          Icons.place_outlined,
-                                          size: 16,
-                                          color: theme.colorScheme.primary,
-                                        ),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          'Xem vị trí quán',
-                                          style: TextStyle(
+                                  // Flexible + chữ nhỏ (bodySmall) — cụm khoảng cách bên trái
+                                  // cộng nhãn này có lúc vượt bề rộng màn hình hẹp, tự co lại
+                                  // và cắt bớt (…) thay vì báo lỗi tràn (RenderFlex overflow).
+                                  Flexible(
+                                    child: InkWell(
+                                      borderRadius: BorderRadius.circular(6),
+                                      onTap: () => launchDirections(
+                                        merchant.branchLatitude!,
+                                        merchant.branchLongitude!,
+                                      ),
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            Icons.place_outlined,
+                                            size: 16,
                                             color: theme.colorScheme.primary,
-                                            decoration:
-                                                TextDecoration.underline,
-                                            decorationColor:
-                                                theme.colorScheme.outline,
                                           ),
-                                        ),
-                                      ],
+                                          const SizedBox(width: 4),
+                                          Flexible(
+                                            child: Text(
+                                              'Xem vị trí quán',
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: theme.textTheme.bodySmall
+                                                  ?.copyWith(
+                                                    color: theme
+                                                        .colorScheme
+                                                        .primary,
+                                                    decoration: TextDecoration
+                                                        .underline,
+                                                    decorationColor: theme
+                                                        .colorScheme
+                                                        .outline,
+                                                  ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
                                     ),
                                   ),
                               ],
@@ -377,10 +397,6 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
                       ],
                     ),
                   ),
-                  if (merchant.photoUrls.isNotEmpty) ...[
-                    const SizedBox(width: 8),
-                    _MerchantPhotoStrip(photoUrls: merchant.photoUrls),
-                  ],
                 ],
               ),
               if (merchant.isBuyOnBehalf) ...[

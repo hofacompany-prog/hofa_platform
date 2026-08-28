@@ -75,12 +75,16 @@ class _MerchantReviewsScreenState extends ConsumerState<MerchantReviewsScreen> {
                 const SizedBox(width: 8),
                 Text(
                   m.ratingAvg.toStringAsFixed(1),
-                  style: theme.textTheme.headlineMedium,
+                  style: theme.textTheme.titleLarge,
                 ),
                 const SizedBox(width: 8),
-                Text(
-                  '(${m.ratingCount} đánh giá)',
-                  style: theme.textTheme.bodyMedium,
+                Flexible(
+                  child: Text(
+                    '(${m.ratingCount} đánh giá)',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodyMedium,
+                  ),
                 ),
               ],
             ),
