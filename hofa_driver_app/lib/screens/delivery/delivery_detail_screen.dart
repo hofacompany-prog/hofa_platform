@@ -103,7 +103,9 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
         driverLongitude: driverLongitude,
       );
       ref.invalidate(deliveryProvider(widget.deliveryId));
-      ref.invalidate(activeDeliveryProvider);
+      // activeDeliveryProvider chỉ derive từ danh sách này — invalidate đúng provider gốc mới
+      // ép gọi lại API, cascade cập nhật cả activeDeliveryProvider lẫn UI đang watch danh sách.
+      ref.invalidate(activeDeliveriesProvider);
     } catch (e) {
       if (mounted)
         ScaffoldMessenger.of(

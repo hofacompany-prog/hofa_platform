@@ -5,21 +5,12 @@ import 'package:go_router/go_router.dart';
 import 'package:slide_to_act/slide_to_act.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/format.dart';
-import '../../models/branch.dart';
 import '../../models/delivery.dart';
 import '../../models/order.dart' as model;
 import '../../providers/auth_provider.dart';
 import '../../providers/delivery_providers.dart';
 import '../../repositories/delivery_repository.dart';
-import '../../repositories/order_repository.dart';
-import '../../repositories/pickup_repository.dart';
 import '../delivery/delivery_detail_screen.dart';
-
-final _offerOrderProvider = FutureProvider.autoDispose
-    .family<model.Order, String>((ref, id) => OrderRepository().get(id));
-final _offerBranchProvider = FutureProvider.autoDispose.family<Branch, String>(
-  (ref, id) => PickupRepository().branch(id),
-);
 
 /// Màn hình đơn giao hàng mới cần xác nhận — mở toàn màn hình ngay khi có push (kể cả khi app
 /// đang mở sẵn). Luôn hiện thanh trượt xác nhận với 1 dải màu chạy, thuần phía client
@@ -99,7 +90,10 @@ class _OfferScreenState extends ConsumerState<OfferScreen>
     try {
       await _deliveryRepo.updateStatus(widget.deliveryId, 'accepted');
       _clearPendingOffer();
-      ref.invalidate(activeDeliveryProvider);
+      // Invalidate provider DANH SÁCH (không phải activeDeliveryProvider — nó chỉ derive từ
+      // provider này, invalidate mình nó không ép gọi lại API) để tự làm mới cả trang chủ lẫn
+      // danh sách "chuyến khác" ở màn này.
+      ref.invalidate(activeDeliveriesProvider);
       // KHÔNG điều hướng sang route khác — build() bên dưới tự chuyển sang hiện
       // DeliveryDetailScreen ngay tại màn này khi deliveryProvider refetch thấy status đổi,
       // liền mạch từ lúc xác nhận sang lúc theo dõi chuyến, không có hiệu ứng chuyển màn.
@@ -218,7 +212,7 @@ class _OfferScreenState extends ConsumerState<OfferScreen>
   Widget _buildBody(BuildContext context, Delivery delivery) {
     final theme = Theme.of(context);
     final driverAsync = ref.watch(myDriverProvider);
-    final orderAsync = ref.watch(_offerOrderProvider(delivery.orderId));
+    final orderAsync = ref.watch(orderForDeliveryProvider(delivery.orderId));
 
     // Đợi tải xong myDriverProvider rồi mới tạo controller — tạo ngay ở lần build đầu tiên
     // (lúc còn đang loading) sẽ luôn khoá cứng ở autoAccept=false vì _sweepStarted bật lên
@@ -366,6 +360,10 @@ class _OfferScreenState extends ConsumerState<OfferScreen>
                   error: (e, _) => Text('Không tải được đơn: $e'),
                   data: (order) => _OfferDetails(order: order),
                 ),
+                // Tài xế dự phòng có thể đang chạy sẵn (những) chuyến khác — hiện đủ điểm
+                // lấy/giao + thu hộ của TỪNG chuyến đó ngay dưới đơn mới này, để cân nhắc lộ
+                // trình trước khi quyết định nhận thêm.
+                _OtherActiveDeliveriesSection(excludeDeliveryId: delivery.id),
               ],
             ),
           ),
@@ -463,7 +461,7 @@ class _OfferDetails extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final branchAsync = ref.watch(_offerBranchProvider(order.branchId));
+    final branchAsync = ref.watch(branchForDeliveryProvider(order.branchId));
     final theme = Theme.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -599,6 +597,140 @@ class _OfferDetails extends ConsumerWidget {
           ],
         ),
       ],
+    );
+  }
+}
+
+/// Danh sách RIÊNG các chuyến khác tài xế đang chạy song song (khác hẳn đơn mới đang xác nhận ở
+/// trên) — chỉ tài xế dự phòng mới có thể >0 phần tử (xem activeDeliveriesProvider). Loại cả
+/// [excludeDeliveryId] (chính đơn mới) lẫn các chuyến status='assigned' khác (mời chưa xác nhận,
+/// chưa thật sự "đang chạy") — chỉ liệt kê chuyến đã CHẤP NHẬN trở đi.
+class _OtherActiveDeliveriesSection extends ConsumerWidget {
+  final String excludeDeliveryId;
+  const _OtherActiveDeliveriesSection({required this.excludeDeliveryId});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final others =
+        ref.watch(activeDeliveriesProvider).valueOrNull
+            ?.where(
+              (d) => d.id != excludeDeliveryId && d.status != 'assigned',
+            )
+            .toList() ??
+        const <Delivery>[];
+    if (others.isEmpty) return const SizedBox();
+    return Padding(
+      padding: const EdgeInsets.only(top: 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Divider(),
+          const SizedBox(height: 8),
+          Text(
+            'Đang chạy song song (${others.length} chuyến khác)',
+            style: theme.textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 8),
+          for (final d in others) ...[
+            _OtherDeliverySummary(delivery: d),
+            const SizedBox(height: 12),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// 1 chuyến khác đang chạy — hiện gọn mã đơn + điểm lấy + điểm giao + thu hộ CỦA RIÊNG chuyến đó,
+/// không lẫn với đơn mới đang xác nhận.
+class _OtherDeliverySummary extends ConsumerWidget {
+  final Delivery delivery;
+  const _OtherDeliverySummary({required this.delivery});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final orderAsync = ref.watch(orderForDeliveryProvider(delivery.orderId));
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surfaceContainerHighest.withValues(
+          alpha: 0.5,
+        ),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: theme.colorScheme.outlineVariant),
+      ),
+      child: orderAsync.when(
+        loading: () => const SizedBox(
+          height: 40,
+          child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+        ),
+        error: (e, _) => Text('Không tải được đơn: $e'),
+        data: (order) => Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  Icons.local_shipping_outlined,
+                  size: 16,
+                  color: theme.colorScheme.secondary,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  order.orderCode,
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  deliveryStatusLabels[delivery.status] ?? delivery.status,
+                  style: theme.textTheme.bodySmall,
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Consumer(
+              builder: (context, ref, _) {
+                final branchAsync = ref.watch(
+                  branchForDeliveryProvider(order.branchId),
+                );
+                return branchAsync.when(
+                  data: (branch) => _AddressTile(
+                    icon: Icons.storefront,
+                    label: 'Lấy hàng',
+                    title: branch.displayName,
+                    subtitle: branch.fullLine,
+                  ),
+                  loading: () => const SizedBox(),
+                  error: (_, _) => const SizedBox(),
+                );
+              },
+            ),
+            const SizedBox(height: 8),
+            _AddressTile(
+              icon: Icons.flag,
+              label: 'Giao hàng',
+              title: order.shipRecipientName,
+              subtitle: order.shipFullAddress,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              order.paymentMethod == 'cod'
+                  ? 'Thu hộ ${formatVnd(order.totalAmount)}'
+                  : 'Đã thanh toán',
+              style: theme.textTheme.bodySmall?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

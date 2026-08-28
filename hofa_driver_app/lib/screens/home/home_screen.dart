@@ -31,9 +31,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     // Kiểm tra NGAY lúc mở màn chính — tài xế thiếu 1 trong 2 quyền này thì không nhận được đơn
-    // mới (thông báo) hoặc không tìm được (vị trí). Khác app Khách hàng (chỉ hỏi 1 lần, có thể
-    // bỏ qua): tài xế BẮT BUỘC phải cấp ĐỦ CẢ 2 quyền mới dùng được app (không có nút "Để sau"),
-    // hỏi lại mỗi lần vào Trang chủ tới khi được cấp đủ.
+    // mới (thông báo) hoặc không tìm được (vị trí). Hỏi lại mỗi lần vào Trang chủ tới khi được
+    // cấp đủ, nhưng có nút "Để sau" để không bị kẹt nếu chưa muốn cấp ngay (khác trước đây bắt
+    // buộc, không có lối thoát).
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => _ensureRequiredPermissions(),
     );
@@ -66,30 +66,31 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
     _permDialogOpen = true;
     await showDialog<void>(
       context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) => PopScope(
-        canPop: false,
-        child: AlertDialog(
-          title: const Text('Cần cấp quyền để nhận đơn'),
-          content: const Text(
-            'Tài xế bắt buộc bật Thông báo và Vị trí để nhận đơn mới kịp thời và xác định đúng '
-            'vị trí giao hàng — bấm "Cấp quyền" để tiếp tục. Nếu trước đó đã từ chối, nút này sẽ '
-            'mở thẳng Cài đặt để bạn bật lại.',
-          ),
-          actions: [
-            FilledButton(
-              onPressed: () async {
-                await PermissionHelper.requestNotification(dialogContext);
-                if (dialogContext.mounted) {
-                  await PermissionHelper.requestLocation(dialogContext);
-                }
-                if (dialogContext.mounted) Navigator.pop(dialogContext);
-                if (mounted) await _ensureRequiredPermissions();
-              },
-              child: const Text('Cấp quyền'),
-            ),
-          ],
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Cần cấp quyền để nhận đơn'),
+        content: const Text(
+          'Tài xế nên bật Thông báo và Vị trí để nhận đơn mới kịp thời và xác định đúng vị trí '
+          'giao hàng — bấm "Cấp quyền" để tiếp tục. Nếu trước đó đã từ chối, nút này sẽ mở thẳng '
+          'Cài đặt để bạn bật lại. Chưa muốn cấp ngay thì bấm "Để sau", lần sau vào Trang chủ sẽ '
+          'hỏi lại.',
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Để sau'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              await PermissionHelper.requestNotification(dialogContext);
+              if (dialogContext.mounted) {
+                await PermissionHelper.requestLocation(dialogContext);
+              }
+              if (dialogContext.mounted) Navigator.pop(dialogContext);
+              if (mounted) await _ensureRequiredPermissions();
+            },
+            child: const Text('Cấp quyền'),
+          ),
+        ],
       ),
     );
     _permDialogOpen = false;
@@ -104,11 +105,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
         } catch (_) {
           // mất mạng tạm thời — bỏ qua, lần cập nhật tiếp theo sẽ tự bù
         }
-        // Đang có chuyến chạy dở — ghi thêm vệt đường để khách/cửa hàng theo dõi trên bản đồ.
-        final active = ref.read(activeDeliveryProvider).valueOrNull;
-        if (active != null && !kTerminalDeliveryStatuses.contains(active.status)) {
+        // Đang có (những) chuyến chạy dở — ghi thêm vệt đường cho TỪNG chuyến để khách/cửa hàng
+        // theo dõi trên bản đồ (tài xế Dự phòng có thể có nhiều hơn 1 chuyến cùng lúc).
+        final active = ref.read(activeDeliveriesProvider).valueOrNull ?? const [];
+        for (final d in active) {
+          if (kTerminalDeliveryStatuses.contains(d.status) || d.status == 'assigned') continue;
           try {
-            await DeliveryRepository().addTrack(active.id, pos.latitude, pos.longitude);
+            await DeliveryRepository().addTrack(d.id, pos.latitude, pos.longitude);
           } catch (_) {
             // tương tự — bỏ qua, không chặn UI vì 1 lần ghi vệt đường lỗi
           }
@@ -168,10 +171,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   @override
   Widget build(BuildContext context) {
     final driverAsync = ref.watch(myDriverProvider);
-    final activeDeliveryAsync = ref.watch(activeDeliveryProvider);
+    // Tài xế THƯỜNG tối đa 1 phần tử; tài xế Dự phòng (is_backup_driver) có thể có nhiều chuyến
+    // cùng lúc — xem activeDeliveriesProvider.
+    final activeDeliveriesAsync = ref.watch(activeDeliveriesProvider);
     final theme = Theme.of(context);
-    final pendingOffer = activeDeliveryAsync.valueOrNull;
-    final hasPendingOffer = pendingOffer != null && pendingOffer.status == 'assigned';
+    final activeDeliveries = activeDeliveriesAsync.valueOrNull ?? const [];
+    // "Đơn đang chờ xác nhận" ở nút AppBar vẫn chỉ mở ĐÚNG 1 màn /offer/:id tại 1 thời điểm
+    // (route chỉ nhận 1 deliveryId) — lấy lời mời chưa xác nhận ĐẦU TIÊN nếu có nhiều.
+    final pendingOffer = activeDeliveries
+        .cast<Delivery?>()
+        .firstWhere((d) => d?.status == 'assigned', orElse: () => null);
+    final hasPendingOffer = pendingOffer != null;
 
     return Scaffold(
       appBar: AppBar(
@@ -207,7 +217,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       body: RefreshIndicator(
         onRefresh: () async {
           ref.invalidate(myDriverProvider);
-          ref.invalidate(activeDeliveryProvider);
+          ref.invalidate(activeDeliveriesProvider);
         },
         child: driverAsync.when(
           loading: () => const Center(child: CircularProgressIndicator()),
@@ -215,7 +225,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
           data: (driver) {
             if (driver == null) return const Center(child: Text('Chưa có hồ sơ tài xế'));
             final isOnline = driver.status == 'online' || driver.status == 'busy';
-            final hasActiveDelivery = driver.status == 'busy';
+            // driver.status='busy' KHÔNG dùng được nữa để suy ra "đang chạy đơn" — tài xế Dự
+            // phòng (is_backup_driver) được gán đơn mà KHÔNG bị chuyển sang busy (xem
+            // hofa-db/98_backup_driver_pool.sql), vẫn giữ 'online' dù đang chạy. Suy thẳng từ
+            // danh sách chuyến đang hoạt động (bỏ qua 'assigned' — mời chưa xác nhận, chưa thật
+            // sự "đang chạy") mới đúng cho cả 2 loại tài xế.
+            final hasActiveDelivery = activeDeliveries.any(
+              (d) => d.status != 'assigned',
+            );
 
             if (_lastSyncedStatus != driver.status) {
               _lastSyncedStatus = driver.status;
@@ -297,10 +314,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                   ),
                 ),
                 const SizedBox(height: 16),
-                activeDeliveryAsync.when(
+                activeDeliveriesAsync.when(
                   loading: () => const SizedBox(),
                   error: (_, _) => const SizedBox(),
-                  data: (delivery) => delivery == null
+                  data: (deliveries) => deliveries.isEmpty
                       ? Padding(
                           padding: const EdgeInsets.symmetric(vertical: 32),
                           child: Center(
@@ -314,13 +331,37 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
                             ),
                           ),
                         )
-                      // 'assigned' = đơn đã gán nhưng CHƯA xác nhận (OfferScreen, /offer/:id) —
-                      // khác các trạng thái sau đó (đã nhận, đang chạy) mở /deliveries/:id. Có
-                      // nút riêng ở đây phòng khi lỡ push (không bấm vào thông báo kịp) vẫn có
-                      // cách quay lại đúng màn xác nhận thay vì phải chờ push tới lần nữa.
-                      : delivery.status == 'assigned'
-                          ? _PendingOfferCard(delivery: delivery)
-                          : _ActiveDeliveryCard(delivery: delivery),
+                      : Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Chuyến đầu tiên (nhận trước nhất) — thẻ đầy đủ như cũ.
+                            // 'assigned' = đơn đã gán nhưng CHƯA xác nhận (OfferScreen,
+                            // /offer/:id) — khác các trạng thái sau đó (đã nhận, đang chạy) mở
+                            // /deliveries/:id. Có nút riêng ở đây phòng khi lỡ push (không bấm
+                            // vào thông báo kịp) vẫn có cách quay lại đúng màn xác nhận thay vì
+                            // phải chờ push tới lần nữa.
+                            deliveries.first.status == 'assigned'
+                                ? _PendingOfferCard(delivery: deliveries.first)
+                                : _ActiveDeliveryCard(delivery: deliveries.first),
+                            // Tài xế Dự phòng có thể nhận thêm đơn dù đang chạy đơn khác — tách
+                            // hẳn thành 1 danh sách RIÊNG bên dưới cho đơn thứ 2, 3... thay vì
+                            // trộn chung 1 thẻ, để không nhầm là cùng 1 chuyến.
+                            if (deliveries.length > 1) ...[
+                              const SizedBox(height: 20),
+                              Text(
+                                'Các đơn khác đang chạy (${deliveries.length - 1})',
+                                style: theme.textTheme.titleSmall?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              for (final d in deliveries.skip(1)) ...[
+                                _OtherDeliveryTile(delivery: d),
+                                const SizedBox(height: 8),
+                              ],
+                            ],
+                          ],
+                        ),
                 ),
               ],
             );
@@ -334,13 +375,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 /// Đơn đã gán nhưng chưa xác nhận — nút mở thẳng OfferScreen (/offer/:id), chỗ dựa khi lỡ bấm
 /// vào push thông báo (thông báo bị tắt, hoặc trình duyệt/thiết bị chặn) nhưng đơn vẫn đang
 /// chờ, không phải chờ push tới lần nữa mới thấy lại được.
-class _PendingOfferCard extends StatelessWidget {
+class _PendingOfferCard extends ConsumerWidget {
   final Delivery delivery;
   const _PendingOfferCard({required this.delivery});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    final orderCode = ref
+        .watch(orderForDeliveryProvider(delivery.orderId))
+        .valueOrNull
+        ?.orderCode;
     return Card(
       elevation: 0,
       color: theme.colorScheme.secondary,
@@ -355,7 +400,9 @@ class _PendingOfferCard extends StatelessWidget {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    'Bạn có 1 đơn đang chờ xác nhận!',
+                    orderCode != null
+                        ? 'Đơn $orderCode đang chờ xác nhận!'
+                        : 'Bạn có 1 đơn đang chờ xác nhận!',
                     style: theme.textTheme.titleMedium?.copyWith(color: Colors.white, fontWeight: FontWeight.bold),
                   ),
                 ),
@@ -392,20 +439,29 @@ class _PendingOfferCard extends StatelessWidget {
   }
 }
 
-class _ActiveDeliveryCard extends StatelessWidget {
+class _ActiveDeliveryCard extends ConsumerWidget {
   final Delivery delivery;
   const _ActiveDeliveryCard({required this.delivery});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    final orderCode = ref
+        .watch(orderForDeliveryProvider(delivery.orderId))
+        .valueOrNull
+        ?.orderCode;
     return Card(
       elevation: 0,
       color: theme.colorScheme.secondary.withValues(alpha: 0.12),
       child: ListTile(
         contentPadding: const EdgeInsets.all(16),
-        title: Text(deliveryStatusLabels[delivery.status] ?? delivery.status,
-            style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+        title: Text(
+          [
+            ?orderCode,
+            deliveryStatusLabels[delivery.status] ?? delivery.status,
+          ].join(' · '),
+          style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+        ),
         subtitle: Padding(
           padding: const EdgeInsets.only(top: 6),
           child: Column(
@@ -421,6 +477,53 @@ class _ActiveDeliveryCard extends StatelessWidget {
         ),
         trailing: const Icon(Icons.chevron_right),
         onTap: () => context.push('/deliveries/${delivery.id}'),
+      ),
+    );
+  }
+}
+
+/// 1 dòng gọn cho đơn thứ 2, 3... ở danh sách RIÊNG "Các đơn khác đang chạy" (khác hẳn thẻ chính
+/// _ActiveDeliveryCard/_PendingOfferCard phía trên) — vẫn hiện mã đơn để phân biệt rõ ràng.
+class _OtherDeliveryTile extends ConsumerWidget {
+  final Delivery delivery;
+  const _OtherDeliveryTile({required this.delivery});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final orderCode = ref
+        .watch(orderForDeliveryProvider(delivery.orderId))
+        .valueOrNull
+        ?.orderCode;
+    final isPending = delivery.status == 'assigned';
+    return Card(
+      elevation: 0,
+      color: isPending
+          ? theme.colorScheme.secondary.withValues(alpha: 0.7)
+          : theme.colorScheme.surfaceContainerLow,
+      child: ListTile(
+        dense: true,
+        leading: Icon(
+          isPending ? Icons.notifications_active : Icons.local_shipping_outlined,
+          color: isPending ? Colors.white : theme.colorScheme.secondary,
+        ),
+        title: Text(
+          orderCode ?? 'Đang tải...',
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            color: isPending ? Colors.white : null,
+          ),
+        ),
+        subtitle: Text(
+          isPending
+              ? 'Đang chờ xác nhận'
+              : (deliveryStatusLabels[delivery.status] ?? delivery.status),
+          style: TextStyle(color: isPending ? Colors.white : null),
+        ),
+        trailing: Icon(Icons.chevron_right, color: isPending ? Colors.white : null),
+        onTap: () => context.push(
+          isPending ? '/offer/${delivery.id}' : '/deliveries/${delivery.id}',
+        ),
       ),
     );
   }
