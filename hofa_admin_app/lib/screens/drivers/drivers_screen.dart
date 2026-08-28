@@ -526,8 +526,9 @@ class _DriversScreenState extends ConsumerState<DriversScreen>
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Tài xế trong danh sách này nhận KHÔNG GIỚI HẠN số đơn cùng lúc — '
-                                'chỉ được hệ thống mời khi không tìm được tài xế thường nào nhận đơn.',
+                                'Tài xế trong danh sách này nhận KHÔNG GIỚI HẠN số đơn cùng lúc, '
+                                'BẤT KỂ đang ở trạng thái nào (kể cả offline/đang bận) — chỉ '
+                                'được hệ thống mời khi không tìm được tài xế thường nào nhận đơn.',
                                 style: theme.textTheme.bodySmall?.copyWith(
                                   color: theme.colorScheme.outline,
                                 ),

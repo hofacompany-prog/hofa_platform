@@ -46,7 +46,12 @@ async function currentDriverDispatchSettings() {
 /** [minViTrenBalance] — tài xế phải có Ví trên (wallet='cod', xem hofa-db/69_driver_wallet_vi_
  * tren.sql) ĐỦ LỚN HƠN giá trị đơn mới được nhận, áp dụng cho MỌI loại đơn (không riêng COD) —
  * coi như tiền vốn tối thiểu trước khi chạy đơn. Tài xế chưa đủ (kể cả tài xế mới, số dư 0)
- * phải tự nạp tiền vào Ví trên ("Nạp tiền", app tài xế) trước khi nhận được đơn đầu tiên. */
+ * phải tự nạp tiền vào Ví trên ("Nạp tiền", app tài xế) trước khi nhận được đơn đầu tiên.
+ * [backupPool] true — tìm trong nhóm "Tài xế dự phòng" (is_backup_driver=true) thay vì nhóm
+ * thường, và BỎ QUA hẳn điều kiện d.status = 'online' — tài xế dự phòng vẫn được gán dù đang
+ * offline/busy/on_break, theo đúng yêu cầu "bất kể trạng thái nào" của nhóm này (xem
+ * hofa-db/99_backup_driver_any_status.sql, assign_driver RPC cũng bỏ qua check status cho nhóm
+ * này). Vẫn giữ điều kiện có toạ độ — cần để tính khoảng cách/phí, không phải "trạng thái". */
 async function findNearestOnlineDriver(
   pickupLat,
   pickupLng,
@@ -56,7 +61,8 @@ async function findNearestOnlineDriver(
   const drivers = await db.query(
     `SELECT d.* FROM drivers d
        LEFT JOIN driver_wallet_balances w ON w.driver_id = d.id
-      WHERE d.status = 'online' AND d.current_latitude IS NOT NULL AND d.current_longitude IS NOT NULL
+      WHERE (d.status = 'online' OR $3 = true)
+        AND d.current_latitude IS NOT NULL AND d.current_longitude IS NOT NULL
         AND d.id <> ALL($1::uuid[])
         AND COALESCE(w.cod_balance, 0) > $2
         AND d.is_backup_driver = $3`,
@@ -85,10 +91,12 @@ async function findNearestOnlineDriver(
  *   chưa trượt thì sweepExpiredOffers() tự NHẬN hộ (autoAcceptExpiredOffer).
  * - auto_accept=false: accept_window dài hơn (manual_accept_sweep_seconds) — hết giờ thì
  *   reassignAfterDecline() chuyển cho tài xế gần nhất kế tiếp, y hệt khi tài xế tự bấm Từ chối.
- * Không tìm được tài xế THƯỜNG nào (is_backup_driver=false) VÀ (đã bật
+ * Không tìm được tài xế THƯỜNG nào (is_backup_driver=false, phải đang online) VÀ (đã bật
  * driver_dispatch_settings.backup_pool_enabled HOẶC gọi với forceBackupPool=true) thì thử tiếp
- * nhóm "tài xế dự phòng" (is_backup_driver=true, nhận không giới hạn số đơn cùng lúc — xem
- * hofa-db/98_backup_driver_pool.sql) trước khi bỏ cuộc hẳn. [forceBackupPool] dùng cho admin chủ
+ * nhóm "tài xế dự phòng" (is_backup_driver=true) — nhóm này được mời/gán BẤT KỂ đang ở trạng
+ * thái nào (offline/busy/on_break/online đều được, xem hofa-db/99_backup_driver_any_status.sql)
+ * và nhận không giới hạn số đơn cùng lúc (xem hofa-db/98_backup_driver_pool.sql) trước khi bỏ
+ * cuộc hẳn. [forceBackupPool] dùng cho admin chủ
  * động bấm "Quét tài xế" ở 1 đơn cụ thể (POST /admin/orders/:id/rescan-driver) — luôn thử cả
  * nhóm dự phòng bất kể công tắc toàn sàn, vì đây là hành động THỦ CÔNG của admin cho đúng đơn
  * đang kẹt, khác với dispatch TỰ ĐỘNG (offerToNearestDriver gọi từ orders.js/sweepDriverSearch)
