@@ -1,18 +1,30 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../core/format.dart';
 import '../core/geo.dart';
 import '../models/merchant.dart';
+import '../models/voucher.dart';
+import '../providers/app_providers.dart';
 import 'buy_on_behalf_badge.dart';
 import 'merchant_favorite_button.dart';
 import 'network_image_box.dart';
 
-class MerchantCard extends StatelessWidget {
+class MerchantCard extends ConsumerWidget {
   final Merchant merchant;
   final VoidCallback onTap;
+  // Ẩn được ở nơi không cần (vd trang chủ) — mặc định vẫn hiện để không đổi hành vi những chỗ
+  // khác đang dùng (màn Yêu thích...).
+  final bool showFavoriteButton;
 
-  const MerchantCard({super.key, required this.merchant, required this.onTap});
+  const MerchantCard({
+    super.key,
+    required this.merchant,
+    required this.onTap,
+    this.showFavoriteButton = true,
+  });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final isClosed = !merchant.hasOpenBranch;
     // Đỏ = chủ cửa hàng đang tạm nghỉ (chủ động tắt); xám = chỉ đơn thuần ngoài giờ hoạt động
@@ -39,8 +51,8 @@ class MerchantCard extends StatelessWidget {
                   children: [
                     NetworkImageBox(
                       url: merchant.logoUrl,
-                      width: 64,
-                      height: 64,
+                      width: 84,
+                      height: 84,
                       fallbackIcon: Icons.storefront_outlined,
                     ),
                     if (isClosed)
@@ -56,57 +68,65 @@ class MerchantCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              merchant.name,
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w600,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          if (isClosed)
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 6,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: closedColor,
-                                borderRadius: BorderRadius.circular(6),
-                              ),
+                      // Nhãn "Mua hộ" neo TRÊN CÙNG bên phải, cùng hàng với tên — tên chỉ 1
+                      // dòng, dài quá thì "…", không đẩy mất nhãn ra ngoài vì nhãn nằm NGOÀI
+                      // Expanded (không co dãn theo tên).
+                      SizedBox(
+                        height: 22,
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            Expanded(
                               child: Text(
-                                closedLabel,
+                                merchant.name,
                                 style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 11,
                                   fontWeight: FontWeight.w600,
                                 ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
-                            )
-                          else if (merchant.isStandard)
-                            Icon(
-                              Icons.verified,
-                              size: 16,
-                              color: theme.colorScheme.primary,
                             ),
-                        ],
-                      ),
-                      if (merchant.isBuyOnBehalf) ...[
-                        const SizedBox(height: 4),
-                        const BuyOnBehalfBadge(),
-                      ],
-                      const SizedBox(height: 4),
-                      if (merchant.description != null &&
-                          merchant.description!.isNotEmpty)
-                        Text(
-                          merchant.description!,
-                          style: theme.textTheme.bodySmall,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
+                            const SizedBox(width: 6),
+                            if (isClosed)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: closedColor,
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  closedLabel,
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              )
+                            else if (merchant.isStandard)
+                              Icon(
+                                Icons.verified,
+                                size: 16,
+                                color: theme.colorScheme.primary,
+                              ),
+                            if (merchant.isBuyOnBehalf) ...[
+                              const SizedBox(width: 4),
+                              const BuyOnBehalfBadge(),
+                            ],
+                          ],
                         ),
+                      ),
+                      const SizedBox(height: 4),
+                      // Thay mô tả bằng dải mã giảm giá cửa hàng đang có, cuộn ngang nếu nhiều —
+                      // vẫn chừa cố định 1 chiều cao dù cửa hàng không có voucher nào, giữ các
+                      // thẻ cao bằng nhau (như mô tả trước đây).
+                      SizedBox(
+                        height: 28,
+                        child: _VoucherChipsRow(merchantId: merchant.id),
+                      ),
                       const SizedBox(height: 4),
                       // Wrap thay vì Row — tên cửa hàng dài hoặc màn hình hẹp có thể khiến
                       // tổng bề rộng rating + thời gian + khoảng cách vượt quá chỗ trống, Wrap
@@ -178,13 +198,82 @@ class MerchantCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                MerchantFavoriteButton(merchantId: merchant.id),
-                const Icon(Icons.chevron_right),
+                if (showFavoriteButton)
+                  MerchantFavoriteButton(merchantId: merchant.id),
               ],
             ),
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Dải chip mã giảm giá công khai của 1 cửa hàng, cuộn ngang nếu nhiều — dùng lại đúng nguồn dữ
+/// liệu với voucher_picker_dialog.dart (publicVouchersProvider) nên không cần gọi API riêng.
+class _VoucherChipsRow extends ConsumerWidget {
+  final String merchantId;
+
+  const _VoucherChipsRow({required this.merchantId});
+
+  IconData _iconFor(String discountType) {
+    switch (discountType) {
+      case 'percent':
+        return Icons.percent;
+      case 'free_shipping':
+        return Icons.local_shipping_outlined;
+      default:
+        return Icons.sell_outlined;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final vouchers =
+        ref.watch(publicVouchersProvider(merchantId)).valueOrNull
+            ?.where((v) => !v.isExpired)
+            .toList() ??
+        const <Voucher>[];
+    if (vouchers.isEmpty) return const SizedBox.shrink();
+    return ListView.separated(
+      scrollDirection: Axis.horizontal,
+      physics: const ClampingScrollPhysics(),
+      itemCount: vouchers.length,
+      separatorBuilder: (_, _) => const SizedBox(width: 6),
+      itemBuilder: (context, index) {
+        final voucher = vouchers[index];
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.primary.withValues(alpha: 0.08),
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(
+              color: theme.colorScheme.primary.withValues(alpha: 0.25),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                _iconFor(voucher.discountType),
+                size: 12,
+                color: theme.colorScheme.primary,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                voucher.discountLabel(formatVnd),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.primary,
+                  fontWeight: FontWeight.w600,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }

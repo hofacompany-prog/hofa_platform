@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/format.dart';
 import '../../core/permission_helper.dart';
@@ -11,6 +12,7 @@ import '../../providers/app_providers.dart';
 import '../../widgets/address_map_flow.dart';
 import '../../widgets/favorites_icon.dart';
 import '../../widgets/notification_bell.dart';
+import '../../widgets/order_history_icon.dart';
 import '../../widgets/category_grid.dart';
 import '../../widgets/merchant_card.dart';
 import '../../widgets/network_image_box.dart';
@@ -51,15 +53,31 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
   }
 
+  static const _kNotifPromptedOnceKey = 'notification_permission_prompted_once';
+
+  /// Quyền Vị trí: hỏi lại MỖI LẦN còn thiếu (giữ nguyên hành vi cũ). Quyền Thông báo: khách
+  /// hàng chỉ bị hỏi ĐÚNG 1 LẦN (không blocking, có thể bấm "Để sau") — khác hẳn app Tài xế/Cửa
+  /// hàng (bắt buộc phải cấp mới dùng được, hỏi lại mỗi lần vào Trang chủ) vì với khách hàng
+  /// thông báo chỉ là tiện ích, không phải điều kiện bắt buộc để đặt hàng.
   Future<void> _checkPermissionsOnStart() async {
+    final prefs = await SharedPreferences.getInstance();
+    final alreadyPromptedNotif = prefs.getBool(_kNotifPromptedOnceKey) == true;
     final notif = await PermissionHelper.notificationState();
     final loc = await PermissionHelper.locationState();
     if (!mounted) return;
+    final askNotif = !alreadyPromptedNotif && notif != PermissionState.granted;
     final missing = <String>[
-      if (notif != PermissionState.granted) 'Thông báo đẩy',
+      if (askNotif) 'Thông báo đẩy',
       if (loc != PermissionState.granted) 'Vị trí',
     ];
-    if (missing.isEmpty) return;
+    if (missing.isEmpty) {
+      if (!alreadyPromptedNotif) {
+        await prefs.setBool(_kNotifPromptedOnceKey, true);
+      }
+      return;
+    }
+    // Đánh dấu đã hỏi NGAY trước khi hiện dialog — dù khách bấm "Để sau" cũng không hỏi lại nữa.
+    if (askNotif) await prefs.setBool(_kNotifPromptedOnceKey, true);
 
     await showDialog<void>(
       context: context,
@@ -77,7 +95,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           FilledButton(
             onPressed: () async {
               Navigator.pop(dialogContext);
-              if (notif != PermissionState.granted) {
+              if (askNotif) {
                 await PermissionHelper.requestNotification(context);
               }
               if (loc != PermissionState.granted && mounted) {
@@ -217,7 +235,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ),
         ),
         centerTitle: false,
-        actions: const [FavoritesIcon(), NotificationBell()],
+        actions: const [
+          OrderHistoryIcon(),
+          FavoritesIcon(),
+          NotificationBell(),
+        ],
       ),
       body: RefreshIndicator(
         onRefresh: () async => ref.invalidate(merchantsPagedProvider),
@@ -349,6 +371,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                                 padding: const EdgeInsets.only(bottom: 8),
                                 child: MerchantCard(
                                   merchant: m,
+                                  showFavoriteButton: false,
                                   onTap: () =>
                                       context.push('/merchants/${m.id}'),
                                 ),
@@ -501,6 +524,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             padding: const EdgeInsets.only(bottom: 8),
                             child: MerchantCard(
                               merchant: m,
+                              showFavoriteButton: false,
                               onTap: () => context.push('/merchants/${m.id}'),
                             ),
                           ),

@@ -12,6 +12,7 @@ class FavoritesIcon extends StatelessWidget {
   Widget build(BuildContext context) {
     return IconButton(
       tooltip: 'Cửa hàng yêu thích',
+      padding: const EdgeInsets.symmetric(horizontal: 6),
       onPressed: () async {
         if (!await requireLogin(context)) return;
         if (context.mounted) context.push('/favorites');

@@ -13,6 +13,7 @@ class NotificationBell extends ConsumerWidget {
     final unread = ref.watch(unreadNotificationCountProvider).valueOrNull ?? 0;
     return IconButton(
       tooltip: 'Thông báo',
+      padding: const EdgeInsets.symmetric(horizontal: 6),
       onPressed: () async {
         if (!await requireLogin(context)) return;
         if (context.mounted) context.push('/notifications');
