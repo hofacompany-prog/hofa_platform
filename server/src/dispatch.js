@@ -85,13 +85,17 @@ async function findNearestOnlineDriver(
  *   chưa trượt thì sweepExpiredOffers() tự NHẬN hộ (autoAcceptExpiredOffer).
  * - auto_accept=false: accept_window dài hơn (manual_accept_sweep_seconds) — hết giờ thì
  *   reassignAfterDecline() chuyển cho tài xế gần nhất kế tiếp, y hệt khi tài xế tự bấm Từ chối.
- * Không tìm được tài xế THƯỜNG nào (is_backup_driver=false) VÀ đã bật
- * driver_dispatch_settings.backup_pool_enabled thì thử tiếp nhóm "tài xế dự phòng"
- * (is_backup_driver=true, nhận không giới hạn số đơn cùng lúc — xem
- * hofa-db/98_backup_driver_pool.sql) trước khi bỏ cuộc hẳn.
+ * Không tìm được tài xế THƯỜNG nào (is_backup_driver=false) VÀ (đã bật
+ * driver_dispatch_settings.backup_pool_enabled HOẶC gọi với forceBackupPool=true) thì thử tiếp
+ * nhóm "tài xế dự phòng" (is_backup_driver=true, nhận không giới hạn số đơn cùng lúc — xem
+ * hofa-db/98_backup_driver_pool.sql) trước khi bỏ cuộc hẳn. [forceBackupPool] dùng cho admin chủ
+ * động bấm "Quét tài xế" ở 1 đơn cụ thể (POST /admin/orders/:id/rescan-driver) — luôn thử cả
+ * nhóm dự phòng bất kể công tắc toàn sàn, vì đây là hành động THỦ CÔNG của admin cho đúng đơn
+ * đang kẹt, khác với dispatch TỰ ĐỘNG (offerToNearestDriver gọi từ orders.js/sweepDriverSearch)
+ * vẫn phải tôn trọng công tắc để không tự ý dùng dự phòng ngoài ý muốn admin.
  * Trả về { delivery, driver } hoặc null nếu không còn tài xế nào (kể cả dự phòng) phù hợp.
  */
-async function offerToNearestDriver(orderId, { excludeDriverIds = [] } = {}) {
+async function offerToNearestDriver(orderId, { excludeDriverIds = [], forceBackupPool = false } = {}) {
   const order = await db.queryOne(
     `SELECT o.*, m.merchant_type FROM orders o JOIN merchants m ON m.id = o.merchant_id WHERE o.id = $1`,
     [orderId]
@@ -104,7 +108,7 @@ async function offerToNearestDriver(orderId, { excludeDriverIds = [] } = {}) {
   });
   if (!driver) {
     const settings = await currentDriverDispatchSettings();
-    if (settings.backup_pool_enabled) {
+    if (forceBackupPool || settings.backup_pool_enabled) {
       driver = await findNearestOnlineDriver(branch?.latitude ?? null, branch?.longitude ?? null, excludeDriverIds, {
         minViTrenBalance: order.total_amount,
         backupPool: true

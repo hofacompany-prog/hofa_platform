@@ -207,7 +207,9 @@ class _AdminOrderDetailScreenState
 
   /// Quét NGAY 1 lượt tìm tài xế online gần nhất — dùng cho MỌI đơn (mua hộ lẫn bình thường)
   /// chưa có ai nhận (khác _continueDriverSearch: đó chỉ reset để chờ sweep tự động chạy ở chu
-  /// kỳ sau). Cùng logic offerToNearestDriver với nút "Tìm tài xế" phía cửa hàng.
+  /// kỳ sau). Cùng logic offerToNearestDriver với nút "Tìm tài xế" phía cửa hàng, khác 1 điểm:
+  /// server luôn thử thêm nhóm "Tài xế dự phòng" cho riêng lượt quét này (forceBackupPool),
+  /// không cần bật công tắc toàn sàn ở màn Tài xế.
   Future<void> _rescanDriver(Order o) async {
     setState(() => _busy = true);
     try {
@@ -239,8 +241,10 @@ class _AdminOrderDetailScreenState
 
   /// Admin tự chỉ định 1 tài xế online cho đơn (mọi loại — mua hộ hay bình thường), thay vì để
   /// hệ thống tự quét — mở dialog chọn từ danh sách tài xế đang online (GET
-  /// /admin/drivers?status=online). POST /orders/:id/select-driver chỉ mở cho admin ở đơn
-  /// thường (khách hàng không tự chọn được, khác đơn mua hộ) — dùng khi quét không ra ai phù hợp.
+  /// /admin/drivers?status=online), KHÔNG lọc theo is_backup_driver nên tài xế dự phòng cũng
+  /// hiện trong danh sách này (gắn nhãn "Dự phòng" để phân biệt). POST /orders/:id/select-driver
+  /// chỉ mở cho admin ở đơn thường (khách hàng không tự chọn được, khác đơn mua hộ) — dùng khi
+  /// quét không ra ai phù hợp.
   Future<void> _pickDriver(Order o) async {
     final driversAsync = await ref.read(adminRepoProvider).drivers(status: 'online');
     if (!mounted) return;
@@ -265,7 +269,40 @@ class _AdminOrderDetailScreenState
               final d = driversAsync[i];
               return ListTile(
                 leading: const Icon(Icons.two_wheeler_outlined),
-                title: Text('${d.vehicleType ?? "Xe"} · ${d.vehiclePlate ?? "—"}'),
+                title: Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        '${d.vehicleType ?? "Xe"} · ${d.vehiclePlate ?? "—"}',
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (d.isBackupDriver) ...[
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 1,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.secondaryContainer,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          'Dự phòng',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Theme.of(
+                              context,
+                            ).colorScheme.onSecondaryContainer,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
                 subtitle: Text(
                   '${d.totalDeliveries} chuyến · ${d.ratingAvg.toStringAsFixed(1)}★',
                 ),

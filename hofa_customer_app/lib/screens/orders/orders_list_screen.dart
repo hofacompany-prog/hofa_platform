@@ -155,17 +155,25 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
                                 ),
                               ),
                               const SizedBox(height: 4),
-                              Chip(
-                                label: Text(
+                              // Container thay vì Chip — Chip có chiều cao tối thiểu cố định
+                              // (kể cả visualDensity.compact) vượt quá khoảng ListTile.trailing
+                              // dành cho 2 dòng (số tiền + nhãn), gây tràn dọc vài pixel.
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: color.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(
+                                    color: color.withValues(alpha: 0.4),
+                                  ),
+                                ),
+                                child: Text(
                                   orderStatusLabels[o.status] ?? o.status,
-                                  style: const TextStyle(fontSize: 11),
+                                  style: TextStyle(fontSize: 11, color: color),
                                 ),
-                                backgroundColor: color.withValues(alpha: 0.12),
-                                side: BorderSide(
-                                  color: color.withValues(alpha: 0.4),
-                                ),
-                                visualDensity: VisualDensity.compact,
-                                padding: EdgeInsets.zero,
                               ),
                             ],
                           ),

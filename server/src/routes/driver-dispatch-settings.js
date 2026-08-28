@@ -54,10 +54,13 @@ router.post('/admin/orders/:id/rescan-driver', asyncHandler(async (req, res) => 
   if (!order) throw new ApiError('NOT_FOUND', 'Không tìm thấy đơn hàng', 404);
 
   const existing = await db.queryOne('SELECT declined_driver_ids FROM deliveries WHERE order_id = $1', [req.params.id]);
+  // forceBackupPool: true — admin bấm nút này CHÍNH LÀ để gỡ đơn kẹt, nên luôn thử cả nhóm tài
+  // xế dự phòng bất kể công tắc toàn sàn backup_pool_enabled đang tắt hay bật.
   const result = await dispatch.offerToNearestDriver(req.params.id, {
-    excludeDriverIds: existing?.declined_driver_ids || []
+    excludeDriverIds: existing?.declined_driver_ids || [],
+    forceBackupPool: true
   });
-  if (!result) throw new ApiError('NOT_FOUND', 'Hiện không có tài xế nào đang online phù hợp', 404);
+  if (!result) throw new ApiError('NOT_FOUND', 'Hiện không có tài xế nào đang online phù hợp (kể cả dự phòng)', 404);
   const driverUser = await db.queryOne('SELECT full_name FROM users WHERE id = $1', [result.driver.user_id]);
   res.json({ ok: true, data: { ...result.delivery, driver_name: driverUser?.full_name ?? null } });
 }));
