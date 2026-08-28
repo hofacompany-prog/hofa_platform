@@ -2,12 +2,12 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/cloudinary_uploader.dart';
 import '../../core/format.dart';
 import '../../core/push_service.dart';
 import '../../models/chat_message.dart';
 import '../../providers/app_providers.dart';
+import '../../providers/auth_providers.dart';
 
 /// Nhắn tin trong 1 đơn hàng — CHỈ truy cập được từ chi tiết đơn (không có hộp thư riêng). Cập
 /// nhật thời gian thực qua push FCM (PushService.chatMessageStream, xem core/push_service.dart)
@@ -41,8 +41,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   String? _error;
   Timer? _pollTimer;
   StreamSubscription<Map<String, dynamic>>? _pushSub;
-
-  String? get _myUserId => Supabase.instance.client.auth.currentUser?.id;
 
   @override
   void initState() {
@@ -154,6 +152,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final theme = Theme.of(context);
     final orderAsync = ref.watch(orderDetailProvider(widget.orderId));
     final chatSettingsAsync = ref.watch(chatSettingsProvider);
+    // So sánh bằng public.users.id (đúng hồ sơ theo app scope hiện tại) chứ KHÔNG phải
+    // Supabase Auth uid — từ migration 90 (multi-role accounts) 1 auth uid có thể ứng với
+    // NHIỀU dòng users.id khác nhau (mỗi role 1 dòng riêng), auth uid không còn đại diện đúng
+    // "mình" ở app này nữa.
+    final myUserId = ref.watch(userProfileProvider).valueOrNull?.id;
     // Mặc định BẮT BUỘC còn mở (an toàn) trong lúc chưa tải xong order/chat-settings — tránh
     // hiện ô nhập rồi bị chặn ở POST vì thật ra đã đóng.
     final canSend =
@@ -190,7 +193,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                           final message = item as ChatMessage;
                           return _MessageBubble(
                             message: message,
-                            isMe: message.senderId == _myUserId,
+                            isMe: message.senderId == myUserId,
                             otherPartyLastReadAt: _otherPartyLastReadAt,
                           );
                         },
