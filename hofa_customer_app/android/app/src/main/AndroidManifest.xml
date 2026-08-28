@@ -7,7 +7,7 @@
          âm thầm. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <application
-        android:label="HOFA - Khách hàng"
+        android:label="Hofa"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

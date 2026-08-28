@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>HOFA - Khách hàng</string>
+	<string>Hofa</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -27,6 +27,8 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>HOFA cần vị trí của bạn để gợi ý đúng địa chỉ giao hàng gần bạn.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>HOFA cần vị trí của bạn để gợi ý đúng địa chỉ giao hàng gần bạn.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Chụp ảnh đánh giá đơn hàng hoặc ảnh đại diện.</string>
