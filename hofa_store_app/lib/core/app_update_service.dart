@@ -33,6 +33,7 @@ class AppUpdateService {
     final storeUrl = defaultTargetPlatform == TargetPlatform.iOS
         ? settings['ios_store_url'] as String?
         : settings['android_store_url'] as String?;
+    final versionLabel = settings['min_version_label'] as String?;
 
     await showDialog<void>(
       context: context,
@@ -41,9 +42,12 @@ class AppUpdateService {
         canPop: false,
         child: AlertDialog(
           title: const Text('Cần cập nhật ứng dụng'),
-          content: const Text(
-            'Đã có phiên bản mới — bạn cần cập nhật để tiếp tục sử dụng app. Bấm "Cập nhật ngay" '
-            'để mở kho ứng dụng.',
+          content: Text(
+            (versionLabel == null || versionLabel.isEmpty)
+                ? 'Đã có phiên bản mới — bạn cần cập nhật để tiếp tục sử dụng app. Bấm "Cập nhật '
+                      'ngay" để mở kho ứng dụng.'
+                : 'Phiên bản $versionLabel đã sẵn sàng — bạn cần cập nhật để tiếp tục sử dụng '
+                      'app. Bấm "Cập nhật ngay" để mở kho ứng dụng.',
           ),
           actions: [
             FilledButton(

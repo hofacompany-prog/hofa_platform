@@ -27,8 +27,10 @@ class AppUpdateSettingsScreen extends ConsumerWidget {
               Text(
                 'Số build tối thiểu (build number trong pubspec.yaml, phần sau dấu +) — máy '
                 'khách đang cài thấp hơn số này sẽ bị chặn dùng app, chỉ hiện popup mở store để '
-                'cập nhật, không có nút bỏ qua. Để trống link store thì nút "Cập nhật ngay" sẽ '
-                'không bấm được — nhớ điền trước khi tăng số build tối thiểu.',
+                'cập nhật, không có nút bỏ qua. Phiên bản chỉ để hiện chữ cho đúng trong nội '
+                'dung popup (vd "2.2.0"), không dùng để so sánh — nhập cùng lúc với số build cho '
+                'khớp. Để trống link store thì nút "Cập nhật ngay" sẽ không bấm được — nhớ điền '
+                'trước khi tăng số build tối thiểu.',
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.outline,
                 ),
@@ -80,6 +82,7 @@ class _AppUpdateSection extends ConsumerStatefulWidget {
 
 class _AppUpdateSectionState extends ConsumerState<_AppUpdateSection> {
   final _buildCtrl = TextEditingController();
+  final _versionLabelCtrl = TextEditingController();
   final _iosCtrl = TextEditingController();
   final _androidCtrl = TextEditingController();
   bool _initialized = false;
@@ -88,6 +91,7 @@ class _AppUpdateSectionState extends ConsumerState<_AppUpdateSection> {
   @override
   void dispose() {
     _buildCtrl.dispose();
+    _versionLabelCtrl.dispose();
     _iosCtrl.dispose();
     _androidCtrl.dispose();
     super.dispose();
@@ -95,6 +99,7 @@ class _AppUpdateSectionState extends ConsumerState<_AppUpdateSection> {
 
   void _fillFrom(AppUpdateSetting? s) {
     _buildCtrl.text = '${s?.minBuildNumber ?? 1}';
+    _versionLabelCtrl.text = s?.minVersionLabel ?? '';
     _iosCtrl.text = s?.iosStoreUrl ?? '';
     _androidCtrl.text = s?.androidStoreUrl ?? '';
   }
@@ -115,6 +120,9 @@ class _AppUpdateSectionState extends ConsumerState<_AppUpdateSection> {
             AppUpdateSetting(
               appScope: widget.appScope,
               minBuildNumber: minBuild,
+              minVersionLabel: _versionLabelCtrl.text.trim().isEmpty
+                  ? null
+                  : _versionLabelCtrl.text.trim(),
               iosStoreUrl: _iosCtrl.text.trim().isEmpty ? null : _iosCtrl.text.trim(),
               androidStoreUrl: _androidCtrl.text.trim().isEmpty ? null : _androidCtrl.text.trim(),
             ),
@@ -164,6 +172,16 @@ class _AppUpdateSectionState extends ConsumerState<_AppUpdateSection> {
                 isDense: true,
               ),
               keyboardType: TextInputType.number,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _versionLabelCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Phiên bản (hiển thị trong popup)',
+                border: OutlineInputBorder(),
+                isDense: true,
+                hintText: '2.2.0 — khớp version: X.Y.Z trong pubspec.yaml',
+              ),
             ),
             const SizedBox(height: 12),
             TextField(
