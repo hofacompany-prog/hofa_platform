@@ -18,62 +18,81 @@ class HomeScreen extends ConsumerStatefulWidget {
   ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends ConsumerState<HomeScreen> {
+class _HomeScreenState extends ConsumerState<HomeScreen>
+    with WidgetsBindingObserver {
   final _repo = DriverRepository();
   bool _busy = false;
   String? _locationError;
   String? _lastSyncedStatus;
+  bool _permDialogOpen = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     // Kiểm tra NGAY lúc mở màn chính — tài xế thiếu 1 trong 2 quyền này thì không nhận được đơn
-    // mới (thông báo) hoặc không tìm được (vị trí), nhắc trước khi họ tự hỏi sao không có đơn.
-    // addPostFrameCallback để context sẵn sàng hiện dialog ngay sau khung hình đầu tiên.
-    WidgetsBinding.instance.addPostFrameCallback((_) => _checkPermissionsOnStart());
+    // mới (thông báo) hoặc không tìm được (vị trí). Khác app Khách hàng (chỉ hỏi 1 lần, có thể
+    // bỏ qua): tài xế BẮT BUỘC phải cấp ĐỦ CẢ 2 quyền mới dùng được app (không có nút "Để sau"),
+    // hỏi lại mỗi lần vào Trang chủ tới khi được cấp đủ.
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _ensureRequiredPermissions(),
+    );
   }
 
-  Future<void> _checkPermissionsOnStart() async {
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  // Quay lại app sau khi mở Cài đặt hệ thống bật quyền — tự kiểm tra lại ngay, đóng dialog chặn
+  // nếu đã cấp đủ, khỏi bắt bấm thêm gì trong app.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _ensureRequiredPermissions();
+  }
+
+  Future<void> _ensureRequiredPermissions() async {
     final notif = await PermissionHelper.notificationState();
     final loc = await PermissionHelper.locationState();
     if (!mounted) return;
-    final missing = <String>[
-      if (notif != PermissionState.granted) 'Thông báo đẩy',
-      if (loc != PermissionState.granted) 'Vị trí',
-    ];
-    if (missing.isEmpty) return;
-
+    if (notif == PermissionState.granted && loc == PermissionState.granted) {
+      if (_permDialogOpen) {
+        Navigator.of(context, rootNavigator: true).pop();
+      }
+      return;
+    }
+    if (_permDialogOpen) return;
+    _permDialogOpen = true;
     await showDialog<void>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text('Cần cấp quyền để nhận đơn'),
-        content: Text(
-          'Ứng dụng cần quyền ${missing.join(' và ')} để báo đơn mới kịp thời và xác định đúng '
-          'vị trí giao hàng. Thiếu quyền này bạn sẽ không nhận được đơn mới hoặc không tìm được '
-          'khách gần bạn.',
+      barrierDismissible: false,
+      builder: (dialogContext) => PopScope(
+        canPop: false,
+        child: AlertDialog(
+          title: const Text('Cần cấp quyền để nhận đơn'),
+          content: const Text(
+            'Tài xế bắt buộc bật Thông báo và Vị trí để nhận đơn mới kịp thời và xác định đúng '
+            'vị trí giao hàng — bấm "Cấp quyền" để tiếp tục. Nếu trước đó đã từ chối, nút này sẽ '
+            'mở thẳng Cài đặt để bạn bật lại.',
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () async {
+                await PermissionHelper.requestNotification(dialogContext);
+                if (dialogContext.mounted) {
+                  await PermissionHelper.requestLocation(dialogContext);
+                }
+                if (dialogContext.mounted) Navigator.pop(dialogContext);
+                if (mounted) await _ensureRequiredPermissions();
+              },
+              child: const Text('Cấp quyền'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Để sau'),
-          ),
-          FilledButton(
-            onPressed: () async {
-              Navigator.pop(dialogContext);
-              // Xin quyền THẲNG tại đây (bật popup hệ thống/trình duyệt ngay) — cùng cách app Cửa
-              // hàng đang làm ở location_picker_screen.dart, không bắt bấm thêm lần nữa ở màn khác.
-              if (notif != PermissionState.granted) {
-                await PermissionHelper.requestNotification(context);
-              }
-              if (loc != PermissionState.granted && mounted) {
-                await PermissionHelper.requestLocation(context);
-              }
-            },
-            child: const Text('Cấp quyền ngay'),
-          ),
-        ],
       ),
     );
+    _permDialogOpen = false;
   }
 
   void _syncTrackingWithStatus(String status) {

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:geolocator/geolocator.dart';
@@ -92,19 +93,24 @@ class PermissionHelper {
     }
   }
 
-  /// Trình duyệt không cho web tự mở bảng cài đặt quyền (giới hạn bảo mật nền tảng) — đây là lối
-  /// thoát duy nhất khi quyền đã bị từ chối và tryOpenNativeSettings không hoạt động (web).
+  /// Lối thoát khi quyền đã bị từ chối và tryOpenNativeSettings không tự mở được Cài đặt —
+  /// trên web là do trình duyệt chặn (giới hạn bảo mật nền tảng), gần như không xảy ra trên
+  /// native (openAppSettings() luôn mở được Cài đặt hệ thống thật), chỉ còn là lối thoát dự
+  /// phòng hiếm gặp.
   static void showManualInstructions(BuildContext context, String label) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: Text('Bật quyền $label'),
         content: Text(
-          'Trình duyệt không cho web tự mở cài đặt quyền — bạn tự bật giúp:\n\n'
-          '1. Nhấn vào biểu tượng ổ khoá (hoặc chữ "i") cạnh thanh địa chỉ trình duyệt.\n'
-          '2. Chọn "Quyền của trang web" (Site settings).\n'
-          '3. Bật lại quyền $label cho trang này.\n'
-          '4. Tải lại trang.',
+          kIsWeb
+              ? 'Trình duyệt không cho web tự mở cài đặt quyền — bạn tự bật giúp:\n\n'
+                    '1. Nhấn vào biểu tượng ổ khoá (hoặc chữ "i") cạnh thanh địa chỉ trình duyệt.\n'
+                    '2. Chọn "Quyền của trang web" (Site settings).\n'
+                    '3. Bật lại quyền $label cho trang này.\n'
+                    '4. Tải lại trang.'
+              : 'Không tự mở được Cài đặt — bạn tự vào Cài đặt máy > Ứng dụng > tìm app này > '
+                    'bật lại quyền $label giúp.',
         ),
         actions: [
           TextButton(

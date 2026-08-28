@@ -31,34 +31,83 @@ class HomeScreen extends ConsumerStatefulWidget {
   ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends ConsumerState<HomeScreen> {
+class _HomeScreenState extends ConsumerState<HomeScreen>
+    with WidgetsBindingObserver {
+  bool _notifDialogOpen = false;
+
   @override
   void initState() {
     super.initState();
-    // Kiểm tra ngay lúc mở Trang chủ — thiếu quyền Thông báo thì có thể lỡ đơn mới, thiếu quyền
-    // Vị trí thì lỡ luôn các tính năng cần toạ độ chi nhánh (chọn vị trí trên bản đồ...).
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) => _checkPermissionsOnStart(),
-    );
+    WidgetsBinding.instance.addObserver(this);
+    // Kiểm tra ngay lúc mở Trang chủ — thiếu quyền Thông báo thì lỡ đơn mới. Khác app Khách
+    // hàng (chỉ hỏi 1 lần, có thể bỏ qua): cửa hàng BẮT BUỘC phải cấp quyền Thông báo mới dùng
+    // được app (không có nút "Để sau"), hỏi lại mỗi lần vào Trang chủ tới khi được cấp.
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _ensureNotificationPermission();
+      if (mounted) await _checkLocationPermissionOnStart();
+    });
   }
 
-  Future<void> _checkPermissionsOnStart() async {
-    final notif = await PermissionHelper.notificationState();
-    final loc = await PermissionHelper.locationState();
-    if (!mounted) return;
-    final missing = <String>[
-      if (notif != PermissionState.granted) 'Thông báo đẩy',
-      if (loc != PermissionState.granted) 'Vị trí',
-    ];
-    if (missing.isEmpty) return;
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
 
+  // Quay lại app sau khi mở Cài đặt hệ thống bật quyền — tự kiểm tra lại ngay, đóng dialog chặn
+  // nếu đã cấp xong, khỏi bắt bấm thêm gì trong app.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _ensureNotificationPermission();
+  }
+
+  Future<void> _ensureNotificationPermission() async {
+    final notif = await PermissionHelper.notificationState();
+    if (!mounted) return;
+    if (notif == PermissionState.granted) {
+      if (_notifDialogOpen) {
+        Navigator.of(context, rootNavigator: true).pop();
+      }
+      return;
+    }
+    if (_notifDialogOpen) return;
+    _notifDialogOpen = true;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => PopScope(
+        canPop: false,
+        child: AlertDialog(
+          title: const Text('Cần bật thông báo để dùng app'),
+          content: const Text(
+            'Cửa hàng bắt buộc bật thông báo để nhận đơn mới kịp thời — bấm "Cấp quyền" để tiếp '
+            'tục. Nếu trước đó đã từ chối, nút này sẽ mở thẳng Cài đặt để bạn bật lại.',
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () async {
+                await PermissionHelper.requestNotification(dialogContext);
+                if (dialogContext.mounted) Navigator.pop(dialogContext);
+                if (mounted) await _ensureNotificationPermission();
+              },
+              child: const Text('Cấp quyền'),
+            ),
+          ],
+        ),
+      ),
+    );
+    _notifDialogOpen = false;
+  }
+
+  Future<void> _checkLocationPermissionOnStart() async {
+    final loc = await PermissionHelper.locationState();
+    if (!mounted || loc == PermissionState.granted) return;
     await showDialog<void>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Cần cấp quyền để dùng app tốt hơn'),
-        content: Text(
-          'Ứng dụng cần quyền ${missing.join(' và ')} để báo đơn mới kịp thời và xác định đúng '
-          'vị trí chi nhánh.',
+        title: const Text('Cần quyền vị trí để dùng app tốt hơn'),
+        content: const Text(
+          'Ứng dụng cần quyền vị trí để xác định đúng vị trí chi nhánh.',
         ),
         actions: [
           TextButton(
@@ -68,12 +117,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           FilledButton(
             onPressed: () async {
               Navigator.pop(dialogContext);
-              if (notif != PermissionState.granted) {
-                await PermissionHelper.requestNotification(context);
-              }
-              if (loc != PermissionState.granted && mounted) {
-                await PermissionHelper.requestLocation(context);
-              }
+              await PermissionHelper.requestLocation(context);
             },
             child: const Text('Cấp quyền ngay'),
           ),
