@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'core/app_update_service.dart';
 import 'core/env.dart';
 import 'core/push_service.dart';
 import 'core/pwa_version_service.dart';
@@ -55,6 +56,8 @@ class _HofaCustomerAppState extends ConsumerState<HofaCustomerApp> {
     super.initState();
     if (kIsWeb) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _checkPwaVersion());
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _checkNativeUpdate());
     }
   }
 
@@ -65,6 +68,15 @@ class _HofaCustomerAppState extends ConsumerState<HofaCustomerApp> {
     final context = navigatorKey.currentContext;
     if (context == null || !context.mounted) return;
     await PwaVersionService.checkForUpdate(context);
+  }
+
+  // Bản cài từ CH Play/App Store (không phải PWA) — ép cập nhật riêng qua
+  // AppUpdateService, xem core/app_update_service.dart.
+  Future<void> _checkNativeUpdate() async {
+    if (!mounted) return;
+    final context = navigatorKey.currentContext;
+    if (context == null || !context.mounted) return;
+    await AppUpdateService.checkForUpdate(context);
   }
 
   @override

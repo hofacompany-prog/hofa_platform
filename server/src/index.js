@@ -65,6 +65,7 @@ app.use('/', require('./routes/icon-libraries'));
 app.use('/', require('./routes/admin-notifications'));
 app.use('/', require('./routes/notifications'));
 app.use('/', require('./routes/notification-settings'));
+app.use('/', require('./routes/app-update-settings'));
 app.use('/', require('./routes/uploads'));
 app.use('/', require('./routes/gasSync'));
 

@@ -1,5 +1,6 @@
 import '../core/api_client.dart';
 import '../models/address.dart';
+import '../models/app_update_setting.dart';
 import '../models/admin_stats.dart';
 import '../models/user_profile.dart';
 import '../models/user_detail.dart';
@@ -1330,6 +1331,25 @@ class AdminRepository {
     PwaReminderSettings settings,
   ) async => PwaReminderSettings.fromJson(
     await _api.patch('/pwa-reminder-settings', body: settings.toJson())
+        as Map<String, dynamic>,
+  );
+
+  // ---- Ép cập nhật app native (customer/driver/merchant) ----
+
+  Future<List<AppUpdateSetting>> appUpdateSettings() async {
+    final list = await _api.get('/admin/app-update-settings') as List;
+    return list
+        .map((e) => AppUpdateSetting.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  Future<AppUpdateSetting> updateAppUpdateSettings(
+    AppUpdateSetting settings,
+  ) async => AppUpdateSetting.fromJson(
+    await _api.patch(
+          '/admin/app-update-settings/${settings.appScope}',
+          body: settings.toJson(),
+        )
         as Map<String, dynamic>,
   );
 

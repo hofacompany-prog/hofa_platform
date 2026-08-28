@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../core/api_exception.dart';
 import '../models/admin_stats.dart';
+import '../models/app_update_setting.dart';
 import '../models/user_profile.dart';
 import '../models/user_detail.dart';
 import '../models/user_device.dart';
@@ -369,6 +370,11 @@ final adminContactSettingsProvider =
 final pwaReminderSettingsProvider =
     FutureProvider.autoDispose<PwaReminderSettings>(
       (ref) => ref.watch(adminRepoProvider).pwaReminderSettings(),
+    );
+
+final appUpdateSettingsProvider =
+    FutureProvider.autoDispose<List<AppUpdateSetting>>(
+      (ref) => ref.watch(adminRepoProvider).appUpdateSettings(),
     );
 
 final pendingPriceReportsProvider = FutureProvider.autoDispose<List<PriceReport>>(

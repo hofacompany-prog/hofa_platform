@@ -9,6 +9,7 @@ import '../settings/chat_settings_screen.dart';
 import '../settings/admin_contact_settings_screen.dart';
 import '../settings/pwa_reminder_settings_screen.dart';
 import '../settings/price_reports_screen.dart';
+import '../settings/app_update_settings_screen.dart';
 
 /// Gom các mục trước đây tách riêng ở NavigationRail (Cửa hàng, Mã đơn hàng, Thông số cửa hàng,
 /// Bán kính giao hàng, Ví cửa hàng, Phân loại cửa hàng, Nhắn tin trong đơn) vào 1 mục "Cửa
@@ -22,8 +23,8 @@ class MerchantHubScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return DefaultTabController(
-      length: 10,
-      initialIndex: initialTab.clamp(0, 9),
+      length: 11,
+      initialIndex: initialTab.clamp(0, 10),
       child: Scaffold(
         body: Column(
           children: [
@@ -45,6 +46,7 @@ class MerchantHubScreen extends StatelessWidget {
                   Tab(text: 'Liên hệ hỗ trợ'),
                   Tab(text: 'Nhắc cài PWA'),
                   Tab(text: 'Báo giá sai'),
+                  Tab(text: 'Cập nhật app'),
                 ],
               ),
             ),
@@ -61,6 +63,7 @@ class MerchantHubScreen extends StatelessWidget {
                   AdminContactSettingsScreen(),
                   PwaReminderSettingsScreen(),
                   PriceReportsScreen(),
+                  AppUpdateSettingsScreen(),
                 ],
               ),
             ),
