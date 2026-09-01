@@ -4,7 +4,14 @@ const asyncHandler = require('../asyncHandler');
 const { ApiError } = require('../errors');
 const { pickFields, requireRole } = require('../utils');
 
-const FIELDS = ['min_build_number', 'min_version_label', 'ios_store_url', 'android_store_url'];
+const FIELDS = [
+  'min_build_number',
+  'min_version_label',
+  'ios_store_url',
+  'android_store_url',
+  'notif_reprompt_days',
+  'location_reprompt_days'
+];
 const VALID_SCOPES = ['customer', 'driver', 'merchant'];
 
 /** App native gọi lúc mở app (kể cả chưa đăng nhập) để biết có cần ép cập nhật không — đọc

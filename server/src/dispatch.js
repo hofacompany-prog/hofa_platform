@@ -4,6 +4,12 @@ const push = require('./push');
 
 const AVG_SPEED_KMH = 25; // giả định tốc độ trung bình nội thành, dùng để ước lượng ETA
 
+// Âm thanh riêng cho cuốc mới mời tài xế — file đã đóng gói sẵn trong app lúc build (bắt buộc,
+// không thể phát file tải động), xem hofa_driver_app/lib/core/push_service.dart. Cùng cơ chế với
+// NEW_ORDER_SOUND_IOS/NEW_ORDER_ANDROID_CHANNEL bên orderOffer.js (phía cửa hàng).
+const NEW_DELIVERY_SOUND_IOS = 'new_order_alert.caf';
+const NEW_DELIVERY_ANDROID_CHANNEL = 'new_order_alert';
+
 /** Chỉ giữ 1 dòng đang áp dụng — dòng mới nhất theo updated_at. Fallback đúng giá trị mặc định
  * seed sẵn (hofa-db/16_shipping_fee_settings.sql) nếu chưa từng cấu hình. */
 async function currentShippingFeeSettings() {
@@ -211,7 +217,9 @@ async function assignDriverAndNotify(order, driver, distanceKm) {
       accept_deadline: deadline,
       accept_window_seconds: windowSeconds
     },
-    tag: `delivery-offer-${delivery.id}`
+    tag: `delivery-offer-${delivery.id}`,
+    sound: NEW_DELIVERY_SOUND_IOS,
+    androidChannelId: NEW_DELIVERY_ANDROID_CHANNEL
   });
   return { delivery: { ...delivery, accept_deadline: deadline }, driver };
 }
@@ -258,7 +266,9 @@ async function remindPendingDriverOffers() {
         accept_deadline: row.accept_deadline,
         accept_window_seconds: windowSeconds
       },
-      tag: `delivery-offer-${row.id}`
+      tag: `delivery-offer-${row.id}`,
+      sound: NEW_DELIVERY_SOUND_IOS,
+      androidChannelId: NEW_DELIVERY_ANDROID_CHANNEL
     }).catch((err) => {
       console.error('[remind-pending-driver-offers] Không gửi lại được', row.id, err.message);
     });

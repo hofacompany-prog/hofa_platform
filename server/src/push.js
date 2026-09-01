@@ -62,7 +62,14 @@ async function saveNotifications(userIds, { title, body, data = {}, category = '
  * webpush, nếu không trình duyệt coi như "cùng thông báo, đã thấy rồi" và ÂM THẦM thay thế,
  * không rung/kêu lại — mất tác dụng nhắc.
  */
-async function sendToTokens(tokens, { title, body, data = {}, badge = false, tag = null }) {
+/**
+ * [sound] — tên file âm thanh RIÊNG bắt buộc phải khớp đúng file đã đóng gói sẵn trong app lúc
+ * build (không thể phát 1 file tải động — giới hạn cứng của iOS/Android, xem
+ * hofa_store_app/lib/core/push_service.dart#_kNewOrderChannelId). Để trống thì dùng âm mặc
+ * định của máy như trước giờ. Chỉ nơi gọi biết rõ ngữ cảnh (vd orderOffer.js — đơn mới cho cửa
+ * hàng) mới truyền vào, sendToTokens không tự đoán theo data.type.
+ */
+async function sendToTokens(tokens, { title, body, data = {}, badge = false, tag = null, sound = null, androidChannelId = null }) {
   const firebaseApp = getApp();
   if (!firebaseApp || !tokens.length) return { sent: 0 };
 
@@ -80,8 +87,17 @@ async function sendToTokens(tokens, { title, body, data = {}, badge = false, tag
         tokens: batch,
         notification: { title, body },
         data: stringData,
-        android: { priority: 'high', ...(tag ? { notification: { tag } } : {}) },
-        apns: { payload: { aps: { sound: 'default' } } },
+        android: {
+          priority: 'high',
+          notification: {
+            ...(tag ? { tag } : {}),
+            // channelId phải trỏ đúng kênh ĐÃ TẠO SẴN phía client với âm thanh tương ứng — Android
+            // 8+ khoá âm thanh vào kênh (immutable), field "sound" gửi rời ở đây bị bỏ qua nếu có
+            // channelId, nên không set sound riêng ở nhánh Android, chỉ set channelId.
+            ...(androidChannelId ? { channelId: androidChannelId } : {})
+          }
+        },
+        apns: { payload: { aps: { sound: sound || 'default' } } },
         // Payload có cả notification lẫn data → firebase-messaging-compat.js phía web TỰ hiện
         // thông báo (đúng field notification này), independent với onBackgroundMessage —
         // web/firebase-messaging-sw.js của 3 app không được tự gọi showNotification() thêm
@@ -113,7 +129,7 @@ async function sendToTokens(tokens, { title, body, data = {}, badge = false, tag
  * với 1 payload chung) nên nhét thẳng được id dòng notifications vừa tạo vào data —
  * notification_id — để app đánh dấu đã đọc ngay khi bấm push, không cần thêm API tra cứu.
  */
-async function sendPushToUser(userId, { title, body, data = {}, badge = true, category = 'order', tag = null }) {
+async function sendPushToUser(userId, { title, body, data = {}, badge = true, category = 'order', tag = null, sound = null, androidChannelId = null }) {
   const devices = await db.query(
     'SELECT DISTINCT push_token FROM user_devices WHERE user_id = $1 AND push_token IS NOT NULL',
     [userId]
@@ -121,7 +137,7 @@ async function sendPushToUser(userId, { title, body, data = {}, badge = true, ca
   const tokens = devices.map((d) => d.push_token).filter(Boolean);
   const [saved] = await saveNotifications([userId], { title, body, data, category });
   const fcmData = { ...data, category, ...(saved ? { notification_id: saved.id } : {}) };
-  return sendToTokens(tokens, { title, body, data: fcmData, badge, tag });
+  return sendToTokens(tokens, { title, body, data: fcmData, badge, tag, sound, androidChannelId });
 }
 
 /**
@@ -131,13 +147,13 @@ async function sendPushToUser(userId, { title, body, data = {}, badge = true, ca
  * lần. [tag] nên trùng với lần gửi gốc (sendPushToUser) để thiết bị thay banner cũ, không xếp
  * chồng — xem sendToTokens.
  */
-async function resendPushToUser(userId, { title, body, data = {}, badge = true, category = 'order', tag = null }) {
+async function resendPushToUser(userId, { title, body, data = {}, badge = true, category = 'order', tag = null, sound = null, androidChannelId = null }) {
   const devices = await db.query(
     'SELECT DISTINCT push_token FROM user_devices WHERE user_id = $1 AND push_token IS NOT NULL',
     [userId]
   );
   const tokens = devices.map((d) => d.push_token).filter(Boolean);
-  return sendToTokens(tokens, { title, body, data: { ...data, category }, badge, tag });
+  return sendToTokens(tokens, { title, body, data: { ...data, category }, badge, tag, sound, androidChannelId });
 }
 
 /**

@@ -2,6 +2,13 @@ const db = require('./db');
 const push = require('./push');
 const dispatch = require('./dispatch');
 
+// Âm thanh riêng cho đơn mới báo cửa hàng — file đã đóng gói sẵn trong app lúc build (bắt buộc,
+// không thể phát file tải động), xem hofa_store_app/lib/core/push_service.dart. Tên phải khớp
+// CHÍNH XÁC: iOS = tên file .caf trong Runner/ (không kèm đuôi .caf ở đây theo yêu cầu APNs
+// payload aps.sound thực ra CẦN kèm đuôi, xem ghi chú client), Android = channel id đã tạo sẵn.
+const NEW_ORDER_SOUND_IOS = 'new_order_alert.caf';
+const NEW_ORDER_ANDROID_CHANNEL = 'new_order_alert';
+
 /** Tất cả user quản lý 1 cửa hàng (chủ + nhân viên) — để gửi push đơn mới cho tất cả, ai xem trước thì bấm trước. */
 async function getMerchantUserIds(merchantId) {
   const merchant = await db.queryOne('SELECT owner_id FROM merchants WHERE id = $1', [merchantId]);
@@ -27,7 +34,9 @@ async function offerOrderToMerchant(orderId) {
     title: 'Đơn hàng mới!',
     body: `${order.order_code} · ${order.total_amount.toLocaleString('vi-VN')}đ — trượt để nhận đơn`,
     data: { type: 'order_offer', order_id: orderId },
-    tag: `order-offer-${orderId}`
+    tag: `order-offer-${orderId}`,
+    sound: NEW_ORDER_SOUND_IOS,
+    androidChannelId: NEW_ORDER_ANDROID_CHANNEL
   })));
   // Đánh dấu mốc gửi đầu tiên để remindUnconfirmedOrders tính đúng order_reminder_interval_seconds
   // kể từ NGAY LẦN NÀY, không nhắc lại ngay ở chu kỳ quét kế tiếp.
@@ -72,7 +81,9 @@ async function remindUnconfirmedOrders() {
       title: 'Đơn hàng mới!',
       body: `${row.order_code} · ${Number(row.total_amount).toLocaleString('vi-VN')}đ — trượt để nhận đơn`,
       data: { type: 'order_offer', order_id: row.id },
-      tag: `order-offer-${row.id}`
+      tag: `order-offer-${row.id}`,
+      sound: NEW_ORDER_SOUND_IOS,
+      androidChannelId: NEW_ORDER_ANDROID_CHANNEL
     }).catch((err) => {
       console.error('[remind-unconfirmed-orders] Không gửi lại được', row.id, err.message);
     })));
