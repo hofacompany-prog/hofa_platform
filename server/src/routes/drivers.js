@@ -403,6 +403,24 @@ router.post('/admin/wallet-deposits/:id/confirm', asyncHandler(async (req, res) 
   res.json({ ok: true, data: updated });
 }));
 
+/** Từ chối yêu cầu nạp — khác reject withdrawal (không có tiền để hoàn, deposit chỉ cộng ví lúc
+ * confirm, chưa từng trừ gì lúc tạo) — chỉ đánh dấu 'rejected' kèm lý do để yêu cầu biến mất
+ * khỏi hàng chờ, xem hofa-db/104_driver_deposit_reject.sql. */
+router.post('/admin/wallet-deposits/:id/reject', asyncHandler(async (req, res) => {
+  requireRole(req.ctx, ['admin']);
+  const deposit = await db.queryOne(`SELECT * FROM driver_wallet_deposits WHERE id = $1 AND status = 'pending'`, [req.params.id]);
+  if (!deposit) throw new ApiError('NOT_FOUND', 'Không tìm thấy yêu cầu nạp tiền đang chờ', 404);
+
+  const updated = await db.updateById('driver_wallet_deposits', req.params.id, {
+    status: 'rejected',
+    reject_reason: req.body.reason || null,
+    confirmed_at: new Date().toISOString(),
+    confirmed_by: req.ctx.userId
+  });
+  push.notifyDriverWallet(deposit.driver_id, 'deposit_rejected', deposit.amount, req.body.reason).catch(() => {});
+  res.json({ ok: true, data: updated });
+}));
+
 router.get('/admin/wallet-withdrawals', asyncHandler(async (req, res) => {
   requireRole(req.ctx, ['admin']);
   const { limit, offset } = pagination(req.query);

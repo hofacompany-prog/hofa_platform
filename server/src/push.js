@@ -277,6 +277,10 @@ const DRIVER_WALLET_MESSAGES = {
     title: 'Nạp tiền thành công',
     body: `Ví đã được cộng ${amount.toLocaleString('vi-VN')}đ.`
   }),
+  deposit_rejected: (amount, reason) => ({
+    title: 'Yêu cầu nạp tiền bị từ chối',
+    body: `Yêu cầu nạp ${amount.toLocaleString('vi-VN')}đ chưa được ghi nhận.${reason ? ` Lý do: ${reason}` : ''}`
+  }),
   withdrawal_confirmed: (amount) => ({
     title: 'Rút tiền thành công',
     body: `Đã chuyển khoản ${amount.toLocaleString('vi-VN')}đ vào tài khoản ngân hàng của bạn.`
