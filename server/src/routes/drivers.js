@@ -37,8 +37,10 @@ router.post('/drivers/register', asyncHandler(async (req, res) => {
   // vì hồ sơ đã tạo đúng role='driver' ngay từ đầu. requireProfile tự báo PROFILE_NOT_FOUND
   // nếu chưa /me/sync.
   requireProfile(req.ctx);
+  // Không còn bắt buộc license_no/document_urls — app tài xế đã bỏ thu thập GPLX/ảnh giấy tờ,
+  // chỉ giữ biển số xe để định danh phương tiện.
   requireFields(req.body, [
-    'national_id', 'license_no', 'vehicle_type', 'vehicle_plate',
+    'national_id', 'vehicle_type', 'vehicle_plate',
     'bank_name', 'bank_bin', 'bank_account_number', 'bank_account_holder'
   ]);
 
