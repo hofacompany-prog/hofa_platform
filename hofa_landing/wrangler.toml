@@ -1,0 +1,15 @@
+# Deploy: wrangler deploy (cần đăng nhập trước: wrangler login).
+# Trang giới thiệu tĩnh (không phải app Flutter) — chỉ 1 file index.html duy nhất. VẪN cần
+# not_found_handling SPA vì /merchants/:slug (link "Chia sẻ cửa hàng" từ app Khách hàng) phải rơi
+# về index.html để hiện màn trung chuyển mở app/tải app, không phải trang 404 — xem script cuối
+# index.html.
+name = "hofa-landing"
+compatibility_date = "2026-08-08"
+
+[assets]
+directory = "./public"
+not_found_handling = "single-page-application"
+
+[[routes]]
+pattern = "hofa.com.vn"
+custom_domain = true

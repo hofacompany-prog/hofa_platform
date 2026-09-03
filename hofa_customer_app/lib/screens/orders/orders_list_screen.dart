@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/date_range_preset.dart';
 import '../../core/format.dart';
+import '../../core/push_service.dart';
 import '../../models/order.dart';
 import '../../providers/app_providers.dart';
 
@@ -22,17 +24,25 @@ class OrdersListScreen extends ConsumerStatefulWidget {
 
 class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
   final _scrollController = ScrollController();
+  StreamSubscription<Map<String, dynamic>>? _orderEventSub;
 
   @override
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
+    // Đơn đổi trạng thái ở bất kỳ đâu (cửa hàng xác nhận, tài xế nhận/giao...) thì danh sách
+    // đang mở tự làm mới ngay, không cần thoát ra vào lại hay kéo tay.
+    _orderEventSub = PushService.instance.orderEventStream.listen((_) {
+      if (!mounted) return;
+      ref.invalidate(myOrdersPagedProvider(ref.read(orderStatusFilterProvider)));
+    });
   }
 
   @override
   void dispose() {
     _scrollController.removeListener(_onScroll);
     _scrollController.dispose();
+    _orderEventSub?.cancel();
     super.dispose();
   }
 

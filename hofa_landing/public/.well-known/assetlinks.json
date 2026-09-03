@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.hofa.hofa_customer",
+      "sha256_cert_fingerprints": [
+        "7E:7B:DE:1F:54:93:90:84:A1:32:0F:BC:5E:4D:4E:92:79:A9:39:7D:3B:E9:61:6D:AB:60:21:BA:3C:AA:05:93"
+      ]
+    }
+  }
+]

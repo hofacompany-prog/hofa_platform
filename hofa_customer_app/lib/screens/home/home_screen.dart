@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/format.dart';
 import '../../core/permission_helper.dart';
@@ -53,34 +52,33 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
   }
 
-  static const _kNotifPromptedOnceKey = 'notification_permission_prompted_once';
-
-  /// Quyền Vị trí: hỏi lại MỖI LẦN còn thiếu (giữ nguyên hành vi cũ). Quyền Thông báo: khách
-  /// hàng chỉ bị hỏi ĐÚNG 1 LẦN (không blocking, có thể bấm "Để sau") — khác hẳn app Tài xế/Cửa
-  /// hàng (bắt buộc phải cấp mới dùng được, hỏi lại mỗi lần vào Trang chủ) vì với khách hàng
-  /// thông báo chỉ là tiện ích, không phải điều kiện bắt buộc để đặt hàng.
+  /// Chỉ tự hiện hộp thoại (dẫn thẳng tới hộp thoại xin quyền thật của hệ thống) đúng 1 LẦN cho
+  /// mỗi quyền, lúc còn notDetermined (chưa từng hỏi bao giờ) — không có nút "Để sau"/bỏ qua.
+  /// Đã từ chối rồi thì KHÔNG tự hiện lại hộp thoại chặn nữa (app vẫn dùng bình thường không cần
+  /// quyền); sau đó nếu admin có cấu hình số ngày nhắc lại thì chỉ hiện banner nhẹ, tự đóng được,
+  /// không tự mở Cài đặt. Apple đã từ chối app Cửa hàng/Tài xế (mẫu dialog tương tự) vì vi phạm
+  /// cả guideline 5.1.1(iv) lẫn 4.5.4 — xem ghi chú chi tiết trong permission_helper.dart.
   Future<void> _checkPermissionsOnStart() async {
-    final prefs = await SharedPreferences.getInstance();
-    final alreadyPromptedNotif = prefs.getBool(_kNotifPromptedOnceKey) == true;
     final notif = await PermissionHelper.notificationState();
     final loc = await PermissionHelper.locationState();
     if (!mounted) return;
-    final askNotif = !alreadyPromptedNotif && notif != PermissionState.granted;
     final missing = <String>[
-      if (askNotif) 'Thông báo đẩy',
-      if (loc != PermissionState.granted) 'Vị trí',
+      if (notif == PermissionState.notDetermined) 'Thông báo đẩy',
+      if (loc == PermissionState.notDetermined) 'Vị trí',
     ];
     if (missing.isEmpty) {
-      if (!alreadyPromptedNotif) {
-        await prefs.setBool(_kNotifPromptedOnceKey, true);
+      if (notif != PermissionState.granted) {
+        await PermissionHelper.maybeRemind(context, location: false);
+      }
+      if (mounted && loc != PermissionState.granted) {
+        await PermissionHelper.maybeRemind(context, location: true);
       }
       return;
     }
-    // Đánh dấu đã hỏi NGAY trước khi hiện dialog — dù khách bấm "Để sau" cũng không hỏi lại nữa.
-    if (askNotif) await prefs.setBool(_kNotifPromptedOnceKey, true);
 
     await showDialog<void>(
       context: context,
+      barrierDismissible: false,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Cần cấp quyền để dùng app tốt hơn'),
         content: Text(
@@ -88,21 +86,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           'đúng địa chỉ giao hàng gần bạn.',
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Để sau'),
-          ),
           FilledButton(
             onPressed: () async {
               Navigator.pop(dialogContext);
-              if (askNotif) {
+              if (notif == PermissionState.notDetermined) {
                 await PermissionHelper.requestNotification(context);
+                await PermissionHelper.markAsked(location: false);
               }
-              if (loc != PermissionState.granted && mounted) {
+              if (loc == PermissionState.notDetermined && mounted) {
                 await PermissionHelper.requestLocation(context);
+                await PermissionHelper.markAsked(location: true);
               }
             },
-            child: const Text('Cấp quyền ngay'),
+            child: const Text('Tiếp tục'),
           ),
         ],
       ),

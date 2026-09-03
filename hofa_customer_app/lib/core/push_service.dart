@@ -30,6 +30,13 @@ class PushService {
   Stream<Map<String, dynamic>> get chatMessageStream =>
       _chatMessageController.stream;
 
+  // Cùng lý do chatMessageStream ở trên — màn danh sách/chi tiết đơn đang mở sẵn tự làm mới
+  // NGAY khi có push đổi trạng thái đơn, thay vì phải thoát ra vào lại hoặc chờ bấm thông báo.
+  final _orderEventController =
+      StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get orderEventStream =>
+      _orderEventController.stream;
+
   // "order_id:channel" của khung chat đang mở trên màn hình — dùng để khỏi hiện thông báo hệ
   // thống trùng lặp khi khách đang xem đúng đoạn chat đó (tin đã tự cập nhật ngay trong màn).
   String? _openChatKey;
@@ -42,11 +49,10 @@ class PushService {
   Future<void> init(GlobalKey<NavigatorState> navigatorKey) async {
     _navigatorKey = navigatorKey;
 
-    await FirebaseMessaging.instance.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
-    );
+    // Không await — hộp thoại xin quyền cần người dùng bấm mới xong (có thể mất rất lâu,
+    // hoặc treo hẳn nếu không ai tương tác); đăng ký token/lắng nghe bên dưới không được
+    // phép phụ thuộc vào lúc nào người dùng mới bấm hộp thoại này.
+    unawaited(_requestPermissionSafely());
 
     // flutter_local_notifications không hỗ trợ web — trên web, thông báo lúc app đang mở
     // (foreground) do trình duyệt tự xử lý qua firebase-messaging-sw.js, không cần hiển
@@ -55,7 +61,15 @@ class PushService {
       await _local.initialize(
         const InitializationSettings(
           android: AndroidInitializationSettings('@mipmap/ic_launcher'),
-          iOS: DarwinInitializationSettings(),
+          // Tắt 3 cờ request*Permission mặc định (true) — flutter_local_notifications tự mở
+          // thêm 1 hộp thoại xin quyền RIÊNG khi initialize() nếu không tắt, trùng với hộp
+          // thoại FirebaseMessaging.requestPermission() ở trên và cũng chờ người dùng bấm y
+          // hệt, khiến bước này bị treo nếu không có ai tương tác ngay lúc mở app.
+          iOS: DarwinInitializationSettings(
+            requestAlertPermission: false,
+            requestBadgePermission: false,
+            requestSoundPermission: false,
+          ),
         ),
         onDidReceiveNotificationResponse: (response) {
           if (response.payload != null)
@@ -88,7 +102,10 @@ class PushService {
     FirebaseMessaging.onMessage.listen(_onForegroundMessage);
     FirebaseMessaging.onMessageOpenedApp.listen((m) => handleData(m.data));
 
-    final initial = await FirebaseMessaging.instance.getInitialMessage();
+    final initial = await FirebaseMessaging.instance.getInitialMessage().timeout(
+      const Duration(seconds: 5),
+      onTimeout: () => null,
+    );
     // init() được gọi và await TRƯỚC runApp() (xem main.dart) — Navigator chưa tồn tại lúc
     // này, điều hướng ngay sẽ bị handleData() âm thầm bỏ qua (context == null). Đợi 1 khung
     // hình đầu tiên vẽ xong (luôn sau runApp) rồi mới điều hướng.
@@ -117,14 +134,25 @@ class PushService {
     context.go(path);
   }
 
+  Future<void> _requestPermissionSafely() async {
+    try {
+      await FirebaseMessaging.instance
+          .requestPermission(alert: true, badge: true, sound: true)
+          .timeout(const Duration(seconds: 30));
+    } catch (e) {
+      debugPrint('[push] requestPermission lỗi/chưa xong: $e');
+    }
+  }
+
   Future<void> _registerTokenIfLoggedIn() async {
     if (Supabase.instance.client.auth.currentSession == null) return;
     try {
       // vapidKey chỉ web cần (lấy từ Firebase Console > Cloud Messaging > Web Push
-      // certificates) — mobile bỏ qua tham số này.
-      final token = await FirebaseMessaging.instance.getToken(
-        vapidKey: kIsWeb ? Env.firebaseVapidKey : null,
-      );
+      // certificates) — mobile bỏ qua tham số này. Có timeout riêng vì trên iOS lệnh này chờ
+      // APNs token, có thể treo nếu hộp thoại xin quyền ở trên còn chưa được bấm.
+      final token = await FirebaseMessaging.instance
+          .getToken(vapidKey: kIsWeb ? Env.firebaseVapidKey : null)
+          .timeout(const Duration(seconds: 15));
       if (token != null) await DeviceRepository().registerPushToken(token);
     } catch (e) {
       debugPrint('[push] Không đăng ký được push token: $e');
@@ -140,6 +168,10 @@ class PushService {
       // Đang mở đúng khung chat này — tin đã tự chèn vào màn qua chatMessageStream ở trên,
       // khỏi hiện thêm thông báo hệ thống trùng lặp.
       if (key == _openChatKey) return;
+    }
+    if (message.data['type'] == 'order_status_changed' ||
+        message.data['type'] == 'buy_on_behalf_repick') {
+      _orderEventController.add(message.data);
     }
     final title = message.notification?.title ?? message.data['title'];
     final body = message.notification?.body ?? message.data['body'];

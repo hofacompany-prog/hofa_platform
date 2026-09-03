@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'core/app_update_service.dart';
+import 'core/deep_link_service.dart';
 import 'core/env.dart';
 import 'core/push_service.dart';
 import 'core/pwa_version_service.dart';
@@ -21,6 +22,7 @@ Future<void> main() async {
   );
 
   try {
+    debugPrint('[boot] Bắt đầu Firebase.initializeApp...');
     await Firebase.initializeApp(
       options: kIsWeb
           ? FirebaseOptions(
@@ -32,14 +34,19 @@ Future<void> main() async {
               appId: Env.firebaseAppId,
             )
           : null,
-    );
-    await PushService.instance.init(navigatorKey);
+    ).timeout(const Duration(seconds: 8));
+    debugPrint('[boot] Firebase.initializeApp xong, bắt đầu PushService.init...');
+    await PushService.instance.init(navigatorKey).timeout(const Duration(seconds: 8));
+    debugPrint('[boot] PushService.init xong.');
   } catch (e) {
-    // Chưa cấu hình Firebase (thiếu google-services.json / GoogleService-Info.plist) —
-    // app vẫn chạy bình thường, chỉ không nhận được push khi đơn đổi trạng thái. Xem README.md.
-    debugPrint('[push] Firebase chưa sẵn sàng, bỏ qua push notification: $e');
+    // Chưa cấu hình Firebase (thiếu google-services.json / GoogleService-Info.plist) hoặc bước
+    // nào đó quá 8s (vd requestPermission() kẹt chờ popup hệ thống không hiện được) — bỏ qua,
+    // app vẫn phải vào được màn chính, chỉ mất tính năng push, không được phép treo trắng màn
+    // hình vĩnh viễn. Xem README.md.
+    debugPrint('[push] Firebase/push chưa sẵn sàng, bỏ qua: $e');
   }
 
+  debugPrint('[boot] Chuẩn bị runApp()...');
   runApp(const ProviderScope(child: HofaCustomerApp()));
 }
 
@@ -58,7 +65,16 @@ class _HofaCustomerAppState extends ConsumerState<HofaCustomerApp> {
       WidgetsBinding.instance.addPostFrameCallback((_) => _checkPwaVersion());
     } else {
       WidgetsBinding.instance.addPostFrameCallback((_) => _checkNativeUpdate());
+      // Link "Chia sẻ cửa hàng" mở thẳng app (Universal Links/App Links + custom scheme dự
+      // phòng) — xem core/deep_link_service.dart.
+      DeepLinkService.instance.init(ref.read(routerProvider));
     }
+  }
+
+  @override
+  void dispose() {
+    if (!kIsWeb) DeepLinkService.instance.dispose();
+    super.dispose();
   }
 
   Future<void> _checkPwaVersion() async {

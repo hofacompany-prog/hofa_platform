@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -7,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/cloudinary_uploader.dart';
 import '../../core/file_download.dart';
 import '../../core/format.dart';
+import '../../core/push_service.dart';
 import '../../core/vietqr.dart';
 import '../../models/chat_message.dart';
 import '../../models/delivery.dart';
@@ -40,6 +42,26 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
   bool _busy = false;
   bool _reviewPromptShown = false;
   final _reviewSectionKey = GlobalKey();
+  StreamSubscription<Map<String, dynamic>>? _orderEventSub;
+
+  @override
+  void initState() {
+    super.initState();
+    // Đơn này đổi trạng thái ở bất kỳ đâu (cửa hàng xác nhận, tài xế nhận/giao...) thì màn chi
+    // tiết đang mở tự làm mới ngay, không cần thoát ra vào lại.
+    _orderEventSub = PushService.instance.orderEventStream.listen((data) {
+      if (!mounted || data['order_id'] != widget.orderId) return;
+      ref.invalidate(orderDetailProvider(widget.orderId));
+      ref.invalidate(orderHistoryProvider(widget.orderId));
+      ref.invalidate(orderDeliveryProvider(widget.orderId));
+    });
+  }
+
+  @override
+  void dispose() {
+    _orderEventSub?.cancel();
+    super.dispose();
+  }
 
   void _maybeShowReviewPrompt(Order o) {
     if (!widget.autoPromptReview || _reviewPromptShown || !o.canReview) return;
