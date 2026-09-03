@@ -346,14 +346,16 @@ class _DriverAcceptSettingsScreenState
                     const Divider(),
                     const SizedBox(height: 12),
                     Text(
-                      'Bán kính xác nhận "Đã lấy hàng" (đơn mua hộ)',
+                      'Bán kính xác nhận "Đã lấy hàng"/"Đã giao xong"',
                       style: theme.textTheme.titleMedium,
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Đơn mua hộ không có nhân viên cửa hàng xác nhận hộ — tài xế phải đứng '
-                      'trong bán kính này quanh chi nhánh mới xác nhận "Đã lấy hàng" được, tránh '
-                      'chụp ảnh khống từ xa. Vượt quá thì app tài xế báo lỗi và không cho xác nhận.',
+                      'Áp dụng cho mọi đơn — tài xế phải đứng trong bán kính này quanh chi nhánh '
+                      'mới xác nhận "Đã lấy hàng" được, và quanh địa chỉ giao mới xác nhận "Đã '
+                      'giao xong" được (tránh xác nhận khống từ xa). App tài xế chỉ lấy vị trí '
+                      'đúng lúc xác nhận 2 bước này, không theo dõi liên tục. Vượt quá thì app '
+                      'tài xế báo lỗi và không cho xác nhận.',
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: theme.colorScheme.outline,
                       ),
@@ -382,10 +384,10 @@ class _DriverAcceptSettingsScreenState
                                   title: 'Bán kính tối đa',
                                   child: _NumberField(
                                     controller: _pickupRadiusCtrl,
-                                    label: 'Khoảng cách tối đa tới chi nhánh (mét)',
+                                    label: 'Khoảng cách tối đa tới điểm lấy/giao (mét)',
                                     helper:
-                                        'VD 100 — tài xế cách chi nhánh xa hơn số này (đường '
-                                        'chim bay) thì không xác nhận "Đã lấy hàng" được.',
+                                        'VD 100 — tài xế cách điểm lấy/giao xa hơn số này (đường '
+                                        'chim bay) thì không xác nhận được.',
                                   ),
                                 ),
                                 const SizedBox(height: 16),

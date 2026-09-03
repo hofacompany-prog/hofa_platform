@@ -22,51 +22,46 @@ class DriverRepository {
     }
   }
 
+  // Không còn thu thập số GPLX/ảnh giấy tờ ở app tài xế (giảm phạm vi dữ liệu nhạy cảm thu thập
+  // qua app — chỉ giữ biển số xe để định danh phương tiện) — server vẫn còn cột license_no/
+  // document_urls cho hồ sơ tài xế cũ, chỉ không còn được set từ đây nữa.
   Map<String, dynamic> _profileBody({
     required String nationalId,
-    required String licenseNo,
     required String vehicleType,
     required String vehiclePlate,
     required String bankName,
     required String bankBin,
     required String bankAccountNumber,
     required String bankAccountHolder,
-    List<String> documentUrls = const [],
   }) => {
     'national_id': nationalId,
-    'license_no': licenseNo,
     'vehicle_type': vehicleType,
     'vehicle_plate': vehiclePlate,
     'bank_name': bankName,
     'bank_bin': bankBin,
     'bank_account_number': bankAccountNumber,
     'bank_account_holder': bankAccountHolder,
-    if (documentUrls.isNotEmpty) 'document_urls': documentUrls,
   };
 
   Future<Driver> register({
     required String nationalId,
-    required String licenseNo,
     required String vehicleType,
     required String vehiclePlate,
     required String bankName,
     required String bankBin,
     required String bankAccountNumber,
     required String bankAccountHolder,
-    List<String> documentUrls = const [],
   }) async => Driver.fromJson(
     await _api.post(
           '/drivers/register',
           body: _profileBody(
             nationalId: nationalId,
-            licenseNo: licenseNo,
             vehicleType: vehicleType,
             vehiclePlate: vehiclePlate,
             bankName: bankName,
             bankBin: bankBin,
             bankAccountNumber: bankAccountNumber,
             bankAccountHolder: bankAccountHolder,
-            documentUrls: documentUrls,
           ),
         )
         as Map<String, dynamic>,
@@ -76,27 +71,23 @@ class DriverRepository {
   /// thành công, đưa hồ sơ về lại "đang chờ xét duyệt").
   Future<Driver> updateProfile({
     required String nationalId,
-    required String licenseNo,
     required String vehicleType,
     required String vehiclePlate,
     required String bankName,
     required String bankBin,
     required String bankAccountNumber,
     required String bankAccountHolder,
-    List<String> documentUrls = const [],
   }) async => Driver.fromJson(
     await _api.patch(
           '/drivers/me',
           body: _profileBody(
             nationalId: nationalId,
-            licenseNo: licenseNo,
             vehicleType: vehicleType,
             vehiclePlate: vehiclePlate,
             bankName: bankName,
             bankBin: bankBin,
             bankAccountNumber: bankAccountNumber,
             bankAccountHolder: bankAccountHolder,
-            documentUrls: documentUrls,
           ),
         )
         as Map<String, dynamic>,

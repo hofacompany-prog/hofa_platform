@@ -42,14 +42,14 @@ class _ShortcutStatusScreenState extends ConsumerState<ShortcutStatusScreen> {
       }
       await repo.setStatus(widget.goOnline ? 'online' : 'offline');
       if (widget.goOnline) {
-        // Gửi ngay 1 lần vị trí hiện tại — không đợi luồng theo dõi ở Trang chủ bắt được lần
-        // di chuyển >=30m đầu tiên, giống hệt _toggleOnline (home_screen.dart).
+        // Gửi 1 lần vị trí hiện tại lúc bật online, giống hệt _toggleOnline (home_screen.dart) —
+        // không còn theo dõi liên tục sau đó (xem location_tracker.dart).
         final pos = await LocationTracker.instance.current();
         if (pos != null) {
           try {
             await repo.updateLocation(pos.latitude, pos.longitude);
           } catch (_) {
-            // luồng theo dõi ở Trang chủ sẽ tự bù ở lần cập nhật kế tiếp
+            // mất mạng tạm thời — bỏ qua, không chặn việc bật online
           }
         }
       }

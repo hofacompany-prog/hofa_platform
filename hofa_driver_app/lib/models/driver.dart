@@ -2,10 +2,8 @@ class Driver {
   final String id;
   final String userId;
   final String? nationalId;
-  final String? licenseNo;
   final String? vehicleType;
   final String? vehiclePlate;
-  final List<String> documentUrls;
   final String status; // offline | online | busy | on_break
   final bool autoAccept;
   final double? currentLatitude;
@@ -26,10 +24,8 @@ class Driver {
     required this.id,
     required this.userId,
     this.nationalId,
-    this.licenseNo,
     this.vehicleType,
     this.vehiclePlate,
-    this.documentUrls = const [],
     required this.status,
     required this.autoAccept,
     this.currentLatitude,
@@ -56,11 +52,8 @@ class Driver {
         id: json['id'] as String,
         userId: json['user_id'] as String,
         nationalId: json['national_id'] as String?,
-        licenseNo: json['license_no'] as String?,
         vehicleType: json['vehicle_type'] as String?,
         vehiclePlate: json['vehicle_plate'] as String?,
-        documentUrls:
-            json['document_urls'] is List ? (json['document_urls'] as List).map((e) => e.toString()).toList() : const [],
         status: json['status'] as String? ?? 'offline',
         autoAccept: json['auto_accept'] as bool? ?? false,
         currentLatitude: double.tryParse('${json['current_latitude']}'),

@@ -71,7 +71,8 @@ final routerProvider = Provider<GoRouter>((ref) {
         try {
           final merchant = await ref
               .read(merchantRepoProvider)
-              .merchant(merchantMatch.group(1)!);
+              .merchant(merchantMatch.group(1)!)
+              .timeout(const Duration(seconds: 8));
           return '/merchants/${merchant.id}${merchantMatch.group(2) ?? ''}';
         } catch (_) {
           return '/';
@@ -115,7 +116,12 @@ final routerProvider = Provider<GoRouter>((ref) {
       }
 
       try {
-        final profile = await ref.read(userProfileProvider.future);
+        // .timeout — không có thì mạng chậm/kẹt sẽ treo redirect() vĩnh viễn, kẹt cả app ở màn
+        // trắng (GoRouter chưa quyết định được route đầu tiên) thay vì rơi vào catch bên dưới
+        // như ý đồ ban đầu. TimeoutException cũng rơi vào catch (_) như lỗi mạng thường.
+        final profile = await ref
+            .read(userProfileProvider.future)
+            .timeout(const Duration(seconds: 8));
         if (profile == null) {
           if (ref.read(authFlowInProgressProvider)) return null;
           return completingProfile ? null : '/complete-profile';

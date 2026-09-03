@@ -32,11 +32,12 @@ Future<void> main() async {
               appId: Env.firebaseAppId,
             )
           : null,
-    );
-    await PushService.instance.init(navigatorKey);
+    ).timeout(const Duration(seconds: 8));
+    await PushService.instance.init(navigatorKey).timeout(const Duration(seconds: 8));
   } catch (e) {
-    // Chưa cấu hình Firebase (thiếu google-services.json / GoogleService-Info.plist) —
-    // app vẫn chạy bình thường, chỉ không nhận được push khi có đơn mới. Xem README.md.
+    // Chưa cấu hình Firebase (thiếu google-services.json / GoogleService-Info.plist) hoặc bước
+    // nào đó quá 8s (vd chờ mạng/APNs kẹt) — bỏ qua, app vẫn phải vào được màn chính, chỉ mất
+    // tính năng push, không được phép treo trắng màn hình vĩnh viễn. Xem README.md.
     debugPrint('[push] Firebase chưa sẵn sàng, bỏ qua push notification: $e');
   }
 

@@ -1008,6 +1008,13 @@ class AdminRepository {
     await _api.post('/admin/wallet-deposits/$id/confirm');
   }
 
+  Future<void> rejectWalletDeposit(String id, {String? reason}) async {
+    await _api.post(
+      '/admin/wallet-deposits/$id/reject',
+      body: {if (reason != null) 'reason': reason},
+    );
+  }
+
   Future<List<DriverWalletRequest>> walletWithdrawals({String? status}) async {
     final list =
         await _api.get(

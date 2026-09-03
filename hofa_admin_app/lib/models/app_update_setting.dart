@@ -10,6 +10,11 @@ class AppUpdateSetting {
   final String? minVersionLabel;
   final String? iosStoreUrl;
   final String? androidStoreUrl;
+  // Số ngày chờ trước khi app hiện lại banner nhắc bật quyền (nếu trước đó đã từ chối) — banner
+  // chỉ nhắc nhẹ, có thể đóng tự do, KHÔNG tự động mở Cài đặt. null = không tự nhắc lại. Xem
+  // hofa-db/102_permission_reprompt_settings.sql.
+  final int? notifRepromptDays;
+  final int? locationRepromptDays;
 
   AppUpdateSetting({
     this.id,
@@ -18,6 +23,8 @@ class AppUpdateSetting {
     this.minVersionLabel,
     this.iosStoreUrl,
     this.androidStoreUrl,
+    this.notifRepromptDays,
+    this.locationRepromptDays,
   });
 
   factory AppUpdateSetting.fromJson(Map<String, dynamic> json) =>
@@ -28,6 +35,8 @@ class AppUpdateSetting {
         minVersionLabel: json['min_version_label'] as String?,
         iosStoreUrl: json['ios_store_url'] as String?,
         androidStoreUrl: json['android_store_url'] as String?,
+        notifRepromptDays: (json['notif_reprompt_days'] as num?)?.toInt(),
+        locationRepromptDays: (json['location_reprompt_days'] as num?)?.toInt(),
       );
 
   Map<String, dynamic> toJson() => {
@@ -35,6 +44,8 @@ class AppUpdateSetting {
     'min_version_label': minVersionLabel,
     'ios_store_url': iosStoreUrl,
     'android_store_url': androidStoreUrl,
+    'notif_reprompt_days': notifRepromptDays,
+    'location_reprompt_days': locationRepromptDays,
   };
 }
 

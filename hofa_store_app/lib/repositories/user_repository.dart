@@ -11,4 +11,8 @@ class UserRepository {
         'full_name': fullName,
         'phone': phone,
       }) as Map<String, dynamic>);
+
+  Future<void> deleteAccount() async {
+    await _api.delete('/me');
+  }
 }

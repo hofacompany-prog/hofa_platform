@@ -46,9 +46,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     // Chỉ nhắc khi ĐÃ đăng nhập — khách còn đang lướt trang chủ trước khi đăng nhập (xem
     // requireLogin) chưa cần bị hỏi quyền, dễ gây khó chịu ngay lần đầu mở app.
     if (Supabase.instance.client.auth.currentSession != null) {
-      WidgetsBinding.instance.addPostFrameCallback(
-        (_) => _checkPermissionsOnStart(),
-      );
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        // Đợi 1 nhịp cho Trang chủ vẽ xong hẳn — hỏi quyền ngay lúc vừa vẽ xong (nhất là khi mở
+        // app đã có sẵn phiên đăng nhập, vào thẳng trang chủ) dễ tạo cảm giác app đứng/trắng
+        // màn hình vì hộp thoại che ngay lên nội dung còn đang tải.
+        await Future.delayed(const Duration(milliseconds: 1500));
+        if (mounted) await _checkPermissionsOnStart();
+      });
     }
   }
 

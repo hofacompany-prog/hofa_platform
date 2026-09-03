@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../core/format.dart';
-import '../../core/vietqr.dart';
 import '../../core/vnd_input_formatter.dart';
 import '../../models/earnings.dart';
 import '../../providers/auth_provider.dart';
@@ -25,9 +25,35 @@ class EarningsScreen extends ConsumerStatefulWidget {
 }
 
 class _EarningsScreenState extends ConsumerState<EarningsScreen> {
-  /// Nạp thẳng vào Ví trên (chuyển khoản cho HOFA, admin xác nhận). Cần cho tài xế mới/tài xế
-  /// thiếu vốn: hệ thống chỉ gán đơn khi cod_balance (Ví trên) > giá trị đơn (xem
-  /// server/src/dispatch.js), nên không đủ vốn là không nhận được đơn nào, kể cả đơn đầu tiên.
+  /// Chuyển đổi SĐT dạng nội địa (0xxx...) sang dạng quốc tế Zalo yêu cầu (84xxx...) cho link
+  /// zalo.me/<sđt> — bỏ mọi ký tự không phải số trước khi đổi.
+  String _zaloPhone(String phone) {
+    final digits = phone.replaceAll(RegExp(r'\D'), '');
+    return digits.startsWith('0') ? '84${digits.substring(1)}' : digits;
+  }
+
+  Future<void> _call(String phone) async {
+    final uri = Uri(scheme: 'tel', path: phone);
+    if (await canLaunchUrl(uri)) await launchUrl(uri);
+  }
+
+  Future<void> _sms(String phone, String body) async {
+    final uri = Uri(scheme: 'sms', path: phone, queryParameters: {'body': body});
+    if (await canLaunchUrl(uri)) await launchUrl(uri);
+  }
+
+  Future<void> _zalo(String phone) async {
+    final uri = Uri.parse('https://zalo.me/${_zaloPhone(phone)}');
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  /// Nạp thẳng vào Ví trên. Cần cho tài xế mới/tài xế thiếu vốn: hệ thống chỉ gán đơn khi
+  /// cod_balance (Ví trên) > giá trị đơn (xem server/src/dispatch.js), nên không đủ vốn là không
+  /// nhận được đơn nào, kể cả đơn đầu tiên. Không còn hiện QR chuyển khoản trực tiếp trong app —
+  /// chỉ tạo yêu cầu (admin xác nhận khi thấy tiền về) rồi hướng dẫn tài xế TỰ liên hệ SĐT hỗ trợ
+  /// (gọi/SMS/Zalo) để hoàn tất, thay vì app tự xử lý toàn bộ luồng thanh toán.
   Future<void> _deposit() async {
     final amountCtrl = TextEditingController();
     final amount = await showDialog<int>(
@@ -62,64 +88,66 @@ class _EarningsScreenState extends ConsumerState<EarningsScreen> {
       final depositId = await _driverRepo.createDeposit(amount);
       final settings = await ref.read(bankAccountSettingsProvider.future);
       if (!mounted) return;
-      if (!settings.isConfigured) {
+      final code = 'NAP-${depositId.substring(0, 8).toUpperCase()}';
+      if (!settings.hasSupportPhone) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
+          SnackBar(
             content: Text(
-              'HOFA chưa cấu hình tài khoản ngân hàng — liên hệ hỗ trợ để nạp tiền.',
+              'Đã ghi nhận yêu cầu nạp $code — liên hệ HOFA để hoàn tất, hiện chưa có SĐT hỗ trợ trong hệ thống.',
             ),
           ),
         );
         return;
       }
-      final qrUrl = buildVietQrUrl(
-        bankBin: settings.bankBin!,
-        accountNumber: settings.accountNumber!,
-        amount: amount,
-        addInfo: 'NAP-${depositId.substring(0, 8).toUpperCase()}',
-        accountName: settings.accountHolderName,
-      );
+      final phone = settings.supportPhone!;
+      final smsBody = 'Toi muon nap ${formatVnd(amount)} vao vi tai xe HOFA - ma $code';
       if (!mounted) return;
       await showDialog<void>(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Text('Quét mã để nạp tiền'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Image.network(
-                    qrUrl,
-                    width: 240,
-                    height: 240,
-                    fit: BoxFit.contain,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text('${settings.bankName ?? ''} · ${settings.accountNumber}'),
-                if (settings.accountHolderName != null)
-                  Text(settings.accountHolderName!),
-                const SizedBox(height: 8),
-                Text(
-                  'Số tiền: ${formatVnd(amount)}',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'HOFA sẽ cộng tiền vào Ví trên ngay sau khi xác nhận đã nhận được chuyển khoản.',
-                  textAlign: TextAlign.center,
-                ),
-              ],
-            ),
+          title: const Text('Liên hệ để nạp tiền'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Đã ghi nhận yêu cầu nạp ${formatVnd(amount)} (mã $code).'),
+              const SizedBox(height: 8),
+              const Text(
+                'Liên hệ SĐT hỗ trợ theo 1 trong các cách dưới đây để hoàn tất chuyển khoản — '
+                'HOFA sẽ cộng tiền vào Ví trên ngay sau khi xác nhận đã nhận được.',
+              ),
+              const SizedBox(height: 4),
+              Text(phone, style: const TextStyle(fontWeight: FontWeight.bold)),
+            ],
           ),
           actions: [
-            FilledButton(
+            TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Đã hiểu'),
+              child: const Text('Đóng'),
+            ),
+            OutlinedButton.icon(
+              onPressed: () {
+                Navigator.pop(context);
+                _sms(phone, smsBody);
+              },
+              icon: const Icon(Icons.sms_outlined),
+              label: const Text('SMS'),
+            ),
+            OutlinedButton.icon(
+              onPressed: () {
+                Navigator.pop(context);
+                _zalo(phone);
+              },
+              icon: const Icon(Icons.chat_bubble_outline),
+              label: const Text('Zalo'),
+            ),
+            FilledButton.icon(
+              onPressed: () {
+                Navigator.pop(context);
+                _call(phone);
+              },
+              icon: const Icon(Icons.call),
+              label: const Text('Gọi ngay'),
             ),
           ],
         ),

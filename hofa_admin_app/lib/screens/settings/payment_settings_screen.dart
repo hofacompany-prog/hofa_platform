@@ -72,6 +72,7 @@ class _ConfigTabState extends ConsumerState<_ConfigTab> {
   final _accountNumberCtrl = TextEditingController();
   final _accountHolderCtrl = TextEditingController();
   final _minWithdrawalCtrl = TextEditingController();
+  final _supportPhoneCtrl = TextEditingController();
   bool _initialized = false;
   bool _saving = false;
 
@@ -82,6 +83,7 @@ class _ConfigTabState extends ConsumerState<_ConfigTab> {
     _accountNumberCtrl.dispose();
     _accountHolderCtrl.dispose();
     _minWithdrawalCtrl.dispose();
+    _supportPhoneCtrl.dispose();
     super.dispose();
   }
 
@@ -91,6 +93,7 @@ class _ConfigTabState extends ConsumerState<_ConfigTab> {
     _accountNumberCtrl.text = s.accountNumber ?? '';
     _accountHolderCtrl.text = s.accountHolderName ?? '';
     _minWithdrawalCtrl.text = VndInputFormatter.display(s.minWithdrawalBalance);
+    _supportPhoneCtrl.text = s.supportPhone ?? '';
   }
 
   Future<void> _save(String? id) async {
@@ -107,6 +110,9 @@ class _ConfigTabState extends ConsumerState<_ConfigTab> {
               accountHolderName: _accountHolderCtrl.text.trim(),
               minWithdrawalBalance:
                   VndInputFormatter.parse(_minWithdrawalCtrl.text) ?? 0,
+              supportPhone: _supportPhoneCtrl.text.trim().isEmpty
+                  ? null
+                  : _supportPhoneCtrl.text.trim(),
             ),
           );
       ref.invalidate(bankAccountSettingsProvider);
@@ -220,6 +226,19 @@ class _ConfigTabState extends ConsumerState<_ConfigTab> {
                             ),
                             keyboardType: TextInputType.number,
                             inputFormatters: [VndInputFormatter()],
+                          ),
+                          const SizedBox(height: 16),
+                          TextField(
+                            controller: _supportPhoneCtrl,
+                            decoration: const InputDecoration(
+                              labelText: 'SĐT hỗ trợ nạp tiền (app tài xế)',
+                              helperText:
+                                  'App tài xế mở gọi/SMS/Zalo tới số này khi tài xế bấm "Nạp '
+                                  'tiền" — thay cho hiện QR chuyển khoản trực tiếp trong app.',
+                              helperMaxLines: 2,
+                              border: OutlineInputBorder(),
+                            ),
+                            keyboardType: TextInputType.phone,
                           ),
                           const SizedBox(height: 20),
                           SizedBox(
@@ -465,6 +484,72 @@ class _WalletDepositsTab extends ConsumerWidget {
     }
   }
 
+  /// Khác _reject ở _WalletWithdrawalsTab — deposit chưa từng trừ ví lúc tạo (chỉ cộng lúc
+  /// confirm), nên từ chối không hoàn tiền gì, chỉ đánh dấu để yêu cầu biến mất khỏi hàng chờ.
+  Future<void> _reject(
+    BuildContext context,
+    WidgetRef ref,
+    DriverWalletRequest r,
+  ) async {
+    final reasonCtrl = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Từ chối yêu cầu nạp tiền?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Yêu cầu nạp ${formatVnd(r.amount)} của tài xế ${r.driverName} sẽ không được cộng vào Ví trên.',
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: reasonCtrl,
+              decoration: const InputDecoration(
+                labelText: 'Lý do (không bắt buộc)',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Huỷ'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Từ chối'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await ref
+          .read(adminRepoProvider)
+          .rejectWalletDeposit(
+            r.id,
+            reason: reasonCtrl.text.trim().isEmpty
+                ? null
+                : reasonCtrl.text.trim(),
+          );
+      ref.invalidate(pendingWalletDepositsProvider);
+      if (context.mounted)
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Đã từ chối yêu cầu nạp tiền')),
+        );
+    } catch (e) {
+      if (context.mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
@@ -549,6 +634,15 @@ class _WalletDepositsTab extends ConsumerWidget {
                                         style: const TextStyle(
                                           fontWeight: FontWeight.w600,
                                         ),
+                                      ),
+                                      OutlinedButton(
+                                        style: OutlinedButton.styleFrom(
+                                          foregroundColor:
+                                              theme.colorScheme.error,
+                                        ),
+                                        onPressed: () =>
+                                            _reject(context, ref, r),
+                                        child: const Text('Từ chối'),
                                       ),
                                       FilledButton(
                                         onPressed: () =>

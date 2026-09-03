@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:slide_to_act/slide_to_act.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../core/format.dart';
+import '../../core/push_service.dart';
 import '../../models/branch.dart';
 import '../../models/chat_message.dart';
 import '../../models/delivery.dart';
@@ -88,10 +89,23 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen>
   // để tính lại đúng SỐ PHÚT CÒN LẠI tại thời điểm trượt xác nhận, khớp với con số đang nhảy
   // trên màn hình (RollingCountdown ở _buildPlacedBottom), không gửi _prepMinutes gốc chưa đổi.
   DateTime? _prepAnchor;
+  StreamSubscription<Map<String, dynamic>>? _orderEventSub;
+
+  @override
+  void initState() {
+    super.initState();
+    // Đơn này đổi trạng thái ở bất kỳ đâu thì màn chi tiết đang mở tự làm mới ngay.
+    _orderEventSub = PushService.instance.orderEventStream.listen((data) {
+      if (!mounted || data['order_id'] != widget.orderId) return;
+      ref.invalidate(_orderProvider(widget.orderId));
+      ref.invalidate(_deliveryProvider(widget.orderId));
+    });
+  }
 
   @override
   void dispose() {
     _sweepController?.dispose();
+    _orderEventSub?.cancel();
     super.dispose();
   }
 

@@ -39,10 +39,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    // Kiểm tra ngay lúc mở Trang chủ — thiếu quyền Thông báo thì lỡ đơn mới. Hỏi lại mỗi lần vào
-    // Trang chủ tới khi được cấp, nhưng có nút "Để sau" để không bị kẹt nếu chưa muốn cấp ngay
-    // (khác trước đây bắt buộc, không có lối thoát).
+    // Kiểm tra ngay lúc mở Trang chủ — nhưng CHỈ tự hiện hộp thoại giải thích + dẫn tới hộp thoại
+    // xin quyền thật khi quyền chưa từng được hỏi (notDetermined). Đã từ chối rồi thì KHÔNG tự
+    // làm phiền lại nữa — Apple từ chối app 2 lần liền vì vi phạm cả 2 điều: 5.1.1(iv) (màn giải
+    // thích phải luôn dẫn thẳng tới hộp thoại thật, không có nút bỏ qua) VÀ 4.5.4 (thông báo phải
+    // là tuỳ chọn, không được ép mới dùng được app — hiện dialog chặn lặp lại mỗi lần mở app kể
+    // cả khi đã từ chối rồi bị tính là ép buộc). Ai muốn bật lại quyền sau khi đã từ chối thì tự
+    // vào màn Cài đặt trong app (PermissionSettingsSection), không tự động nhắc nữa.
     WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // Đợi 1 nhịp cho Trang chủ vẽ xong hẳn (kể cả lúc mở app đã có sẵn phiên đăng nhập, vào
+      // thẳng Trang chủ ngay từ khung hình đầu tiên) — hỏi quyền ngay lúc vừa vẽ xong dễ tạo
+      // cảm giác app đứng/trắng màn hình vì hộp thoại che ngay lên nội dung còn đang tải.
+      await Future.delayed(const Duration(milliseconds: 1500));
+      if (!mounted) return;
       await _ensureNotificationPermission();
       if (mounted) await _checkLocationPermissionOnStart();
     });
@@ -70,29 +79,31 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       }
       return;
     }
+    // Đã từng hỏi rồi (bị từ chối) — không tự hiện lại hộp thoại chặn, thông báo là tuỳ chọn, app
+    // vẫn phải dùng bình thường không có nó (guideline 4.5.4). Chỉ tự hiện đúng 1 lần lúc chưa
+    // từng hỏi; sau đó nếu admin có cấu hình số ngày nhắc lại thì chỉ hiện banner nhẹ (không chặn).
+    if (notif != PermissionState.notDetermined) {
+      await PermissionHelper.maybeRemind(context, location: false);
+      return;
+    }
     if (_notifDialogOpen) return;
     _notifDialogOpen = true;
     await showDialog<void>(
       context: context,
+      barrierDismissible: false,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Cần bật thông báo để dùng app'),
         content: const Text(
-          'Cửa hàng nên bật thông báo để nhận đơn mới kịp thời — bấm "Cấp quyền" để tiếp tục. '
-          'Nếu trước đó đã từ chối, nút này sẽ mở thẳng Cài đặt để bạn bật lại. Chưa muốn cấp '
-          'ngay thì bấm "Để sau", lần sau vào Trang chủ sẽ hỏi lại.',
+          'Cửa hàng nên bật thông báo để nhận đơn mới kịp thời.',
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Để sau'),
-          ),
           FilledButton(
             onPressed: () async {
               await PermissionHelper.requestNotification(dialogContext);
+              await PermissionHelper.markAsked(location: false);
               if (dialogContext.mounted) Navigator.pop(dialogContext);
-              if (mounted) await _ensureNotificationPermission();
             },
-            child: const Text('Cấp quyền'),
+            child: const Text('Tiếp tục'),
           ),
         ],
       ),
@@ -102,25 +113,30 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
 
   Future<void> _checkLocationPermissionOnStart() async {
     final loc = await PermissionHelper.locationState();
-    if (!mounted || loc == PermissionState.granted) return;
+    if (!mounted) return;
+    // Chỉ tự hiện đúng 1 lần lúc chưa từng hỏi — đã từ chối rồi thì thôi, không tự mở lại và
+    // KHÔNG tự động điều hướng sang Cài đặt (Apple coi đó là ép buộc, guideline 5.1.1(iv)). Sau
+    // đó nếu admin có cấu hình số ngày nhắc lại thì chỉ hiện banner nhẹ (không chặn).
+    if (loc != PermissionState.notDetermined) {
+      await PermissionHelper.maybeRemind(context, location: true);
+      return;
+    }
     await showDialog<void>(
       context: context,
+      barrierDismissible: false,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Cần quyền vị trí để dùng app tốt hơn'),
         content: const Text(
           'Ứng dụng cần quyền vị trí để xác định đúng vị trí chi nhánh.',
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Để sau'),
-          ),
           FilledButton(
             onPressed: () async {
               Navigator.pop(dialogContext);
               await PermissionHelper.requestLocation(context);
+              await PermissionHelper.markAsked(location: true);
             },
-            child: const Text('Cấp quyền ngay'),
+            child: const Text('Tiếp tục'),
           ),
         ],
       ),

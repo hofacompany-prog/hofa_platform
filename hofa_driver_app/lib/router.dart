@@ -63,7 +63,12 @@ final routerProvider = Provider<GoRouter>((ref) {
       if (loggingIn) return '/';
 
       try {
-        final profile = await ref.read(userProfileProvider.future);
+        // .timeout — không có thì mạng chậm/kẹt sẽ treo redirect() vĩnh viễn, kẹt cả app ở màn
+        // trắng (GoRouter chưa quyết định được route đầu tiên) thay vì rơi vào catch bên dưới
+        // như ý đồ ban đầu. TimeoutException cũng rơi vào catch (_) như lỗi mạng thường.
+        final profile = await ref
+            .read(userProfileProvider.future)
+            .timeout(const Duration(seconds: 8));
         // SĐT này có thể đã có tài khoản Auth (đã là khách/chủ cửa hàng ở app khác) nhưng CHƯA
         // có hồ sơ users role='driver' — vd vừa bấm "Đăng nhập" (không phải "Đăng ký") ở app
         // Tài xế lần đầu. Tạo hồ sơ driver riêng trước khi vào /register-driver, xem
@@ -71,7 +76,9 @@ final routerProvider = Provider<GoRouter>((ref) {
         if (profile == null) {
           return completingProfile ? null : '/complete-profile';
         }
-        final driver = await ref.read(myDriverProvider.future);
+        final driver = await ref
+            .read(myDriverProvider.future)
+            .timeout(const Duration(seconds: 8));
         if (driver == null) return onRegister ? null : '/register-driver';
         if (onRegister || completingProfile) return '/';
       } catch (_) {

@@ -7,7 +7,6 @@ import '../../models/bank.dart';
 import '../../models/driver.dart';
 import '../../providers/auth_provider.dart';
 import '../../repositories/driver_repository.dart';
-import '../../widgets/multi_image_upload_field.dart';
 
 /// Hồ sơ tài xế — dùng cho cả 2 luồng: (1) đăng ký lần đầu, [existing] null, chưa có bản ghi
 /// trong bảng drivers; (2) sửa/nộp lại hồ sơ sau khi bị admin từ chối, [existing] là hồ sơ hiện
@@ -26,14 +25,12 @@ class _RegisterDriverScreenState extends ConsumerState<RegisterDriverScreen> {
   final _repo = DriverRepository();
   final _formKey = GlobalKey<FormState>();
   final _nationalIdCtrl = TextEditingController();
-  final _licenseNoCtrl = TextEditingController();
   final _plateCtrl = TextEditingController();
   final _accountNumberCtrl = TextEditingController();
   final _accountHolderCtrl = TextEditingController();
   String _vehicleType = 'xe máy';
   Bank? _selectedBank;
   bool _bankPrefillAttempted = false;
-  List<String> _documentUrls = [];
 
   bool _loading = false;
   String? _error;
@@ -46,19 +43,16 @@ class _RegisterDriverScreenState extends ConsumerState<RegisterDriverScreen> {
     final existing = widget.existing;
     if (existing != null) {
       _nationalIdCtrl.text = existing.nationalId ?? '';
-      _licenseNoCtrl.text = existing.licenseNo ?? '';
       _plateCtrl.text = existing.vehiclePlate ?? '';
       _accountNumberCtrl.text = existing.bankAccountNumber ?? '';
       _accountHolderCtrl.text = existing.bankAccountHolder ?? '';
       _vehicleType = existing.vehicleType ?? _vehicleType;
-      _documentUrls = existing.documentUrls;
     }
   }
 
   @override
   void dispose() {
     _nationalIdCtrl.dispose();
-    _licenseNoCtrl.dispose();
     _plateCtrl.dispose();
     _accountNumberCtrl.dispose();
     _accountHolderCtrl.dispose();
@@ -79,26 +73,22 @@ class _RegisterDriverScreenState extends ConsumerState<RegisterDriverScreen> {
       if (_isEditing) {
         await _repo.updateProfile(
           nationalId: _nationalIdCtrl.text.trim(),
-          licenseNo: _licenseNoCtrl.text.trim(),
           vehicleType: _vehicleType,
           vehiclePlate: _plateCtrl.text.trim(),
           bankName: _selectedBank!.name,
           bankBin: _selectedBank!.bin,
           bankAccountNumber: _accountNumberCtrl.text.trim(),
           bankAccountHolder: _accountHolderCtrl.text.trim(),
-          documentUrls: _documentUrls,
         );
       } else {
         await _repo.register(
           nationalId: _nationalIdCtrl.text.trim(),
-          licenseNo: _licenseNoCtrl.text.trim(),
           vehicleType: _vehicleType,
           vehiclePlate: _plateCtrl.text.trim(),
           bankName: _selectedBank!.name,
           bankBin: _selectedBank!.bin,
           bankAccountNumber: _accountNumberCtrl.text.trim(),
           bankAccountHolder: _accountHolderCtrl.text.trim(),
-          documentUrls: _documentUrls,
         );
       }
       ref.invalidate(userProfileProvider);
@@ -222,16 +212,6 @@ class _RegisterDriverScreenState extends ConsumerState<RegisterDriverScreen> {
                         : null,
                   ),
                   const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _licenseNoCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Số giấy phép lái xe',
-                    ),
-                    validator: (v) => (v == null || v.trim().isEmpty)
-                        ? 'Nhập số giấy phép lái xe'
-                        : null,
-                  ),
-                  const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
                     initialValue: _vehicleType,
                     decoration: const InputDecoration(labelText: 'Loại xe'),
@@ -310,20 +290,10 @@ class _RegisterDriverScreenState extends ConsumerState<RegisterDriverScreen> {
                         ? 'Nhập tên chủ tài khoản'
                         : null,
                   ),
-                  const SizedBox(height: 16),
-                  MultiImageUploadField(
-                    label:
-                        'Ảnh CCCD, giấy phép lái xe, đăng ký xe (không bắt buộc)',
-                    folder: 'drivers',
-                    initialUrls: _documentUrls,
-                    onChanged: (urls) => _documentUrls = urls,
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.only(top: 6),
-                    child: Text(
-                      'HOFA sẽ duyệt hồ sơ trước khi bạn bật được chế độ online nhận đơn.',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'HOFA sẽ duyệt hồ sơ trước khi bạn bật được chế độ online nhận đơn.',
+                    style: Theme.of(context).textTheme.bodySmall,
                   ),
                   if (_error != null) ...[
                     const SizedBox(height: 16),

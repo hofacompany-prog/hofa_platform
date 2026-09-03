@@ -1,13 +1,14 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../core/format.dart';
 import '../../core/location_tracker.dart';
 import '../../core/permission_helper.dart';
+import '../../core/push_service.dart';
 import '../../models/delivery.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/delivery_providers.dart';
-import '../../repositories/delivery_repository.dart';
 import '../../repositories/driver_repository.dart';
 import '../../widgets/notification_bell.dart';
 
@@ -23,25 +24,37 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
   final _repo = DriverRepository();
   bool _busy = false;
   String? _locationError;
-  String? _lastSyncedStatus;
   bool _permDialogOpen = false;
+  StreamSubscription<Map<String, dynamic>>? _orderEventSub;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    // Kiểm tra NGAY lúc mở màn chính — tài xế thiếu 1 trong 2 quyền này thì không nhận được đơn
-    // mới (thông báo) hoặc không tìm được (vị trí). Hỏi lại mỗi lần vào Trang chủ tới khi được
-    // cấp đủ, nhưng có nút "Để sau" để không bị kẹt nếu chưa muốn cấp ngay (khác trước đây bắt
-    // buộc, không có lối thoát).
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) => _ensureRequiredPermissions(),
-    );
+    // Có đơn mới/được gán/ví đổi số dư ở bất kỳ đâu thì danh sách chuyến đang mở tự làm mới
+    // ngay, không cần thoát ra vào lại.
+    _orderEventSub = PushService.instance.orderEventStream.listen((_) {
+      if (mounted) ref.invalidate(activeDeliveriesProvider);
+    });
+    // Kiểm tra NGAY lúc mở màn chính — nhưng CHỈ tự hiện hộp thoại khi ít nhất 1 trong 2 quyền
+    // chưa từng được hỏi (notDetermined). Đã từ chối rồi thì KHÔNG tự làm phiền lại nữa — Apple
+    // từ chối app Cửa hàng (mẫu dialog y hệt) 2 lần liền vì vi phạm cả 5.1.1(iv) (màn giải thích
+    // phải luôn dẫn thẳng hộp thoại thật, không có nút bỏ qua) VÀ 4.5.4 (thông báo/vị trí phải là
+    // tuỳ chọn, không được ép mới dùng được app — cứ mở app lại bị chặn dù đã từ chối tính là ép
+    // buộc). Ai muốn bật lại quyền sau khi từ chối thì tự vào Cài đặt trong app.
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      // Đợi 1 nhịp cho Trang chủ vẽ xong hẳn (kể cả lúc mở app đã có sẵn phiên đăng nhập, vào
+      // thẳng Trang chủ ngay từ khung hình đầu tiên) — hỏi quyền ngay lúc vừa vẽ xong dễ tạo
+      // cảm giác app đứng/trắng màn hình vì hộp thoại che ngay lên nội dung còn đang tải.
+      await Future.delayed(const Duration(milliseconds: 1500));
+      if (mounted) await _ensureRequiredPermissions();
+    });
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _orderEventSub?.cancel();
     super.dispose();
   }
 
@@ -62,66 +75,54 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       }
       return;
     }
+    // Cả 2 quyền đều đã được hỏi rồi (dù cấp hay từ chối) — không tự hiện hộp thoại chặn lại
+    // nữa. Sau đó nếu admin có cấu hình số ngày nhắc lại thì chỉ hiện banner nhẹ (không chặn) cho
+    // từng quyền còn thiếu.
+    final anyNotDetermined =
+        notif == PermissionState.notDetermined ||
+        loc == PermissionState.notDetermined;
+    if (!anyNotDetermined) {
+      await PermissionHelper.maybeRemind(context, location: false);
+      if (mounted) await PermissionHelper.maybeRemind(context, location: true);
+      return;
+    }
     if (_permDialogOpen) return;
     _permDialogOpen = true;
     await showDialog<void>(
       context: context,
+      barrierDismissible: false,
       builder: (dialogContext) => AlertDialog(
         title: const Text('Cần cấp quyền để nhận đơn'),
         content: const Text(
           'Tài xế nên bật Thông báo và Vị trí để nhận đơn mới kịp thời và xác định đúng vị trí '
-          'giao hàng — bấm "Cấp quyền" để tiếp tục. Nếu trước đó đã từ chối, nút này sẽ mở thẳng '
-          'Cài đặt để bạn bật lại. Chưa muốn cấp ngay thì bấm "Để sau", lần sau vào Trang chủ sẽ '
-          'hỏi lại.',
+          'giao hàng.',
         ),
         actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Để sau'),
-          ),
           FilledButton(
             onPressed: () async {
-              await PermissionHelper.requestNotification(dialogContext);
-              if (dialogContext.mounted) {
+              // Chỉ thật sự xin quyền nào CÒN notDetermined — quyền kia có thể đã bị từ chối từ
+              // trước (vd lần duyệt Apple trước đó), gọi request cho nó sẽ tự nhảy sang Cài đặt
+              // NGAY LẬP TỨC (xem PermissionHelper.requestNotification/requestLocation), chặn
+              // mất cơ hội hộp thoại thật hiện ra cho quyền còn lại vẫn đang notDetermined — đúng
+              // lỗi Apple từ chối (5.1.1(iv): "redirected to Settings before showing the
+              // permission request").
+              if (notif == PermissionState.notDetermined) {
+                await PermissionHelper.requestNotification(dialogContext);
+                await PermissionHelper.markAsked(location: false);
+              }
+              if (loc == PermissionState.notDetermined && dialogContext.mounted) {
                 await PermissionHelper.requestLocation(dialogContext);
+                await PermissionHelper.markAsked(location: true);
               }
               if (dialogContext.mounted) Navigator.pop(dialogContext);
               if (mounted) await _ensureRequiredPermissions();
             },
-            child: const Text('Cấp quyền'),
+            child: const Text('Tiếp tục'),
           ),
         ],
       ),
     );
     _permDialogOpen = false;
-  }
-
-  void _syncTrackingWithStatus(String status) {
-    final shouldTrack = status == 'online' || status == 'busy';
-    if (shouldTrack && !LocationTracker.instance.isTracking) {
-      LocationTracker.instance.start((pos) async {
-        try {
-          await _repo.updateLocation(pos.latitude, pos.longitude);
-        } catch (_) {
-          // mất mạng tạm thời — bỏ qua, lần cập nhật tiếp theo sẽ tự bù
-        }
-        // Đang có (những) chuyến chạy dở — ghi thêm vệt đường cho TỪNG chuyến để khách/cửa hàng
-        // theo dõi trên bản đồ (tài xế Dự phòng có thể có nhiều hơn 1 chuyến cùng lúc).
-        final active = ref.read(activeDeliveriesProvider).valueOrNull ?? const [];
-        for (final d in active) {
-          if (kTerminalDeliveryStatuses.contains(d.status) || d.status == 'assigned') continue;
-          try {
-            await DeliveryRepository().addTrack(d.id, pos.latitude, pos.longitude);
-          } catch (_) {
-            // tương tự — bỏ qua, không chặn UI vì 1 lần ghi vệt đường lỗi
-          }
-        }
-      }).then((ok) {
-        if (!ok && mounted) setState(() => _locationError = 'Cần cấp quyền vị trí để nhận đơn gần bạn');
-      });
-    } else if (!shouldTrack && LocationTracker.instance.isTracking) {
-      LocationTracker.instance.stop();
-    }
   }
 
   Future<void> _toggleOnline(bool goOnline) async {
@@ -136,15 +137,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
       }
       await _repo.setStatus(goOnline ? 'online' : 'offline');
       if (goOnline) {
-        // Gửi ngay 1 lần vị trí hiện tại — không đợi luồng theo dõi bắt được lần di
-        // chuyển >=30m đầu tiên, vì lúc đó server chưa có toạ độ nên chưa tìm thấy
-        // tài xế này khi có đơn mới.
+        // Gửi 1 lần vị trí hiện tại lúc bật online — KHÔNG còn theo dõi liên tục sau đó (đã bỏ
+        // hẳn stream nền, xem location_tracker.dart) để tránh vướng chính sách theo dõi vị trí
+        // thời gian thực của Apple/Google. Vị trí được làm mới tiếp ở mỗi lần xác nhận "Đã lấy
+        // hàng"/"Đã giao xong" (delivery_detail_screen.dart), đủ để việc gán đơn không bị lệch xa.
         final pos = await LocationTracker.instance.current();
         if (pos != null) {
           try {
             await _repo.updateLocation(pos.latitude, pos.longitude);
           } catch (_) {
-            // luồng theo dõi bên dưới sẽ tự bù ở lần cập nhật kế tiếp
+            // mất mạng tạm thời — bỏ qua, không chặn việc bật online
           }
         }
       }
@@ -233,11 +235,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen>
             final hasActiveDelivery = activeDeliveries.any(
               (d) => d.status != 'assigned',
             );
-
-            if (_lastSyncedStatus != driver.status) {
-              _lastSyncedStatus = driver.status;
-              WidgetsBinding.instance.addPostFrameCallback((_) => _syncTrackingWithStatus(driver.status));
-            }
 
             return ListView(
               padding: const EdgeInsets.all(16),

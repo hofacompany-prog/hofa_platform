@@ -4,6 +4,8 @@
 <dict>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
@@ -27,6 +29,8 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>HOFA cần vị trí của bạn để xác định đúng vị trí chi nhánh trên bản đồ.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
 	<string>HOFA cần vị trí của bạn để xác định đúng vị trí chi nhánh trên bản đồ.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Chụp ảnh sản phẩm hoặc hoá đơn.</string>

@@ -70,13 +70,20 @@ final routerProvider = Provider<GoRouter>((ref) {
       if (loggingIn) return '/home';
 
       try {
-        final profile = await ref.read(userProfileProvider.future);
+        // .timeout — không có thì mạng chậm/kẹt sẽ treo redirect() vĩnh viễn, kẹt cả app ở màn
+        // trắng (GoRouter chưa quyết định được route đầu tiên) thay vì rơi vào catch bên dưới
+        // như ý đồ ban đầu. TimeoutException cũng rơi vào catch (_) như lỗi mạng thường.
+        final profile = await ref
+            .read(userProfileProvider.future)
+            .timeout(const Duration(seconds: 8));
         // Chưa có hồ sơ public.users — xảy ra khi đăng ký xong nhưng phải xác nhận
         // email rồi mới đăng nhập lại (lúc đăng ký session=null nên chưa gọi được
         // auth.syncProfile). Gom chung với "chưa có cửa hàng": CreateStoreScreen lo cả 2.
         if (profile == null) return onOnboarding ? null : '/onboarding';
 
-        final merchant = await ref.read(myMerchantProvider.future);
+        final merchant = await ref
+            .read(myMerchantProvider.future)
+            .timeout(const Duration(seconds: 8));
         if (merchant == null && !onOnboarding) return '/onboarding';
         if (merchant != null && onOnboarding) return '/home';
       } catch (_) {

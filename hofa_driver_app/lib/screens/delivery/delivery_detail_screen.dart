@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -5,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/format.dart';
 import '../../core/location_tracker.dart';
 import '../../core/maps_launcher.dart';
+import '../../core/push_service.dart';
 import '../../models/branch.dart';
 import '../../models/chat_message.dart';
 import '../../models/delivery.dart';
@@ -50,6 +52,24 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
   bool _loadingContext = false;
   model.Order? _order;
   Branch? _branch;
+  StreamSubscription<Map<String, dynamic>>? _orderEventSub;
+
+  @override
+  void initState() {
+    super.initState();
+    // Chuyến này đổi trạng thái ở bất kỳ đâu thì màn chi tiết đang mở tự làm mới ngay.
+    _orderEventSub = PushService.instance.orderEventStream.listen((data) {
+      if (!mounted || data['delivery_id'] != widget.deliveryId) return;
+      ref.invalidate(deliveryProvider(widget.deliveryId));
+      ref.invalidate(activeDeliveriesProvider);
+    });
+  }
+
+  @override
+  void dispose() {
+    _orderEventSub?.cancel();
+    super.dispose();
+  }
 
   /// Đơn giá trị THẤP HƠN HOẶC BẰNG ngưỡng admin cấu hình thì bỏ qua xác nhận OTP hoàn toàn —
   /// xem hofa-db/73_otp_threshold_settings.sql. Chưa tải xong _order thì mặc định BẮT BUỘC
@@ -81,6 +101,11 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
     }
   }
 
+  /// "Đã lấy hàng"/"Đã giao xong" luôn kèm vị trí hiện tại (lấy 1 LẦN đúng lúc xác nhận, không
+  /// theo dõi liên tục — xem location_tracker.dart) để server đối chiếu tài xế có đang ở gần
+  /// đúng điểm lấy/giao hay không (server/src/routes/deliveries.js requireProximity). Đơn mua hộ
+  /// tự lấy vị trí riêng trong _promptBuyOnBehalfPickup (đã truyền sẵn driverLatitude/
+  /// driverLongitude) nên bỏ qua bước lấy lại ở đây.
   Future<void> _advance(
     String nextStatus, {
     String? otp,
@@ -92,6 +117,22 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
   }) async {
     setState(() => _busy = true);
     try {
+      if ((nextStatus == 'picked_up' || nextStatus == 'delivered') &&
+          (driverLatitude == null || driverLongitude == null)) {
+        final pos = await LocationTracker.instance.current();
+        if (pos == null) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Cần bật định vị (GPS) để xác nhận bước này'),
+              ),
+            );
+          }
+          return;
+        }
+        driverLatitude = pos.latitude;
+        driverLongitude = pos.longitude;
+      }
       await _repo.updateStatus(
         widget.deliveryId,
         nextStatus,

@@ -1,4 +1,6 @@
-/// Thông tin tài khoản ngân hàng của sàn — dùng tạo mã VietQR cho khách quét chuyển khoản.
+/// Thông tin tài khoản ngân hàng của sàn — dùng tạo mã VietQR cho khách quét chuyển khoản, và
+/// supportPhone để app tài xế mở gọi/SMS/Zalo lúc bấm "Nạp tiền" (không còn hiện QR trực tiếp
+/// trong app tài xế).
 class BankAccountSettings {
   final String? id;
   final String? bankName;
@@ -6,6 +8,7 @@ class BankAccountSettings {
   final String? accountNumber;
   final String? accountHolderName;
   final int minWithdrawalBalance;
+  final String? supportPhone;
 
   BankAccountSettings({
     this.id,
@@ -14,6 +17,7 @@ class BankAccountSettings {
     this.accountNumber,
     this.accountHolderName,
     this.minWithdrawalBalance = 0,
+    this.supportPhone,
   });
 
   bool get isConfigured =>
@@ -26,6 +30,7 @@ class BankAccountSettings {
         accountNumber: json['account_number'] as String?,
         accountHolderName: json['account_holder_name'] as String?,
         minWithdrawalBalance: (json['min_withdrawal_balance'] as num?)?.toInt() ?? 0,
+        supportPhone: json['support_phone'] as String?,
       );
 
   /// Mặc định dùng khi server chưa có dòng cấu hình nào (chưa từng chạy migration).
@@ -37,5 +42,6 @@ class BankAccountSettings {
         'account_number': accountNumber,
         'account_holder_name': accountHolderName,
         'min_withdrawal_balance': minWithdrawalBalance,
+        'support_phone': supportPhone,
       };
 }

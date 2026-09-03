@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -147,9 +148,26 @@ class PushService {
   Future<void> _registerTokenIfLoggedIn() async {
     if (Supabase.instance.client.auth.currentSession == null) return;
     try {
+      // iOS: getToken() cần APNs token đã sẵn sàng TRƯỚC (Apple cấp qua mạng sau khi quyền
+      // được cấp, có độ trễ vài trăm ms tới vài giây) — gọi quá sớm ném lỗi thẳng
+      // 'apns-token-not-set' và KHÔNG tự thử lại, khiến thiết bị không bao giờ đăng ký được
+      // push dù quyền đã cấp (xác nhận qua log thật trên app Cửa hàng/Tài xế: race với
+      // _requestPermissionSafely() ở init(), 2 việc chạy gần như cùng lúc lúc mở app). Đợi tối
+      // đa 10s cho APNs token trước khi gọi getToken() — quá thời gian đó thì bỏ qua lần này,
+      // lần gọi lại tiếp theo (onTokenRefresh/onAuthStateChange) sẽ thử lại.
+      if (!kIsWeb && Platform.isIOS) {
+        var apnsToken = await FirebaseMessaging.instance.getAPNSToken();
+        for (var i = 0; apnsToken == null && i < 60; i++) {
+          await Future.delayed(const Duration(milliseconds: 500));
+          apnsToken = await FirebaseMessaging.instance.getAPNSToken();
+        }
+        if (apnsToken == null) {
+          debugPrint('[push] Chưa có APNs token sau 30s — bỏ qua, đợi lần gọi lại tiếp theo.');
+          return;
+        }
+      }
       // vapidKey chỉ web cần (lấy từ Firebase Console > Cloud Messaging > Web Push
-      // certificates) — mobile bỏ qua tham số này. Có timeout riêng vì trên iOS lệnh này chờ
-      // APNs token, có thể treo nếu hộp thoại xin quyền ở trên còn chưa được bấm.
+      // certificates) — mobile bỏ qua tham số này.
       final token = await FirebaseMessaging.instance
           .getToken(vapidKey: kIsWeb ? Env.firebaseVapidKey : null)
           .timeout(const Duration(seconds: 15));

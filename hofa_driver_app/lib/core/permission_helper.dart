@@ -4,6 +4,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:permission_handler/permission_handler.dart' as ph;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'api_client.dart';
 
 /// 3 mức duy nhất cần phân biệt để quyết định hành động khi bấm nút: đã cấp (không cần làm gì
 /// thêm), chưa quyết định (xin quyền lần đầu, trình duyệt/hệ thống tự hiện popup xin quyền), đã
@@ -168,5 +169,90 @@ class PermissionHelper {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool(_kLocationGrantedKey, after == PermissionState.granted);
     }
+  }
+
+  // ---------------------------------------------------------------------------------------
+  // Nhắc lại quyền đã bị từ chối, sau N ngày admin cấu hình (app_update_settings, xem
+  // hofa-db/102_permission_reprompt_settings.sql) — CHỈ hiện banner nhắc nhẹ, tự đóng được, KHÔNG
+  // tự mở Cài đặt hay chặn màn hình. Apple đã từ chối app vì coi việc tự động điều hướng/chặn lặp
+  // lại là ép buộc (guideline 5.1.1(iv), 4.5.4) — banner này chỉ gợi ý, người dùng chủ động bấm
+  // "Mở Cài đặt" thì mới mở, bấm "Đóng" thì thôi hẳn tới lần nhắc kế tiếp.
+  // ---------------------------------------------------------------------------------------
+  static const _kNotifLastAskedKey = 'permission_notification_last_asked_at';
+  static const _kLocationLastAskedKey = 'permission_location_last_asked_at';
+  static Map<String, dynamic>? _cachedSettings;
+
+  static Future<Map<String, dynamic>?> _repromptSettings() async {
+    if (_cachedSettings != null) return _cachedSettings;
+    try {
+      final res = await ApiClient.instance.get('/app-update-settings');
+      if (res is Map<String, dynamic>) _cachedSettings = res;
+    } catch (_) {
+      // mất mạng/lỗi tạm thời — coi như chưa cấu hình, không nhắc, thử lại lần mở app sau.
+    }
+    return _cachedSettings;
+  }
+
+  /// Ghi lại mốc "vừa hỏi/nhắc" — gọi ngay sau khi hiện hộp thoại xin quyền lần đầu HOẶC sau khi
+  /// hiện banner nhắc, để N ngày tiếp theo tính từ đúng lần cuối cùng người dùng thấy nó.
+  static Future<void> markAsked({required bool location}) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(
+      location ? _kLocationLastAskedKey : _kNotifLastAskedKey,
+      DateTime.now().millisecondsSinceEpoch,
+    );
+  }
+
+  static Future<bool> _dueForReminder(String key, int days) async {
+    final prefs = await SharedPreferences.getInstance();
+    final lastMs = prefs.getInt(key);
+    if (lastMs == null) return true;
+    final last = DateTime.fromMillisecondsSinceEpoch(lastMs);
+    return DateTime.now().difference(last).inDays >= days;
+  }
+
+  /// Gọi mỗi lần mở Trang chủ, SAU khi đã qua bước hỏi lần đầu (notDetermined) — nếu quyền đang bị
+  /// từ chối và đã đủ N ngày theo cấu hình admin, hiện banner nhắc nhẹ (không chặn, tự đóng được).
+  static Future<void> maybeRemind(
+    BuildContext context, {
+    required bool location,
+  }) async {
+    final state = location ? await locationState() : await notificationState();
+    if (state != PermissionState.denied) return;
+    final settings = await _repromptSettings();
+    final days = (settings?[location ? 'location_reprompt_days' : 'notif_reprompt_days'] as num?)
+        ?.toInt();
+    if (days == null) return;
+    final due = await _dueForReminder(
+      location ? _kLocationLastAskedKey : _kNotifLastAskedKey,
+      days,
+    );
+    if (!due || !context.mounted) return;
+    await markAsked(location: location);
+    if (!context.mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.clearMaterialBanners();
+    messenger.showMaterialBanner(
+      MaterialBanner(
+        content: Text(
+          location
+              ? 'Bạn chưa bật quyền vị trí — bật để xác định đúng vị trí chi nhánh.'
+              : 'Bạn chưa bật thông báo — bật để không lỡ đơn mới.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => messenger.hideCurrentMaterialBanner(),
+            child: const Text('Đóng'),
+          ),
+          TextButton(
+            onPressed: () {
+              messenger.hideCurrentMaterialBanner();
+              tryOpenNativeSettings(location: location);
+            },
+            child: const Text('Mở Cài đặt'),
+          ),
+        ],
+      ),
+    );
   }
 }

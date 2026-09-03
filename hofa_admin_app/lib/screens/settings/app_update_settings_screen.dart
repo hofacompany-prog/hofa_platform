@@ -85,6 +85,8 @@ class _AppUpdateSectionState extends ConsumerState<_AppUpdateSection> {
   final _versionLabelCtrl = TextEditingController();
   final _iosCtrl = TextEditingController();
   final _androidCtrl = TextEditingController();
+  final _notifRepromptCtrl = TextEditingController();
+  final _locationRepromptCtrl = TextEditingController();
   bool _initialized = false;
   bool _saving = false;
 
@@ -93,6 +95,8 @@ class _AppUpdateSectionState extends ConsumerState<_AppUpdateSection> {
     _versionLabelCtrl.dispose();
     _iosCtrl.dispose();
     _androidCtrl.dispose();
+    _notifRepromptCtrl.dispose();
+    _locationRepromptCtrl.dispose();
     super.dispose();
   }
 
@@ -100,6 +104,8 @@ class _AppUpdateSectionState extends ConsumerState<_AppUpdateSection> {
     _versionLabelCtrl.text = s?.minVersionLabel ?? '';
     _iosCtrl.text = s?.iosStoreUrl ?? '';
     _androidCtrl.text = s?.androidStoreUrl ?? '';
+    _notifRepromptCtrl.text = s?.notifRepromptDays?.toString() ?? '';
+    _locationRepromptCtrl.text = s?.locationRepromptDays?.toString() ?? '';
   }
 
   Future<void> _save() async {
@@ -118,6 +124,8 @@ class _AppUpdateSectionState extends ConsumerState<_AppUpdateSection> {
                   : _versionLabelCtrl.text.trim(),
               iosStoreUrl: _iosCtrl.text.trim().isEmpty ? null : _iosCtrl.text.trim(),
               androidStoreUrl: _androidCtrl.text.trim().isEmpty ? null : _androidCtrl.text.trim(),
+              notifRepromptDays: int.tryParse(_notifRepromptCtrl.text.trim()),
+              locationRepromptDays: int.tryParse(_locationRepromptCtrl.text.trim()),
             ),
           );
       ref.invalidate(appUpdateSettingsProvider);
@@ -185,6 +193,36 @@ class _AppUpdateSectionState extends ConsumerState<_AppUpdateSection> {
                 isDense: true,
                 hintText: 'https://play.google.com/store/apps/details?id=...',
               ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _notifRepromptCtrl,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Nhắc lại quyền Thông báo sau (ngày)',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                      hintText: 'Để trống = không tự nhắc',
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextField(
+                    controller: _locationRepromptCtrl,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Nhắc lại quyền Vị trí sau (ngày)',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                      hintText: 'Để trống = không tự nhắc',
+                    ),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 16),
             SizedBox(
