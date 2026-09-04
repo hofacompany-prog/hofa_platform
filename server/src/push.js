@@ -50,6 +50,26 @@ async function saveNotifications(userIds, { title, body, data = {}, category = '
   }
 }
 
+/** Số thông báo CHƯA ĐỌC thuộc category='order' (đơn hàng/chuyến giao/tin nhắn/ví — mọi thứ
+ * gửi qua sendPushToUser/resendPushToUser đều tự gắn category này, xem 31_notification_
+ * categories.sql) của 1 user — dùng làm số hiển thị trên icon app (badge), CỐ Ý không tính
+ * promotion/ad/system (thông báo admin tự soạn gửi tay, màn "Thông báo" web admin) vào số này.
+ * Cùng quy tắc app web đã áp dụng (chỉ tăng badge khi data.category === 'order', xem
+ * web/firebase-messaging-sw.js#handlePush) — hàm này là bản tương đương cho iOS/Android, nơi
+ * cần gửi kèm SỐ TUYỆT ĐỐI (không phải cộng dồn phía client) mỗi lần push. */
+async function unreadOrderCount(userId) {
+  try {
+    const row = await db.queryOne(
+      `SELECT COUNT(*)::int AS count FROM notifications WHERE user_id = $1 AND read_at IS NULL AND category = 'order'`,
+      [userId]
+    );
+    return row?.count ?? 0;
+  } catch (err) {
+    console.error('[push] Không đếm được số thông báo chưa đọc:', err.message);
+    return null;
+  }
+}
+
 /**
  * Gửi thẳng tới danh sách token (không tra cứu user_devices) — dùng chung cho cả push
  * theo từng user (sendPushToUser) lẫn gửi hàng loạt (sendBroadcastToCustomers).
@@ -69,7 +89,7 @@ async function saveNotifications(userIds, { title, body, data = {}, category = '
  * định của máy như trước giờ. Chỉ nơi gọi biết rõ ngữ cảnh (vd orderOffer.js — đơn mới cho cửa
  * hàng) mới truyền vào, sendToTokens không tự đoán theo data.type.
  */
-async function sendToTokens(tokens, { title, body, data = {}, badge = false, tag = null, sound = null, androidChannelId = null }) {
+async function sendToTokens(tokens, { title, body, data = {}, badge = false, badgeCount = null, tag = null, sound = null, androidChannelId = null }) {
   const firebaseApp = getApp();
   if (!firebaseApp || !tokens.length) return { sent: 0 };
 
@@ -94,10 +114,23 @@ async function sendToTokens(tokens, { title, body, data = {}, badge = false, tag
             // channelId phải trỏ đúng kênh ĐÃ TẠO SẴN phía client với âm thanh tương ứng — Android
             // 8+ khoá âm thanh vào kênh (immutable), field "sound" gửi rời ở đây bị bỏ qua nếu có
             // channelId, nên không set sound riêng ở nhánh Android, chỉ set channelId.
-            ...(androidChannelId ? { channelId: androidChannelId } : {})
+            ...(androidChannelId ? { channelId: androidChannelId } : {}),
+            // notificationCount — số hiện trên icon app (badge), chỉ 1 số OEM launcher hỗ trợ
+            // (Samsung One UI, Xiaomi...) chứ không chuẩn hoá toàn Android như iOS, nhưng gửi
+            // thêm không có tác dụng phụ gì với máy không hỗ trợ.
+            ...(badgeCount != null ? { notificationCount: badgeCount } : {})
           }
         },
-        apns: { payload: { aps: { sound: sound || 'default' } } },
+        apns: {
+          payload: {
+            aps: {
+              sound: sound || 'default',
+              // badge — số TUYỆT ĐỐI hiện trên icon app iOS, phải gửi đúng tổng số chưa đọc mỗi
+              // lần (không phải cộng dồn phía client) — xem unreadOrderCount().
+              ...(badgeCount != null ? { badge: badgeCount } : {})
+            }
+          }
+        },
         // Payload có cả notification lẫn data → firebase-messaging-compat.js phía web TỰ hiện
         // thông báo (đúng field notification này), independent với onBackgroundMessage —
         // web/firebase-messaging-sw.js của 3 app không được tự gọi showNotification() thêm
@@ -137,7 +170,10 @@ async function sendPushToUser(userId, { title, body, data = {}, badge = true, ca
   const tokens = devices.map((d) => d.push_token).filter(Boolean);
   const [saved] = await saveNotifications([userId], { title, body, data, category });
   const fcmData = { ...data, category, ...(saved ? { notification_id: saved.id } : {}) };
-  return sendToTokens(tokens, { title, body, data: fcmData, badge, tag, sound, androidChannelId });
+  // Số icon app (iOS/Android) chỉ tính category='order' — không tính thông báo quảng cáo/
+  // khuyến mãi admin tự soạn gửi tay, xem unreadOrderCount().
+  const badgeCount = category === 'order' ? await unreadOrderCount(userId) : null;
+  return sendToTokens(tokens, { title, body, data: fcmData, badge, badgeCount, tag, sound, androidChannelId });
 }
 
 /**
@@ -153,7 +189,8 @@ async function resendPushToUser(userId, { title, body, data = {}, badge = true, 
     [userId]
   );
   const tokens = devices.map((d) => d.push_token).filter(Boolean);
-  return sendToTokens(tokens, { title, body, data: { ...data, category }, badge, tag, sound, androidChannelId });
+  const badgeCount = category === 'order' ? await unreadOrderCount(userId) : null;
+  return sendToTokens(tokens, { title, body, data: { ...data, category }, badge, badgeCount, tag, sound, androidChannelId });
 }
 
 /**
