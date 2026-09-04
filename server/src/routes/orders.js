@@ -167,7 +167,19 @@ router.get('/orders/mine', asyncHandler(async (req, res) => {
   const { limit, offset } = pagination(req.query);
   const clauses = ['customer_id = $1'];
   const params = [req.ctx.userId];
-  if (req.query.status) { params.push(req.query.status); clauses.push(`status = $${params.length}`); }
+  // ?status=a hoặc ?status=a,b,c — màn "Đơn hàng của tôi" gom nhiều trạng thái thật lại thành 1
+  // nhóm hiển thị cho khách (vd "Đang giao" = ready_for_pickup+assigned+picked_up+delivering),
+  // xem customerOrderStatusGroups trong hofa_customer_app/lib/models/order.dart.
+  if (req.query.status) {
+    const statuses = req.query.status.split(',').map((s) => s.trim()).filter(Boolean);
+    if (statuses.length === 1) {
+      params.push(statuses[0]);
+      clauses.push(`status = $${params.length}`);
+    } else if (statuses.length > 1) {
+      params.push(statuses);
+      clauses.push(`status = ANY($${params.length}::order_status[])`);
+    }
+  }
   // from/to: ngày dương lịch theo giờ Việt Nam (YYYY-MM-DD) — màn "Đơn hàng của tôi" bắt buộc
   // chọn 1 trong 4 khoảng (Hôm nay/Hôm qua/Tuần qua/Tháng qua), không còn xem "tất cả" không
   // giới hạn thời gian, cùng cách tính mốc ngày với /merchants/:merchantId/orders.
@@ -429,6 +441,32 @@ router.patch('/orders/:id/status', asyncHandler(async (req, res) => {
     }
   }
 
+  // Cửa hàng bấm "Đã làm xong" (status=ready_for_pickup) nhưng tài xế đã XÁC NHẬN NHẬN ĐƠN từ
+  // trước (tìm sớm, xem hofa-db/105_early_driver_search.sql) — orders.status đã tự nhảy sang
+  // 'assigned' ngay lúc tài xế bấm nhận (update_delivery_status RPC, xem hofa-db/
+  // 106_driver_confirm_before_assigned.sql), không phải lúc mời như trước. Chuyển tiếp
+  // 'assigned' → 'ready_for_pickup' không còn hợp lệ với state machine (đi lùi) — không cần tìm
+  // lại tài xế, chỉ đánh dấu ready_at (mốc "món đã xong" để tính trễ) + báo tài xế "hàng đã
+  // xong, tới lấy được rồi", bỏ qua toàn bộ phần dưới.
+  if (req.body.status === 'ready_for_pickup' && order.status === 'assigned') {
+    let readyRow = order;
+    if (!order.ready_at) {
+      readyRow = await db.queryOne('UPDATE orders SET ready_at = now() WHERE id = $1 RETURNING *', [req.params.id]);
+      if (order.confirmed_at && order.estimated_prep_minutes != null) {
+        const elapsedMinutes = (new Date(readyRow.ready_at) - new Date(order.confirmed_at)) / 60000;
+        const lateMinutes = Math.round(elapsedMinutes - order.estimated_prep_minutes);
+        if (lateMinutes > 0) {
+          await db.query('UPDATE orders SET late_minutes = $2 WHERE id = $1', [req.params.id, lateMinutes]);
+          readyRow.late_minutes = lateMinutes;
+        }
+      }
+      dispatch.notifyDriverOrderReady(req.params.id).catch((err) => {
+        console.error('[dispatch] Không báo được tài xế đơn đã sẵn sàng', req.params.id, err.message);
+      });
+    }
+    return res.json({ ok: true, data: readyRow });
+  }
+
   const updated = await db.callRpc('update_order_status', {
     p_order_id: req.params.id,
     p_new_status: req.body.status,
@@ -449,15 +487,15 @@ router.patch('/orders/:id/status', asyncHandler(async (req, res) => {
         [req.params.id, prepMinutes]
       );
     }
-    // Công tắc "tối đa" (driver_dispatch_settings.search_on_confirm, admin cấu hình) — tìm tài
+    // Công tắc "tối đa" (driver_dispatch_settings.search_on_confirm, admin cấu hình) — MỜI tài
     // xế NGAY lúc xác nhận thay vì đợi tới ngưỡng search_before_ready_minutes (xem
-    // dispatch.sweepEarlyDriverSearch, quét định kỳ, chỉ xử lý nhánh TẮT công tắc này).
-    // deferOrderStatus=true — chưa đẩy orders.status lên 'assigned' vội, xem
-    // hofa-db/105_early_driver_search.sql.
+    // dispatch.sweepEarlyDriverSearch, quét định kỳ, chỉ xử lý nhánh TẮT công tắc này). Chỉ MỜI
+    // — orders.status không đổi cho tới khi tài xế thật sự bấm nhận (xem hofa-db/
+    // 106_driver_confirm_before_assigned.sql).
     if (!order.selected_driver_id) {
       dispatch.currentDriverDispatchSettings().then((settings) => {
         if (!settings.search_on_confirm) return;
-        return dispatch.offerToNearestDriver(req.params.id, { deferOrderStatus: true });
+        return dispatch.offerToNearestDriver(req.params.id);
       }).catch((err) => {
         console.error('[dispatch] Không tự gán được tài xế sớm cho đơn (search_on_confirm)', req.params.id, err.message);
       });
@@ -486,25 +524,16 @@ router.patch('/orders/:id/status', asyncHandler(async (req, res) => {
   // phải tự chọn tài xế (giống Grab/Shopee). Không tìm được ai thì bỏ qua lặng lẽ,
   // cửa hàng vẫn có thể bấm "Tìm tài xế" thủ công (POST /orders/:id/find-driver).
   if (req.body.status === 'ready_for_pickup') {
-    const existingDelivery = await db.queryOne('SELECT id FROM deliveries WHERE order_id = $1', [req.params.id]);
-    if (existingDelivery) {
-      // Đã tìm được tài xế SỚM từ trước (search_before_ready_minutes/search_on_confirm, xem
-      // hofa-db/105_early_driver_search.sql) — không tìm lại, chỉ cần đẩy nốt orders.status lên
-      // 'assigned' (driver đã có sẵn, chỉ đang chờ đúng lúc này) + báo tài xế hàng đã THẬT SỰ
-      // xong. Cập nhật `updated` để response trả về đúng trạng thái mới nhất, không dừng lại ở
-      // 'ready_for_pickup' vốn chỉ là bước trung gian ở đây.
-      const reassigned = await db.callRpc('update_order_status', {
-        p_order_id: req.params.id,
-        p_new_status: 'assigned',
-        p_changed_by: req.ctx.userId,
-        p_actor_role: req.ctx.role,
-        p_note: 'Đã tìm tài xế từ trước (tìm sớm)'
-      });
-      Object.assign(updated, reassigned);
-      dispatch.notifyDriverOrderReady(req.params.id).catch((err) => {
-        console.error('[dispatch] Không báo được tài xế đơn đã sẵn sàng', req.params.id, err.message);
-      });
-    } else {
+    // Có thể đã có 1 lời mời đang treo từ trước (tìm sớm mời 1 tài xế, họ chưa phản hồi —
+    // deliveries.driver_id đã set nhưng chưa 'accepted') — không tìm mới đè lên, deliveries.
+    // order_id UNIQUE nên tìm lại sẽ ghi đè mất lời mời đang treo mà tài xế kia không hề hay
+    // biết. Chỉ tìm khi CHƯA có ai được mời (chưa từng tìm, hoặc tìm sớm thất bại hoàn toàn —
+    // driver_id NULL).
+    const pendingOffer = await db.queryOne(
+      'SELECT id FROM deliveries WHERE order_id = $1 AND driver_id IS NOT NULL',
+      [req.params.id]
+    );
+    if (!pendingOffer) {
       dispatch.offerToNearestDriver(req.params.id).catch((err) => {
         console.error('[dispatch] Không tự gán được tài xế cho đơn', req.params.id, err.message);
       });

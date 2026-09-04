@@ -17,6 +17,10 @@ import '../../widgets/stat_card.dart';
 /// hàng — mỗi trạng thái thật thuộc đúng 1 nhóm. "Sắp tới" = đơn mới chưa xác nhận, "Đang
 /// chuẩn bị" = đã nhận đang làm, "Đã làm xong" = đã sẵn sàng, từ lúc chờ tài xế tới lúc đang
 /// giao (không còn là việc của bếp nữa), "Đã hoàn tất"/"Đã hủy" giữ nguyên ý nghĩa gốc.
+/// Riêng 'assigned' KHÔNG thuộc thẳng 1 nhóm cố định — tài xế có thể xác nhận SỚM trong lúc bếp
+/// còn đang làm (tìm sớm, xem hofa-db/106_driver_confirm_before_assigned.sql), lúc đó status đã
+/// là 'assigned' nhưng bếp thật ra vẫn chưa xong — dùng Order.needsMarkReady (dựa vào readyAt,
+/// không chỉ status) để xếp đúng nhóm, xem _matchesGroup bên dưới.
 const _statusGroups = <String, List<String>>{
   'Đang chuẩn bị': ['confirmed', 'preparing'],
   'Đã làm xong': [
@@ -30,6 +34,14 @@ const _statusGroups = <String, List<String>>{
   'Đã hoàn tất': ['completed'],
   'Đã hủy': ['cancelled', 'refunded'],
 };
+
+bool _matchesGroup(Order o, String group) {
+  if (group == 'Đang chuẩn bị') return o.needsMarkReady;
+  if (group == 'Đã làm xong') {
+    return !o.needsMarkReady && _statusGroups['Đã làm xong']!.contains(o.status);
+  }
+  return _statusGroups[group]!.contains(o.status);
+}
 
 /// Thứ tự tab hiển thị — "Sắp tới" lên đầu (đơn mới chưa xác nhận cần thấy ngay), tab MẶC ĐỊNH
 /// lúc mở màn vẫn là "Đang chuẩn bị" (đặt riêng ở _selectedGroupProvider, không suy từ .first
@@ -160,9 +172,7 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
               error: (e, _) => Center(child: Text('Lỗi tải đơn hàng: $e')),
               data: (allOrders) {
                 final orders = [
-                  ...allOrders.where(
-                    (o) => _statusGroups[selectedGroup]!.contains(o.status),
-                  ),
+                  ...allOrders.where((o) => _matchesGroup(o, selectedGroup)),
                   // Đặt sau các đơn cần thao tác thật (pending_payment/placed) — đơn đặt trước
                   // còn "ngủ" chỉ để xem trước, không cần thấy trước tiên.
                   if (selectedGroup == 'Sắp tới') ...upcomingScheduled,
@@ -214,7 +224,9 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
                       // Đang chuẩn bị: thay chip trạng thái bằng đồng hồ đếm ngược + nút "Đã làm
                       // xong" hệt màn chi tiết đơn (RollingCountdown dùng chung), thay vì chỉ hiện
                       // 1 chip tĩnh — cửa hàng thấy ngay đơn nào sắp trễ mà không cần bấm vào xem.
-                      if (o.status == 'confirmed' || o.status == 'preparing') {
+                      // needsMarkReady (không chỉ status) — vẫn hiện card này nếu tài xế đã xác
+                      // nhận SỚM mà bếp chưa xong (status đã 'assigned', readyAt còn null).
+                      if (o.needsMarkReady) {
                         return _PreparingOrderCard(
                           order: o,
                           isUnread: isUnread,

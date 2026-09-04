@@ -213,12 +213,25 @@ const orderStatusLabels = {
   'placed': 'Đơn mới',
   'confirmed': 'Đã xác nhận',
   'preparing': 'Đang chuẩn bị',
-  'ready_for_pickup': 'Chờ tài xế lấy',
-  'assigned': 'Đã gán tài xế',
+  'ready_for_pickup': 'Đang tìm tài xế',
+  'assigned': 'Chờ tài xế lấy hàng',
   'picked_up': 'Đã lấy hàng',
   'delivering': 'Đang giao',
   'delivered': 'Đã giao',
   'completed': 'Hoàn tất',
   'cancelled': 'Đã huỷ',
   'refunded': 'Đã hoàn tiền',
+};
+
+/// Gom 11 trạng thái thật (order_status) lại còn 5 nhóm dễ hiểu cho khách ở màn "Đơn hàng của
+/// tôi" — khách không cần phân biệt các bước nội bộ (vd "Đang tìm tài xế" khác "Chờ tài xế lấy
+/// hàng" khác "Đã lấy hàng" đều chỉ là 1 việc với họ: "đang giao"). Nối các trạng thái trong 1
+/// nhóm bằng dấu phẩy rồi gửi thẳng làm query param ?status=, server hỗ trợ lọc nhiều trạng thái
+/// cùng lúc kiểu này — xem GET /orders/mine (server/src/routes/orders.js).
+const customerOrderStatusGroups = <String, List<String>>{
+  'Chờ thanh toán': ['pending_payment'],
+  'Cửa hàng đang xử lý': ['placed', 'confirmed', 'preparing'],
+  'Đang giao': ['ready_for_pickup', 'assigned', 'picked_up', 'delivering'],
+  'Đã giao': ['delivered', 'completed'],
+  'Đã huỷ': ['cancelled', 'refunded'],
 };

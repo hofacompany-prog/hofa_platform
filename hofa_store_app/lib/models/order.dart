@@ -66,6 +66,11 @@ class Order {
   final String paymentStatus;
   final DateTime createdAt;
   final DateTime? confirmedAt;
+  // Mốc "món đã làm xong" — set lúc cửa hàng bấm "Đã làm xong" (PATCH /orders/:id/status,
+  // status=ready_for_pickup), kể cả khi tài xế đã xác nhận sớm từ trước (status đã là
+  // 'assigned', xem hofa-db/106_driver_confirm_before_assigned.sql) nên không đổi status nữa —
+  // dùng readyAt (thay vì status) để biết bếp đã thật sự xong chưa.
+  final DateTime? readyAt;
   final DateTime? deliveredAt;
   final String? customerNote;
   final int? estimatedPrepMinutes;
@@ -101,6 +106,7 @@ class Order {
     required this.paymentStatus,
     required this.createdAt,
     this.confirmedAt,
+    this.readyAt,
     this.deliveredAt,
     this.customerNote,
     this.estimatedPrepMinutes,
@@ -137,6 +143,9 @@ class Order {
     confirmedAt: json['confirmed_at'] != null
         ? DateTime.tryParse(json['confirmed_at'].toString())
         : null,
+    readyAt: json['ready_at'] != null
+        ? DateTime.tryParse(json['ready_at'].toString())
+        : null,
     deliveredAt: json['delivered_at'] != null
         ? DateTime.tryParse(json['delivered_at'].toString())
         : null,
@@ -168,6 +177,14 @@ class Order {
   /// Tổng SỐ LƯỢNG món (cộng dồn quantity từng dòng) — khác items.length (chỉ đếm số DÒNG sản
   /// phẩm khác nhau, đơn "2x Cá basa" chỉ có 1 dòng nhưng phải hiện 2 món).
   int get totalQuantity => items.fold(0, (sum, i) => sum + i.quantity);
+
+  /// Bếp còn cần bấm "Đã làm xong" — đúng khi đang confirmed/preparing NHƯ CŨ, nhưng cũng đúng
+  /// khi status đã nhảy sang 'assigned' (tài xế xác nhận SỚM, xem hofa-db/
+  /// 106_driver_confirm_before_assigned.sql) mà readyAt vẫn null (bếp thật ra vẫn chưa xong) —
+  /// dùng thay cho việc chỉ so status, để đơn không "biến mất" khỏi tab Đang chuẩn bị chỉ vì đã
+  /// có tài xế trong lúc bếp còn đang làm.
+  bool get needsMarkReady =>
+      readyAt == null && (status == 'confirmed' || status == 'preparing' || status == 'assigned');
 }
 
 /// Nhãn tiếng Việt + màu cho từng trạng thái — khớp enum order_status trong 01_schema.sql
@@ -176,8 +193,8 @@ const orderStatusLabels = {
   'placed': 'Đơn mới',
   'confirmed': 'Đã xác nhận',
   'preparing': 'Đang chuẩn bị',
-  'ready_for_pickup': 'Chờ tài xế lấy',
-  'assigned': 'Đã gán tài xế',
+  'ready_for_pickup': 'Đang tìm tài xế',
+  'assigned': 'Chờ tài xế lấy hàng',
   'picked_up': 'Đã lấy hàng',
   'delivering': 'Đang giao',
   'delivered': 'Đã giao',

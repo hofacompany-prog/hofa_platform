@@ -101,18 +101,31 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               children: [
-                ...orderStatusLabels.entries.map(
-                  (e) => Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: ChoiceChip(
-                      label: Text(e.value),
-                      selected: statusFilter == e.key,
-                      onSelected: (_) =>
-                          ref.read(orderStatusFilterProvider.notifier).state =
-                              e.key,
-                    ),
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: ChoiceChip(
+                    label: const Text('Tất cả'),
+                    selected: statusFilter == null,
+                    onSelected: (_) =>
+                        ref.read(orderStatusFilterProvider.notifier).state =
+                            null,
                   ),
                 ),
+                ...customerOrderStatusGroups.entries.map((e) {
+                  // Gộp nhiều trạng thái thật thành 1 chip — gửi thẳng chuỗi nối dấu phẩy làm
+                  // giá trị lọc, server tự hiểu (xem GET /orders/mine).
+                  final joined = e.value.join(',');
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: ChoiceChip(
+                      label: Text(e.key),
+                      selected: statusFilter == joined,
+                      onSelected: (_) =>
+                          ref.read(orderStatusFilterProvider.notifier).state =
+                              joined,
+                    ),
+                  );
+                }),
               ],
             ),
           ),

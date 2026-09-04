@@ -111,7 +111,7 @@ async function findNearestOnlineDriver(
  */
 async function offerToNearestDriver(
   orderId,
-  { excludeDriverIds = [], forceBackupPool = false, deferOrderStatus = false } = {}
+  { excludeDriverIds = [], forceBackupPool = false } = {}
 ) {
   const order = await db.queryOne(
     `SELECT o.*, m.merchant_type FROM orders o JOIN merchants m ON m.id = o.merchant_id WHERE o.id = $1`,
@@ -144,7 +144,7 @@ async function offerToNearestDriver(
   const pickupDistanceKm = driver._distance ?? null;
   const pickupEtaMinutes =
     pickupDistanceKm != null ? Math.max(1, Math.round((pickupDistanceKm / AVG_SPEED_KMH) * 60)) : null;
-  return assignDriverAndNotify(order, driver, distanceKm, { pickupEtaMinutes, deferOrderStatus });
+  return assignDriverAndNotify(order, driver, distanceKm, { pickupEtaMinutes });
 }
 
 /** Gán CHÍNH XÁC 1 tài xế khách đã chỉ định (đơn mua hộ — khách tự chọn ở checkout hoặc lúc
@@ -180,20 +180,13 @@ async function offerToSpecificDriver(orderId, driverId) {
 }
 
 /** Gán tài xế cụ thể đã xác định sẵn (order + driver + khoảng cách) — gọi RPC assign_driver,
- * chốt accept_deadline bằng now() của Postgres, gửi push mời nhận đơn. Dùng chung cho cả
- * offerToNearestDriver (tự tìm gần nhất) lẫn offerToSpecificDriver (khách tự chọn tài xế).
- * [pickupEtaMinutes] ETA tài xế tới CỬA HÀNG (khác etaMinutes tính bên trong = ETA cả chuyến,
- * dùng tính driver_fee). [deferOrderStatus] true = tìm tài xế SỚM (trước ready_for_pickup, xem
- * sweepEarlyDriverSearch/search_on_confirm) — orders.status CHƯA đẩy lên 'assigned' vội, để
- * không phá vỡ cách phân nhóm "Đang chuẩn bị"/"Đã làm xong" ở 2 app cửa hàng/khách (đều dựa
- * thẳng vào orders.status). PATCH /orders/:id/status (status=ready_for_pickup) tự đẩy nốt lên
- * 'assigned' khi cửa hàng thật sự bấm "Đã làm xong". Xem hofa-db/105_early_driver_search.sql. */
-async function assignDriverAndNotify(
-  order,
-  driver,
-  distanceKm,
-  { pickupEtaMinutes = null, deferOrderStatus = false } = {}
-) {
+ * chốt accept_deadline bằng now() của Postgres, gửi push MỜI nhận đơn (chưa phải xác nhận).
+ * Dùng chung cho cả offerToNearestDriver (tự tìm gần nhất) lẫn offerToSpecificDriver (khách tự
+ * chọn tài xế). [pickupEtaMinutes] ETA tài xế tới CỬA HÀNG (khác etaMinutes tính bên trong = ETA
+ * cả chuyến, dùng tính driver_fee). LƯU Ý: gọi hàm này KHÔNG làm orders.status đổi — chỉ khi tài
+ * xế thật sự bấm nhận (deliveries.status → 'accepted') thì update_delivery_status (RPC) mới đẩy
+ * orders.status sang 'assigned', xem hofa-db/106_driver_confirm_before_assigned.sql. */
+async function assignDriverAndNotify(order, driver, distanceKm, { pickupEtaMinutes = null } = {}) {
   const driverFee = await computeDriverFee(distanceKm ?? 0);
   const etaMinutes = distanceKm != null ? Math.max(1, Math.round((distanceKm / AVG_SPEED_KMH) * 60)) : null;
 
@@ -203,8 +196,7 @@ async function assignDriverAndNotify(
     p_distance_km: distanceKm,
     p_eta_minutes: etaMinutes,
     p_driver_fee: driverFee,
-    p_pickup_eta_minutes: pickupEtaMinutes,
-    p_defer_order_status: deferOrderStatus
+    p_pickup_eta_minutes: pickupEtaMinutes
   });
   // Gán được rồi — xoá mọi dấu vết đang "chờ quét tìm tài xế" của sweepDriverSearch (nếu đơn
   // này từng bị kẹt), không riêng gì lúc chính sweep đó gán được.
@@ -315,13 +307,7 @@ async function reassignAfterDecline(deliveryId) {
     `UPDATE deliveries SET driver_id = NULL, status = 'pending', accept_deadline = NULL, declined_driver_ids = $1 WHERE id = $2`,
     [declined, deliveryId]
   );
-  // Tài xế trước bị gán lúc đơn còn 'confirmed'/'preparing' (tìm SỚM, xem
-  // sweepEarlyDriverSearch/search_on_confirm) — vẫn phải tìm người thay thế theo đúng kiểu SỚM
-  // đó (chưa đẩy orders.status lên 'assigned'), không phải chỉ vì tài xế đầu từ chối mà đột
-  // ngột coi như đơn đã ready_for_pickup.
-  const order = await db.queryOne('SELECT status FROM orders WHERE id = $1', [delivery.order_id]);
-  const deferOrderStatus = order?.status === 'confirmed' || order?.status === 'preparing';
-  return offerToNearestDriver(delivery.order_id, { excludeDriverIds: declined, deferOrderStatus });
+  return offerToNearestDriver(delivery.order_id, { excludeDriverIds: declined });
 }
 
 /** Đơn mua hộ: tài xế khách CHỌN TAY từ chối/hết hạn — KHÔNG tự tìm tài xế khác như đơn thường
@@ -408,11 +394,10 @@ async function sweepExpiredOffers() {
  * max_rescan_attempts lần liên tiếp không tìm được ai, báo admin (notifyAdmins) quyết định
  * huỷ đơn hay quét tiếp — trong lúc chờ admin phản hồi (driver_search_alerted_at có giá trị),
  * sweep bỏ qua đơn đó, không tự quét thêm nữa.
- * status phải khớp CẢ 'ready_for_pickup' LẪN 'assigned' — assign_driver (hofa-db/
- * 05_driver_dispatch.sql) chỉ đổi orders.status sang 'assigned' Ở LẦN GÁN ĐẦU TIÊN rồi để
- * nguyên vĩnh viễn, kể cả sau khi tài xế từ chối (chỉ deliveries.status/driver_id đổi lại về
- * pending/NULL) — nếu chỉ lọc 'ready_for_pickup' thì đơn đã qua 1 lần gán mà
- * reassignAfterDecline không tìm được ai thay thế sẽ KẸT VĨNH VIỄN, sweep không bao giờ thấy lại.
+ * status chỉ cần khớp 'ready_for_pickup' — từ migration 106, orders.status KHÔNG còn nhảy sang
+ * 'assigned' cho tới khi tài xế thật sự bấm nhận (xem hofa-db/106_driver_confirm_before_
+ * assigned.sql), nên đơn còn đang tìm/chờ xác nhận LUÔN đứng ở 'ready_for_pickup' cho tới lúc
+ * đó — không còn kẹt ở 'assigned' như thiết kế cũ nữa.
  */
 async function sweepDriverSearch() {
   const settings = await currentDriverDispatchSettings();
@@ -420,10 +405,10 @@ async function sweepDriverSearch() {
     `SELECT o.id, o.order_code, o.total_amount, o.driver_search_attempts, d.declined_driver_ids
        FROM orders o
        LEFT JOIN deliveries d ON d.order_id = o.id
-      WHERE o.status IN ('ready_for_pickup', 'assigned')
+      WHERE o.status = 'ready_for_pickup'
         AND o.selected_driver_id IS NULL
         AND o.driver_search_alerted_at IS NULL
-        AND (d.id IS NULL OR (d.status = 'pending' AND d.driver_id IS NULL))
+        AND (d.id IS NULL OR d.driver_id IS NULL)
         AND (o.driver_search_last_attempt_at IS NULL
              OR o.driver_search_last_attempt_at < now() - ($1 || ' seconds')::interval)`,
     [settings.rescan_interval_seconds]
@@ -472,17 +457,17 @@ async function sweepDriverSearch() {
  * lúc đó mới bắt đầu như trước đây. Gọi định kỳ từ setInterval (index.js), cùng nhịp
  * driver_dispatch_settings.rescan_interval_seconds như sweepDriverSearch. Bỏ qua hẳn (không
  * quét) nếu search_on_confirm=true — trường hợp đó PATCH /orders/:id/status (status='confirmed')
- * đã tự gọi offerToNearestDriver ngay lúc xác nhận rồi (xem routes/orders.js), sweep này sẽ
- * không match những đơn đó nữa (đã có deliveries row). Ngưỡng tính từ confirmed_at +
+ * đã tự MỜI tài xế ngay lúc xác nhận rồi (xem routes/orders.js). Ngưỡng tính từ confirmed_at +
  * estimated_prep_minutes (hoặc default_prep_minutes/15 phút nếu cửa hàng chưa chỉnh) trừ đi
- * search_before_ready_minutes. Gán được thì deliveries row được tạo NGAY (deferOrderStatus=true,
- * orders.status vẫn giữ nguyên 'confirmed'/'preparing') — cửa hàng vẫn bấm "Đã làm xong" bình
- * thường sau đó, PATCH /orders/:id/status tự nhận ra đã có tài xế rồi nên chỉ đẩy nốt
- * orders.status lên 'assigned' + báo tài xế "hàng xong" (notifyDriverOrderReady), không tìm lại.
- * Không tìm được thì cứ để nguyên 'confirmed'/'preparing', quét lại mỗi rescan_interval_seconds
- * — nếu tới lúc cửa hàng bấm xong mà VẪN chưa có tài xế, offerToNearestDriver bình thường (không
- * defer) ở PATCH /orders/:id/status tiếp quản, rồi sweepDriverSearch (đã có, có báo admin khi
- * kẹt lâu) tiếp tục từ đó — không cần cơ chế báo admin riêng ở sweep này. */
+ * search_before_ready_minutes. Từ migration 106, MỜI tài xế (offerToNearestDriver) không còn
+ * đổi orders.status nữa — chỉ khi tài xế THẬT SỰ bấm nhận orders.status mới sang 'assigned' (xem
+ * hofa-db/106_driver_confirm_before_assigned.sql), nên đơn vẫn đứng nguyên 'confirmed'/
+ * 'preparing' xuyên suốt cả lúc đang mời, không cần cờ deferOrderStatus như trước nữa.
+ * Điều kiện "chưa có ai được mời" dùng driver_id IS NULL (không phải "chưa có deliveries row")
+ * — tài xế đầu bị từ chối mà không tìm được ai thay sẽ để lại 1 dòng deliveries rỗng
+ * (driver_id NULL), phải cho quét lại được, nếu không đơn sẽ KẸT VĨNH VIỄN (không match sweep
+ * này nữa vì đã có deliveries row, cũng không match sweepDriverSearch vì order.status chưa tới
+ * ready_for_pickup). */
 async function sweepEarlyDriverSearch() {
   const settings = await currentDriverDispatchSettings();
   if (settings.search_on_confirm) return { checked: 0, results: [] };
@@ -490,11 +475,12 @@ async function sweepEarlyDriverSearch() {
   const rows = await db.query(
     `SELECT o.id FROM orders o
        JOIN merchants m ON m.id = o.merchant_id
+       LEFT JOIN deliveries d ON d.order_id = o.id
       WHERE o.status IN ('confirmed', 'preparing')
         AND m.merchant_type != 'buy_on_behalf'
         AND o.selected_driver_id IS NULL
         AND o.confirmed_at IS NOT NULL
-        AND NOT EXISTS (SELECT 1 FROM deliveries d WHERE d.order_id = o.id)
+        AND (d.id IS NULL OR d.driver_id IS NULL)
         AND (o.driver_search_last_attempt_at IS NULL
              OR o.driver_search_last_attempt_at < now() - ($2 || ' seconds')::interval)
         AND o.confirmed_at + (COALESCE(o.estimated_prep_minutes, o.default_prep_minutes, 15) || ' minutes')::interval
@@ -504,7 +490,7 @@ async function sweepEarlyDriverSearch() {
 
   const results = [];
   for (const row of rows) {
-    const assigned = await offerToNearestDriver(row.id, { deferOrderStatus: true });
+    const assigned = await offerToNearestDriver(row.id);
     if (!assigned) {
       await db.query(
         `UPDATE orders SET driver_search_attempts = driver_search_attempts + 1,
@@ -517,10 +503,11 @@ async function sweepEarlyDriverSearch() {
   return { checked: rows.length, results };
 }
 
-/** Đơn đã được tìm tài xế SỚM (deferOrderStatus=true, xem sweepEarlyDriverSearch/
- * search_on_confirm) — báo cho tài xế biết hàng đã THẬT SỰ sẵn sàng, có thể tới lấy ngay (trước
- * đó tài xế chỉ biết đang trên đường tới, chưa chắc món đã xong). Dùng ở PATCH /orders/:id/status
- * khi cửa hàng bấm "Đã làm xong" mà đơn đã có deliveries row từ trước. */
+/** Đơn đã được tìm tài xế SỚM và tài xế đã XÁC NHẬN NHẬN (orders.status đã là 'assigned', xem
+ * sweepEarlyDriverSearch/search_on_confirm + hofa-db/106_driver_confirm_before_assigned.sql) —
+ * báo cho tài xế biết hàng đã THẬT SỰ sẵn sàng, có thể tới lấy ngay (trước đó tài xế chỉ biết
+ * đang trên đường tới, chưa chắc món đã xong). Dùng ở PATCH /orders/:id/status khi cửa hàng bấm
+ * "Đã làm xong" mà đơn đã có tài xế xác nhận từ trước. */
 async function notifyDriverOrderReady(orderId) {
   const row = await db.queryOne(
     `SELECT d.id AS delivery_id, dr.user_id, o.order_code

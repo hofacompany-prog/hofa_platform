@@ -410,7 +410,10 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen>
   ) {
     final theme = Theme.of(context);
     final isPlaced = o.status == 'placed';
-    final isPrepPhase = o.status == 'confirmed' || o.status == 'preparing';
+    // Bếp còn cần bấm "Đã làm xong" — dùng o.needsMarkReady (không chỉ so status) để đơn không
+    // "biến mất" khỏi phần này chỉ vì đã có tài xế xác nhận SỚM trong lúc bếp còn đang làm, xem
+    // hofa-db/106_driver_confirm_before_assigned.sql.
+    final isPrepPhase = o.needsMarkReady;
     // Đơn giao ngay đặt trước còn "ngủ" (xem hofa-db/84_instant_scheduled_order.sql) — cửa hàng
     // xem TRƯỚC ở tab "Sắp tới" nhưng CHƯA thao tác gì được (chưa xác nhận/huỷ/đếm giờ tự huỷ),
     // tới lúc orderOffer.sweepDueScheduledInstant "nổ" đơn (scheduledActivatedAt có giá trị)
