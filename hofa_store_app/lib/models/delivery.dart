@@ -17,7 +17,12 @@ class Delivery {
   final String? pickupOtp;
   final num? distanceKm;
   final int? etaMinutes;
+  // ETA (phút) tài xế dự kiến TỚI CỬA HÀNG để lấy hàng, tính lúc gán — khác etaMinutes (ETA cả
+  // chuyến cửa hàng→khách, dùng tính driverFee). Xem hofa-db/105_early_driver_search.sql.
+  final int? pickupEtaMinutes;
   final int driverFee;
+  final String? driverName;
+  final String? driverPhone;
 
   Delivery({
     required this.id,
@@ -26,7 +31,10 @@ class Delivery {
     this.pickupOtp,
     this.distanceKm,
     this.etaMinutes,
+    this.pickupEtaMinutes,
     required this.driverFee,
+    this.driverName,
+    this.driverPhone,
   });
 
   factory Delivery.fromJson(Map<String, dynamic> json) => Delivery(
@@ -36,6 +44,9 @@ class Delivery {
         pickupOtp: json['pickup_otp'] as String?,
         distanceKm: json['distance_km'] != null ? num.tryParse('${json['distance_km']}') : null,
         etaMinutes: (json['eta_minutes'] as num?)?.toInt(),
+        pickupEtaMinutes: (json['pickup_eta_minutes'] as num?)?.toInt(),
         driverFee: (json['driver_fee'] as num?)?.toInt() ?? 0,
+        driverName: json['driver_name'] as String?,
+        driverPhone: json['driver_phone'] as String?,
       );
 }

@@ -17,6 +17,9 @@ class Delivery {
   final String? deliveryOtp;
   final num? distanceKm;
   final int? etaMinutes;
+  // ETA (phút) tài xế dự kiến TỚI CỬA HÀNG để lấy hàng, tính lúc gán — khác etaMinutes (ETA cả
+  // chuyến cửa hàng→khách). Xem hofa-db/105_early_driver_search.sql.
+  final int? pickupEtaMinutes;
   final String? driverId;
   final String? driverName;
   final String? driverPhone;
@@ -29,6 +32,7 @@ class Delivery {
     this.deliveryOtp,
     this.distanceKm,
     this.etaMinutes,
+    this.pickupEtaMinutes,
     this.driverId,
     this.driverName,
     this.driverPhone,
@@ -42,6 +46,7 @@ class Delivery {
         deliveryOtp: json['delivery_otp'] as String?,
         distanceKm: json['distance_km'] != null ? num.tryParse('${json['distance_km']}') : null,
         etaMinutes: (json['eta_minutes'] as num?)?.toInt(),
+        pickupEtaMinutes: (json['pickup_eta_minutes'] as num?)?.toInt(),
         driverId: json['driver_id'] as String?,
         driverName: json['driver_name'] as String?,
         driverPhone: json['driver_phone'] as String?,

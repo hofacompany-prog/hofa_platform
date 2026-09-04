@@ -25,6 +25,7 @@ class _DriverAcceptSettingsScreenState
   final _offerReminderIntervalCtrl = TextEditingController();
   final _rescanIntervalCtrl = TextEditingController();
   final _maxRescanAttemptsCtrl = TextEditingController();
+  final _searchBeforeReadyCtrl = TextEditingController();
   final _pickupRadiusCtrl = TextEditingController();
   bool _initialized = false;
   bool _dispatchInitialized = false;
@@ -32,6 +33,8 @@ class _DriverAcceptSettingsScreenState
   bool _saving = false;
   bool _savingDispatch = false;
   bool _savingPickupRadius = false;
+  bool _searchOnConfirm = false;
+  bool _backupPoolEnabled = false;
 
   @override
   void dispose() {
@@ -40,6 +43,7 @@ class _DriverAcceptSettingsScreenState
     _offerReminderIntervalCtrl.dispose();
     _rescanIntervalCtrl.dispose();
     _maxRescanAttemptsCtrl.dispose();
+    _searchBeforeReadyCtrl.dispose();
     _pickupRadiusCtrl.dispose();
     super.dispose();
   }
@@ -53,6 +57,9 @@ class _DriverAcceptSettingsScreenState
   void _fillDispatchFrom(DriverDispatchSettings s) {
     _rescanIntervalCtrl.text = s.rescanIntervalSeconds.toString();
     _maxRescanAttemptsCtrl.text = s.maxRescanAttempts.toString();
+    _searchBeforeReadyCtrl.text = s.searchBeforeReadyMinutes.toString();
+    _searchOnConfirm = s.searchOnConfirm;
+    _backupPoolEnabled = s.backupPoolEnabled;
   }
 
   void _fillPickupRadiusFrom(PickupProximitySettings s) {
@@ -90,12 +97,17 @@ class _DriverAcceptSettingsScreenState
   Future<void> _saveDispatch(String? id) async {
     final interval = int.tryParse(_rescanIntervalCtrl.text.trim());
     final maxAttempts = int.tryParse(_maxRescanAttemptsCtrl.text.trim());
+    final searchBeforeReady = int.tryParse(_searchBeforeReadyCtrl.text.trim());
     if (interval == null || interval <= 0) {
       _showError('Thời gian quét lại không hợp lệ');
       return;
     }
     if (maxAttempts == null || maxAttempts <= 0) {
       _showError('Số lần quét trước khi báo admin không hợp lệ');
+      return;
+    }
+    if (searchBeforeReady == null || searchBeforeReady < 0) {
+      _showError('Số phút tìm tài xế sớm không hợp lệ');
       return;
     }
 
@@ -108,6 +120,9 @@ class _DriverAcceptSettingsScreenState
               id: id,
               rescanIntervalSeconds: interval,
               maxRescanAttempts: maxAttempts,
+              backupPoolEnabled: _backupPoolEnabled,
+              searchBeforeReadyMinutes: searchBeforeReady,
+              searchOnConfirm: _searchOnConfirm,
             ),
           );
       ref.invalidate(driverDispatchSettingsProvider);
@@ -267,9 +282,10 @@ class _DriverAcceptSettingsScreenState
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Áp dụng khi đơn chuyển sang "Chờ tài xế lấy" mà không tìm được tài xế nào '
-                      'online phù hợp — tự quét lại định kỳ, sau 1 số lần liên tiếp vẫn không có '
-                      'ai thì báo admin quyết định huỷ đơn hay quét tiếp.',
+                      'Gồm cả tìm SỚM (trước khi cửa hàng bấm "Đã làm xong") lẫn quét lại khi đơn '
+                      'đã "Chờ tài xế lấy" mà không tìm được ai online phù hợp — tự quét lại định '
+                      'kỳ, sau 1 số lần liên tiếp vẫn không có ai thì báo admin quyết định huỷ '
+                      'đơn hay quét tiếp.',
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: theme.colorScheme.outline,
                       ),
@@ -316,6 +332,39 @@ class _DriverAcceptSettingsScreenState
                                         'nào nhận, gửi thông báo cho admin chọn huỷ đơn hay quét '
                                         'tiếp (chọn quét tiếp sẽ tính lại từ đầu, đủ số lần này '
                                         'nữa thì báo lại).',
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                _SectionCard(
+                                  title: 'Tìm tài xế sớm',
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      _NumberField(
+                                        controller: _searchBeforeReadyCtrl,
+                                        label:
+                                            'Còn bao nhiêu phút nữa thì bắt đầu tìm (phút)',
+                                        helper:
+                                            'VD 5 — khi thời gian chuẩn bị còn lại bấy nhiêu '
+                                            'phút, hệ thống bắt đầu tìm tài xế luôn, không đợi '
+                                            'tới lúc cửa hàng bấm "Đã làm xong" — để tài xế tới '
+                                            'quán đúng lúc món vừa xong. Bỏ qua nếu bật "Tối đa" '
+                                            'bên dưới.',
+                                      ),
+                                      const SizedBox(height: 4),
+                                      SwitchListTile(
+                                        contentPadding: EdgeInsets.zero,
+                                        title: const Text('Tối đa'),
+                                        subtitle: const Text(
+                                          'Tìm tài xế NGAY lúc cửa hàng xác nhận đơn, bỏ qua '
+                                          'hẳn thời gian chờ ở trên — tài xế có thể phải đợi ở '
+                                          'quán nếu bếp làm chậm hơn dự kiến.',
+                                        ),
+                                        value: _searchOnConfirm,
+                                        onChanged: (v) =>
+                                            setState(() => _searchOnConfirm = v),
+                                      ),
+                                    ],
                                   ),
                                 ),
                                 const SizedBox(height: 16),

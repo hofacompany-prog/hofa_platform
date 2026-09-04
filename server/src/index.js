@@ -124,6 +124,16 @@ setInterval(() => {
   dispatch.sweepDriverSearch().catch((e) => console.error('[sweep-driver-search]', e));
 }, 15_000);
 
+// Tự tìm tài xế SỚM — trước khi cửa hàng bấm "Đã làm xong" — khi thời gian chuẩn bị còn lại
+// chạm ngưỡng driver_dispatch_settings.search_before_ready_minutes (admin cấu hình), thay vì đợi
+// tới ready_for_pickup mới bắt đầu tìm như sweepDriverSearch ở trên. Bỏ qua hẳn nếu admin bật
+// search_on_confirm (tìm ngay lúc xác nhận, xem routes/orders.js). Cùng nhịp quét 15s cho đơn
+// giản, chỉ thật sự thử gán khi đã đủ rescan_interval_seconds kể từ lần thử trước — xem
+// dispatch.sweepEarlyDriverSearch.
+setInterval(() => {
+  dispatch.sweepEarlyDriverSearch().catch((e) => console.error('[sweep-early-driver-search]', e));
+}, 15_000);
+
 // Nhắc lại cửa hàng cho tới khi xác nhận đơn (status rời khỏi 'placed') — gửi LẠI push qua
 // resendPushToUser, KHÔNG ghi thêm dòng notifications mới (không nhân bản hộp thư trong app),
 // chỉ lặp lại chuông/rung nhắc. Quét Node mỗi 10s nhưng chỉ THẬT SỰ gửi lại cho 1 đơn khi đã đủ

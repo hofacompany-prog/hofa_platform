@@ -438,6 +438,8 @@ class _DriversScreenState extends ConsumerState<DriversScreen>
               rescanIntervalSeconds: s.rescanIntervalSeconds,
               maxRescanAttempts: s.maxRescanAttempts,
               backupPoolEnabled: value,
+              searchBeforeReadyMinutes: s.searchBeforeReadyMinutes,
+              searchOnConfirm: s.searchOnConfirm,
             ),
           );
       ref.invalidate(driverDispatchSettingsProvider);

@@ -826,6 +826,66 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen>
                       loading: () => const SizedBox(),
                       error: (_, _) => const SizedBox(),
                       data: (delivery) {
+                        final children = <Widget>[];
+                        // Đã tìm được tài xế — hiện tên + ETA ngay cả khi cửa hàng còn đang
+                        // chuẩn bị (tìm sớm, xem hofa-db/105_early_driver_search.sql). Trước khi
+                        // lấy hàng hiện ETA tới CỬA HÀNG (pickupEtaMinutes); sau khi lấy hàng hiện
+                        // ETA cả chuyến (etaMinutes) — không còn ý nghĩa "tới cửa hàng" nữa.
+                        if (delivery != null && delivery.driverName != null) {
+                          final beforePickup = !const [
+                            'picked_up',
+                            'delivering',
+                            'delivered',
+                          ].contains(delivery.status);
+                          final etaMinutes = beforePickup
+                              ? delivery.pickupEtaMinutes
+                              : delivery.etaMinutes;
+                          children.add(
+                            Card(
+                              elevation: 0,
+                              color: theme.colorScheme.primary.withValues(
+                                alpha: 0.08,
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(16),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.two_wheeler,
+                                      color: theme.colorScheme.primary,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            'Tài xế: ${delivery.driverName}',
+                                            style: theme.textTheme.titleSmall
+                                                ?.copyWith(
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                          ),
+                                          Text(
+                                            etaMinutes != null
+                                                ? (beforePickup
+                                                      ? 'Dự kiến $etaMinutes phút nữa tới lấy hàng'
+                                                      : 'Đang giao cho khách')
+                                                : deliveryStatusLabels[delivery
+                                                          .status] ??
+                                                      delivery.status,
+                                            style: theme.textTheme.bodySmall,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        }
                         // Đơn giá trị thấp (<= ngưỡng admin cấu hình) bỏ qua xác nhận OTP hoàn
                         // toàn — không hiện mã nữa, xem hofa-db/73_otp_threshold_settings.sql.
                         final otpMinAmount =
@@ -834,43 +894,54 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen>
                                 .valueOrNull
                                 ?.minOrderAmount ??
                             0;
-                        if (delivery == null ||
-                            delivery.pickupOtp == null ||
-                            o.totalAmount <= otpMinAmount)
-                          return const SizedBox();
-                        return Padding(
-                          padding: const EdgeInsets.only(top: 16),
-                          child: Card(
-                            color: theme.colorScheme.primary.withValues(
-                              alpha: 0.10,
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.all(16),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Mã lấy hàng',
-                                    style: theme.textTheme.titleSmall,
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    delivery.pickupOtp!,
-                                    style: theme.textTheme.headlineMedium
-                                        ?.copyWith(
-                                          fontWeight: FontWeight.bold,
-                                          letterSpacing: 4,
-                                          color: theme.colorScheme.onSurface,
-                                        ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    'Đọc mã này cho tài xế khi họ đến lấy hàng.',
-                                    style: theme.textTheme.bodySmall,
-                                  ),
-                                ],
+                        if (delivery != null &&
+                            delivery.pickupOtp != null &&
+                            o.totalAmount > otpMinAmount) {
+                          children.add(
+                            Card(
+                              color: theme.colorScheme.primary.withValues(
+                                alpha: 0.10,
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.all(16),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Mã lấy hàng',
+                                      style: theme.textTheme.titleSmall,
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      delivery.pickupOtp!,
+                                      style: theme.textTheme.headlineMedium
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.bold,
+                                            letterSpacing: 4,
+                                            color: theme.colorScheme.onSurface,
+                                          ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Đọc mã này cho tài xế khi họ đến lấy hàng.',
+                                      style: theme.textTheme.bodySmall,
+                                    ),
+                                  ],
+                                ),
                               ),
                             ),
+                          );
+                        }
+                        if (children.isEmpty) return const SizedBox();
+                        return Padding(
+                          padding: const EdgeInsets.only(top: 16),
+                          child: Column(
+                            children: [
+                              for (var i = 0; i < children.length; i++) ...[
+                                if (i > 0) const SizedBox(height: 12),
+                                children[i],
+                              ],
+                            ],
                           ),
                         );
                       },
