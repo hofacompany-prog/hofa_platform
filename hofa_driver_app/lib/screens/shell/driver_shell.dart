@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../providers/nav_icon_providers.dart';
+import '../../providers/notification_providers.dart';
 import '../../widgets/tab_icon.dart';
 
 class DriverShell extends ConsumerWidget {
@@ -25,6 +26,10 @@ class DriverShell extends ConsumerWidget {
     final location = GoRouterState.of(context).matchedLocation;
     final index = _indexFor(location);
     final iconByTabKey = ref.watch(navIconsProvider).valueOrNull ?? const {};
+    // Watch ở đây (bọc TOÀN BỘ route) CHỈ để side effect BadgeService.set() (badge icon app)
+    // tự đồng bộ đúng số thông báo "Đơn hàng"/chuyến giao chưa đọc — xem notification_
+    // providers.dart.
+    ref.watch(unreadOrderCountProvider);
 
     return Scaffold(
       body: SafeArea(child: child),

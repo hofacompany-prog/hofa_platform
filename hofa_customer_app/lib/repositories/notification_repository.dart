@@ -15,8 +15,11 @@ class NotificationRepository {
         .toList();
   }
 
-  Future<int> unreadCount() async {
-    final data = await _api.get('/notifications/unread-count') as Map<String, dynamic>;
+  Future<int> unreadCount({String? category}) async {
+    final data = await _api.get(
+      '/notifications/unread-count',
+      query: {if (category != null) 'category': category},
+    ) as Map<String, dynamic>;
     return (data['count'] as num?)?.toInt() ?? 0;
   }
 

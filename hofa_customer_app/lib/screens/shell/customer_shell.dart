@@ -130,6 +130,9 @@ class _CustomerShellState extends ConsumerState<CustomerShell> {
     final instantCount = cart.salesModel == 'instant' ? cart.itemCount : 0;
     final preorderCount = cart.salesModel == 'scheduled' ? cart.itemCount : 0;
     final iconByTabKey = ref.watch(navIconsProvider).valueOrNull ?? const {};
+    // Watch ở đây (bọc TOÀN BỘ route) CHỈ để side effect BadgeService.set() (badge icon app)
+    // tự đồng bộ đúng số thông báo "Đơn hàng" chưa đọc — xem app_providers.dart.
+    ref.watch(unreadOrderCountProvider);
 
     return Scaffold(
       body: widget.child,

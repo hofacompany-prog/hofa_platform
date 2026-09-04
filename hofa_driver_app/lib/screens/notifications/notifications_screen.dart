@@ -26,6 +26,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       await ref.read(notificationRepoProvider).markAllRead();
       ref.invalidate(notificationsProvider);
       ref.invalidate(unreadNotificationCountProvider);
+      ref.invalidate(unreadOrderCountProvider);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Lỗi: $e')));
@@ -40,6 +41,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       ref.read(notificationRepoProvider).markRead(n.id).catchError((_) {});
       ref.invalidate(notificationsProvider);
       ref.invalidate(unreadNotificationCountProvider);
+      ref.invalidate(unreadOrderCountProvider);
     }
     PushService.instance.handleData(n.data);
   }
@@ -73,6 +75,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         onRefresh: () async {
           ref.invalidate(notificationsProvider);
           ref.invalidate(unreadNotificationCountProvider);
+      ref.invalidate(unreadOrderCountProvider);
         },
         child: notificationsAsync.when(
           loading: () => const Center(child: CircularProgressIndicator()),

@@ -48,6 +48,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       await ref.read(notificationRepoProvider).markAllRead();
       ref.invalidate(notificationsPagedProvider);
       ref.invalidate(unreadNotificationCountProvider);
+      ref.invalidate(unreadOrderCountProvider);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
@@ -66,6 +67,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       ref.read(notificationRepoProvider).markRead(n.id).catchError((_) {});
       ref.invalidate(notificationsPagedProvider);
       ref.invalidate(unreadNotificationCountProvider);
+      ref.invalidate(unreadOrderCountProvider);
     }
     PushService.instance.handleData(n.data);
   }
@@ -130,6 +132,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
               onRefresh: () async {
                 ref.invalidate(notificationsPagedProvider);
                 ref.invalidate(unreadNotificationCountProvider);
+      ref.invalidate(unreadOrderCountProvider);
               },
               child: notificationsState.isInitialLoading
                   ? const Center(child: CircularProgressIndicator())
