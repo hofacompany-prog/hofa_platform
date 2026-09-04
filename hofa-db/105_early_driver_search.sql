@@ -36,7 +36,7 @@ COMMENT ON COLUMN driver_dispatch_settings.search_on_confirm IS
    search_before_ready_minutes — dùng khi muốn tài xế luôn có mặt sớm nhất có thể, chấp nhận tài
    xế phải chờ ở quán nếu bếp làm chậm hơn dự kiến.';
 
-ALTER TABLE deliveries ADD COLUMN pickup_eta_minutes INTEGER;
+ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS pickup_eta_minutes INTEGER;
 COMMENT ON COLUMN deliveries.pickup_eta_minutes IS
   'ETA (phút) tài xế dự kiến tới CỬA HÀNG để lấy hàng, tính từ vị trí tài xế lúc được gán — khác
    eta_minutes (ETA cả chuyến cửa hàng→khách, dùng tính driver_fee). Chỉ là ước lượng tại thời
@@ -45,6 +45,14 @@ COMMENT ON COLUMN deliveries.pickup_eta_minutes IS
 -- assign_driver: thêm p_pickup_eta_minutes (ETA tới cửa hàng) + p_defer_order_status (true = tìm
 -- tài xế SỚM, chưa đẩy orders.status lên 'assigned' vội — xem ghi chú migration ở trên). Giữ
 -- nguyên hành vi cũ hệt trước đây nếu gọi không truyền 2 tham số mới (mặc định NULL/false).
+-- Postgres cho phép NHIỀU HÀM cùng tên khác chữ ký tham số (overload) — CREATE OR REPLACE chỉ
+-- thay thế khi khớp ĐÚNG chữ ký cũ, thêm tham số mới sẽ tạo ra 1 overload THỨ 2 thay vì thay thế
+-- (đã xác nhận qua thực tế: chạy migration bị lỗi "function name assign_driver is not unique").
+-- Phải DROP tường minh chữ ký 5 tham số cũ (hofa-db/98_backup_driver_pool.sql) trước, đảm bảo
+-- CHỈ CÒN 1 bản — nếu không, chỗ nào gọi RPC theo kiểu cũ (không truyền 2 tham số mới) sẽ vẫn
+-- trúng bản CŨ, bỏ lỡ hẳn logic pickup_eta_minutes/defer_order_status.
+DROP FUNCTION IF EXISTS assign_driver(UUID, UUID, NUMERIC, INTEGER, INTEGER);
+
 CREATE OR REPLACE FUNCTION assign_driver(
   p_order_id            UUID,
   p_driver_id           UUID,
@@ -98,7 +106,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-COMMENT ON FUNCTION assign_driver IS
+COMMENT ON FUNCTION assign_driver(UUID, UUID, NUMERIC, INTEGER, INTEGER, INTEGER, BOOLEAN) IS
   'Gán tài xế cho đơn — tài xế thường phải đang online mới gán được; tài xế dự phòng
    (is_backup_driver=true) được gán BẤT KỂ trạng thái nào và không bị chuyển sang busy, giữ
    nguyên trạng thái hiện tại để luôn sẵn sàng nhận thêm đơn khác. p_pickup_eta_minutes = ETA
