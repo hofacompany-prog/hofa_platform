@@ -22,12 +22,10 @@ class PushService {
   Future<void> init(GlobalKey<NavigatorState> navigatorKey) async {
     _navigatorKey = navigatorKey;
 
-    await FirebaseMessaging.instance.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
-    );
-
+    // KHÔNG tự xin quyền thông báo ở đây nữa — trước đây gọi requestPermission() vô điều kiện
+    // mỗi lần mở app khiến trình duyệt hỏi lại liên tục. Chỉ đăng ký token nếu quyền ĐÃ được
+    // cấp từ trước; muốn bật thì admin tự bấm nút "Bật thông báo" (_AdminDevicesTab, gọi
+    // requestAndRegister()).
     await _registerTokenIfLoggedIn();
     FirebaseMessaging.instance.onTokenRefresh.listen(
       (_) => _registerTokenIfLoggedIn(),

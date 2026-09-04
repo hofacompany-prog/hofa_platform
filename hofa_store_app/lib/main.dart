@@ -66,7 +66,15 @@ class _HofaStoreAppState extends ConsumerState<HofaStoreApp> {
   // AppUpdateService, xem core/app_update_service.dart.
   Future<void> _checkNativeUpdate() async {
     if (!mounted) return;
-    final context = navigatorKey.currentContext;
+    // navigatorKey.currentContext thường vẫn null ngay lúc khung hình đầu tiên vừa vẽ xong
+    // (Navigator của MaterialApp.router chưa kịp gắn) — xác nhận qua debug thật, khiến bước
+    // kiểm tra ép cập nhật bị bỏ qua âm thầm mỗi lần. Thử lại tối đa 4s thay vì bỏ cuộc ngay.
+    BuildContext? context = navigatorKey.currentContext;
+    for (var i = 0; context == null && i < 20; i++) {
+      await Future.delayed(const Duration(milliseconds: 200));
+      if (!mounted) return;
+      context = navigatorKey.currentContext;
+    }
     if (context == null || !context.mounted) return;
     await AppUpdateService.checkForUpdate(context);
   }
