@@ -521,7 +521,7 @@ async function sweepEarlyDriverSearch() {
   if (settings.search_on_confirm) return { checked: 0, results: [] };
 
   const rows = await db.query(
-    `SELECT o.id FROM orders o
+    `SELECT o.id, d.declined_driver_ids FROM orders o
        JOIN merchants m ON m.id = o.merchant_id
        LEFT JOIN deliveries d ON d.order_id = o.id
       WHERE o.status IN ('confirmed', 'preparing')
@@ -538,7 +538,11 @@ async function sweepEarlyDriverSearch() {
 
   const results = [];
   for (const row of rows) {
-    const assigned = await offerToNearestDriver(row.id);
+    // THIẾU dòng này trước đây — quét lại mà không loại tài xế đã TỪ CHỐI (kể cả tài xế dự
+    // phòng), dẫn tới mời lại đúng người vừa từ chối ở vòng quét kế tiếp.
+    const assigned = await offerToNearestDriver(row.id, {
+      excludeDriverIds: row.declined_driver_ids || []
+    });
     if (!assigned) {
       await db.query(
         `UPDATE orders SET driver_search_attempts = driver_search_attempts + 1,
