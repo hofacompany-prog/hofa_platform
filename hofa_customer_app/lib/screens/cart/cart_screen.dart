@@ -5,6 +5,7 @@ import '../../core/format.dart';
 import '../../core/geo.dart';
 import '../../core/require_login.dart';
 import '../../models/cart_item.dart';
+import '../../models/merchant_fee_tier.dart';
 import '../../providers/app_providers.dart';
 import '../../providers/cart_provider.dart';
 import '../../widgets/network_image_box.dart';
@@ -17,8 +18,9 @@ class CartScreen extends ConsumerWidget {
   /// để xem trước ở giỏ hàng, chưa chắc đúng số tiền sẽ tính vào đơn thật vì khách có thể
   /// đổi sang địa chỉ khác ở màn thanh toán (xem checkout_screen.dart, nơi phí ship được
   /// tính lại theo đúng địa chỉ đã chọn và thật sự cộng vào Tổng cộng). Trả về null nếu
-  /// chưa đủ dữ liệu để ước tính (chưa có địa chỉ, thiếu toạ độ chi nhánh...).
-  int? _estimatedShippingFee(WidgetRef ref, CartState cart) {
+  /// chưa đủ dữ liệu để ước tính (chưa có địa chỉ, thiếu toạ độ chi nhánh...). [subtotal]
+  /// truyền vào ngoài (thay vì tự đọc cart.subtotal) để dùng đúng giá ĐÃ CỘNG % mua hộ khi có.
+  int? _estimatedShippingFee(WidgetRef ref, CartState cart, int subtotal) {
     final branchId = cart.branchId;
     if (branchId == null) return null;
     final settings = ref.watch(shippingFeeSettingsProvider).valueOrNull;
@@ -40,7 +42,7 @@ class CartScreen extends ConsumerWidget {
       address.latitude!,
       address.longitude!,
     );
-    return settings.estimate(distanceKm, orderAmount: cart.subtotal);
+    return settings.estimate(distanceKm, orderAmount: subtotal);
   }
 
   Future<void> _editToppings(
@@ -140,7 +142,40 @@ class CartScreen extends ConsumerWidget {
     // Giỏ chỉ chứa 1 hình thức bán tại 1 thời điểm (xem CartNotifier.belongsToCurrentCart)
     // — món đặt trước/bán sỉ hiển thị ở tab "Đặt trước", không lặp lại ở đây.
     final isInstantCart = !cart.isEmpty && cart.salesModel == 'instant';
-    final shippingFee = isInstantCart ? _estimatedShippingFee(ref, cart) : null;
+
+    // Cửa hàng mua hộ: giá hiển thị ở giỏ hàng cũng cộng % theo đúng bậc của CẢ GIỎ (tổng giá
+    // trị/số lượng các món cùng cửa hàng này) — khớp với màn thanh toán, không chỉ tính ở đó
+    // nữa. Xem hofa-db/108_buy_on_behalf_price_fold_and_small_order_fee.sql.
+    final merchant = cart.merchantId == null
+        ? null
+        : ref.watch(merchantDetailProvider(cart.merchantId!)).valueOrNull;
+    final feeTiers = (merchant != null && merchant.isBuyOnBehalf)
+        ? ref.watch(merchantFeeTiersProvider(cart.merchantId!)).valueOrNull ??
+              const <MerchantFeeTier>[]
+        : const <MerchantFeeTier>[];
+    final buyOnBehalfTier = (merchant != null && merchant.isBuyOnBehalf)
+        ? matchBuyOnBehalfTier(
+            feeTiers,
+            merchant.buyOnBehalfFeeBasis == 'value'
+                ? cart.items.fold<int>(
+                    0,
+                    (sum, i) =>
+                        sum + (i.basePrice + i.toppingsTotal) * i.quantity,
+                  )
+                : cart.items.fold<int>(0, (sum, i) => sum + i.quantity),
+          )
+        : null;
+    int displayUnitPrice(CartItem i) => (merchant != null && merchant.isBuyOnBehalf)
+        ? markedUpUnitPrice(i.basePrice + i.toppingsTotal, buyOnBehalfTier)
+        : i.unitPrice + i.toppingsTotal;
+    int displayLineTotal(CartItem i) => displayUnitPrice(i) * i.quantity;
+    final displaySubtotal = (merchant != null && merchant.isBuyOnBehalf)
+        ? cart.items.fold<int>(0, (sum, i) => sum + displayLineTotal(i))
+        : cart.subtotal;
+
+    final shippingFee = isInstantCart
+        ? _estimatedShippingFee(ref, cart, displaySubtotal)
+        : null;
 
     return Scaffold(
       appBar: AppBar(
@@ -226,9 +261,7 @@ class CartScreen extends ConsumerWidget {
                                       ),
                                     const SizedBox(height: 4),
                                     Text(
-                                      formatVnd(
-                                        item.unitPrice + item.toppingsTotal,
-                                      ),
+                                      formatVnd(displayUnitPrice(item)),
                                       style: TextStyle(
                                         color: theme.colorScheme.primary,
                                       ),
@@ -278,7 +311,7 @@ class CartScreen extends ConsumerWidget {
                                     ],
                                   ),
                                   Text(
-                                    formatVnd(item.lineTotal),
+                                    formatVnd(displayLineTotal(item)),
                                     style: const TextStyle(
                                       fontWeight: FontWeight.w600,
                                     ),
@@ -318,7 +351,7 @@ class CartScreen extends ConsumerWidget {
                                 style: theme.textTheme.bodySmall,
                               ),
                               Text(
-                                formatVnd(cart.subtotal),
+                                formatVnd(displaySubtotal),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                                 style: theme.textTheme.titleMedium?.copyWith(
