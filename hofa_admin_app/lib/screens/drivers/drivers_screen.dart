@@ -440,6 +440,8 @@ class _DriversScreenState extends ConsumerState<DriversScreen>
               backupPoolEnabled: value,
               searchBeforeReadyMinutes: s.searchBeforeReadyMinutes,
               searchOnConfirm: s.searchOnConfirm,
+              maxBatchOrders: s.maxBatchOrders,
+              maxBatchDetourMinutes: s.maxBatchDetourMinutes,
             ),
           );
       ref.invalidate(driverDispatchSettingsProvider);

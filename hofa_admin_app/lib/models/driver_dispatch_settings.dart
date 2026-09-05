@@ -16,6 +16,12 @@ class DriverDispatchSettings {
   final int searchBeforeReadyMinutes;
   // "Tối đa" — tìm tài xế NGAY lúc cửa hàng xác nhận đơn, bỏ qua hẳn searchBeforeReadyMinutes.
   final bool searchOnConfirm;
+  // Số đơn tối đa 1 tài xế được chạy cùng lúc (ghép đơn) — 1 = TẮT HẲN tính năng ghép. Xem
+  // server/src/batchDispatch.js, hofa-db/107_order_batching.sql.
+  final int maxBatchOrders;
+  // Số phút tài xế được phép đi thêm (so với chỉ chạy đơn đang có một mình) để nhận thêm 1 đơn
+  // ghép — vượt ngưỡng này thì không ghép dù vẫn có 1 thứ tự đi được.
+  final int maxBatchDetourMinutes;
 
   DriverDispatchSettings({
     this.id,
@@ -24,6 +30,8 @@ class DriverDispatchSettings {
     this.backupPoolEnabled = false,
     this.searchBeforeReadyMinutes = 5,
     this.searchOnConfirm = false,
+    this.maxBatchOrders = 1,
+    this.maxBatchDetourMinutes = 10,
   });
 
   factory DriverDispatchSettings.fromJson(Map<String, dynamic> json) =>
@@ -36,6 +44,9 @@ class DriverDispatchSettings {
         searchBeforeReadyMinutes:
             (json['search_before_ready_minutes'] as num?)?.toInt() ?? 5,
         searchOnConfirm: json['search_on_confirm'] as bool? ?? false,
+        maxBatchOrders: (json['max_batch_orders'] as num?)?.toInt() ?? 1,
+        maxBatchDetourMinutes:
+            (json['max_batch_detour_minutes'] as num?)?.toInt() ?? 10,
       );
 
   /// Mặc định dùng khi server chưa có dòng cấu hình nào (chưa từng chạy migration).
@@ -45,6 +56,8 @@ class DriverDispatchSettings {
     backupPoolEnabled: false,
     searchBeforeReadyMinutes: 5,
     searchOnConfirm: false,
+    maxBatchOrders: 1,
+    maxBatchDetourMinutes: 10,
   );
 
   Map<String, dynamic> toJson() => {
@@ -53,5 +66,7 @@ class DriverDispatchSettings {
     'backup_pool_enabled': backupPoolEnabled,
     'search_before_ready_minutes': searchBeforeReadyMinutes,
     'search_on_confirm': searchOnConfirm,
+    'max_batch_orders': maxBatchOrders,
+    'max_batch_detour_minutes': maxBatchDetourMinutes,
   };
 }

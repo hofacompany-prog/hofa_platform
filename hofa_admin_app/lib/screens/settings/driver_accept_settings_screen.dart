@@ -26,6 +26,8 @@ class _DriverAcceptSettingsScreenState
   final _rescanIntervalCtrl = TextEditingController();
   final _maxRescanAttemptsCtrl = TextEditingController();
   final _searchBeforeReadyCtrl = TextEditingController();
+  final _maxBatchOrdersCtrl = TextEditingController();
+  final _maxBatchDetourCtrl = TextEditingController();
   final _pickupRadiusCtrl = TextEditingController();
   bool _initialized = false;
   bool _dispatchInitialized = false;
@@ -44,6 +46,8 @@ class _DriverAcceptSettingsScreenState
     _rescanIntervalCtrl.dispose();
     _maxRescanAttemptsCtrl.dispose();
     _searchBeforeReadyCtrl.dispose();
+    _maxBatchOrdersCtrl.dispose();
+    _maxBatchDetourCtrl.dispose();
     _pickupRadiusCtrl.dispose();
     super.dispose();
   }
@@ -60,6 +64,8 @@ class _DriverAcceptSettingsScreenState
     _searchBeforeReadyCtrl.text = s.searchBeforeReadyMinutes.toString();
     _searchOnConfirm = s.searchOnConfirm;
     _backupPoolEnabled = s.backupPoolEnabled;
+    _maxBatchOrdersCtrl.text = s.maxBatchOrders.toString();
+    _maxBatchDetourCtrl.text = s.maxBatchDetourMinutes.toString();
   }
 
   void _fillPickupRadiusFrom(PickupProximitySettings s) {
@@ -98,6 +104,8 @@ class _DriverAcceptSettingsScreenState
     final interval = int.tryParse(_rescanIntervalCtrl.text.trim());
     final maxAttempts = int.tryParse(_maxRescanAttemptsCtrl.text.trim());
     final searchBeforeReady = int.tryParse(_searchBeforeReadyCtrl.text.trim());
+    final maxBatchOrders = int.tryParse(_maxBatchOrdersCtrl.text.trim());
+    final maxBatchDetour = int.tryParse(_maxBatchDetourCtrl.text.trim());
     if (interval == null || interval <= 0) {
       _showError('Thời gian quét lại không hợp lệ');
       return;
@@ -108,6 +116,14 @@ class _DriverAcceptSettingsScreenState
     }
     if (searchBeforeReady == null || searchBeforeReady < 0) {
       _showError('Số phút tìm tài xế sớm không hợp lệ');
+      return;
+    }
+    if (maxBatchOrders == null || maxBatchOrders < 1) {
+      _showError('Số đơn ghép tối đa không hợp lệ');
+      return;
+    }
+    if (maxBatchDetour == null || maxBatchDetour < 0) {
+      _showError('Số phút đi thêm tối đa khi ghép không hợp lệ');
       return;
     }
 
@@ -123,6 +139,8 @@ class _DriverAcceptSettingsScreenState
               backupPoolEnabled: _backupPoolEnabled,
               searchBeforeReadyMinutes: searchBeforeReady,
               searchOnConfirm: _searchOnConfirm,
+              maxBatchOrders: maxBatchOrders,
+              maxBatchDetourMinutes: maxBatchDetour,
             ),
           );
       ref.invalidate(driverDispatchSettingsProvider);
@@ -363,6 +381,33 @@ class _DriverAcceptSettingsScreenState
                                         value: _searchOnConfirm,
                                         onChanged: (v) =>
                                             setState(() => _searchOnConfirm = v),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                _SectionCard(
+                                  title: 'Ghép đơn',
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      _NumberField(
+                                        controller: _maxBatchOrdersCtrl,
+                                        label: 'Số đơn tối đa 1 tài xế chạy cùng lúc',
+                                        helper:
+                                            'VD 2 — khi không tìm được tài xế nào rảnh hoàn '
+                                            'toàn, thử ghép đơn mới vào tài xế đang chạy đơn '
+                                            'khác (chưa lấy hàng) nếu lộ trình hợp lý. Để 1 = '
+                                            'TẮT HẲN, không ghép gì cả.',
+                                      ),
+                                      const SizedBox(height: 12),
+                                      _NumberField(
+                                        controller: _maxBatchDetourCtrl,
+                                        label: 'Số phút đi thêm tối đa khi ghép',
+                                        helper:
+                                            'VD 10 — tài xế phải đi thêm nhiều hơn số phút này '
+                                            'so với chỉ chạy đơn đang có một mình thì KHÔNG '
+                                            'ghép, dù vẫn có 1 lộ trình đi được.',
                                       ),
                                     ],
                                   ),

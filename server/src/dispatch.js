@@ -1,6 +1,7 @@
 const db = require('./db');
 const { routeDistanceKm, routeDistancesKm } = require('./routing');
 const push = require('./push');
+const batchDispatch = require('./batchDispatch');
 
 const AVG_SPEED_KMH = 25; // giả định tốc độ trung bình nội thành, dùng để ước lượng ETA
 
@@ -47,6 +48,29 @@ async function currentDriverAcceptSettings() {
 async function currentDriverDispatchSettings() {
   const row = await db.queryOne('SELECT * FROM driver_dispatch_settings ORDER BY updated_at DESC LIMIT 1');
   return row || { rescan_interval_seconds: 60, max_rescan_attempts: 10, backup_pool_enabled: false };
+}
+
+/** Trả tài xế về 'online' — TRỪ KHI họ còn đơn ghép khác đang hoạt động (chưa delivered/failed/
+ * returned), auto excludeDeliveryId chính là chuyến vừa kết thúc/bị huỷ (không tính nó khi đếm
+ * "đơn khác"). Chỉ đổi nếu đang 'busy' (tài xế dự phòng không bao giờ 'busy', không đụng gì tới
+ * họ). Dùng ở mọi chỗ từng làm `UPDATE drivers SET status='online' WHERE status='busy'` không
+ * điều kiện — thiếu bước này thì 1 tài xế đang ghép ≥2 đơn mà 1 đơn bị từ chối/huỷ giữa chừng sẽ
+ * bị trả nhầm về 'online' trong lúc đơn kia vẫn đang chạy dở, xem hofa-db/107_order_batching.sql. */
+async function releaseDriverIfNoOtherActive(driverId, excludeDeliveryId) {
+  // excludeDeliveryId có thể là NULL (đã xoá thẳng dòng deliveries trước khi gọi hàm này, không
+  // còn gì để loại trừ) — "$2::uuid IS NULL OR id <> $2" xử lý đúng cả 2 trường hợp, KHÔNG được
+  // để "id <> NULL" trần trụi (luôn NULL trong SQL, âm thầm loại bỏ MỌI dòng khỏi subquery, khiến
+  // NOT EXISTS luôn đúng và mất hẳn tác dụng bảo vệ).
+  await db.query(
+    `UPDATE drivers SET status = 'online'
+      WHERE id = $1 AND status = 'busy'
+        AND NOT EXISTS (
+          SELECT 1 FROM deliveries
+           WHERE driver_id = $1 AND ($2::uuid IS NULL OR id <> $2)
+             AND status NOT IN ('delivered', 'failed', 'returned')
+        )`,
+    [driverId, excludeDeliveryId ?? null]
+  );
 }
 
 /** [minViTrenBalance] — tài xế phải có Ví trên (wallet='cod', xem hofa-db/69_driver_wallet_vi_
@@ -97,17 +121,21 @@ async function findNearestOnlineDriver(
  *   chưa trượt thì sweepExpiredOffers() tự NHẬN hộ (autoAcceptExpiredOffer).
  * - auto_accept=false: accept_window dài hơn (manual_accept_sweep_seconds) — hết giờ thì
  *   reassignAfterDecline() chuyển cho tài xế gần nhất kế tiếp, y hệt khi tài xế tự bấm Từ chối.
- * Không tìm được tài xế THƯỜNG nào (is_backup_driver=false, phải đang online) VÀ (đã bật
- * driver_dispatch_settings.backup_pool_enabled HOẶC gọi với forceBackupPool=true) thì thử tiếp
- * nhóm "tài xế dự phòng" (is_backup_driver=true) — nhóm này được mời/gán BẤT KỂ đang ở trạng
- * thái nào (offline/busy/on_break/online đều được, xem hofa-db/99_backup_driver_any_status.sql)
- * và nhận không giới hạn số đơn cùng lúc (xem hofa-db/98_backup_driver_pool.sql) trước khi bỏ
- * cuộc hẳn. [forceBackupPool] dùng cho admin chủ
- * động bấm "Quét tài xế" ở 1 đơn cụ thể (POST /admin/orders/:id/rescan-driver) — luôn thử cả
- * nhóm dự phòng bất kể công tắc toàn sàn, vì đây là hành động THỦ CÔNG của admin cho đúng đơn
- * đang kẹt, khác với dispatch TỰ ĐỘNG (offerToNearestDriver gọi từ orders.js/sweepDriverSearch)
- * vẫn phải tôn trọng công tắc để không tự ý dùng dự phòng ngoài ý muốn admin.
- * Trả về { delivery, driver } hoặc null nếu không còn tài xế nào (kể cả dự phòng) phù hợp.
+ * Không tìm được tài xế THƯỜNG nào rảnh hoàn toàn (is_backup_driver=false, phải đang online) thì
+ * thử GHÉP đơn vào 1 tài xế thường đang chạy đơn khác nhưng CHƯA lấy hàng (batchDispatch.
+ * findBatchableDriver, xem hofa-db/107_order_batching.sql — chỉ thật sự ghép nếu admin đã bật
+ * driver_dispatch_settings.max_batch_orders > 1 và lộ trình gộp không làm tài xế đi vòng thêm quá
+ * max_batch_detour_minutes). Vẫn không ghép được VÀ (đã bật driver_dispatch_settings.
+ * backup_pool_enabled HOẶC gọi với forceBackupPool=true) thì thử nhóm "tài xế dự phòng"
+ * (is_backup_driver=true) — nhóm này được mời/gán BẤT KỂ đang ở trạng thái nào (offline/busy/
+ * on_break/online đều được, xem hofa-db/99_backup_driver_any_status.sql), ưu tiên dự phòng đang
+ * RẢNH (0 đơn) trước, hết dự phòng rảnh thì thử GHÉP tiếp vào dự phòng đang chạy sẵn đơn khác
+ * (cùng bài kiểm tra lộ trình như tài xế thường) trước khi bỏ cuộc hẳn. [forceBackupPool] dùng
+ * cho admin chủ động bấm "Quét tài xế" ở 1 đơn cụ thể (POST /admin/orders/:id/rescan-driver) —
+ * luôn thử cả nhóm dự phòng bất kể công tắc toàn sàn, vì đây là hành động THỦ CÔNG của admin cho
+ * đúng đơn đang kẹt, khác với dispatch TỰ ĐỘNG (offerToNearestDriver gọi từ orders.js/
+ * sweepDriverSearch) vẫn phải tôn trọng công tắc để không tự ý dùng dự phòng ngoài ý muốn admin.
+ * Trả về { delivery, driver } hoặc null nếu không còn tài xế nào (kể cả ghép/dự phòng) phù hợp.
  */
 async function offerToNearestDriver(
   orderId,
@@ -123,6 +151,11 @@ async function offerToNearestDriver(
   let driver = await findNearestOnlineDriver(branch?.latitude ?? null, branch?.longitude ?? null, excludeDriverIds, {
     minViTrenBalance: order.total_amount
   });
+  let batchMatch = null; // { driver, pickupEtaMinutes } — chỉ khác null khi gán qua GHÉP đơn
+  if (!driver) {
+    batchMatch = await batchDispatch.findBatchableDriver(order, branch, { excludeDriverIds });
+    driver = batchMatch?.driver ?? null;
+  }
   if (!driver) {
     const settings = await currentDriverDispatchSettings();
     if (forceBackupPool || settings.backup_pool_enabled) {
@@ -130,6 +163,10 @@ async function offerToNearestDriver(
         minViTrenBalance: order.total_amount,
         backupPool: true
       });
+      if (!driver) {
+        batchMatch = await batchDispatch.findBatchableDriver(order, branch, { backupPool: true, excludeDriverIds });
+        driver = batchMatch?.driver ?? null;
+      }
     }
   }
   if (!driver) return null;
@@ -140,11 +177,17 @@ async function offerToNearestDriver(
       : null;
   // findNearestOnlineDriver đã tính khoảng cách chi nhánh↔tài xế (driver._distance) để chọn
   // người gần nhất — dùng lại luôn làm ETA "tới cửa hàng" thay vì tính lại, khác distanceKm ở
-  // trên (cả chuyến chi nhánh→khách, dùng tính driver_fee).
+  // trên (cả chuyến chi nhánh→khách, dùng tính driver_fee). Đơn ghép thì batchDispatch đã tự
+  // tính sẵn pickupEtaMinutes theo đúng lộ trình gộp, dùng luôn giá trị đó thay vì driver._distance
+  // (không có ý nghĩa gì trong trường hợp ghép, tài xế không phải "gần nhất" theo nghĩa thường).
   const pickupDistanceKm = driver._distance ?? null;
   const pickupEtaMinutes =
-    pickupDistanceKm != null ? Math.max(1, Math.round((pickupDistanceKm / AVG_SPEED_KMH) * 60)) : null;
-  return assignDriverAndNotify(order, driver, distanceKm, { pickupEtaMinutes });
+    batchMatch?.pickupEtaMinutes ??
+    (pickupDistanceKm != null ? Math.max(1, Math.round((pickupDistanceKm / AVG_SPEED_KMH) * 60)) : null);
+  // Ghép cho tài xế THƯỜNG đang 'busy' cần p_allow_busy=true để RPC không chặn (tài xế dự phòng
+  // vốn đã bỏ qua điều kiện status, allowBusy không có tác dụng gì thêm với họ).
+  const allowBusy = !!batchMatch && !driver.is_backup_driver;
+  return assignDriverAndNotify(order, driver, distanceKm, { pickupEtaMinutes, allowBusy });
 }
 
 /** Gán CHÍNH XÁC 1 tài xế khách đã chỉ định (đơn mua hộ — khách tự chọn ở checkout hoặc lúc
@@ -181,12 +224,14 @@ async function offerToSpecificDriver(orderId, driverId) {
 
 /** Gán tài xế cụ thể đã xác định sẵn (order + driver + khoảng cách) — gọi RPC assign_driver,
  * chốt accept_deadline bằng now() của Postgres, gửi push MỜI nhận đơn (chưa phải xác nhận).
- * Dùng chung cho cả offerToNearestDriver (tự tìm gần nhất) lẫn offerToSpecificDriver (khách tự
- * chọn tài xế). [pickupEtaMinutes] ETA tài xế tới CỬA HÀNG (khác etaMinutes tính bên trong = ETA
- * cả chuyến, dùng tính driver_fee). LƯU Ý: gọi hàm này KHÔNG làm orders.status đổi — chỉ khi tài
- * xế thật sự bấm nhận (deliveries.status → 'accepted') thì update_delivery_status (RPC) mới đẩy
+ * Dùng chung cho cả offerToNearestDriver (tự tìm gần nhất/ghép) lẫn offerToSpecificDriver (khách
+ * tự chọn tài xế). [pickupEtaMinutes] ETA tài xế tới CỬA HÀNG (khác etaMinutes tính bên trong =
+ * ETA cả chuyến, dùng tính driver_fee). [allowBusy] true = cho phép gán 1 tài xế THƯỜNG đang
+ * 'busy' (ghép đơn, xem batchDispatch.js) — RPC assign_driver sẽ RAISE nếu tài xế thường đang
+ * busy mà không truyền cờ này. LƯU Ý: gọi hàm này KHÔNG làm orders.status đổi — chỉ khi tài xế
+ * thật sự bấm nhận (deliveries.status → 'accepted') thì update_delivery_status (RPC) mới đẩy
  * orders.status sang 'assigned', xem hofa-db/106_driver_confirm_before_assigned.sql. */
-async function assignDriverAndNotify(order, driver, distanceKm, { pickupEtaMinutes = null } = {}) {
+async function assignDriverAndNotify(order, driver, distanceKm, { pickupEtaMinutes = null, allowBusy = false } = {}) {
   const driverFee = await computeDriverFee(distanceKm ?? 0);
   const etaMinutes = distanceKm != null ? Math.max(1, Math.round((distanceKm / AVG_SPEED_KMH) * 60)) : null;
 
@@ -196,7 +241,8 @@ async function assignDriverAndNotify(order, driver, distanceKm, { pickupEtaMinut
     p_distance_km: distanceKm,
     p_eta_minutes: etaMinutes,
     p_driver_fee: driverFee,
-    p_pickup_eta_minutes: pickupEtaMinutes
+    p_pickup_eta_minutes: pickupEtaMinutes,
+    p_allow_busy: allowBusy
   });
   // Gán được rồi — xoá mọi dấu vết đang "chờ quét tìm tài xế" của sweepDriverSearch (nếu đơn
   // này từng bị kẹt), không riêng gì lúc chính sweep đó gán được.
@@ -296,12 +342,14 @@ async function remindPendingDriverOffers() {
 }
 
 /** Tài xế từ chối, hoặc hết hạn accept_deadline mà TẮT "Tự động nhận đơn" — trả tài xế cũ về
- * online rồi thử gán tiếp cho tài xế gần nhất kế tiếp (loại các tài xế đã từ chối). */
+ * online (TRỪ KHI họ còn đơn ghép khác đang chạy, xem releaseDriverIfNoOtherActive —
+ * hofa-db/107_order_batching.sql) rồi thử gán tiếp cho tài xế gần nhất kế tiếp (loại các tài xế
+ * đã từ chối). */
 async function reassignAfterDecline(deliveryId) {
   const delivery = await db.queryOne('SELECT * FROM deliveries WHERE id = $1', [deliveryId]);
   if (!delivery || !delivery.driver_id) return null;
 
-  await db.query(`UPDATE drivers SET status = 'online' WHERE id = $1 AND status = 'busy'`, [delivery.driver_id]);
+  await releaseDriverIfNoOtherActive(delivery.driver_id, deliveryId);
   const declined = [...new Set([...(delivery.declined_driver_ids || []), delivery.driver_id])];
   await db.query(
     `UPDATE deliveries SET driver_id = NULL, status = 'pending', accept_deadline = NULL, declined_driver_ids = $1 WHERE id = $2`,
@@ -319,7 +367,7 @@ async function repickNeeded(deliveryId, reason) {
   const delivery = await db.queryOne('SELECT * FROM deliveries WHERE id = $1', [deliveryId]);
   if (!delivery || !delivery.driver_id) return null;
 
-  await db.query(`UPDATE drivers SET status = 'online' WHERE id = $1 AND status = 'busy'`, [delivery.driver_id]);
+  await releaseDriverIfNoOtherActive(delivery.driver_id, deliveryId);
   const declined = [...new Set([...(delivery.declined_driver_ids || []), delivery.driver_id])];
   await db.query(
     `UPDATE deliveries SET driver_id = NULL, status = 'pending', accept_deadline = NULL, declined_driver_ids = $1 WHERE id = $2`,
@@ -537,5 +585,6 @@ module.exports = {
   notifyDriverOrderReady,
   remindPendingDriverOffers,
   computeDriverFee,
-  currentDriverDispatchSettings
+  currentDriverDispatchSettings,
+  releaseDriverIfNoOtherActive
 };

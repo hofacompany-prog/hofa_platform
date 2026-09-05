@@ -57,4 +57,36 @@ async function routeDistancesKm(originLat, originLng, destinations) {
   }
 }
 
-module.exports = { routeDistanceKm, routeDistancesKm };
+/** Ma trận khoảng cách đường đi thực tế (km) giữa MỌI CẶP trong 1 danh sách điểm bất kỳ — khác
+ * routeDistancesKm (cố định 1 gốc→nhiều đích), dùng khi cần biết khoảng cách qua lại giữa nhiều
+ * điểm cùng lúc (vd đánh giá thứ tự lộ trình khi ghép đơn cho tài xế, xem
+ * server/src/batchDispatch.js). points: [{lat, lng}, ...] — trả về mảng 2 chiều distances[i][j] =
+ * km từ points[i] tới points[j] (đường chéo distances[i][i] luôn 0), CÙNG THỨ TỰ với points. Phần
+ * tử nào OSRM báo không tới được thì rớt về haversine riêng cho đúng cặp đó; lỗi cả request thì
+ * rớt về haversine cho toàn bộ ma trận. */
+async function routeMatrixKm(points) {
+  const n = points.length;
+  if (n === 0) return [];
+  const haversineMatrix = () =>
+    points.map((a) => points.map((b) => haversineKm(a.lat, a.lng, b.lat, b.lng)));
+  try {
+    const coords = points.map((p) => `${p.lng},${p.lat}`).join(';');
+    const idx = points.map((_, i) => i).join(';');
+    const url = `${OSRM_BASE}/table/v1/driving/${coords}?sources=${idx}&destinations=${idx}&annotations=distance`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(TIMEOUT_MS) });
+    if (!res.ok) throw new Error(`OSRM HTTP ${res.status}`);
+    const data = await res.json();
+    const rows = data?.distances;
+    if (!Array.isArray(rows) || rows.length !== n) throw new Error('OSRM: thiếu/sai kích thước distances');
+    return rows.map((row, i) =>
+      row.map((meters, j) =>
+        typeof meters === 'number' ? meters / 1000 : haversineKm(points[i].lat, points[i].lng, points[j].lat, points[j].lng)
+      )
+    );
+  } catch (err) {
+    console.error('[routing] routeMatrixKm lỗi, rớt về haversine cho cả ma trận:', err.message);
+    return haversineMatrix();
+  }
+}
+
+module.exports = { routeDistanceKm, routeDistancesKm, routeMatrixKm };

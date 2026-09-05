@@ -305,10 +305,13 @@ const ACTIVE_DELIVERY_STATUSES = ['pending', 'assigned', 'accepted', 'arrived_st
 
 /** Trả tài xế về 'online' nếu đang 'busy' vì đúng chuyến này — admin sửa/xoá tay bỏ qua RPC
  * update_delivery_status (không có side effect nào khác của RPC đó chạy ở đây, xem comment 2
- * route bên dưới), nên phải tự lo phần này để không kẹt tài xế "busy" mãi mãi. */
-async function releaseDriverIfBusy(driverId) {
+ * route bên dưới), nên phải tự lo phần này để không kẹt tài xế "busy" mãi mãi. Dùng lại
+ * dispatch.releaseDriverIfNoOtherActive (không tự viết UPDATE riêng) — TRỪ KHI tài xế còn đơn
+ * ghép khác đang chạy mới không trả (xem hofa-db/107_order_batching.sql), [excludeDeliveryId]
+ * là chính chuyến vừa sửa/xoá, không tính vào "đơn khác". */
+async function releaseDriverIfBusy(driverId, excludeDeliveryId) {
   if (!driverId) return;
-  await db.query(`UPDATE drivers SET status = 'online' WHERE id = $1 AND status = 'busy'`, [driverId]);
+  await dispatch.releaseDriverIfNoOtherActive(driverId, excludeDeliveryId ?? null);
 }
 
 /** Toàn bộ chuyến giao hàng đang "sống" (chưa delivered/failed/returned) kèm tên tài xế + mã
@@ -385,7 +388,7 @@ router.patch('/admin/deliveries/:id/status', asyncHandler(async (req, res) => {
 
   const updated = await db.updateById('deliveries', req.params.id, { status: req.body.status });
   if (!ACTIVE_DELIVERY_STATUSES.includes(req.body.status)) {
-    await releaseDriverIfBusy(delivery.driver_id);
+    await releaseDriverIfBusy(delivery.driver_id, req.params.id);
   }
   res.json({ ok: true, data: updated });
 }));
@@ -397,7 +400,7 @@ router.delete('/admin/deliveries/:id', asyncHandler(async (req, res) => {
   const delivery = await db.findById('deliveries', req.params.id);
   if (!delivery) throw new ApiError('NOT_FOUND', 'Không tìm thấy chuyến giao hàng', 404);
   await db.deleteById('deliveries', req.params.id);
-  await releaseDriverIfBusy(delivery.driver_id);
+  await releaseDriverIfBusy(delivery.driver_id, req.params.id);
   res.json({ ok: true, data: { deleted: true } });
 }));
 
