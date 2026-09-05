@@ -37,16 +37,78 @@ const _stageShortLabels = {
   'delivered': 'Giao xong',
 };
 
-class DeliveryDetailScreen extends ConsumerStatefulWidget {
+/// Màn "đang giao" — hiện TOÀN BỘ chuyến đang chạy dở của tài xế (không chỉ riêng [deliveryId]
+/// được truyền lúc điều hướng tới đây), xếp chồng mỗi chuyến 1 khối (`_DeliveryProgressCard`)
+/// trên CÙNG 1 màn cuộn được. Khi tài xế được ghép thêm đơn (xem
+/// hofa-db/107_order_batching.sql) và bấm NHẬN, màn đang mở tự thêm khối mới ngay (deliveries
+/// status rời khỏi 'assigned') — không điều hướng đi đâu, đúng yêu cầu "cùng giao diện đó".
+/// [deliveryId] chỉ dùng làm fallback hiếm khi activeDeliveriesProvider chưa kịp tải/rỗng do
+/// race — mọi nơi điều hướng vào route này (`context.push('/deliveries/$id')`,
+/// core/push_service.dart, home_screen.dart) không cần sửa gì, màn đích tự hiện đúng danh sách
+/// đang chạy chứ không riêng đúng id được truyền vào URL.
+class DeliveryDetailScreen extends ConsumerWidget {
   final String deliveryId;
   const DeliveryDetailScreen({super.key, required this.deliveryId});
 
   @override
-  ConsumerState<DeliveryDetailScreen> createState() =>
-      _DeliveryDetailScreenState();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final active =
+        ref.watch(activeDeliveriesProvider).valueOrNull ?? const <Delivery>[];
+    // Loại lời mời CHƯA xác nhận (status='assigned') — đúng filter đã dùng ở
+    // _OtherActiveDeliveriesSection (offer_screen.dart), lời mời mới luôn có màn /offer/:id
+    // riêng lo (xem pendingOfferIdProvider + router.dart), không lẫn vào đây.
+    final inProgress = active.where((d) => d.status != 'assigned').toList();
+    final ids = inProgress.isNotEmpty
+        ? inProgress.map((d) => d.id).toList()
+        : [deliveryId];
+
+    // Hết hẳn đơn đang chạy (giao/huỷ xong đơn CUỐI CÙNG) — tự về trang chủ, không cần tài xế tự
+    // bấm gì nữa (nút "Về trang chủ" trên từng khối trước đây đã bỏ, dễ gây hiểu lầm khi còn đơn
+    // khác chưa xong — xem _ActionArea bên dưới).
+    ref.listen(activeDeliveriesProvider, (previous, next) {
+      final prevInProgress = (previous?.valueOrNull ?? const <Delivery>[])
+          .where((d) => d.status != 'assigned');
+      final nextInProgress = (next.valueOrNull ?? const <Delivery>[]).where(
+        (d) => d.status != 'assigned',
+      );
+      if (prevInProgress.isNotEmpty && nextInProgress.isEmpty) {
+        context.go('/');
+      }
+    });
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          ids.length > 1 ? 'Đang giao (${ids.length} đơn)' : 'Chuyến giao hàng',
+        ),
+      ),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          for (var i = 0; i < ids.length; i++) ...[
+            if (i > 0) const SizedBox(height: 20),
+            _DeliveryProgressCard(deliveryId: ids[i]),
+          ],
+        ],
+      ),
+    );
+  }
 }
 
-class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
+/// 1 khối chi tiết chuyến giao — y hệt nội dung/logic màn DeliveryDetailScreen trước khi hỗ trợ
+/// ghép đơn (OTP, ảnh mua hộ, breakdown thu nhập, báo cáo sự cố...), chỉ khác không tự bọc
+/// Scaffold/AppBar riêng nữa (khung ngoài DeliveryDetailScreen lo phần đó, xếp N khối này chồng
+/// lên nhau khi có nhiều đơn đang chạy).
+class _DeliveryProgressCard extends ConsumerStatefulWidget {
+  final String deliveryId;
+  const _DeliveryProgressCard({required this.deliveryId});
+
+  @override
+  ConsumerState<_DeliveryProgressCard> createState() =>
+      _DeliveryProgressCardState();
+}
+
+class _DeliveryProgressCardState extends ConsumerState<_DeliveryProgressCard> {
   final _repo = DeliveryRepository();
   bool _busy = false;
   bool _loadingContext = false;
@@ -57,7 +119,7 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
   @override
   void initState() {
     super.initState();
-    // Chuyến này đổi trạng thái ở bất kỳ đâu thì màn chi tiết đang mở tự làm mới ngay.
+    // Chuyến này đổi trạng thái ở bất kỳ đâu thì khối đang mở tự làm mới ngay.
     _orderEventSub = PushService.instance.orderEventStream.listen((data) {
       if (!mounted || data['delivery_id'] != widget.deliveryId) return;
       ref.invalidate(deliveryProvider(widget.deliveryId));
@@ -145,7 +207,8 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
       );
       ref.invalidate(deliveryProvider(widget.deliveryId));
       // activeDeliveryProvider chỉ derive từ danh sách này — invalidate đúng provider gốc mới
-      // ép gọi lại API, cascade cập nhật cả activeDeliveryProvider lẫn UI đang watch danh sách.
+      // ép gọi lại API, cascade cập nhật cả activeDeliveryProvider lẫn UI đang watch danh sách
+      // (kể cả khung ngoài DeliveryDetailScreen, tự thêm/bớt khối đúng lúc).
       ref.invalidate(activeDeliveriesProvider);
     } catch (e) {
       if (mounted)
@@ -616,318 +679,329 @@ class _DeliveryDetailScreenState extends ConsumerState<DeliveryDetailScreen> {
     ref.watch(otpSettingsProvider);
     final theme = Theme.of(context);
 
-    return Scaffold(
-      appBar: AppBar(
-        // Nổi bật ngay dưới mã đơn (KHÔNG đặt cùng hàng — che mất/làm ellipsis mã đơn ở màn
-        // hẹp) — tài xế cần thấy ngay là đơn mua hộ (có thêm phí, xem
-        // hofa-db/79_driver_buy_on_behalf_fee_share.sql) mà không cần cuộn xuống đọc thẻ chi
-        // tiết mua hộ ở dưới.
-        toolbarHeight: deliveryAsync.valueOrNull?.isBuyOnBehalf == true ? 64 : kToolbarHeight,
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              _order != null ? 'Đơn ${_order!.orderCode}' : 'Chuyến giao hàng',
-              overflow: TextOverflow.ellipsis,
-            ),
-            if (deliveryAsync.valueOrNull?.isBuyOnBehalf == true)
-              Padding(
-                padding: const EdgeInsets.only(top: 3),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 3,
+    return Card(
+      elevation: 0,
+      color: theme.colorScheme.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: theme.colorScheme.outlineVariant),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: deliveryAsync.when(
+          loading: () => const Padding(
+            padding: EdgeInsets.symmetric(vertical: 24),
+            child: Center(child: CircularProgressIndicator()),
+          ),
+          error: (e, _) => Text('Lỗi: $e'),
+          data: (delivery) {
+            _loadContext(delivery.orderId);
+            final order = _order;
+            final branch = _branch;
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header riêng của khối này (mã đơn + nút báo sự cố/bản đồ) — thay cho AppBar
+                // dùng chung trước đây, vì mỗi khối là 1 đơn khác nhau (khác khách/chi nhánh).
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        _order != null
+                            ? 'Đơn ${_order!.orderCode}'
+                            : 'Chuyến giao hàng',
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (_order != null)
+                      IconButton(
+                        tooltip: 'Báo cáo sự cố',
+                        icon: const Icon(Icons.flag_outlined),
+                        onPressed: _busy ? null : () => _reportIssue(_order!.id),
+                      ),
+                    IconButton(
+                      tooltip: 'Bản đồ',
+                      icon: const Icon(Icons.map_outlined),
+                      onPressed: () =>
+                          context.push('/deliveries/${widget.deliveryId}/map'),
+                    ),
+                  ],
+                ),
+                if (delivery.isBuyOnBehalf)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.secondary,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        'MUA HỘ +PHÍ',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: theme.colorScheme.onSecondary,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 0.3,
+                        ),
+                      ),
+                    ),
                   ),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.secondary,
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    'MUA HỘ +PHÍ',
-                    style: theme.textTheme.labelSmall?.copyWith(
-                      color: theme.colorScheme.onSecondary,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 0.3,
+                if (_busy) const LinearProgressIndicator(),
+                const SizedBox(height: 8),
+                _StageStepper(status: delivery.status),
+                const SizedBox(height: 16),
+                if (delivery.isBuyOnBehalf && order != null)
+                  _BuyOnBehalfShoppingCard(order: order),
+                if (delivery.isBuyOnBehalf && order != null)
+                  const SizedBox(height: 12),
+                Card(
+                  elevation: 0,
+                  color: theme.colorScheme.surfaceContainerLow,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.storefront,
+                              color: theme.colorScheme.primary,
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                branch?.displayName ?? 'Đang tải...',
+                                style: theme.textTheme.titleSmall,
+                              ),
+                            ),
+                            if (branch != null)
+                              IconButton(
+                                icon: const Icon(Icons.directions),
+                                onPressed: () => launchDirections(
+                                  branch.latitude,
+                                  branch.longitude,
+                                ),
+                              ),
+                            if (branch?.phone != null)
+                              IconButton(
+                                icon: const Icon(Icons.call_outlined),
+                                onPressed: () => _call(branch!.phone!),
+                              ),
+                          ],
+                        ),
+                        if (branch != null)
+                          Padding(
+                            padding: const EdgeInsets.only(left: 32),
+                            child: Text(branch.fullLine),
+                          ),
+                      ],
                     ),
                   ),
                 ),
-              ),
-          ],
-        ),
-        actions: [
-          if (_order != null)
-            IconButton(
-              tooltip: 'Báo cáo sự cố',
-              icon: const Icon(Icons.flag_outlined),
-              onPressed: _busy ? null : () => _reportIssue(_order!.id),
-            ),
-          IconButton(
-            tooltip: 'Bản đồ',
-            icon: const Icon(Icons.map_outlined),
-            onPressed: () =>
-                context.push('/deliveries/${widget.deliveryId}/map'),
-          ),
-        ],
-      ),
-      body: deliveryAsync.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Lỗi: $e')),
-        data: (delivery) {
-          _loadContext(delivery.orderId);
-          final order = _order;
-          final branch = _branch;
-
-          return ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              if (_busy) const LinearProgressIndicator(),
-              const SizedBox(height: 8),
-              _StageStepper(status: delivery.status),
-              const SizedBox(height: 16),
-              if (delivery.isBuyOnBehalf && order != null)
-                _BuyOnBehalfShoppingCard(order: order),
-              if (delivery.isBuyOnBehalf && order != null)
                 const SizedBox(height: 12),
-              Card(
-                elevation: 0,
-                color: theme.colorScheme.surfaceContainerLow,
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
+                Card(
+                  elevation: 0,
+                  color: theme.colorScheme.surfaceContainerLow,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(Icons.flag, color: theme.colorScheme.secondary),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Khách hàng',
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color: theme.colorScheme.outline,
+                                    ),
+                                  ),
+                                  Text(
+                                    order?.shipRecipientName ?? 'Đang tải...',
+                                    style: theme.textTheme.titleSmall,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (order != null && order.shipLatitude != null)
+                              IconButton(
+                                icon: const Icon(Icons.directions),
+                                onPressed: () => launchDirections(
+                                  order.shipLatitude!,
+                                  order.shipLongitude!,
+                                ),
+                              ),
+                            if (order != null)
+                              IconButton(
+                                icon: const Icon(Icons.call_outlined),
+                                onPressed: () => _call(order.shipRecipientPhone),
+                              ),
+                            if (order != null &&
+                                isChatWindowOpen(
+                                  status: order.status,
+                                  deliveredAt: order.deliveredAt,
+                                  hoursAfterDelivered:
+                                      ref
+                                          .watch(chatSettingsProvider)
+                                          .valueOrNull
+                                          ?.hoursAfterDelivered ??
+                                      1,
+                                ))
+                              IconButton(
+                                icon: ChatBadgeIcon(
+                                  orderId: order.id,
+                                  channel: 'customer_driver',
+                                  icon: Icons.chat_bubble_outline,
+                                ),
+                                onPressed: () =>
+                                    context.push('/orders/${order.id}/chat'),
+                              ),
+                          ],
+                        ),
+                        if (order != null)
+                          Padding(
+                            padding: const EdgeInsets.only(left: 32),
+                            child: Text(order.shipFullAddress),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+                // Ghi chú địa điểm giao (mô tả nhà/cổng/gọi trước...) — trước đây chỉ hiện chữ xám
+                // nhỏ lẫn dưới địa chỉ, dễ bị tài xế lướt qua. Đổi thành khung màu in đậm, cùng kiểu
+                // với thẻ ghi chú đơn hàng bên dưới, đúng như bên app Cửa hàng/Khách hàng đang hiện.
+                if (order?.shipNote != null &&
+                    order!.shipNote!.trim().isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.primaryContainer.withValues(
+                          alpha: 0.5,
+                        ),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Icon(
-                            Icons.storefront,
+                            Icons.location_on_outlined,
+                            size: 18,
                             color: theme.colorScheme.primary,
                           ),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              branch?.displayName ?? 'Đang tải...',
-                              style: theme.textTheme.titleSmall,
-                            ),
-                          ),
-                          if (branch != null)
-                            IconButton(
-                              icon: const Icon(Icons.directions),
-                              onPressed: () => launchDirections(
-                                branch.latitude,
-                                branch.longitude,
+                              'Ghi chú địa điểm: ${order.shipNote}',
+                              style: TextStyle(
+                                color: theme.colorScheme.primary,
+                                fontWeight: FontWeight.bold,
                               ),
                             ),
-                          if (branch?.phone != null)
-                            IconButton(
-                              icon: const Icon(Icons.call_outlined),
-                              onPressed: () => _call(branch!.phone!),
-                            ),
+                          ),
                         ],
                       ),
-                      if (branch != null)
-                        Padding(
-                          padding: const EdgeInsets.only(left: 32),
-                          child: Text(branch.fullLine),
-                        ),
-                    ],
+                    ),
                   ),
-                ),
-              ),
-              const SizedBox(height: 12),
-              Card(
-                elevation: 0,
-                color: theme.colorScheme.surfaceContainerLow,
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
+                if (order?.customerNote != null &&
+                    order!.customerNote!.trim().isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 12),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.secondaryContainer.withValues(
+                          alpha: 0.5,
+                        ),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Icon(Icons.flag, color: theme.colorScheme.secondary),
+                          Icon(
+                            Icons.info_outline,
+                            size: 18,
+                            color: theme.colorScheme.secondary,
+                          ),
                           const SizedBox(width: 8),
                           Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Khách hàng',
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    color: theme.colorScheme.outline,
-                                  ),
-                                ),
-                                Text(
-                                  order?.shipRecipientName ?? 'Đang tải...',
-                                  style: theme.textTheme.titleSmall,
-                                ),
-                              ],
+                            child: Text(
+                              order.customerNote!,
+                              style: TextStyle(
+                                color: theme.colorScheme.secondary,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
-                          if (order != null && order.shipLatitude != null)
-                            IconButton(
-                              icon: const Icon(Icons.directions),
-                              onPressed: () => launchDirections(
-                                order.shipLatitude!,
-                                order.shipLongitude!,
-                              ),
-                            ),
-                          if (order != null)
-                            IconButton(
-                              icon: const Icon(Icons.call_outlined),
-                              onPressed: () => _call(order.shipRecipientPhone),
-                            ),
-                          if (order != null &&
-                              isChatWindowOpen(
-                                status: order.status,
-                                deliveredAt: order.deliveredAt,
-                                hoursAfterDelivered:
-                                    ref
-                                        .watch(chatSettingsProvider)
-                                        .valueOrNull
-                                        ?.hoursAfterDelivered ??
-                                    1,
-                              ))
-                            IconButton(
-                              icon: ChatBadgeIcon(
-                                orderId: order.id,
-                                channel: 'customer_driver',
-                                icon: Icons.chat_bubble_outline,
-                              ),
-                              onPressed: () =>
-                                  context.push('/orders/${order.id}/chat'),
-                            ),
                         ],
                       ),
-                      if (order != null)
-                        Padding(
-                          padding: const EdgeInsets.only(left: 32),
-                          child: Text(order.shipFullAddress),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-              // Ghi chú địa điểm giao (mô tả nhà/cổng/gọi trước...) — trước đây chỉ hiện chữ xám
-              // nhỏ lẫn dưới địa chỉ, dễ bị tài xế lướt qua. Đổi thành khung màu in đậm, cùng kiểu
-              // với thẻ ghi chú đơn hàng bên dưới, đúng như bên app Cửa hàng/Khách hàng đang hiện.
-              if (order?.shipNote != null && order!.shipNote!.trim().isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 12),
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.primaryContainer.withValues(
-                        alpha: 0.5,
-                      ),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(
-                          Icons.location_on_outlined,
-                          size: 18,
-                          color: theme.colorScheme.primary,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            'Ghi chú địa điểm: ${order.shipNote}',
-                            style: TextStyle(
-                              color: theme.colorScheme.primary,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ],
                     ),
                   ),
-                ),
-              if (order?.customerNote != null &&
-                  order!.customerNote!.trim().isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 12),
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.secondaryContainer.withValues(
-                        alpha: 0.5,
-                      ),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(
-                          Icons.info_outline,
-                          size: 18,
-                          color: theme.colorScheme.secondary,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            order.customerNote!,
-                            style: TextStyle(
-                              color: theme.colorScheme.secondary,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              if (!delivery.isBuyOnBehalf && order != null) ...[
+                if (!delivery.isBuyOnBehalf && order != null) ...[
+                  const SizedBox(height: 12),
+                  _OrderItemsCard(order: order),
+                ],
                 const SizedBox(height: 12),
-                _OrderItemsCard(order: order),
-              ],
-              const SizedBox(height: 12),
-              _PayoutBreakdownCard(delivery: delivery),
-              if (order != null && order.paymentMethod == 'cod')
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Text(
-                    'Thu hộ khách: ${formatVnd(order.totalAmount)} (COD)',
-                    style: TextStyle(
-                      color: theme.colorScheme.error,
-                      fontWeight: FontWeight.w600,
+                _PayoutBreakdownCard(delivery: delivery),
+                if (order != null && order.paymentMethod == 'cod')
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text(
+                      'Thu hộ khách: ${formatVnd(order.totalAmount)} (COD)',
+                      style: TextStyle(
+                        color: theme.colorScheme.error,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
+                const SizedBox(height: 24),
+                _ActionArea(
+                  status: delivery.status,
+                  failureReason: delivery.failureReason,
+                  busy: _busy,
+                  isBuyOnBehalf: delivery.isBuyOnBehalf,
+                  onArrivedStore: () => _advance('arrived_store'),
+                  onPickedUp: _otpRequired
+                      ? () => _promptOtp(
+                          'Nhập mã OTP lấy hàng (cửa hàng đọc cho bạn)',
+                          'picked_up',
+                        )
+                      : () => _advance('picked_up'),
+                  onBuyOnBehalfPickup: _promptBuyOnBehalfPickup,
+                  onStartDelivering: () => _advance('delivering'),
+                  onDelivered: _promptDelivered,
+                  onFailed: _promptFailed,
+                  onReportClosedToCustomer: order == null
+                      ? null
+                      : _reportClosedToCustomer,
+                  onReportClosedToAdmin: _reportClosedToAdmin,
+                  onReportPrice: order == null
+                      ? null
+                      : () => context.push(
+                          '/merchants/${order.merchantId}/report-price',
+                        ),
                 ),
-              const SizedBox(height: 24),
-              _ActionArea(
-                status: delivery.status,
-                failureReason: delivery.failureReason,
-                busy: _busy,
-                isBuyOnBehalf: delivery.isBuyOnBehalf,
-                onArrivedStore: () => _advance('arrived_store'),
-                onPickedUp: _otpRequired
-                    ? () => _promptOtp(
-                        'Nhập mã OTP lấy hàng (cửa hàng đọc cho bạn)',
-                        'picked_up',
-                      )
-                    : () => _advance('picked_up'),
-                onBuyOnBehalfPickup: _promptBuyOnBehalfPickup,
-                onStartDelivering: () => _advance('delivering'),
-                onDelivered: _promptDelivered,
-                onFailed: _promptFailed,
-                onReportClosedToCustomer: order == null
-                    ? null
-                    : _reportClosedToCustomer,
-                onReportClosedToAdmin: _reportClosedToAdmin,
-                onReportPrice: order == null
-                    ? null
-                    : () => context.push(
-                        '/merchants/${order.merchantId}/report-price',
-                      ),
-                onDone: () => context.go('/'),
-              ),
-            ],
-          );
-        },
+              ],
+            );
+          },
+        ),
       ),
     );
   }
@@ -1000,7 +1074,6 @@ class _ActionArea extends StatelessWidget {
   final VoidCallback? onReportClosedToCustomer;
   final VoidCallback onReportClosedToAdmin;
   final VoidCallback? onReportPrice;
-  final VoidCallback onDone;
 
   const _ActionArea({
     required this.status,
@@ -1016,7 +1089,6 @@ class _ActionArea extends StatelessWidget {
     required this.onReportClosedToCustomer,
     required this.onReportClosedToAdmin,
     required this.onReportPrice,
-    required this.onDone,
   });
 
   @override
@@ -1113,12 +1185,10 @@ class _ActionArea extends StatelessWidget {
             Icon(
               Icons.check_circle,
               color: theme.colorScheme.primary,
-              size: 48,
+              size: 40,
             ),
             const SizedBox(height: 8),
-            Text('Đã giao hàng thành công', style: theme.textTheme.titleMedium),
-            const SizedBox(height: 16),
-            FilledButton(onPressed: onDone, child: const Text('Về trang chủ')),
+            Text('Đơn đã hoàn tất', style: theme.textTheme.titleMedium),
           ],
         );
       case 'failed':
@@ -1127,15 +1197,13 @@ class _ActionArea extends StatelessWidget {
             Icon(
               Icons.cancel_outlined,
               color: theme.colorScheme.error,
-              size: 48,
+              size: 40,
             ),
             const SizedBox(height: 8),
             Text(
               'Giao thất bại${failureReason != null ? ': $failureReason' : ''}',
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 16),
-            FilledButton(onPressed: onDone, child: const Text('Về trang chủ')),
           ],
         );
       default:

@@ -19,6 +19,9 @@ class Driver {
   final String? bankBin;
   final String? bankAccountNumber;
   final String? bankAccountHolder;
+  // Tài xế dự phòng (drivers.is_backup_driver) — được nhận không giới hạn đơn cùng lúc, KHÔNG bị
+  // khoá màn hình giao hàng như tài xế thường khi đang chạy đơn — xem router.dart redirect.
+  final bool isBackupDriver;
 
   Driver({
     required this.id,
@@ -41,6 +44,7 @@ class Driver {
     this.bankBin,
     this.bankAccountNumber,
     this.bankAccountHolder,
+    this.isBackupDriver = false,
   });
 
   bool get isVerified => verifiedAt != null;
@@ -69,5 +73,6 @@ class Driver {
         bankBin: json['bank_bin'] as String?,
         bankAccountNumber: json['bank_account_number'] as String?,
         bankAccountHolder: json['bank_account_holder'] as String?,
+        isBackupDriver: json['is_backup_driver'] as bool? ?? false,
       );
 }

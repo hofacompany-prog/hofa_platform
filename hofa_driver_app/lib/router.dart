@@ -92,6 +92,24 @@ final routerProvider = Provider<GoRouter>((ref) {
           state.matchedLocation != '/offer/$pendingOfferId') {
         return '/offer/$pendingOfferId';
       }
+
+      // Tài xế THƯỜNG đang chạy đơn (kể cả ghép nhiều đơn — xem
+      // hofa-db/107_order_batching.sql) bị khoá ở màn giao hàng cho tới khi giao/huỷ xong HẾT,
+      // kể cả tắt/mở lại app giữa chừng (route ban đầu '/' sẽ bị đá thẳng vào đây). Tài xế DỰ
+      // PHÒNG (is_backup_driver) vốn quen chạy nhiều đơn cùng lúc, KHÔNG bị khoá — vẫn tự do vào
+      // Trang chủ/Thu nhập/Cá nhân như trước.
+      final myDriver = ref.read(myDriverProvider).valueOrNull;
+      final activeDeliveries =
+          ref.read(activeDeliveriesProvider).valueOrNull ?? [];
+      final inProgress =
+          activeDeliveries.where((d) => d.status != 'assigned').toList();
+      if (myDriver != null && !myDriver.isBackupDriver && inProgress.isNotEmpty) {
+        final allowed =
+            state.matchedLocation.startsWith('/deliveries/') ||
+            state.matchedLocation.startsWith('/orders/') ||
+            state.matchedLocation.startsWith('/merchants/');
+        if (!allowed) return '/deliveries/${inProgress.first.id}';
+      }
       return null;
     },
     routes: [
