@@ -68,6 +68,10 @@ class Order {
   final String? shipNote;
   final String? customerNote;
   final int subtotal;
+  // Đơn mua hộ: đã CỘNG THẲNG vào giá món trong subtotal — trừ ngược ra để biết đúng tiền hàng
+  // THẬT tài xế cần ứng tại quán (xem _BuyOnBehalfShoppingCard,
+  // hofa-db/108_buy_on_behalf_price_fold_and_small_order_fee.sql).
+  final int buyOnBehalfFee;
   final int totalAmount;
   final String paymentMethod;
   final String paymentStatus;
@@ -91,6 +95,7 @@ class Order {
     this.shipNote,
     this.customerNote,
     required this.subtotal,
+    this.buyOnBehalfFee = 0,
     required this.totalAmount,
     required this.paymentMethod,
     required this.paymentStatus,
@@ -126,6 +131,7 @@ class Order {
     shipNote: json['ship_note'] as String?,
     customerNote: json['customer_note'] as String?,
     subtotal: (json['subtotal'] as num?)?.toInt() ?? 0,
+    buyOnBehalfFee: (json['buy_on_behalf_fee'] as num?)?.toInt() ?? 0,
     totalAmount: (json['total_amount'] as num?)?.toInt() ?? 0,
     paymentMethod: json['payment_method'] as String? ?? 'cod',
     paymentStatus: json['payment_status'] as String? ?? 'pending',

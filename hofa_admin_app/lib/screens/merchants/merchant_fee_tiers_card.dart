@@ -153,6 +153,16 @@ class _MerchantFeeTiersCardState extends ConsumerState<MerchantFeeTiersCard> {
                       ),
                     ],
                   ),
+                  if (feeType == 'fixed') ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'Chưa dùng — hệ thống tạm không áp dụng loại này (chỉ bậc "Phần trăm" '
+                      'mới thật sự cộng phí, cộng thẳng vào giá món).',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.outline,
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   if (feeType == 'fixed')
                     TextField(

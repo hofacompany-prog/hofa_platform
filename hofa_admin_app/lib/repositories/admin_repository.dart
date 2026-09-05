@@ -39,6 +39,7 @@ import '../models/notification_settings.dart';
 import '../models/nav_tab_icon.dart';
 import '../models/icon_library.dart';
 import '../models/driver_finance_settings.dart';
+import '../models/small_order_fee_settings.dart';
 import '../models/otp_settings.dart';
 import '../models/chat_settings.dart';
 import '../models/driver_wallet_summary.dart';
@@ -1072,6 +1073,22 @@ class AdminRepository {
     DriverFinanceSettings settings,
   ) async => DriverFinanceSettings.fromJson(
     await _api.patch('/driver-finance-settings', body: settings.toJson())
+        as Map<String, dynamic>,
+  );
+
+  // ---- Cấu hình phí đơn nhỏ/lẻ ----
+
+  Future<SmallOrderFeeSettings> smallOrderFeeSettings() async {
+    final data = await _api.get('/small-order-fee-settings');
+    return data == null
+        ? SmallOrderFeeSettings.fallback()
+        : SmallOrderFeeSettings.fromJson(data as Map<String, dynamic>);
+  }
+
+  Future<SmallOrderFeeSettings> updateSmallOrderFeeSettings(
+    SmallOrderFeeSettings settings,
+  ) async => SmallOrderFeeSettings.fromJson(
+    await _api.patch('/small-order-fee-settings', body: settings.toJson())
         as Map<String, dynamic>,
   );
 

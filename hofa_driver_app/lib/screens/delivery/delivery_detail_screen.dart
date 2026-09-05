@@ -1519,7 +1519,10 @@ class _BuyOnBehalfShoppingCard extends StatelessWidget {
                   style: theme.textTheme.bodyMedium,
                 ),
                 Text(
-                  formatVnd(order.subtotal),
+                  // order.subtotal đã CỘNG THẲNG % phí mua hộ (khách trả, không phải tiền hàng
+                  // tài xế bỏ ra) — trừ ngược ra để hiện đúng số tiền THẬT cần ứng tại quán, xem
+                  // hofa-db/108_buy_on_behalf_price_fold_and_small_order_fee.sql.
+                  formatVnd(order.subtotal - order.buyOnBehalfFee),
                   style: theme.textTheme.titleSmall?.copyWith(
                     fontWeight: FontWeight.bold,
                   ),

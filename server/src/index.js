@@ -43,6 +43,7 @@ app.use('/', require('./routes/favorites'));
 app.use('/', require('./routes/vouchers'));
 app.use('/', require('./routes/voucher-settings'));
 app.use('/', require('./routes/shipping'));
+app.use('/', require('./routes/small-order-fee-settings'));
 app.use('/', require('./routes/delivery-radius-settings'));
 app.use('/', require('./routes/platform-fee-settings'));
 app.use('/', require('./routes/order-settings'));

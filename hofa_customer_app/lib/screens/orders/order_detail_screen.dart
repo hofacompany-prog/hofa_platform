@@ -642,9 +642,15 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                         ),
                         const Divider(height: 24),
                         _row('Tạm tính', formatVnd(o.subtotal)),
-                        _row('Phí giao hàng', formatVnd(o.deliveryFee)),
                         if (o.buyOnBehalfFee > 0)
-                          _row('Phí mua hộ', formatVnd(o.buyOnBehalfFee)),
+                          _row(
+                            '  · đã gồm phí mua hộ',
+                            formatVnd(o.buyOnBehalfFee),
+                            color: theme.colorScheme.outline,
+                          ),
+                        _row('Phí giao hàng', formatVnd(o.deliveryFee)),
+                        if (o.smallOrderFee > 0)
+                          _row('Phí đơn nhỏ', formatVnd(o.smallOrderFee)),
                         if (o.discountAmount > 0)
                           _row(
                             'Giảm giá',

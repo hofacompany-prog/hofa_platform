@@ -713,7 +713,15 @@ class _AdminOrderDetailScreenState
                             ),
                             const Divider(height: 24),
                             _row('Tạm tính', formatVnd(o.subtotal)),
+                            if (o.buyOnBehalfFee > 0)
+                              _row(
+                                '  · trong đó phí mua hộ',
+                                formatVnd(o.buyOnBehalfFee),
+                                color: theme.colorScheme.outline,
+                              ),
                             _row('Phí giao hàng', formatVnd(o.deliveryFee)),
+                            if (o.smallOrderFee > 0)
+                              _row('Phí đơn nhỏ', formatVnd(o.smallOrderFee)),
                             if (o.discountAmount > 0)
                               _row(
                                 'Giảm giá',

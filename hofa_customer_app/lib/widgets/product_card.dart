@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/format.dart';
 import '../core/geo.dart';
+import '../models/merchant_fee_tier.dart';
 import '../models/product.dart';
+import '../providers/app_providers.dart';
 import 'network_image_box.dart';
 import 'quick_add_to_cart.dart';
 
@@ -41,6 +43,29 @@ class _ProductCardState extends ConsumerState<ProductCard> {
     final theme = Theme.of(context);
     final product = widget.product;
     final variant = product.defaultVariant;
+    // Cửa hàng mua hộ: giá hiển thị đã cộng % phí mua hộ (tạm tính theo số lượng=1, giống lúc
+    // mới mở màn chi tiết sản phẩm) — cộng THẲNG vào giá thay vì để khách bất ngờ ở bước thanh
+    // toán, xem hofa-db/108_buy_on_behalf_price_fold_and_small_order_fee.sql.
+    final merchant = ref
+        .watch(merchantDetailProvider(product.merchantId))
+        .valueOrNull;
+    final feeTiers = (merchant != null && merchant.isBuyOnBehalf)
+        ? ref
+                  .watch(merchantFeeTiersProvider(product.merchantId))
+                  .valueOrNull ??
+              const <MerchantFeeTier>[]
+        : const <MerchantFeeTier>[];
+    final displayPrice = variant == null
+        ? 0
+        : (merchant != null && merchant.isBuyOnBehalf)
+        ? markedUpUnitPrice(
+            variant.price,
+            matchBuyOnBehalfTier(
+              feeTiers,
+              merchant.buyOnBehalfFeeBasis == 'value' ? variant.price : 1,
+            ),
+          )
+        : variant.price;
     return Card(
       elevation: 0,
       color: theme.colorScheme.surfaceContainerLow,
@@ -141,7 +166,7 @@ class _ProductCardState extends ConsumerState<ProductCard> {
                           children: [
                             Expanded(
                               child: Text(
-                                formatVnd(variant.price),
+                                formatVnd(displayPrice),
                                 style: TextStyle(
                                   fontWeight: FontWeight.w700,
                                   color: theme.colorScheme.primary,

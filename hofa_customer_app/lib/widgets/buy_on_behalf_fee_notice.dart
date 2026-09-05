@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../core/format.dart';
 import '../models/merchant.dart';
-import '../models/merchant_fee_tier.dart';
 import '../providers/app_providers.dart';
 
 /// Thông báo + bảng bậc phí mua hộ — đặt ở màn chi tiết cửa hàng và chi tiết sản phẩm để
@@ -39,7 +38,7 @@ class BuyOnBehalfFeeNotice extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _NoticeLine(icon: Icons.payments_outlined, text: 'Có phụ phí mua hộ, xem bảng bên dưới'),
+          _NoticeLine(icon: Icons.payments_outlined, text: 'Phí mua hộ đã cộng thẳng vào giá món hiển thị, xem bảng bên dưới'),
           _NoticeLine(icon: Icons.schedule, text: 'Đơn có thể giao lâu hơn bình thường'),
           _NoticeLine(icon: Icons.lock_clock, text: 'Chỉ thanh toán trước (chuyển khoản), không hỗ trợ COD'),
           const SizedBox(height: 8),
@@ -111,27 +110,5 @@ class _NoticeLine extends StatelessWidget {
         ],
       ),
     );
-  }
-}
-
-/// Bậc phí đang áp dụng cho 1 giỏ hàng thực tế + số tiền ước tính — dùng ở màn thanh toán.
-/// [quantityTotal]/[subtotal] là số liệu của RIÊNG cửa hàng mua hộ này trong giỏ.
-class BuyOnBehalfFeeEstimate {
-  final MerchantFeeTier? tier;
-  final int fee;
-  const BuyOnBehalfFeeEstimate({required this.tier, required this.fee});
-
-  static BuyOnBehalfFeeEstimate compute({
-    required Merchant merchant,
-    required List<MerchantFeeTier> tiers,
-    required int quantityTotal,
-    required int subtotal,
-  }) {
-    if (!merchant.isBuyOnBehalf || merchant.buyOnBehalfFeeBasis == null) {
-      return const BuyOnBehalfFeeEstimate(tier: null, fee: 0);
-    }
-    final basisValue = merchant.buyOnBehalfFeeBasis == 'value' ? subtotal : quantityTotal;
-    final tier = matchBuyOnBehalfTier(tiers, basisValue);
-    return BuyOnBehalfFeeEstimate(tier: tier, fee: estimateBuyOnBehalfFee(tier, subtotal));
   }
 }

@@ -38,6 +38,7 @@ import '../models/notification_settings.dart';
 import '../models/nav_tab_icon.dart';
 import '../models/icon_library.dart';
 import '../models/driver_finance_settings.dart';
+import '../models/small_order_fee_settings.dart';
 import '../models/otp_settings.dart';
 import '../models/chat_settings.dart';
 import '../models/driver_wallet_summary.dart';
@@ -280,6 +281,11 @@ final driverWalletSummaryProvider =
 final driverFinanceSettingsProvider =
     FutureProvider.autoDispose<DriverFinanceSettings>(
       (ref) => ref.watch(adminRepoProvider).driverFinanceSettings(),
+    );
+
+final smallOrderFeeSettingsProvider =
+    FutureProvider.autoDispose<SmallOrderFeeSettings>(
+      (ref) => ref.watch(adminRepoProvider).smallOrderFeeSettings(),
     );
 
 final otpSettingsProvider = FutureProvider.autoDispose<OtpSettings>(

@@ -88,6 +88,7 @@ class Order {
   final int deliveryFee;
   final int discountAmount;
   final int buyOnBehalfFee;
+  final int smallOrderFee;
   final int totalAmount;
   final String paymentMethod;
   final String paymentStatus;
@@ -115,6 +116,7 @@ class Order {
     required this.deliveryFee,
     required this.discountAmount,
     this.buyOnBehalfFee = 0,
+    this.smallOrderFee = 0,
     required this.totalAmount,
     required this.paymentMethod,
     required this.paymentStatus,
@@ -183,6 +185,7 @@ class Order {
     deliveryFee: (json['delivery_fee'] as num?)?.toInt() ?? 0,
     discountAmount: (json['discount_amount'] as num?)?.toInt() ?? 0,
     buyOnBehalfFee: (json['buy_on_behalf_fee'] as num?)?.toInt() ?? 0,
+    smallOrderFee: (json['small_order_fee'] as num?)?.toInt() ?? 0,
     totalAmount: (json['total_amount'] as num?)?.toInt() ?? 0,
     paymentMethod: json['payment_method'] as String? ?? 'cod',
     paymentStatus: json['payment_status'] as String? ?? 'pending',

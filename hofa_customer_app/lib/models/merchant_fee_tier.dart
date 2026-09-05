@@ -53,6 +53,15 @@ int estimateBuyOnBehalfFee(MerchantFeeTier? tier, int subtotal) {
   return ((subtotal * (tier.feePercent ?? 0)) / 100).round();
 }
 
+/// Giá món ĐÃ CỘNG % phí mua hộ — cộng thẳng vào giá hiển thị/tính tiền thay vì làm 1 dòng phụ
+/// riêng lúc thanh toán (xem hofa-db/108_buy_on_behalf_price_fold_and_small_order_fee.sql).
+/// Bậc kiểu "cố định" (tier.isFixed) TẠM KHÔNG áp dụng (giữ cấu hình, chưa dùng tới — trả về
+/// [basePrice] không đổi) — chỉ bậc "%" mới thật sự cộng vào giá.
+int markedUpUnitPrice(int basePrice, MerchantFeeTier? tier) {
+  if (tier == null || tier.isFixed) return basePrice;
+  return (basePrice * (1 + (tier.feePercent ?? 0) / 100)).round();
+}
+
 const buyOnBehalfFeeBasisLabels = {
   'quantity': 'Theo số lượng sản phẩm',
   'value': 'Theo giá trị đơn hàng',

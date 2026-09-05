@@ -5,6 +5,8 @@ import '../../core/format.dart';
 import '../../core/require_login.dart';
 import '../../models/buy_now_request.dart';
 import '../../models/cart_item.dart';
+import '../../models/merchant.dart';
+import '../../models/merchant_fee_tier.dart';
 import '../../models/product.dart';
 import '../../models/product_variant.dart';
 import '../../models/topping.dart';
@@ -35,9 +37,6 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
     _selectedVariant ??= product.defaultVariant;
   }
 
-  int _unitPriceFor(ProductVariant variant, List<WholesaleTier> tiers) =>
-      _unitPriceForQuantity(_quantity, variant, tiers);
-
   int _unitPriceForQuantity(
     int quantity,
     ProductVariant variant,
@@ -55,6 +54,28 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
     return matched?.unitPrice ?? variant.price;
   }
 
+  /// Giá CUỐI khách thấy/trả — [_unitPriceForQuantity] (đã tính bậc sỉ/đặt trước) cộng thêm %
+  /// phí mua hộ nếu cửa hàng là merchant_type='buy_on_behalf' (cộng THẲNG vào giá món thay vì
+  /// làm 1 dòng phụ riêng lúc thanh toán — xem hofa-db/108_buy_on_behalf_price_fold_and_small_
+  /// order_fee.sql). Bậc phí mua hộ chọn theo đúng basis của cửa hàng (quantity = số lượng đang
+  /// xem, value = giá×số lượng đang xem) — CHỈ LÀ ƯỚC TÍNH cho riêng sản phẩm này, giỏ hàng có
+  /// nhiều món cùng merchant sẽ tính lại theo TỔNG giỏ (xem cart_provider.dart).
+  int _finalUnitPriceForQuantity(
+    int quantity,
+    ProductVariant variant,
+    List<WholesaleTier> tiers,
+    Merchant? merchant,
+    List<MerchantFeeTier> feeTiers,
+  ) {
+    final basePrice = _unitPriceForQuantity(quantity, variant, tiers);
+    if (merchant == null || !merchant.isBuyOnBehalf) return basePrice;
+    final basisValue = merchant.buyOnBehalfFeeBasis == 'value'
+        ? basePrice * quantity
+        : quantity;
+    final tier = matchBuyOnBehalfTier(feeTiers, basisValue);
+    return markedUpUnitPrice(basePrice, tier);
+  }
+
   /// Đổi số lượng qua nút +/- — nếu số lượng mới đạt 1 bậc giá RẺ HƠN bậc hiện tại (bậc giá
   /// sỉ hay bậc đặt trước đều tính, chỉ cần đạt điều kiện số lượng — không cần biết khách có
   /// đạt thêm điều kiện số ngày/tuần của bậc đặt trước hay không) thì báo ngay bằng popup
@@ -64,11 +85,25 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
     Product product,
     ProductVariant variant,
     List<WholesaleTier> tiers,
+    Merchant? merchant,
+    List<MerchantFeeTier> feeTiers,
   ) {
     final newQuantity = _quantity + delta;
     if (newQuantity < 1) return;
-    final oldPrice = _unitPriceForQuantity(_quantity, variant, tiers);
-    final newPrice = _unitPriceForQuantity(newQuantity, variant, tiers);
+    final oldPrice = _finalUnitPriceForQuantity(
+      _quantity,
+      variant,
+      tiers,
+      merchant,
+      feeTiers,
+    );
+    final newPrice = _finalUnitPriceForQuantity(
+      newQuantity,
+      variant,
+      tiers,
+      merchant,
+      feeTiers,
+    );
     setState(() => _quantity = newQuantity);
     if (newPrice < oldPrice) {
       _showTierReachedDialog(product, newPrice);
@@ -341,11 +376,27 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
               ? ref.watch(wholesaleTiersProvider(variant.id))
               : null;
           final tiers = tiersAsync?.valueOrNull ?? [];
+          final feeTiers = (merchant != null && merchant.isBuyOnBehalf)
+              ? ref
+                        .watch(merchantFeeTiersProvider(product.merchantId))
+                        .valueOrNull ??
+                    const <MerchantFeeTier>[]
+              : const <MerchantFeeTier>[];
           // Giá xem trước ở đây chưa gắn với tab Giá sỉ/Đặt trước nào (khách chưa chọn) —
           // dùng unitPrice của MỌI bậc (cả giá sỉ lẫn đặt trước), vì unitPrice luôn là "giá
           // khi chỉ đạt điều kiện số lượng" bất kể loại bậc — số ngày/tuần (chỉ áp dụng cho
-          // bậc đặt trước) chưa chọn được ở màn này nên không cần quan tâm lúc xem trước.
-          final unitPrice = variant != null ? _unitPriceFor(variant, tiers) : 0;
+          // bậc đặt trước) chưa chọn được ở màn này nên không cần quan tâm lúc xem trước. Đã
+          // cộng thêm % phí mua hộ nếu có (xem _finalUnitPriceForQuantity) — giá hiện ở đây
+          // khớp đúng giá sẽ trả, không còn phát sinh thêm phí lúc thanh toán.
+          final unitPrice = variant != null
+              ? _finalUnitPriceForQuantity(
+                  _quantity,
+                  variant,
+                  tiers,
+                  merchant,
+                  feeTiers,
+                )
+              : 0;
           final toppingGroups =
               ref.watch(toppingGroupsProvider(product.id)).valueOrNull ?? [];
           final toppingsTotal = _selectedToppings.fold(
@@ -502,6 +553,8 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                                         product,
                                         variant,
                                         tiers,
+                                        merchant,
+                                        feeTiers,
                                       )
                               : null,
                           icon: const Icon(Icons.remove),
@@ -518,7 +571,14 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                         IconButton.outlined(
                           onPressed: () => variant == null
                               ? setState(() => _quantity++)
-                              : _changeQuantity(1, product, variant, tiers),
+                              : _changeQuantity(
+                                  1,
+                                  product,
+                                  variant,
+                                  tiers,
+                                  merchant,
+                                  feeTiers,
+                                ),
                           icon: const Icon(Icons.add),
                         ),
                       ],

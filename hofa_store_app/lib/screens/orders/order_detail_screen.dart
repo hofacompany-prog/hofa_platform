@@ -773,7 +773,15 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen>
                     ),
                     const Divider(height: 1),
                     const SizedBox(height: 8),
-                    _totalRow('Tổng tiền món', o.subtotal, bold: true),
+                    // Đơn mua hộ: subtotal đã CỘNG THẲNG % phí mua hộ (khách trả, không phải
+                    // doanh thu cửa hàng) — trừ ngược ra để hiện đúng giá trị hàng thật, khớp
+                    // với "Tài chính" (merchant_payout vẫn tính trên giá gốc, không đổi), xem
+                    // hofa-db/108_buy_on_behalf_price_fold_and_small_order_fee.sql.
+                    _totalRow(
+                      'Tổng tiền món',
+                      o.subtotal - o.buyOnBehalfFee,
+                      bold: true,
+                    ),
                     const SizedBox(height: 4),
                     Text(
                       'Thanh toán: ${o.paymentMethod.toUpperCase()} · ${o.paymentStatus}',

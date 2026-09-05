@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/cart_item.dart';
+import '../models/merchant_fee_tier.dart';
 import '../models/product.dart';
 import '../providers/app_providers.dart';
 import '../providers/cart_provider.dart';
@@ -109,6 +110,23 @@ Future<void> quickAddToCart(
       merchantDetailProvider(product.merchantId).future,
     );
 
+    // Cửa hàng mua hộ: cộng thẳng % phí mua hộ vào giá món ngay khi thêm nhanh — cùng cách
+    // product_detail_screen.dart đang làm, xem hofa-db/108_buy_on_behalf_price_fold_and_
+    // small_order_fee.sql.
+    var unitPrice = variant.price;
+    if (merchant.isBuyOnBehalf) {
+      final feeTiers = await ref.read(
+        merchantFeeTiersProvider(product.merchantId).future,
+      );
+      final basisValue = merchant.buyOnBehalfFeeBasis == 'value'
+          ? variant.price * quantity
+          : quantity;
+      unitPrice = markedUpUnitPrice(
+        variant.price,
+        matchBuyOnBehalfTier(feeTiers, basisValue),
+      );
+    }
+
     await cartNotifier.addItem(
       merchantId: product.merchantId,
       merchantName: merchant.name,
@@ -121,7 +139,7 @@ Future<void> quickAddToCart(
         productImage: product.images.isNotEmpty ? product.images.first : null,
         variantId: variant.id,
         variantName: variant.name,
-        unitPrice: variant.price,
+        unitPrice: unitPrice,
         basePrice: variant.price,
         quantity: quantity,
         unit: product.unit,

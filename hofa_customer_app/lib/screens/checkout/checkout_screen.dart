@@ -636,9 +636,43 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         (widget.preorderSchedule != null || widget.initialScheduledFor != null)
         ? _groupByOccurrence(items)
         : null;
+
+    // % phí mua hộ giờ CỘNG THẲNG vào giá món (không còn là 1 dòng phụ riêng) — chỉ để KHÁCH
+    // XEM TRƯỚC, server tự tính lại số thật lúc tạo đơn (mirror đúng cách chọn bậc phía
+    // create_order, xem hofa-db/108_buy_on_behalf_price_fold_and_small_order_fee.sql). Bậc
+    // chọn theo TỔNG giỏ (giá trị/số lượng gốc, chưa cộng %) — khác giá xem trước lúc mở riêng
+    // 1 sản phẩm (chỉ tạm tính theo đúng sản phẩm đó), số cuối ở đây mới là số thật sẽ trả.
+    final merchant = cart.merchantId == null
+        ? null
+        : ref.watch(merchantDetailProvider(cart.merchantId!)).valueOrNull;
+    final branch = cart.branchId == null
+        ? null
+        : ref.watch(branchDetailProvider(cart.branchId!)).valueOrNull;
+    final feeTiers = (merchant != null && merchant.isBuyOnBehalf)
+        ? ref.watch(merchantFeeTiersProvider(cart.merchantId!)).valueOrNull ??
+              const []
+        : const <MerchantFeeTier>[];
+    final buyOnBehalfTier = (merchant != null && merchant.isBuyOnBehalf)
+        ? matchBuyOnBehalfTier(
+            feeTiers,
+            merchant.buyOnBehalfFeeBasis == 'value'
+                ? items.fold<int>(
+                    0,
+                    (sum, i) =>
+                        sum + (i.basePrice + i.toppingsTotal) * i.quantity,
+                  )
+                : items.fold<int>(0, (sum, i) => sum + i.quantity),
+          )
+        : null;
+    int checkoutLineTotal(CartItem i) =>
+        (merchant != null && merchant.isBuyOnBehalf)
+        ? markedUpUnitPrice(i.basePrice + i.toppingsTotal, buyOnBehalfTier) *
+              i.quantity
+        : i.lineTotal;
+
     final itemsSubtotal = scheduledOrders != null
         ? _tierAwareSubtotal(scheduledOrders, _orderDaysCount(items))
-        : items.fold<int>(0, (sum, i) => sum + i.lineTotal);
+        : items.fold<int>(0, (sum, i) => sum + checkoutLineTotal(i));
 
     // Chốt địa chỉ mặc định sớm (trước khi cần tới trong shippingFee/nút Đặt hàng) —
     // giữ đúng logic cũ (ưu tiên is_default, không thì lấy địa chỉ đầu tiên).
@@ -657,31 +691,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final orderCount = scheduledOrders?.length ?? 1;
     final totalShippingFee = shippingFee * orderCount;
 
-    // Phí mua hộ chỉ để KHÁCH XEM TRƯỚC — server tự tính lại số thật lúc tạo đơn (không
-    // gửi lên như delivery_fee), nên sai khác nhỏ do làm tròn không ảnh hưởng số tiền thu
-    // thật. Xem BuyOnBehalfFeeEstimate.compute — mirror đúng cách chọn bậc phía server.
-    final merchant = cart.merchantId == null
-        ? null
-        : ref.watch(merchantDetailProvider(cart.merchantId!)).valueOrNull;
-    final branch = cart.branchId == null
-        ? null
-        : ref.watch(branchDetailProvider(cart.branchId!)).valueOrNull;
-    final feeTiers = (merchant != null && merchant.isBuyOnBehalf)
-        ? ref.watch(merchantFeeTiersProvider(cart.merchantId!)).valueOrNull ??
-              const []
-        : const <MerchantFeeTier>[];
-    final buyOnBehalfEstimate = merchant == null
-        ? const BuyOnBehalfFeeEstimate(tier: null, fee: 0)
-        : BuyOnBehalfFeeEstimate.compute(
-            merchant: merchant,
-            tiers: feeTiers,
-            quantityTotal: items.fold<int>(0, (sum, i) => sum + i.quantity),
-            subtotal: itemsSubtotal,
-          );
-    final buyOnBehalfFee = buyOnBehalfEstimate.fee;
-
-    final total =
-        itemsSubtotal + totalShippingFee + buyOnBehalfFee - _voucherDiscount;
+    final total = itemsSubtotal + totalShippingFee - _voucherDiscount;
 
     return Scaffold(
       appBar: AppBar(
@@ -1085,9 +1095,20 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                               Text(i.productName),
                               Text(
                                 '${i.variantName} · ${i.quantity} x '
-                                // Có topping thì tách rõ giá món + giá topping (khách biết đang
-                                // cộng gì vào), không có topping thì chỉ hiện đơn giá món.
-                                '${i.toppingsTotal > 0 ? '(${formatVnd(i.unitPrice)} + ${formatVnd(i.toppingsTotal)} topping)' : formatVnd(i.unitPrice)}',
+                                // Cửa hàng mua hộ: giá đã cộng % phí, hiện gộp luôn (không tách
+                                // topping riêng nữa vì % áp cho cả 2). Có topping thì tách rõ
+                                // giá món + giá topping (khách biết đang cộng gì vào), không có
+                                // topping thì chỉ hiện đơn giá món.
+                                '${merchant != null && merchant.isBuyOnBehalf
+                                    ? formatVnd(
+                                        markedUpUnitPrice(
+                                          i.basePrice + i.toppingsTotal,
+                                          buyOnBehalfTier,
+                                        ),
+                                      )
+                                    : i.toppingsTotal > 0
+                                    ? '(${formatVnd(i.unitPrice)} + ${formatVnd(i.toppingsTotal)} topping)'
+                                    : formatVnd(i.unitPrice)}',
                                 style: theme.textTheme.bodySmall,
                               ),
                               if (i.toppings.isNotEmpty)
@@ -1109,7 +1130,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          formatVnd(i.lineTotal),
+                          formatVnd(checkoutLineTotal(i)),
                           style: const TextStyle(fontWeight: FontWeight.w600),
                         ),
                       ],
@@ -1179,28 +1200,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       ],
                     ),
                   ),
-                  if (buyOnBehalfFee > 0)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Expanded(
-                            child: Text(
-                              'Phí mua hộ',
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            formatVnd(buyOnBehalfFee),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
-                      ),
-                    ),
                   if (_voucherDiscount > 0)
                     Padding(
                       padding: const EdgeInsets.only(top: 4),
