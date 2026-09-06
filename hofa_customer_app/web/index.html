@@ -20,6 +20,76 @@
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="description" content="HOFA — Đặt hàng từ cửa hàng gần bạn, giao nhanh tận nơi.">
 
+  <!-- Link "Chia sẻ cửa hàng" (app Khách hàng, merchant_detail_screen.dart) trỏ thẳng
+       https://hofa.com.vn/merchants/:slug. Bình thường Universal Links (iOS)/App Links
+       (Android, xem web/.well-known/) đã tự mở thẳng app TRƯỚC KHI trang này kịp tải — đoạn
+       này chỉ chạy khi Universal/App Links không được tôn trọng (app chưa cài, hoặc trình
+       duyệt trong app như Zalo/Messenger không tôn trọng): hiện màn trung chuyển, thử mở app
+       qua custom scheme "hofa://", còn không rời được trang thì tự chuyển sang App Store/CH
+       Play. TRƯỚC ĐÂY tách riêng ra 1 Cloudflare Worker khác (hofa_landing) — worker đó khai
+       "custom_domain" cho CẢ hofa.com.vn nên vô tình CHIẾM MẤT domain khỏi tay chính worker
+       app Flutter thật (hofa-customer), khiến hofa.com.vn/* toàn bộ (không riêng /merchants/)
+       chỉ còn hiện trang trung chuyển tĩnh thay vì app thật. Dời hẳn logic này vào đây (tự
+       host trong chính hofa-customer, xuất hiện TRƯỚC khi Flutter kịp tải) để không còn 2
+       worker tranh nhau 1 domain nữa — xem web/.well-known/ cho 2 file xác thực Universal/App
+       Links (cũng dời từ hofa_landing sang, không đổi nội dung). -->
+  <script>
+    (function () {
+      var m = location.pathname.match(/^\/merchants\/([^/]+)\/?$/);
+      if (!m) return;
+      var slug = m[1];
+
+      var overlay = document.createElement('div');
+      overlay.style.cssText =
+        'position:fixed;inset:0;z-index:999999;background:#16220A;color:#fff;display:flex;' +
+        'flex-direction:column;align-items:center;justify-content:center;text-align:center;' +
+        'padding:32px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;';
+      overlay.innerHTML =
+        '<div style="width:64px;height:64px;border-radius:18px;background:#85C100;display:flex;' +
+        'align-items:center;justify-content:center;margin-bottom:20px;font-weight:800;font-size:28px;">H</div>' +
+        '<h1 style="font-size:1.25rem;margin:0 0 8px;">Đang mở trong ứng dụng HOFA…</h1>' +
+        '<p style="color:rgba(255,255,255,0.7);max-width:300px;margin:0 0 24px;font-size:0.92rem;">' +
+        'Nếu app không tự mở, bấm nút bên dưới.</p>' +
+        '<a id="mg-open" href="#" style="background:#85C100;color:#16220A;font-weight:700;' +
+        'padding:14px 28px;border-radius:14px;text-decoration:none;margin-bottom:14px;">Mở ứng dụng HOFA</a>' +
+        '<a id="mg-store" href="#" style="color:rgba(255,255,255,0.8);text-decoration:underline;font-size:0.88rem;">' +
+        'Chưa có app? Tải ngay</a>';
+      document.addEventListener('DOMContentLoaded', function () {
+        document.body.appendChild(overlay);
+        document.getElementById('mg-open').addEventListener('click', function (e) {
+          e.preventDefault();
+          window.location.href = deepLink;
+        });
+      });
+
+      var deepLink = 'hofa://open?path=' + encodeURIComponent('/merchants/' + slug);
+      window.location.href = deepLink;
+
+      var left = false;
+      document.addEventListener('visibilitychange', function () {
+        if (document.hidden) left = true;
+      });
+
+      fetch('https://api.hofa.com.vn/app-update-settings', { headers: { 'X-App-Scope': 'customer' } })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (json) {
+          var row = json && json.data;
+          if (!row) return;
+          var isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+          var url = (isIOS ? row.ios_store_url : row.android_store_url) || row.ios_store_url || row.android_store_url;
+          if (!url) return;
+          document.addEventListener('DOMContentLoaded', function () {
+            var storeLink = document.getElementById('mg-store');
+            if (storeLink) storeLink.setAttribute('href', url);
+          });
+          setTimeout(function () {
+            if (!left && !document.hidden) window.location.href = url;
+          }, 1300);
+        })
+        .catch(function () {});
+    })();
+  </script>
+
   <!-- Trình duyệt trong app (Facebook/Messenger/Instagram/Zalo/TikTok/Zoom...) chặn nhiều thứ
        web cần (cài PWA, đăng nhập Google, đôi lúc cả camera/định vị) — phát hiện càng sớm càng
        tốt (trước cả lúc Flutter tải) và tự đẩy sang Chrome trên Android bằng intent://, vì
