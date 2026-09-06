@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -60,23 +60,6 @@ final routerProvider = Provider<GoRouter>((ref) {
       Supabase.instance.client.auth.onAuthStateChange,
     ),
     redirect: (context, state) async {
-      // TẠM THỜI (chẩn đoán lỗi "link chia sẻ rơi về trang chủ" khi app đang mở nền) — hiện
-      // SnackBar mỗi lần redirect() được đánh giá cho 1 đường dẫn liên quan /merchants (log
-      // console debugPrint cũng có nhưng khó xem trên TestFlight không cắm Xcode) — xoá sau khi
-      // tìm ra nguyên nhân.
-      final loc = state.matchedLocation;
-      debugPrint('[router redirect] eval: $loc');
-      if (loc.startsWith('/merchants')) {
-        final ctx = navigatorKey.currentContext;
-        if (ctx != null && ctx.mounted) {
-          ScaffoldMessenger.maybeOf(ctx)?.showSnackBar(
-            SnackBar(
-              content: Text('[redirect] eval: $loc'),
-              duration: const Duration(seconds: 6),
-            ),
-          );
-        }
-      }
       // Link chia sẻ cửa hàng (nút "Chia sẻ cửa hàng" ở merchant_detail_screen.dart) dùng slug
       // (tên đọc được) thay vì UUID cho dễ đọc — GET /merchants/:id đã hỗ trợ tra bằng slug
       // (server/src/routes/merchants.js). MerchantDetailScreen bên dưới vẫn luôn cần UUID thật

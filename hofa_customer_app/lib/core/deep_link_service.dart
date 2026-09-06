@@ -1,8 +1,6 @@
 import 'dart:async';
 import 'package:app_links/app_links.dart';
-import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../main.dart' show navigatorKey;
 
 /// Xử lý link "Chia sẻ cửa hàng" (merchant_detail_screen.dart) mở thẳng vào app:
 /// - Universal Links/App Links (https://store.hofa.com.vn/merchants/...) thường tự mở app
@@ -13,10 +11,6 @@ import '../main.dart' show navigatorKey;
 ///   trong Zalo/Messenger) — path đích nằm trong query param "path", không suy được trực tiếp
 ///   từ path của chính URI này (host "open" chiếm mất vị trí "merchants" nếu viết dạng
 ///   hofa://merchants/slug), nên cần tự đọc query param rồi điều hướng tay bằng router.go().
-///
-/// TẠM THỜI (đang chẩn đoán lỗi "link chia sẻ rơi về trang chủ") — mọi bước đều hiện SnackBar
-/// ngay trên màn hình để thấy CHÍNH XÁC app nhận được gì, xoá hết các dòng _debug(...) sau khi
-/// xác định xong nguyên nhân thật.
 class DeepLinkService {
   DeepLinkService._();
   static final DeepLinkService instance = DeepLinkService._();
@@ -24,36 +18,17 @@ class DeepLinkService {
   final _appLinks = AppLinks();
   StreamSubscription<Uri>? _sub;
 
-  Future<void> _debug(String message) async {
-    BuildContext? context = navigatorKey.currentContext;
-    for (var i = 0; context == null && i < 25; i++) {
-      await Future.delayed(const Duration(milliseconds: 200));
-      context = navigatorKey.currentContext;
-    }
-    if (context == null || !context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('[deep link] $message'),
-        duration: const Duration(seconds: 6),
-      ),
-    );
-  }
-
   Future<void> init(GoRouter router) async {
     try {
       final initial = await _appLinks.getInitialLink();
-      _debug('getInitialLink() = $initial');
       if (initial != null) _handle(router, initial);
-    } catch (e) {
-      _debug('getInitialLink() lỗi: $e');
+    } catch (_) {
+      // không lấy được initial link — bỏ qua, app vẫn mở bình thường vào màn mặc định
     }
     _sub?.cancel();
     _sub = _appLinks.uriLinkStream.listen(
-      (uri) {
-        _debug('uriLinkStream nhận: $uri');
-        _handle(router, uri);
-      },
-      onError: (e) => _debug('uriLinkStream lỗi: $e'),
+      (uri) => _handle(router, uri),
+      onError: (_) {},
     );
   }
 
@@ -77,19 +52,14 @@ class DeepLinkService {
         if (uri.hasQuery) path = '$path?${uri.query}';
       }
     }
-    _debug('_handle: scheme=${uri.scheme} path=$path');
     if (path == null || path.isEmpty || path == '/') return;
     // Trễ 1 nhịp trước khi điều hướng — app RESUME từ nền (đúng lúc mở link) thường kèm Supabase
     // tự làm mới phiên đăng nhập (onAuthStateChange), kích hoạt GoRouterRefreshStream đánh giá
-    // lại redirect() cho vị trí HIỆN TẠI (vẫn là route cũ lúc đó) gần như cùng lúc — nếu việc đó
-    // hoàn tất SAU router.go() bên dưới, có thể ghi đè ngược lại route cũ. Đợi 1 nhịp ngắn để
-    // phần làm mới phiên đó ổn định trước, tránh 2 lần điều hướng tranh nhau (đã xác nhận thật:
-    // cold start — app tắt hẳn mở lại — vào đúng trang, warm start — app đang mở nền — lại về
-    // trang chủ, đúng dấu hiệu của cuộc đua này).
-    final target = path;
-    Future.delayed(const Duration(milliseconds: 500), () {
-      _debug('router.go (trễ 500ms): $target');
-      router.go(target);
-    });
+    // lại redirect() cho vị trí HIỆN TẠI (vẫn là route cũ lúc đó) gần như cùng lúc — việc đó hoàn
+    // tất SAU router.go() bên dưới sẽ ghi đè ngược lại route cũ. Đợi 1 nhịp ngắn để phần làm mới
+    // phiên đó ổn định trước, tránh 2 lần điều hướng tranh nhau — đã xác nhận qua test thật: bỏ
+    // trễ này thì cold start (app tắt hẳn) vào đúng trang nhưng warm start (app đang mở nền) lại
+    // rơi về trang chủ, đúng dấu hiệu cuộc đua điều hướng.
+    Future.delayed(const Duration(milliseconds: 500), () => router.go(path!));
   }
 }
