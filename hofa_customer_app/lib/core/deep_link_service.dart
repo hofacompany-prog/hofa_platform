@@ -1,17 +1,22 @@
 import 'dart:async';
 import 'package:app_links/app_links.dart';
+import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../main.dart' show navigatorKey;
 
 /// Xử lý link "Chia sẻ cửa hàng" (merchant_detail_screen.dart) mở thẳng vào app:
-/// - Universal Links/App Links (https://hofa.com.vn/#/merchants/...) thường tự mở app TRƯỚC KHI
-///   engine kịp chạy tới đây — vẫn lắng nghe để chắc chắn điều hướng đúng route, không phụ thuộc
-///   suy luận route ngầm của go_router từ URI gốc. Web dùng hash-router nên path thật nằm ở
-///   FRAGMENT của URI (sau dấu #), không phải uri.path — xem _handle().
-/// - Custom scheme "hofa://open?path=..." (trang trung chuyển hofa_landing/public/index.html
-///   dùng khi Universal Links không được tôn trọng, vd trình duyệt trong Zalo/Messenger) — path
-///   đích nằm trong query param "path", không suy được trực tiếp từ path của chính URI này (host
-///   "open" chiếm mất vị trí "merchants" nếu viết dạng hofa://merchants/slug), nên cần tự đọc
-///   query param rồi điều hướng tay bằng router.go().
+/// - Universal Links/App Links (https://store.hofa.com.vn/merchants/...) thường tự mở app
+///   TRƯỚC KHI engine kịp chạy tới đây — vẫn lắng nghe để chắc chắn điều hướng đúng route,
+///   không phụ thuộc suy luận route ngầm của go_router từ URI gốc.
+/// - Custom scheme "hofa://open?path=..." (trang trung chuyển hofa_store_app/web/index.html,
+///   deploy ở store.hofa.com.vn — dùng khi Universal Links không được tôn trọng, vd trình duyệt
+///   trong Zalo/Messenger) — path đích nằm trong query param "path", không suy được trực tiếp
+///   từ path của chính URI này (host "open" chiếm mất vị trí "merchants" nếu viết dạng
+///   hofa://merchants/slug), nên cần tự đọc query param rồi điều hướng tay bằng router.go().
+///
+/// TẠM THỜI (đang chẩn đoán lỗi "link chia sẻ rơi về trang chủ") — mọi bước đều hiện SnackBar
+/// ngay trên màn hình để thấy CHÍNH XÁC app nhận được gì, xoá hết các dòng _debug(...) sau khi
+/// xác định xong nguyên nhân thật.
 class DeepLinkService {
   DeepLinkService._();
   static final DeepLinkService instance = DeepLinkService._();
@@ -19,17 +24,36 @@ class DeepLinkService {
   final _appLinks = AppLinks();
   StreamSubscription<Uri>? _sub;
 
+  Future<void> _debug(String message) async {
+    BuildContext? context = navigatorKey.currentContext;
+    for (var i = 0; context == null && i < 25; i++) {
+      await Future.delayed(const Duration(milliseconds: 200));
+      context = navigatorKey.currentContext;
+    }
+    if (context == null || !context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('[deep link] $message'),
+        duration: const Duration(seconds: 6),
+      ),
+    );
+  }
+
   Future<void> init(GoRouter router) async {
     try {
       final initial = await _appLinks.getInitialLink();
+      _debug('getInitialLink() = $initial');
       if (initial != null) _handle(router, initial);
-    } catch (_) {
-      // không lấy được initial link — bỏ qua, app vẫn mở bình thường vào màn mặc định
+    } catch (e) {
+      _debug('getInitialLink() lỗi: $e');
     }
     _sub?.cancel();
     _sub = _appLinks.uriLinkStream.listen(
-      (uri) => _handle(router, uri),
-      onError: (_) {},
+      (uri) {
+        _debug('uriLinkStream nhận: $uri');
+        _handle(router, uri);
+      },
+      onError: (e) => _debug('uriLinkStream lỗi: $e'),
     );
   }
 
@@ -44,8 +68,8 @@ class DeepLinkService {
     } else if (uri.scheme == 'http' || uri.scheme == 'https') {
       if (uri.fragment.startsWith('/')) {
         // Web dùng hash-router mặc định (không gọi usePathUrlStrategy()) — path đích nằm
-        // trong FRAGMENT (https://hofa.com.vn/#/merchants/slug), uri.path lúc này luôn chỉ là
-        // "/" nên phải đọc fragment mới ra đúng path. Fragment tự chứa cả query nếu có (dạng
+        // trong FRAGMENT (https://.../#/merchants/slug), uri.path lúc này luôn chỉ là "/" nên
+        // phải đọc fragment mới ra đúng path. Fragment tự chứa cả query nếu có (dạng
         // #/path?query), không cần ghép uri.query riêng như nhánh path-based bên dưới.
         path = uri.fragment;
       } else {
@@ -53,6 +77,7 @@ class DeepLinkService {
         if (uri.hasQuery) path = '$path?${uri.query}';
       }
     }
+    _debug('_handle: scheme=${uri.scheme} path=$path');
     if (path == null || path.isEmpty || path == '/') return;
     router.go(path);
   }
