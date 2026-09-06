@@ -184,16 +184,17 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
               final merchant = merchantAsync.valueOrNull;
               final name = merchant?.name ?? 'cửa hàng này';
               // Slug (tên đọc được) thay vì UUID cho link dễ đọc — router.dart tự tra slug
-              // -> id thật khi mở link này (xem _merchantSlugPathRe). Đường dẫn THẲNG (không có
-              // "#/" — định dạng cũ từ thời hofa.com.vn còn là web app Khách hàng, đã bỏ) — bắt
-              // buộc để Universal Links/App Links (iOS/Android) khớp đúng path và mở thẳng vào
-              // app, xem hofa_landing/public/.well-known/.
+              // -> id thật khi mở link này (xem _merchantSlugPathRe). Đường dẫn THẲNG (không
+              // "#/") — bắt buộc để Universal Links/App Links (iOS/Android) khớp đúng path và
+              // mở thẳng vào app. Domain store.hofa.com.vn (không phải hofa.com.vn — trang giới
+              // thiệu tĩnh, không liên quan app) chỉ dùng để xác thực Universal/App Links + màn
+              // trung chuyển mở app này, xem Env.merchantShareBaseUrl.
               final linkId = merchant?.slug ?? merchantId;
               SharePlus.instance.share(
                 ShareParams(
                   text:
                       'Ghé "$name" trên HOFA nè: '
-                      '${Env.webBaseUrl}/merchants/$linkId',
+                      '${Env.merchantShareBaseUrl}/merchants/$linkId',
                   subject: name,
                 ),
               );

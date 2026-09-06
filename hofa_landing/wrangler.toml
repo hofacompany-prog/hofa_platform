@@ -1,12 +1,15 @@
-# NGƯNG DÙNG worker này — "custom_domain = true" cho "hofa.com.vn" từng CHIẾM MẤT domain khỏi
-# tay worker hofa-customer (app Flutter thật), vì Cloudflare Custom Domain chỉ gán được cho 1
-# worker duy nhất. Toàn bộ /.well-known/ + màn trung chuyển "Chia sẻ cửa hàng" đã dời sang
-# hofa_customer_app/web/ (tự host trong chính worker hofa-customer, không tranh domain nữa) —
-# xem hofa_customer_app/wrangler.toml. Giữ lại thư mục này chỉ để tham khảo, KHÔNG deploy lại
-# (không còn [[routes]] nên deploy cũng không còn chiếm domain nào cả).
+# Deploy: wrangler deploy (cần đăng nhập trước: wrangler login).
+# Trang giới thiệu tĩnh THUẦN (không phải app Flutter, không còn liên quan gì tới link "Chia sẻ
+# cửa hàng" nữa — phần đó (transit page + .well-known/) đã dời hẳn sang domain
+# store.hofa.com.vn (worker hofa-store, không còn phục vụ web quản lý cửa hàng — chủ shop dùng
+# app native), để hofa.com.vn không còn bị tranh chấp/hiểu nhầm là domain của app Khách hàng.
 name = "hofa-landing"
 compatibility_date = "2026-08-08"
 
 [assets]
 directory = "./public"
 not_found_handling = "single-page-application"
+
+[[routes]]
+pattern = "hofa.com.vn"
+custom_domain = true

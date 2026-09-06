@@ -5,11 +5,14 @@ class Env {
   static const supabaseAnonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
   static const apiBaseUrl = String.fromEnvironment('API_BASE_URL');
 
-  /// Gốc URL app Khách đã deploy — dùng để dựng link chia sẻ (vd chia sẻ 1 cửa hàng, xem
-  /// merchant_detail_screen.dart). KHÔNG lấy từ Uri.base vì app này còn có bản Android native
-  /// (không có "URL trình duyệt" để đọc). Domain riêng hofa.com.vn đã gắn sẵn cho worker
-  /// hofa-customer (xác nhận qua app-version.json khớp nhau ở cả 2 domain).
-  static const webBaseUrl = 'https://hofa.com.vn';
+  /// Domain dùng để dựng link "Chia sẻ cửa hàng" (merchant_detail_screen.dart) — KHÔNG phải
+  /// domain của chính app Khách hàng (app này không có bản web/PWA công khai ở domain riêng,
+  /// hofa.com.vn là trang giới thiệu tĩnh, xem hofa_landing/). store.hofa.com.vn (worker
+  /// hofa-store, không còn phục vụ web quản lý cửa hàng) chỉ đóng vai trò xác thực Universal
+  /// Links (iOS)/App Links (Android, xem web/.well-known/ trong hofa_store_app) + trang trung
+  /// chuyển mở THẲNG app Khách hàng — xem ios/Runner/Runner.entitlements và
+  /// android/app/src/main/AndroidManifest.xml (phải khớp đúng domain này).
+  static const merchantShareBaseUrl = 'https://store.hofa.com.vn';
   /// Được set bằng --dart-define=APP_VERSION=<git hash> trong build_web.sh, không
   /// khai báo trong env.json — mặc định '0.1.0+1' chỉ dùng khi `flutter run` lúc dev.
   static const appVersion = String.fromEnvironment(
