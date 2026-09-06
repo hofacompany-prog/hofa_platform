@@ -79,6 +79,17 @@ class DeepLinkService {
     }
     _debug('_handle: scheme=${uri.scheme} path=$path');
     if (path == null || path.isEmpty || path == '/') return;
-    router.go(path);
+    // Trễ 1 nhịp trước khi điều hướng — app RESUME từ nền (đúng lúc mở link) thường kèm Supabase
+    // tự làm mới phiên đăng nhập (onAuthStateChange), kích hoạt GoRouterRefreshStream đánh giá
+    // lại redirect() cho vị trí HIỆN TẠI (vẫn là route cũ lúc đó) gần như cùng lúc — nếu việc đó
+    // hoàn tất SAU router.go() bên dưới, có thể ghi đè ngược lại route cũ. Đợi 1 nhịp ngắn để
+    // phần làm mới phiên đó ổn định trước, tránh 2 lần điều hướng tranh nhau (đã xác nhận thật:
+    // cold start — app tắt hẳn mở lại — vào đúng trang, warm start — app đang mở nền — lại về
+    // trang chủ, đúng dấu hiệu của cuộc đua này).
+    final target = path;
+    Future.delayed(const Duration(milliseconds: 500), () {
+      _debug('router.go (trễ 500ms): $target');
+      router.go(target);
+    });
   }
 }
