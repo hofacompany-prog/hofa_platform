@@ -18,6 +18,7 @@ import '../models/otp_settings.dart';
 import '../models/product.dart';
 import '../models/review.dart';
 import '../models/shipping_fee_settings.dart';
+import '../models/small_order_fee_settings.dart';
 import '../models/topping.dart';
 import '../models/voucher.dart';
 import '../models/wholesale_tier.dart';
@@ -190,6 +191,14 @@ final merchantFeeTiersProvider = FutureProvider.autoDispose
 final shippingFeeSettingsProvider =
     FutureProvider.autoDispose<ShippingFeeSettings?>(
       (ref) => ref.watch(shippingRepoProvider).feeSettings(),
+    );
+
+/// Cấu hình phí đơn nhỏ/lẻ toàn sàn (chỉnh ở app admin) — dùng để cộng thêm phí ở giỏ hàng/
+/// thanh toán khi giá trị giỏ hàng dưới ngưỡng, xem
+/// hofa-db/108_buy_on_behalf_price_fold_and_small_order_fee.sql.
+final smallOrderFeeSettingsProvider =
+    FutureProvider.autoDispose<SmallOrderFeeSettings?>(
+      (ref) => ref.watch(shippingRepoProvider).smallOrderFeeSettings(),
     );
 
 /// Khoảng cách đường đi thực tế (km) giữa 2 toạ độ (lat1,lng1,lat2,lng2) — dùng ở checkout để

@@ -691,7 +691,18 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     final orderCount = scheduledOrders?.length ?? 1;
     final totalShippingFee = shippingFee * orderCount;
 
-    final total = itemsSubtotal + totalShippingFee - _voucherDiscount;
+    // Phí đơn nhỏ/lẻ — tính trên GIÁ TRỊ GIỎ HÀNG (itemsSubtotal, đã gồm % mua hộ nếu có),
+    // KHÔNG tính trên tổng thanh toán cuối (không gồm phí ship) — đúng điều kiện phía server
+    // (create_order dùng v_subtotal, không dùng total_amount), chỉ để KHÁCH XEM TRƯỚC ở đây,
+    // xem hofa-db/108_buy_on_behalf_price_fold_and_small_order_fee.sql.
+    final smallOrderFeeSettings = ref
+        .watch(smallOrderFeeSettingsProvider)
+        .valueOrNull;
+    final smallOrderFee =
+        (smallOrderFeeSettings?.estimate(itemsSubtotal) ?? 0) * orderCount;
+
+    final total =
+        itemsSubtotal + totalShippingFee + smallOrderFee - _voucherDiscount;
 
     return Scaffold(
       appBar: AppBar(
@@ -1200,6 +1211,28 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       ],
                     ),
                   ),
+                  if (smallOrderFee > 0)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Expanded(
+                            child: Text(
+                              'Phí đơn nhỏ',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            formatVnd(smallOrderFee),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
+                      ),
+                    ),
                   if (_voucherDiscount > 0)
                     Padding(
                       padding: const EdgeInsets.only(top: 4),

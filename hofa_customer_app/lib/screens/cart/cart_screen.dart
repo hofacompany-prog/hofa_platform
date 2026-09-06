@@ -177,6 +177,16 @@ class CartScreen extends ConsumerWidget {
         ? _estimatedShippingFee(ref, cart, displaySubtotal)
         : null;
 
+    // Phí đơn nhỏ/lẻ — tính trên giá trị GIỎ HÀNG (displaySubtotal), không phải tổng thanh
+    // toán cuối, chỉ để xem trước (số thật chốt lại ở màn thanh toán/lúc tạo đơn), xem
+    // hofa-db/108_buy_on_behalf_price_fold_and_small_order_fee.sql.
+    final smallOrderFeeSettings = ref
+        .watch(smallOrderFeeSettingsProvider)
+        .valueOrNull;
+    final smallOrderFee = isInstantCart
+        ? (smallOrderFeeSettings?.estimate(displaySubtotal) ?? 0)
+        : 0;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Giỏ hàng'),
@@ -363,6 +373,17 @@ class CartScreen extends ConsumerWidget {
                                 Text(
                                   'Phí giao hàng (ước tính): '
                                   '${shippingFee == 0 ? 'Miễn phí' : formatVnd(shippingFee)}',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.outline,
+                                  ),
+                                ),
+                              ],
+                              if (smallOrderFee > 0) ...[
+                                const SizedBox(height: 2),
+                                Text(
+                                  'Phí đơn nhỏ: ${formatVnd(smallOrderFee)}',
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: theme.textTheme.bodySmall?.copyWith(

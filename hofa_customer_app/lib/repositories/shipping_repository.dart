@@ -1,5 +1,6 @@
 import '../core/api_client.dart';
 import '../models/shipping_fee_settings.dart';
+import '../models/small_order_fee_settings.dart';
 
 class ShippingRepository {
   final _api = ApiClient.instance;
@@ -8,6 +9,12 @@ class ShippingRepository {
     final json =
         await _api.get('/shipping-fee-settings') as Map<String, dynamic>?;
     return json == null ? null : ShippingFeeSettings.fromJson(json);
+  }
+
+  Future<SmallOrderFeeSettings?> smallOrderFeeSettings() async {
+    final json =
+        await _api.get('/small-order-fee-settings') as Map<String, dynamic>?;
+    return json == null ? null : SmallOrderFeeSettings.fromJson(json);
   }
 
   /// Khoảng cách ĐƯỜNG ĐI THỰC TẾ (km) giữa 2 toạ độ, qua GET /route-distance (server gọi OSRM,
