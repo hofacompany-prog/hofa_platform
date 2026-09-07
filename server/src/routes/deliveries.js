@@ -6,6 +6,8 @@ const { requireFields, pagination, requireRole, requireMerchantAccess, requireOr
 const dispatch = require('../dispatch');
 const config = require('../config');
 const push = require('../push');
+const { routeMatrixKm } = require('../routing');
+const { bestRoutePath } = require('../batchDispatch');
 
 async function requireOwnDriverRow(ctx) {
   requireRole(ctx, ['driver']);
@@ -73,6 +75,74 @@ router.get('/deliveries/mine', asyncHandler(async (req, res) => {
     params
   );
   res.json({ ok: true, data: rows });
+}));
+
+/** Thứ tự điểm dừng (lấy/giao) tối ưu cho MỌI chuyến đang chạy của tài xế hiện tại (ghép đơn,
+ * xem hofa-db/107_order_batching.sql) — dùng để app tài xế hiện danh sách điểm dừng gọn, đúng
+ * lộ trình ngắn nhất thay vì đoán theo thứ tự nhận đơn. Tái dùng ĐÚNG thuật toán +
+ * routeMatrixKm (đường đi thật qua OSRM, tự rớt về haversine) đang dùng để quyết định ghép đơn
+ * (server/src/batchDispatch.js) — thứ tự hiện ra luôn khớp với lộ trình hệ thống đã tính khi
+ * ghép, không tính riêng 1 kiểu khác gây lệch.
+ * 0 hoặc 1 chuyến: trả thẳng thứ tự hiển nhiên (lấy trước nếu chưa lấy, rồi giao), KHÔNG gọi
+ * OSRM — đỡ 1 lượt gọi mạng không cần thiết cho trường hợp phổ biến nhất (không ghép đơn). */
+router.get('/deliveries/mine/route', asyncHandler(async (req, res) => {
+  const driver = await requireOwnDriverRow(req.ctx);
+  const rows = await db.query(
+    `SELECT d.id AS delivery_id, d.order_id, d.status,
+            b.latitude AS pickup_lat, b.longitude AS pickup_lng,
+            o.ship_latitude AS dropoff_lat, o.ship_longitude AS dropoff_lng
+       FROM deliveries d
+       JOIN orders o ON o.id = d.order_id
+       JOIN branches b ON b.id = o.branch_id
+      WHERE d.driver_id = $1 AND d.status NOT IN ('delivered', 'failed', 'returned')
+      ORDER BY d.assigned_at ASC`,
+    [driver.id]
+  );
+
+  // Đơn đã 'picked_up'/'delivering' chỉ còn điểm giao — điểm lấy coi như đã xong, không đưa vào
+  // danh sách cần ghé nữa (khớp đúng cách batchDispatch.js xử lý "đã đứng ở điểm lấy").
+  const pickupDone = (status) => status === 'picked_up' || status === 'delivering';
+
+  const naiveStops = () => {
+    const stops = [];
+    for (const r of rows) {
+      if (!pickupDone(r.status)) stops.push({ delivery_id: r.delivery_id, order_id: r.order_id, type: 'pickup' });
+      stops.push({ delivery_id: r.delivery_id, order_id: r.order_id, type: 'dropoff' });
+    }
+    return stops;
+  };
+
+  if (rows.length <= 1) {
+    return res.json({ ok: true, data: { stops: naiveStops() } });
+  }
+
+  if (
+    driver.current_latitude == null || driver.current_longitude == null ||
+    rows.some((r) => r.pickup_lat == null || r.dropoff_lat == null)
+  ) {
+    // Thiếu toạ độ (hiếm — driver chưa từng bật GPS, hoặc thiếu toạ độ chi nhánh/giao hàng) —
+    // rớt về đúng thứ tự nhận đơn như trước đây, không chặn cứng màn hình.
+    return res.json({ ok: true, data: { stops: naiveStops() } });
+  }
+
+  const points = [{ lat: driver.current_latitude, lng: driver.current_longitude }];
+  const orders = rows.map((r) => {
+    const done = pickupDone(r.status);
+    const pickupIdx = done ? null : points.push({ lat: r.pickup_lat, lng: r.pickup_lng }) - 1;
+    const dropoffIdx = points.push({ lat: r.dropoff_lat, lng: r.dropoff_lng }) - 1;
+    return { pickupIdx, dropoffIdx, pickupDone: done, delivery_id: r.delivery_id, order_id: r.order_id };
+  });
+
+  const matrix = await routeMatrixKm(points);
+  const { pathIndices } = bestRoutePath(0, orders, matrix);
+
+  const idxToStop = new Map();
+  for (const o of orders) {
+    if (!o.pickupDone) idxToStop.set(o.pickupIdx, { delivery_id: o.delivery_id, order_id: o.order_id, type: 'pickup' });
+    idxToStop.set(o.dropoffIdx, { delivery_id: o.delivery_id, order_id: o.order_id, type: 'dropoff' });
+  }
+  const stops = pathIndices.map((idx) => idxToStop.get(idx)).filter(Boolean);
+  res.json({ ok: true, data: { stops } });
 }));
 
 router.get('/deliveries/:id', asyncHandler(async (req, res) => {

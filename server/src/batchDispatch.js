@@ -52,6 +52,54 @@ function bestRouteKm(startIdx, orders, matrix) {
   return best;
 }
 
+/** Y HỆT bestRouteKm (đệ quy, cùng cách cắt tỉa, cùng ý nghĩa [orders]/[matrix]) nhưng TRẢ THÊM
+ * thứ tự điểm đã đi qua thay vì chỉ mỗi khoảng cách — dùng để hiện danh sách điểm dừng đã sắp
+ * xếp cho tài xế (xem GET /deliveries/mine/route, server/src/routes/deliveries.js), không dùng
+ * cho việc quyết định có ghép đơn hay không (chỗ đó vẫn dùng bestRouteKm, không đổi). Trả về
+ * { distanceKm, pathIndices } — pathIndices là mảng chỉ số điểm theo ĐÚNG thứ tự nên ghé qua,
+ * KHÔNG gồm điểm xuất phát [startIdx]. orders rỗng trả về pathIndices rỗng. Mỗi phần tử [orders]
+ * có thể tự set sẵn pickupDone: true (đơn đã lấy hàng xong, xem GET /deliveries/mine/route) để
+ * bỏ qua hẳn điểm lấy của đơn đó, chỉ còn tính đường tới điểm giao — mặc định false nếu không
+ * truyền, giữ đúng hành vi "chưa ghé điểm nào" như bestRouteKm. */
+function bestRoutePath(startIdx, orders, matrix) {
+  if (orders.length === 0) return { distanceKm: 0, pathIndices: [] };
+  let best = Infinity;
+  let bestPath = [];
+
+  function recurse(currentIdx, remaining, distSoFar, path) {
+    if (distSoFar >= best) return;
+    let allDone = true;
+    for (let i = 0; i < remaining.length; i++) {
+      const o = remaining[i];
+      if (!o.pickupDone) {
+        allDone = false;
+        const nextIdx = o.pickupIdx;
+        const next = remaining.slice();
+        next[i] = { ...o, pickupDone: true };
+        recurse(nextIdx, next, distSoFar + matrix[currentIdx][nextIdx], [...path, nextIdx]);
+      } else if (!o.dropoffDone) {
+        allDone = false;
+        const nextIdx = o.dropoffIdx;
+        const next = remaining.slice();
+        next[i] = { ...o, dropoffDone: true };
+        recurse(nextIdx, next, distSoFar + matrix[currentIdx][nextIdx], [...path, nextIdx]);
+      }
+    }
+    if (allDone && distSoFar < best) {
+      best = distSoFar;
+      bestPath = path;
+    }
+  }
+
+  recurse(
+    startIdx,
+    orders.map((o) => ({ ...o, pickupDone: o.pickupDone ?? false, dropoffDone: o.dropoffDone ?? false })),
+    0,
+    []
+  );
+  return { distanceKm: best, pathIndices: bestPath };
+}
+
 /** Tìm 1 tài xế ĐANG CHẠY đơn khác (đã nhận nhưng CHƯA lấy hàng — deliveries.status IN
  * ('accepted', 'arrived_store'), tức kể cả lúc đã đứng tới nơi lấy hàng nhưng chưa bấm "Đã lấy
  * hàng") phù hợp để ghép thêm [order] vào lộ trình, theo đúng điều kiện: tổng số đơn (cũ + mới)
@@ -137,4 +185,4 @@ async function findBatchableDriver(order, branch, { backupPool = false, excludeD
   return { driver: best.driver, pickupEtaMinutes };
 }
 
-module.exports = { findBatchableDriver, bestRouteKm, currentBatchSettings };
+module.exports = { findBatchableDriver, bestRouteKm, bestRoutePath, currentBatchSettings };

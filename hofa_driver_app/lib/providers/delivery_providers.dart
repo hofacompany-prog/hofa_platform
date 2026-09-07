@@ -3,6 +3,7 @@ import '../models/branch.dart';
 import '../models/delivery.dart';
 import '../models/order.dart';
 import '../models/product.dart';
+import '../models/route_stop.dart';
 import '../repositories/delivery_repository.dart';
 import '../repositories/order_repository.dart';
 import '../repositories/pickup_repository.dart';
@@ -53,6 +54,17 @@ final activeDeliveryProvider = FutureProvider.autoDispose<Delivery?>((ref) async
 });
 
 final deliveryProvider = FutureProvider.autoDispose.family<Delivery, String>((ref, id) => _deliveryRepo.get(id));
+
+/// Thứ tự điểm dừng (lấy/giao) đã sắp xếp tối ưu cho TOÀN BỘ chuyến đang chạy — xem
+/// DeliveryRepository.myRoute()/GET /deliveries/mine/route. Watch activeDeliveriesProvider
+/// trước để tự tính lại mỗi khi danh sách chuyến đang chạy đổi (nhận thêm đơn ghép, đổi trạng
+/// thái lấy/giao...), dùng ở delivery_detail_screen.dart khi có ≥2 chuyến cùng lúc.
+final activeRouteProvider = FutureProvider.autoDispose<List<RouteStop>>((
+  ref,
+) async {
+  await ref.watch(activeDeliveriesProvider.future);
+  return _deliveryRepo.myRoute();
+});
 
 /// Đơn (Order) + chi nhánh lấy hàng (Branch) ứng với 1 chuyến — dùng chung cho home_screen.dart
 /// (hiện mã đơn ở mỗi thẻ chuyến) và offer_screen.dart (chi tiết điểm lấy/giao lúc xác nhận).

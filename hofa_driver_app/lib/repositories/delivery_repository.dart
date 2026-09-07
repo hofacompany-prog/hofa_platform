@@ -1,5 +1,6 @@
 import '../core/api_client.dart';
 import '../models/delivery.dart';
+import '../models/route_stop.dart';
 
 class DeliveryRepository {
   final _api = ApiClient.instance;
@@ -10,6 +11,15 @@ class DeliveryRepository {
       'limit': limit,
     }) as List;
     return list.map((e) => Delivery.fromJson(e as Map<String, dynamic>)).toList();
+  }
+
+  /// Thứ tự điểm dừng (lấy/giao) tối ưu cho MỌI chuyến đang chạy — xem
+  /// GET /deliveries/mine/route (server/src/routes/deliveries.js), dùng để hiện danh sách điểm
+  /// dừng gọn khi có ≥2 đơn ghép, xem delivery_detail_screen.dart.
+  Future<List<RouteStop>> myRoute() async {
+    final data = await _api.get('/deliveries/mine/route') as Map<String, dynamic>;
+    final list = data['stops'] as List;
+    return list.map((e) => RouteStop.fromJson(e as Map<String, dynamic>)).toList();
   }
 
   Future<Delivery> get(String id) async => Delivery.fromJson(await _api.get('/deliveries/$id') as Map<String, dynamic>);

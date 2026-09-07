@@ -11,6 +11,7 @@ import '../../models/branch.dart';
 import '../../models/chat_message.dart';
 import '../../models/delivery.dart';
 import '../../models/order.dart' as model;
+import '../../models/route_stop.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/delivery_providers.dart';
 import '../../repositories/delivery_repository.dart';
@@ -82,14 +83,213 @@ class DeliveryDetailScreen extends ConsumerWidget {
           ids.length > 1 ? 'Đang giao (${ids.length} đơn)' : 'Chuyến giao hàng',
         ),
       ),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          for (var i = 0; i < ids.length; i++) ...[
-            if (i > 0) const SizedBox(height: 20),
-            _DeliveryProgressCard(deliveryId: ids[i]),
+      // Chỉ 1 chuyến (phổ biến nhất — không ghép đơn): giữ nguyên hiện thẳng đầy đủ như trước,
+      // không cần gọi thêm API sắp xếp lộ trình (activeRouteProvider) cho trường hợp này.
+      body: ids.length <= 1
+          ? ListView(
+              padding: const EdgeInsets.all(16),
+              children: [_DeliveryProgressCard(deliveryId: ids.first)],
+            )
+          : _RouteStopList(ids: ids),
+    );
+  }
+}
+
+/// Danh sách ĐIỂM DỪNG (lấy/giao) gọn — dùng khi có ≥2 chuyến đang chạy (ghép đơn). Thứ tự lấy
+/// từ activeRouteProvider (GET /deliveries/mine/route, đúng lộ trình ngắn nhất tính bằng cùng
+/// thuật toán server dùng lúc quyết định ghép) — mỗi dòng chỉ hiện gọn (loại điểm/mã đơn/địa
+/// chỉ), bấm "Xem đơn hàng" mới mở bottom sheet chứa đầy đủ _DeliveryProgressCard, tránh chiếm
+/// hết màn hình như trước (mọi chuyến đều hiện đầy đủ cùng lúc).
+class _RouteStopList extends ConsumerWidget {
+  final List<String> ids;
+  const _RouteStopList({required this.ids});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final routeAsync = ref.watch(activeRouteProvider);
+    // Đang tải/lỗi lấy lộ trình tối ưu — rớt về đúng thứ tự cũ (lấy rồi giao từng chuyến theo
+    // assignedAt) thay vì để trắng màn hình chờ API, xem hofa-db/107_order_batching.sql.
+    final stops =
+        routeAsync.valueOrNull ??
+        [
+          for (final id in ids) ...[
+            RouteStop(deliveryId: id, orderId: '', isPickup: true),
+            RouteStop(deliveryId: id, orderId: '', isPickup: false),
           ],
-        ],
+        ];
+
+    return ListView.separated(
+      padding: const EdgeInsets.all(16),
+      itemCount: stops.length,
+      separatorBuilder: (_, _) => const SizedBox(height: 10),
+      itemBuilder: (context, i) => _RouteStopTile(stop: stops[i], index: i),
+    );
+  }
+}
+
+class _RouteStopTile extends ConsumerWidget {
+  final RouteStop stop;
+  final int index;
+  const _RouteStopTile({required this.stop, required this.index});
+
+  void _openOrderSheet(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.9,
+        minChildSize: 0.5,
+        maxChildSize: 0.95,
+        expand: false,
+        builder: (context, scrollController) => SingleChildScrollView(
+          controller: scrollController,
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.outlineVariant,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              _DeliveryProgressCard(deliveryId: stop.deliveryId),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    // stop.orderId có thể rỗng (fallback lúc activeRouteProvider chưa tải xong, xem
+    // _RouteStopList) — lấy lại đúng orderId thật qua deliveryProvider (đằng nào cũng cần gọi
+    // để biết isBuyOnBehalf), không để trắng dòng vì thiếu orderId tạm thời.
+    final deliveryAsync = ref.watch(deliveryProvider(stop.deliveryId));
+    final isBuyOnBehalf = deliveryAsync.valueOrNull?.isBuyOnBehalf ?? false;
+    final effectiveOrderId = stop.orderId.isNotEmpty
+        ? stop.orderId
+        : deliveryAsync.valueOrNull?.orderId;
+    final orderAsync = effectiveOrderId == null
+        ? null
+        : ref.watch(orderForDeliveryProvider(effectiveOrderId));
+    final order = orderAsync?.valueOrNull;
+    final branchAsync = (stop.isPickup && order != null)
+        ? ref.watch(branchForDeliveryProvider(order.branchId))
+        : null;
+    final branch = branchAsync?.valueOrNull;
+
+    final subtitle = stop.isPickup
+        ? (branch?.fullLine ?? '')
+        : (order?.shipFullAddress ?? '');
+
+    return Card(
+      elevation: 0,
+      color: theme.colorScheme.surfaceContainerLow,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: BorderSide(color: theme.colorScheme.outlineVariant),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            CircleAvatar(
+              radius: 16,
+              backgroundColor: stop.isPickup
+                  ? theme.colorScheme.primaryContainer
+                  : theme.colorScheme.secondaryContainer,
+              child: Text(
+                '${index + 1}',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: stop.isPickup
+                      ? theme.colorScheme.onPrimaryContainer
+                      : theme.colorScheme.onSecondaryContainer,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        stop.isPickup
+                            ? Icons.storefront_outlined
+                            : Icons.flag_outlined,
+                        size: 16,
+                        color: stop.isPickup
+                            ? theme.colorScheme.primary
+                            : theme.colorScheme.secondary,
+                      ),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          '${stop.isPickup ? 'Lấy hàng' : 'Giao hàng'}'
+                          '${order != null ? ' — Đơn ${order.orderCode}' : ''}',
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (isBuyOnBehalf)
+                        Container(
+                          margin: const EdgeInsets.only(left: 4),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.secondary,
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            'MUA HỘ',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: theme.colorScheme.onSecondary,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  if (subtitle.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(
+                        subtitle,
+                        style: theme.textTheme.bodySmall,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            OutlinedButton(
+              onPressed: () => _openOrderSheet(context),
+              child: const Text('Xem đơn hàng'),
+            ),
+          ],
+        ),
       ),
     );
   }
