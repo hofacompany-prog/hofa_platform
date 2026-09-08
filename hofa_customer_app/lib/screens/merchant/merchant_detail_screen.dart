@@ -7,6 +7,7 @@ import '../../core/env.dart';
 import '../../core/geo.dart';
 import '../../core/maps_launcher.dart';
 import '../../models/category.dart';
+import '../../models/merchant.dart';
 import '../../models/product.dart';
 import '../../providers/app_providers.dart';
 import '../../widgets/buy_on_behalf_badge.dart';
@@ -158,6 +159,41 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
     }
   }
 
+  /// Bảng phí mua hộ (BuyOnBehalfFeeNotice) — CHỈ hiện ở đây, khi bấm vào nhãn "Mua hộ" dưới
+  /// avatar cửa hàng. Trước đây hiện luôn (không cần bấm) ở màn này + màn chi tiết sản phẩm +
+  /// màn thanh toán, gây rối vì lặp lại nhiều nơi — theo yêu cầu, giờ chỉ có đúng 1 lối vào.
+  void _showBuyOnBehalfNotice(Merchant merchant) {
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Center(
+                  child: Container(
+                    width: 40,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 12),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.outlineVariant,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                BuyOnBehalfFeeNotice(merchant: merchant),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final merchantId = widget.merchantId;
@@ -233,7 +269,9 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
                       ],
                       if (merchant.isBuyOnBehalf) ...[
                         const SizedBox(height: 4),
-                        const BuyOnBehalfBadge(),
+                        BuyOnBehalfBadge(
+                          onTap: () => _showBuyOnBehalfNotice(merchant),
+                        ),
                       ],
                     ],
                   ),
@@ -404,7 +442,6 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
                 ],
               ),
               if (merchant.isBuyOnBehalf) ...[
-                BuyOnBehalfFeeNotice(merchant: merchant),
                 Row(
                   children: [
                     Expanded(

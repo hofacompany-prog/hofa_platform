@@ -13,7 +13,6 @@ import '../../models/wholesale_tier.dart';
 import '../../providers/app_providers.dart';
 import '../../providers/cart_provider.dart';
 import '../../models/available_driver.dart';
-import '../../widgets/buy_on_behalf_fee_notice.dart';
 import '../../widgets/driver_picker_dialog.dart';
 import '../../widgets/voucher_picker_dialog.dart';
 import '../../widgets/address_map_flow.dart';
@@ -866,8 +865,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   ),
                 const Divider(height: 32),
                 if (merchant != null && merchant.isBuyOnBehalf) ...[
-                  BuyOnBehalfFeeNotice(merchant: merchant),
-                  const SizedBox(height: 12),
                   Text('Cách tìm tài xế', style: theme.textTheme.titleSmall),
                   RadioGroup<bool>(
                     groupValue: _autoFindDriver,
