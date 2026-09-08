@@ -1301,13 +1301,30 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
                     const SizedBox(height: 16),
                     // Xem/sửa menu (danh mục/sản phẩm/biến thể/tồn kho) đầy đủ như chính cửa
                     // hàng tự quản lý — xem merchant_products_screen.dart.
-                    OutlinedButton.icon(
-                      onPressed: () => context.push(
-                        '/merchants/${m.id}/products',
-                        extra: m,
-                      ),
-                      icon: const Icon(Icons.storefront_outlined),
-                      label: const Text('Quản lý menu'),
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 8,
+                      children: [
+                        OutlinedButton.icon(
+                          onPressed: () => context.push(
+                            '/merchants/${m.id}/products',
+                            extra: m,
+                          ),
+                          icon: const Icon(Icons.storefront_outlined),
+                          label: const Text('Quản lý menu'),
+                        ),
+                        // Danh mục RIÊNG của cửa hàng (merchant_categories) — khác danh mục
+                        // ngành hàng hệ thống (/categories, admin quản lý chung toàn sàn) —
+                        // xem merchant_categories_screen.dart.
+                        OutlinedButton.icon(
+                          onPressed: () => context.push(
+                            '/merchants/${m.id}/categories',
+                            extra: m,
+                          ),
+                          icon: const Icon(Icons.category_outlined),
+                          label: const Text('Quản lý danh mục'),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 16),
                     MerchantToppingGroupsCard(merchant: m),

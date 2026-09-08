@@ -543,6 +543,7 @@ class AdminRepository {
     required String merchantId,
     required String categoryId,
     required String name,
+    int? sortOrder,
   }) async => MerchantCategory.fromJson(
     await _api.post(
           '/merchant-categories',
@@ -550,6 +551,7 @@ class AdminRepository {
             'merchant_id': merchantId,
             'category_id': categoryId,
             'name': name,
+            if (sortOrder != null) 'sort_order': sortOrder,
           },
         )
         as Map<String, dynamic>,
