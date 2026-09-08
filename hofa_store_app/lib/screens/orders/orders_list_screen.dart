@@ -43,9 +43,8 @@ bool _matchesGroup(Order o, String group) {
   return _statusGroups[group]!.contains(o.status);
 }
 
-/// Thứ tự tab hiển thị — "Sắp tới" lên đầu (đơn mới chưa xác nhận cần thấy ngay), tab MẶC ĐỊNH
-/// lúc mở màn vẫn là "Đang chuẩn bị" (đặt riêng ở _selectedGroupProvider, không suy từ .first
-/// nữa) — bếp đang làm gì mới là việc cần thấy ngay khi mở màn, dù không còn đứng đầu danh sách.
+/// Thứ tự tab hiển thị — "Sắp tới" lên đầu VÀ cũng là tab MẶC ĐỊNH lúc mở màn (đơn mới chưa
+/// xác nhận cần thấy ngay đầu tiên, xem _selectedGroupProvider).
 const _tabOrder = [
   'Sắp tới',
   'Đang chuẩn bị',
@@ -54,8 +53,12 @@ const _tabOrder = [
   'Đã hủy',
 ];
 
+/// 3 nhóm hiện số đếm nhỏ trên chip (để chủ quán kiểm soát nhanh không cần bấm vào từng tab) —
+/// cố ý bỏ "Đã hoàn tất"/"Đã hủy" vì đó là trạng thái kết thúc, không cần theo dõi số lượng.
+const _badgeGroups = {'Sắp tới', 'Đang chuẩn bị', 'Đã làm xong'};
+
 final _selectedGroupProvider = StateProvider.autoDispose<String>(
-  (ref) => 'Đang chuẩn bị',
+  (ref) => 'Sắp tới',
 );
 
 /// Ô lọc khoảng thời gian đã dời qua màn Tài chính (finance_screen.dart) — màn Đơn hàng là
@@ -70,7 +73,9 @@ final _ordersProvider = FutureProvider.autoDispose<List<Order>>((ref) async {
 
 /// Đơn giao ngay đặt trước còn "ngủ" (chưa tới giờ báo/thao tác được) — chỉ xem trước, gộp vào
 /// cuối danh sách tab "Sắp tới" (không giới hạn theo ngày đặt như _ordersProvider ở trên, vì
-/// khách có thể đặt trước nhiều ngày mà cửa hàng vẫn cần thấy ngay từ lúc đặt).
+/// khách có thể đặt trước nhiều ngày mà cửa hàng vẫn cần thấy ngay từ lúc đặt). Watch KHÔNG ĐIỀU
+/// KIỆN (trước đây chỉ tải khi đang đứng ở tab "Sắp tới") — số đếm trên chip "Sắp tới" cần đúng
+/// dù đang xem tab khác, xem _badgeGroups.
 final _upcomingScheduledOrdersProvider = FutureProvider.autoDispose<List<Order>>(
   (ref) async {
     final merchant = await ref.watch(myMerchantProvider.future);
@@ -98,7 +103,11 @@ final _unreadOrderIdsProvider = FutureProvider.autoDispose<Set<String>>((
 });
 
 class OrdersListScreen extends ConsumerStatefulWidget {
-  const OrdersListScreen({super.key});
+  // Tab mở sẵn lúc vào màn — null thì dùng mặc định của _selectedGroupProvider ("Sắp tới").
+  // Truyền tường minh khi có 1 lối vào khác cố ý nhắm 1 tab cụ thể (vd thẻ "Đang chuẩn bị" ở
+  // home_screen.dart) — không dựa vào mặc định chung của màn này vì mặc định có thể đổi sau.
+  final String? initialGroup;
+  const OrdersListScreen({super.key, this.initialGroup});
 
   @override
   ConsumerState<OrdersListScreen> createState() => _OrdersListScreenState();
@@ -110,6 +119,13 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
   @override
   void initState() {
     super.initState();
+    // Ghi đè tab mặc định NGAY TRƯỚC lần build đầu tiên — an toàn với autoDispose vì build()
+    // ngay sau đó sẽ watch provider này, tự giữ nó sống, không có khe hở bị dispose lại về
+    // mặc định giữa lúc set và lúc watch (khác nếu set từ màn khác trước khi điều hướng tới).
+    final initialGroup = widget.initialGroup;
+    if (initialGroup != null) {
+      ref.read(_selectedGroupProvider.notifier).state = initialGroup;
+    }
     // Có đơn mới/đổi trạng thái ở bất kỳ đâu thì danh sách đang mở tự làm mới ngay, không cần
     // thoát ra vào lại hay kéo tay.
     _orderEventSub = PushService.instance.orderEventStream.listen((_) {
@@ -132,10 +148,19 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
     final selectedGroup = ref.watch(_selectedGroupProvider);
     final unreadOrderIds =
         ref.watch(_unreadOrderIdsProvider).valueOrNull ?? const <String>{};
-    // Chỉ cần tải khi đang xem đúng tab "Sắp tới" — tránh gọi API thừa cho 4 tab còn lại.
-    final upcomingScheduled = selectedGroup == 'Sắp tới'
-        ? ref.watch(_upcomingScheduledOrdersProvider).valueOrNull ?? const []
-        : const <Order>[];
+    // Watch không điều kiện (không chỉ lúc đang ở tab "Sắp tới") — cần cho số đếm trên chip
+    // luôn đúng dù đang xem tab khác, xem _badgeGroups.
+    final upcomingScheduled =
+        ref.watch(_upcomingScheduledOrdersProvider).valueOrNull ?? const [];
+    // Đặt tên khác data callback của ordersAsync.when bên dưới (cũng đặt "allOrders") — 2 biến
+    // độc lập, không phải cùng 1 biến bị shadow, chỉ trùng ý nghĩa nên trùng tên gốc.
+    final ordersLoadedSoFar = ordersAsync.valueOrNull ?? const <Order>[];
+    int countFor(String group) {
+      final base = ordersLoadedSoFar
+          .where((o) => _matchesGroup(o, group))
+          .length;
+      return group == 'Sắp tới' ? base + upcomingScheduled.length : base;
+    }
 
     return Scaffold(
       appBar: AppBar(
@@ -145,24 +170,27 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
       body: Column(
         children: [
           SizedBox(
-            height: 44,
+            height: 48,
             child: ListView(
               scrollDirection: Axis.horizontal,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              children: _tabOrder
-                  .map(
-                    (name) => Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      child: ChoiceChip(
-                        label: Text(name),
-                        selected: selectedGroup == name,
-                        onSelected: (_) =>
-                            ref.read(_selectedGroupProvider.notifier).state =
-                                name,
-                      ),
-                    ),
-                  )
-                  .toList(),
+              children: _tabOrder.map((name) {
+                final chip = ChoiceChip(
+                  label: Text(name),
+                  selected: selectedGroup == name,
+                  onSelected: (_) =>
+                      ref.read(_selectedGroupProvider.notifier).state = name,
+                );
+                final count = _badgeGroups.contains(name)
+                    ? countFor(name)
+                    : 0;
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  child: count > 0
+                      ? Badge(label: Text('$count'), child: chip)
+                      : chip,
+                );
+              }).toList(),
             ),
           ),
           const Divider(height: 1),
@@ -183,9 +211,7 @@ class _OrdersListScreenState extends ConsumerState<OrdersListScreen> {
                 return RefreshIndicator(
                   onRefresh: () async {
                     ref.invalidate(_ordersProvider);
-                    if (selectedGroup == 'Sắp tới') {
-                      ref.invalidate(_upcomingScheduledOrdersProvider);
-                    }
+                    ref.invalidate(_upcomingScheduledOrdersProvider);
                   },
                   child: ListView.separated(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),

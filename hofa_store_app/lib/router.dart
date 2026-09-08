@@ -132,7 +132,8 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: '/orders',
-            builder: (context, state) => const OrdersListScreen(),
+            builder: (context, state) =>
+                OrdersListScreen(initialGroup: state.extra as String?),
           ),
           GoRoute(
             path: '/orders/:id',

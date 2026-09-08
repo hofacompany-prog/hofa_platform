@@ -335,8 +335,9 @@ class _PreparingCardState extends State<_PreparingCard> {
 
   /// Bấm vào thẻ (không phải công tắc mở/đóng cửa, tự bắt gesture riêng nên không đụng
   /// nhau) — đúng 1 đơn đang chuẩn bị thì mở thẳng đơn đó, nhiều hơn 1 thì mở danh sách đơn
-  /// hàng (mặc định mở sẵn ở tab "Đang chuẩn bị", xem orders_list_screen.dart), không có đơn
-  /// nào thì không làm gì.
+  /// hàng Ở ĐÚNG tab "Đang chuẩn bị" (truyền tường minh qua initialGroup — màn Đơn hàng mặc
+  /// định mở tab "Sắp tới", không dựa vào mặc định đó cho lối vào này), không có đơn nào thì
+  /// không làm gì.
   Future<void> _onTap() async {
     final merchantId = widget.branch?.merchantId;
     if (merchantId == null ||
@@ -354,7 +355,7 @@ class _PreparingCardState extends State<_PreparingCard> {
       if (preparing.length == 1) {
         context.push('/orders/${preparing.first.id}');
       } else {
-        context.push('/orders');
+        context.push('/orders', extra: 'Đang chuẩn bị');
       }
     } catch (e) {
       if (mounted) {
