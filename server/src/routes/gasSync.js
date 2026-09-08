@@ -205,6 +205,16 @@ router.get('/gas-sync/snapshot', asyncHandler(async (req, res) => {
   );
   merchant.classifications = classificationRows.map((r) => r.name);
 
+  // Danh mục CỦA RIÊNG cửa hàng này (merchant_categories) — GAS dùng để báo trước "sẽ tự tạo
+  // danh mục cửa hàng mới" trong màn Kiểm tra thay đổi khi Danh mục con chọn trong sheet PRODUCT
+  // chưa có danh mục cửa hàng tương ứng (xem resolveMerchantCategoryId_ — nơi THẬT SỰ tạo mới
+  // lúc đồng bộ, hàm này chỉ đọc để hiển thị trước).
+  const merchantCategoryRows = await db.query(
+    'SELECT category_id, name FROM merchant_categories WHERE merchant_id = $1',
+    [merchant.id]
+  );
+  merchant.merchant_categories = merchantCategoryRows;
+
   const branch = await db.queryOne(
     'SELECT * FROM branches WHERE merchant_id = $1 AND is_main = true AND deleted_at IS NULL',
     [merchant.id]

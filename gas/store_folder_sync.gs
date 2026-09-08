@@ -1474,16 +1474,44 @@ function diffToppingGroups_(lines, snapshot, payload) {
   });
 }
 
-function diffProducts_(lines, snapshot, payload) {
+/** Tra ID danh mục con hệ thống theo đúng CẶP tên cha+con đã chọn trong form (categoryTree phẳng
+ *  từ getCategoryTree(), {id, parent_id, name}) — dùng để biết chính xác Danh mục con đang nói
+ *  tới CÂY DANH MỤC nào (2 danh mục con trùng tên nhưng khác cha là 2 thứ khác nhau), tránh báo
+ *  nhầm "sẽ tạo mới" khi thật ra cửa hàng đã có danh mục cùng tên nhưng cho 1 ngành hàng khác. */
+function resolveCategoryId_(categoryTree, parentName, childName) {
+  const parent = (categoryTree || []).filter(function (c) { return !c.parent_id && c.name === parentName; })[0];
+  if (!parent) return null;
+  const child = (categoryTree || []).filter(function (c) { return c.parent_id === parent.id && c.name === childName; })[0];
+  return child ? child.id : null;
+}
+
+/** true nếu Danh mục con đã chọn CHƯA có danh mục cửa hàng (merchant_categories) tương ứng —
+ *  khớp đúng điều kiện resolveMerchantCategoryId_ bên gasSync.js dùng để quyết định tự tạo mới
+ *  lúc đồng bộ thật; hàm này chỉ ĐỌC để báo trước trong màn Kiểm tra thay đổi, không tạo gì. */
+function willCreateMerchantCategory_(categoryTree, existingMerchantCategories, parentName, childName) {
+  if (!parentName || !childName) return false;
+  const categoryId = resolveCategoryId_(categoryTree, parentName, childName);
+  if (!categoryId) return false; // không khớp cây danh mục hệ thống — để resolveMerchantCategoryId_ tự xử lý lúc đồng bộ, không đoán ở đây
+  const already = (existingMerchantCategories || []).some(function (mc) {
+    return mc.category_id === categoryId && String(mc.name || '').trim().toLowerCase() === childName.trim().toLowerCase();
+  });
+  return !already;
+}
+
+function diffProducts_(lines, snapshot, payload, categoryTree) {
   const oldById = {};
   (snapshot.products || []).forEach(function (p) { oldById[p.id] = p; });
   const seenOldIds = {};
+  const existingMerchantCategories = (snapshot.merchant && snapshot.merchant.merchant_categories) || [];
 
   (payload.products || []).forEach(function (p) {
     if (!p.id) {
       lines.push('🆕 SẢN PHẨM MỚI: "' + p.name + '" (' + (p.status || 'active') + ')');
       if (p.parent_category_name || p.child_category_name) {
         lines.push('   Danh mục: ' + [p.parent_category_name, p.child_category_name].filter(Boolean).join(' > '));
+      }
+      if (willCreateMerchantCategory_(categoryTree, existingMerchantCategories, p.parent_category_name, p.child_category_name)) {
+        lines.push('   🆕 Sẽ tự tạo danh mục cửa hàng mới: "' + p.child_category_name + '"');
       }
       if (p.unit) lines.push('   Đơn vị: ' + p.unit);
       (p.variants || []).forEach(function (v) {
@@ -1508,6 +1536,9 @@ function diffProducts_(lines, snapshot, payload) {
       [oldP.parent_category_name, oldP.child_category_name].filter(Boolean).join(' > '),
       [p.parent_category_name, p.child_category_name].filter(Boolean).join(' > ')
     ));
+    if (willCreateMerchantCategory_(categoryTree, existingMerchantCategories, p.parent_category_name, p.child_category_name)) {
+      lines.push('   🆕 Sẽ tự tạo danh mục cửa hàng mới: "' + p.child_category_name + '"');
+    }
     lines.push(fieldCompareRow_('Trạng thái', oldP.status, p.status));
     lines.push(fieldCompareRow_('Đơn vị', oldP.unit, p.unit));
     lines.push(fieldCompareRow_('Ảnh', (oldP.images && oldP.images[0]) || '', p.image_url));
@@ -1554,10 +1585,12 @@ function gasSyncCheckDiff(storeName) {
     : ('name=' + encodeURIComponent(payload.merchant.name));
   const snapshot = gasApiRequest_('get', '/gas-sync/snapshot?' + qs, null);
 
+  const categoryTree = getCategoryTree();
+
   const lines = [];
   diffMerchant_(lines, snapshot, payload);
   diffToppingGroups_(lines, snapshot, payload);
-  diffProducts_(lines, snapshot, payload);
+  diffProducts_(lines, snapshot, payload, categoryTree);
   if (!lines.length) lines.push('Không có gì thay đổi so với hệ thống thật.');
 
   const deleteCount = lines.filter(function (l) { return l.indexOf('🗑️') !== -1; }).length;
