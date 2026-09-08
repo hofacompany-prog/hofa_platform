@@ -3066,30 +3066,26 @@ function buildProductManagerHtml_(idPrefix) {
     }).withFailureHandler(showErr).upsertProduct(currentRow, values);
   }
 
-  /** Ghi/xoá THẬT từng biến thể đang staged cục bộ (pendingVariants) lên sheet VARIANT, tuần tự
-   *  từng biến thể một (giống pattern uploadFilesSequentially_ ở form Cửa hàng — tránh vượt giới
-   *  hạn gọi đồng thời của Apps Script) — CHỈ chạy sau khi sản phẩm cha đã lưu xong, dùng đúng
-   *  productName vừa lưu (không lệch tên nếu vừa đổi Tên sản phẩm ở lần lưu này). */
+  /** Ghi THẬT từng biến thể CÒN GIỮ (không đánh dấu xoá) lên sheet VARIANT, tuần tự từng biến
+   *  thể một (giống pattern uploadFilesSequentially_ ở form Cửa hàng — tránh vượt giới hạn gọi
+   *  đồng thời của Apps Script) — CHỈ chạy sau khi sản phẩm cha đã lưu xong, dùng đúng
+   *  productName vừa lưu (không lệch tên nếu vừa đổi Tên sản phẩm ở lần lưu này).
+   *
+   *  CỐ Ý xử lý XOÁ ở 1 bước RIÊNG, SAU CÙNG (xem flushDeletedVariants_) — deleteRow() dồn mọi
+   *  dòng bên dưới lên trên; nếu xoá xen kẽ với update ngay trong vòng lặp này, 1 lượt xoá ở
+   *  dòng trên sẽ làm lệch số dòng của mọi update phía dưới còn đang chờ xử lý (từng gây lỗi
+   *  thật "Không tìm thấy biến thể này ở đúng sản phẩm" lúc đồng bộ — update ghi nhầm lên dòng
+   *  bên cạnh, giữ lại ID hệ thống CŨ của dòng đó). Tách xoá ra làm 1 bước sau cùng đảm bảo mọi
+   *  update/thêm mới ở bước này chạy xong với số dòng còn NGUYÊN VẸN, chưa bị xáo trộn. */
   function flushPendingVariants_(productName, index, errors) {
     if (index >= pendingVariants.length) {
-      showMsg(errors.length
-        ? ('Đã lưu sản phẩm — nhưng có ' + errors.length + ' lỗi ở biến thể: ' + errors.join('; '))
-        : 'Đã lưu sản phẩm và toàn bộ biến thể.');
-      loadProducts();
-      loadVariantsInline_();
+      flushDeletedVariants_(productName, errors);
       return;
     }
     var v = pendingVariants[index];
     var next = function () { flushPendingVariants_(productName, index + 1, errors); };
 
-    if (v.deleted) {
-      if (!v.row) { next(); return; } // chưa từng lưu lên sheet thì không có gì để xoá thật
-      google.script.run.withSuccessHandler(next).withFailureHandler(function (e) {
-        errors.push((v.name || '') + ': ' + (e && e.message ? e.message : e));
-        next();
-      }).deleteVariant(v.row);
-      return;
-    }
+    if (v.deleted) { next(); return; } // xử lý xoá ở flushDeletedVariants_, sau khi vòng này xong hết
 
     var values = new Array(${VARIANT_SYSTEM_ID_COLUMN - 1}).fill('');
     values[${VARIANT_STORE_COLUMN - 1}] = currentStore;
@@ -3103,6 +3099,34 @@ function buildProductManagerHtml_(idPrefix) {
       errors.push((v.name || '') + ': ' + (e && e.message ? e.message : e));
       next();
     }).upsertVariant(v.row, values);
+  }
+
+  /** Xoá THẬT các biến thể đã đánh dấu xoá — CHẠY SAU CÙNG (flushPendingVariants_ đã cập nhật
+   *  xong mọi biến thể còn giữ) và theo thứ tự SỐ DÒNG GIẢM DẦN, giống hệt pattern
+   *  deleteRowsByStoreName_ đã dùng — xoá dòng lớn trước để không làm lệch số dòng của các dòng
+   *  cần xoá kế tiếp (luôn nhỏ hơn). */
+  function flushDeletedVariants_(productName, errors) {
+    var toDelete = pendingVariants
+      .filter(function (v) { return v.deleted && v.row; })
+      .sort(function (a, b) { return b.row - a.row; });
+    deleteVariantsSequentially_(toDelete, 0, errors);
+  }
+
+  function deleteVariantsSequentially_(list, index, errors) {
+    if (index >= list.length) {
+      showMsg(errors.length
+        ? ('Đã lưu sản phẩm — nhưng có ' + errors.length + ' lỗi ở biến thể: ' + errors.join('; '))
+        : 'Đã lưu sản phẩm và toàn bộ biến thể.');
+      loadProducts();
+      loadVariantsInline_();
+      return;
+    }
+    var v = list[index];
+    var next = function () { deleteVariantsSequentially_(list, index + 1, errors); };
+    google.script.run.withSuccessHandler(next).withFailureHandler(function (e) {
+      errors.push((v.name || '') + ': ' + (e && e.message ? e.message : e));
+      next();
+    }).deleteVariant(v.row);
   }
 
   /** Biến thể (giá bán) quản lý NGAY trong tab Sản phẩm — thêm/sửa/xoá chỉ cập nhật mảng cục bộ
