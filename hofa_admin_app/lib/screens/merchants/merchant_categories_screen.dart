@@ -144,12 +144,13 @@ class _MerchantCategoriesScreenState
 
     setState(() => _busy = true);
     try {
-      // Mục mới luôn xếp cuối nhóm anh em CÙNG danh mục con hệ thống đã chọn — không giành
-      // chỗ mục đã sắp xếp trước đó (mirror _addDialog ở catalog/categories_screen.dart).
-      final siblings = current.where((m) => m.categoryId == selectedChildId);
-      final nextSortOrder = siblings.isEmpty
+      // Mục mới luôn xếp CUỐI CÙNG trong toàn bộ danh sách danh mục của cửa hàng — server sắp
+      // xếp merchant_categories theo 1 dãy sort_order DUY NHẤT cho cả cửa hàng (không tách
+      // riêng theo danh mục con hệ thống, xem GET /merchant-categories ORDER BY sort_order),
+      // nên phải tính theo TOÀN BỘ [current], không lọc theo selectedChildId.
+      final nextSortOrder = current.isEmpty
           ? 0
-          : siblings.map((m) => m.sortOrder).reduce((a, b) => a > b ? a : b) +
+          : current.map((m) => m.sortOrder).reduce((a, b) => a > b ? a : b) +
                 1;
       await ref
           .read(adminRepoProvider)
@@ -274,9 +275,13 @@ class _MerchantCategoriesScreenState
     }
   }
 
-  /// Đổi vị trí [siblings][index] lên/xuống 1 bậc — [siblings] PHẢI là các mục CÙNG danh mục
-  /// con hệ thống (categoryId), vì thứ tự chỉ có ý nghĩa trong cùng 1 nhóm hiển thị trên app
-  /// Khách. Mirror _move ở catalog/categories_screen.dart.
+  /// Đổi vị trí [siblings][index] lên/xuống 1 bậc — [siblings] PHẢI là TOÀN BỘ danh mục của
+  /// cửa hàng (đã sắp theo sort_order), KHÔNG lọc theo danh mục con hệ thống: server sắp xếp
+  /// merchant_categories theo 1 dãy sort_order duy nhất cho cả cửa hàng (xem
+  /// GET /merchant-categories ORDER BY sort_order — khác cây 2 cấp cha/con của danh mục hệ
+  /// thống ở catalog/categories_screen.dart, nơi hàm _move gốc này được mirror từ đó). Lọc
+  /// theo categoryId ở đây từng khiến mỗi nhóm chỉ còn 1 mục — nút lên/xuống bị khoá vĩnh
+  /// viễn vì không có "anh em" nào để đổi chỗ.
   Future<void> _move(
     List<MerchantCategory> siblings,
     int index,
@@ -346,19 +351,13 @@ class _MerchantCategoriesScreenState
               );
             }
 
-            // Nhóm theo danh mục con hệ thống (categoryId) — mỗi nhóm ứng với 1 nhánh
-            // cha›con hệ thống, nút lên/xuống chỉ áp dụng TRONG cùng 1 nhóm (là "anh em" thật
-            // của nhau trên trang cửa hàng).
-            final byCategoryId = <String, List<MerchantCategory>>{};
-            for (final m in items) {
-              (byCategoryId[m.categoryId] ??= []).add(m);
-            }
-            final groupKeys = byCategoryId.keys.toList()
-              ..sort((a, b) {
-                final ca = _findCategory(systemCategories, a);
-                final cb = _findCategory(systemCategories, b);
-                return (ca?.name ?? '').compareTo(cb?.name ?? '');
-              });
+            // 1 DÃY DUY NHẤT cho cả cửa hàng — KHÔNG nhóm/tách theo danh mục con hệ thống, vì
+            // trang cửa hàng thật (app Khách) hiện toàn bộ danh mục của cửa hàng theo đúng 1
+            // sort_order chung (xem GET /merchant-categories ORDER BY sort_order). Danh mục
+            // con hệ thống mỗi mục đang gắn vào chỉ hiện làm phụ đề tham khảo, không dùng để
+            // nhóm hay giới hạn phạm vi lên/xuống.
+            final ordered = List<MerchantCategory>.from(items)
+              ..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
 
             return ListView(
               padding: const EdgeInsets.all(24),
@@ -368,83 +367,64 @@ class _MerchantCategoriesScreenState
                     padding: EdgeInsets.only(bottom: 12),
                     child: LinearProgressIndicator(),
                   ),
-                ...groupKeys.map((categoryId) {
-                  final child = _findCategory(systemCategories, categoryId);
+                ...ordered.asMap().entries.map((entry) {
+                  final index = entry.key;
+                  final m = entry.value;
+                  final child = _findCategory(systemCategories, m.categoryId);
                   final parent = _findCategory(systemCategories, child?.parentId);
-                  final siblings = List<MerchantCategory>.from(
-                    byCategoryId[categoryId]!,
-                  )..sort((a, b) => a.sortOrder.compareTo(b.sortOrder));
+                  final path = [
+                    if (parent != null) parent.name,
+                    if (child != null) child.name,
+                  ].join(' › ');
 
                   return Card(
                     elevation: 0,
                     color: theme.colorScheme.surfaceContainerLow,
                     margin: const EdgeInsets.only(bottom: 8),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
-                            child: Text(
-                              [
-                                if (parent != null) parent.name,
-                                if (child != null) child.name,
-                              ].join(' › '),
-                              style: theme.textTheme.labelLarge?.copyWith(
-                                color: theme.colorScheme.primary,
-                              ),
+                    child: ListTile(
+                      title: Text(
+                        m.name,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      subtitle: Text(
+                        [if (path.isNotEmpty) path, if (!m.isActive) 'Đã tắt']
+                            .join(' · '),
+                        style: theme.textTheme.bodySmall,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      trailing: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            IconButton(
+                              tooltip: 'Đưa lên trên',
+                              icon: const Icon(Icons.arrow_upward),
+                              onPressed: _busy || index == 0
+                                  ? null
+                                  : () => _move(ordered, index, -1),
                             ),
-                          ),
-                          ...siblings.asMap().entries.map((entry) {
-                            final index = entry.key;
-                            final m = entry.value;
-                            return ListTile(
-                              dense: true,
-                              title: Text(
-                                m.name,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              subtitle: m.isActive ? null : const Text('Đã tắt'),
-                              trailing: SingleChildScrollView(
-                                scrollDirection: Axis.horizontal,
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    IconButton(
-                                      tooltip: 'Đưa lên trên',
-                                      icon: const Icon(Icons.arrow_upward),
-                                      onPressed: _busy || index == 0
-                                          ? null
-                                          : () => _move(siblings, index, -1),
-                                    ),
-                                    IconButton(
-                                      tooltip: 'Đưa xuống dưới',
-                                      icon: const Icon(Icons.arrow_downward),
-                                      onPressed:
-                                          _busy || index == siblings.length - 1
-                                          ? null
-                                          : () => _move(siblings, index, 1),
-                                    ),
-                                    IconButton(
-                                      tooltip: 'Sửa',
-                                      icon: const Icon(Icons.edit_outlined),
-                                      onPressed: _busy
-                                          ? null
-                                          : () => _editDialog(m),
-                                    ),
-                                    IconButton(
-                                      tooltip: 'Xoá',
-                                      icon: const Icon(Icons.delete_outline),
-                                      onPressed: _busy ? null : () => _delete(m),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          }),
-                        ],
+                            IconButton(
+                              tooltip: 'Đưa xuống dưới',
+                              icon: const Icon(Icons.arrow_downward),
+                              onPressed: _busy || index == ordered.length - 1
+                                  ? null
+                                  : () => _move(ordered, index, 1),
+                            ),
+                            IconButton(
+                              tooltip: 'Sửa',
+                              icon: const Icon(Icons.edit_outlined),
+                              onPressed: _busy ? null : () => _editDialog(m),
+                            ),
+                            IconButton(
+                              tooltip: 'Xoá',
+                              icon: const Icon(Icons.delete_outline),
+                              onPressed: _busy ? null : () => _delete(m),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   );
