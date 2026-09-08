@@ -144,7 +144,16 @@ const PRODUCT_CHILD_CATEGORY_COLUMN = 5;  // 5 - Danh mục con → products.mer
 const PRODUCT_STATUS_COLUMN = 6;        // 6 - Trạng thái → products.status (dropdown)
 const PRODUCT_IMAGE_COLUMN = 7;         // 7 - Ảnh sản phẩm → products.images (1 ảnh)
 const PRODUCT_TOPPING_GROUPS_COLUMN = 8; // 8 - Nhóm topping áp dụng → product_topping_group_links (tên nhóm, cách nhau bằng dấu phẩy)
-const PRODUCT_SYSTEM_ID_COLUMN = 9;     // 9 - ID hệ thống (products.id, server tự ghi khi đồng bộ, không gõ tay)
+// Thêm SAU cột Nhóm topping, TRƯỚC ID hệ thống — products.unit đã có sẵn trong DB từ đầu
+// (VARCHAR(30) DEFAULT 'cái', hofa-db/01_schema.sql) nhưng bản PRODUCT layout trước đây (8 cột,
+// còn "Đơn vị" ở vị trí khác) đã bỏ cột này khi tách biến thể/giá ra sheet VARIANT riêng — nay
+// thêm lại, đặt cạnh khối "Biến thể" trong FORM (không phải trong sheet — 1 sản phẩm chỉ 1 đơn
+// vị dùng chung cho MỌI biến thể, khớp đúng thiết kế DB hiện tại, product_variants không có cột
+// riêng cho việc này). Chèn TRƯỚC ID hệ thống (không phải thêm cuối cùng như STORE_HOURS_COLUMN)
+// nên sheet cũ (9 cột, ID hệ thống ở cột 9) PHẢI chạy migrateProductAddUnitColumn_v1() 1 lần để
+// dời đúng dữ liệu ID hệ thống đang có sang cột 10 trước khi dùng layout mới.
+const PRODUCT_UNIT_COLUMN = 9;          // 9 - Đơn vị → products.unit (vd: cái, kg, hộp, phần)
+const PRODUCT_SYSTEM_ID_COLUMN = 10;    // 10 - ID hệ thống (products.id, server tự ghi khi đồng bộ, không gõ tay)
 
 const PRODUCT_HEADERS = [
   'Tên quán',                // 1 — liên kết nội bộ, không gửi API
@@ -155,8 +164,12 @@ const PRODUCT_HEADERS = [
   'Trạng thái',              // 6 — products.status: draft|active|out_of_stock|hidden|archived
   'Ảnh sản phẩm',            // 7 — products.images
   'Nhóm topping',            // 8 — product_topping_group_links, nhiều nhóm cách nhau bằng dấu phẩy (tên nhóm trong sheet TOPPING)
-  'ID hệ thống'              // 9 — products.id, server tự ghi khi đồng bộ
+  'Đơn vị',                  // 9 — products.unit (vd: cái, kg, hộp, phần), chọn qua form ngay dưới khối Biến thể
+  'ID hệ thống'              // 10 — products.id, server tự ghi khi đồng bộ
 ];
+
+// Vài đơn vị hay dùng để gợi ý (datalist trong form) — không giới hạn, tự gõ đơn vị khác vẫn được.
+const PRODUCT_UNIT_SUGGESTIONS = ['cái', 'phần', 'hộp', 'kg', 'g', 'ly', 'chai', 'lon', 'gói', 'combo'];
 
 // Giá trị enum product_status thật (hofa-db/01_schema.sql) kèm nhãn tiếng Việt cho dropdown.
 const PRODUCT_STATUS_OPTIONS = [
@@ -246,6 +259,7 @@ function onOpen() {
     .addItem('⚠️ Sắp xếp lại cột MERCHANT (chạy 1 lần)', 'migrateStoreColumnsToApiLayout_v1')
     .addItem('🔧 Chỉ sửa lại dòng tiêu đề MERCHANT (không đụng dữ liệu)', 'fixStoreHeaderRowOnly_v1')
     .addItem('⚠️ Sắp xếp lại cột PRODUCT (chạy 1 lần)', 'migrateProductColumnsToApiLayout_v1')
+    .addItem('⚠️ Thêm cột Đơn vị vào PRODUCT (chạy 1 lần)', 'migrateProductAddUnitColumn_v1')
     .addToUi();
 }
 
@@ -481,6 +495,45 @@ function migrateProductColumnsToApiLayout_v1() {
     (newVariantRows.length > 0 ? ', đã tạo ' + newVariantRows.length + ' dòng biến thể "Mặc định" bên sheet VARIANT.' : '.') +
     ' Nhớ kiểm tra lại cột Trạng thái cho các dòng đã có sẵn.'
   );
+}
+
+/** CHẠY 1 LẦN DUY NHẤT — thêm cột "Đơn vị" (số 9, products.unit) vào sheet PRODUCT đã ở layout
+ *  có Danh mục cha/con (tức đã chạy migrateProductColumnsToApiLayout_v1 trước đó, hoặc sheet mới
+ *  tạo sau khi PRODUCT_HEADERS đã có Đơn vị thì không cần chạy hàm này nữa — getProductSheet_()
+ *  tự tạo đúng layout mới). Dùng insertColumnBefore() thay vì tự đọc/ghi lại dữ liệu — Sheets tự
+ *  dời NGUYÊN VẸN mọi cột từ "Đơn vị" trở đi (gồm cả ID hệ thống đang có) sang phải 1 cột, không
+ *  rủi ro lệch dòng như cách đọc-ghi tay đã dùng ở các hàm migrate cũ hơn. */
+function migrateProductAddUnitColumn_v1() {
+  const ui = SpreadsheetApp.getUi();
+  const sheet = getProductSheet_();
+
+  const currentHeaders = sheet.getRange(1, 1, 1, Math.max(sheet.getLastColumn(), PRODUCT_HEADERS.length)).getValues()[0];
+  if (currentHeaders[PRODUCT_UNIT_COLUMN - 1] === 'Đơn vị') {
+    ui.alert('Sheet PRODUCT đã có cột Đơn vị rồi, không cần chạy lại.');
+    return;
+  }
+  if (currentHeaders[PRODUCT_PARENT_CATEGORY_COLUMN - 1] !== 'Danh mục cha' || currentHeaders[PRODUCT_TOPPING_GROUPS_COLUMN - 1] !== 'Nhóm topping') {
+    ui.alert(
+      'Sheet PRODUCT chưa ở layout có Danh mục cha/Nhóm topping — chạy menu "⚠️ Sắp xếp lại cột ' +
+      'PRODUCT (chạy 1 lần)" trước, xong rồi mới chạy lại menu này.'
+    );
+    return;
+  }
+
+  const confirm = ui.alert(
+    'Thêm cột Đơn vị vào PRODUCT?',
+    'Sẽ chèn thêm 1 cột trống "Đơn vị" ngay trước cột ID hệ thống — cột ID hệ thống và mọi dữ ' +
+      'liệu đang có ở đó TỰ DỜI sang phải 1 cột, không mất dữ liệu. Cột Đơn vị để trống cho các ' +
+      'dòng đã có sẵn (hệ thống tự hiểu là "cái" nếu để trống) — điền lại qua form Sản phẩm nếu ' +
+      'muốn đổi. Tiếp tục?',
+    ui.ButtonSet.YES_NO
+  );
+  if (confirm !== ui.Button.YES) return;
+
+  sheet.insertColumnBefore(PRODUCT_UNIT_COLUMN);
+  sheet.getRange(1, 1, 1, PRODUCT_HEADERS.length).setValues([PRODUCT_HEADERS]);
+
+  ui.alert('Xong! Sheet PRODUCT đã có cột Đơn vị (cột 9) — ID hệ thống đã tự dời sang cột 10.');
 }
 
 /** Menu tuỳ chỉnh + showModalDialog CHỈ chạy được trên trình duyệt (máy tính hoặc trình duyệt
@@ -1273,6 +1326,7 @@ function gasSyncBuildPayloadForStore_(storeName) {
       child_category_name: v[PRODUCT_CHILD_CATEGORY_COLUMN - 1] || '',
       status: v[PRODUCT_STATUS_COLUMN - 1] || 'active',
       image_url: v[PRODUCT_IMAGE_COLUMN - 1] || '',
+      unit: String(v[PRODUCT_UNIT_COLUMN - 1] || '').trim() || 'cái',
       topping_group_names: String(v[PRODUCT_TOPPING_GROUPS_COLUMN - 1] || '')
         .split(',').map(function (s) { return s.trim(); }).filter(Boolean),
       variants: variantRows.map(function (vr) {
@@ -1431,6 +1485,7 @@ function diffProducts_(lines, snapshot, payload) {
       if (p.parent_category_name || p.child_category_name) {
         lines.push('   Danh mục: ' + [p.parent_category_name, p.child_category_name].filter(Boolean).join(' > '));
       }
+      if (p.unit) lines.push('   Đơn vị: ' + p.unit);
       (p.variants || []).forEach(function (v) {
         lines.push('   + Biến thể mới: "' + v.name + '" — ' + (v.price || 0) + 'đ');
       });
@@ -1454,6 +1509,7 @@ function diffProducts_(lines, snapshot, payload) {
       [p.parent_category_name, p.child_category_name].filter(Boolean).join(' > ')
     ));
     lines.push(fieldCompareRow_('Trạng thái', oldP.status, p.status));
+    lines.push(fieldCompareRow_('Đơn vị', oldP.unit, p.unit));
     lines.push(fieldCompareRow_('Ảnh', (oldP.images && oldP.images[0]) || '', p.image_url));
     const oldGroupNames = (oldP.topping_group_names || []).slice().sort().join(', ');
     const newGroupNames = (p.topping_group_names || []).slice().sort().join(', ');
@@ -1554,6 +1610,7 @@ function gasSyncApply(storeName) {
         child_category_name: p.child_category_name,
         status: p.status,
         image_url: p.image_url,
+        unit: p.unit,
         topping_group_names: p.topping_group_names,
         variants: p.variants.map(function (v) {
           return {
@@ -2714,6 +2771,11 @@ function buildProductManagerHtml_(idPrefix) {
     <button id="${idPrefix}btnCancelVariantInline" type="button">Huỷ</button>
   </div>
 
+  <label>Đơn vị</label>
+  <input type="text" id="${idPrefix}pUnit" placeholder="cái, kg, hộp, phần..." list="${idPrefix}unitList">
+  <datalist id="${idPrefix}unitList"></datalist>
+  <div style="color:#888; font-size:12px; margin-top:2px;">Dùng chung cho mọi biến thể của sản phẩm này (vd "phần", "kg", "hộp") — để trống sẽ tự hiểu là "cái".</div>
+
   <div id="${idPrefix}pSystemIdArea" style="color:#888; font-size:12px; margin-top:8px;"></div>
 
   <div>
@@ -2746,9 +2808,11 @@ function buildProductManagerHtml_(idPrefix) {
   var STATUS_IDX = ${PRODUCT_STATUS_COLUMN - 1};
   var IMAGE_IDX = ${PRODUCT_IMAGE_COLUMN - 1};
   var TOPPING_GROUPS_IDX = ${PRODUCT_TOPPING_GROUPS_COLUMN - 1};
+  var UNIT_IDX = ${PRODUCT_UNIT_COLUMN - 1};
   var SYSTEM_ID_IDX = ${PRODUCT_SYSTEM_ID_COLUMN - 1};
   var EDITABLE_COLUMN_COUNT = ${PRODUCT_SYSTEM_ID_COLUMN - 1};
   var STATUS_OPTIONS = ${JSON.stringify(PRODUCT_STATUS_OPTIONS)};
+  var UNIT_SUGGESTIONS = ${JSON.stringify(PRODUCT_UNIT_SUGGESTIONS)};
   var MAX_PHOTO_BYTES = ${PHOTO_MAX_BYTES};
 
   function showMsg(t) { $('msg').innerText = t; $('err').innerText = ''; }
@@ -2759,6 +2823,11 @@ function buildProductManagerHtml_(idPrefix) {
       var opt = document.createElement('option');
       opt.value = o.value; opt.text = o.label;
       $('pStatus').appendChild(opt);
+    });
+    UNIT_SUGGESTIONS.forEach(function (u) {
+      var opt = document.createElement('option');
+      opt.value = u;
+      $('unitList').appendChild(opt);
     });
     google.script.run.withSuccessHandler(function (list) {
       var sel = $('storeSelect');
@@ -2923,6 +2992,7 @@ function buildProductManagerHtml_(idPrefix) {
     currentToppingGroupsValue = v[TOPPING_GROUPS_IDX] || '';
     applyToppingGroupSelection();
     updateImgPreview(v[IMAGE_IDX] || '');
+    $('pUnit').value = v[UNIT_IDX] || '';
     $('pSystemIdArea').textContent = v[SYSTEM_ID_IDX]
       ? 'Đã đồng bộ — ID: ' + v[SYSTEM_ID_IDX]
       : 'Chưa đồng bộ lên hệ thống thật — sang tab "Đồng bộ CSDL" để đẩy lên';
@@ -2947,6 +3017,7 @@ function buildProductManagerHtml_(idPrefix) {
     values[CHILD_CATEGORY_IDX] = currentChildCategoryName;
     values[STATUS_IDX] = $('pStatus').value;
     values[IMAGE_IDX] = $('pImgUrl').value;
+    values[UNIT_IDX] = $('pUnit').value.trim() || 'cái';
     values[TOPPING_GROUPS_IDX] = getSelectedToppingGroups();
     google.script.run.withSuccessHandler(function (res) {
       currentRow = res.row;

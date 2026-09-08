@@ -524,6 +524,7 @@ router.post('/gas-sync/apply', asyncHandler(async (req, res) => {
           name: p.name,
           description: p.description || null,
           status: p.status || 'active',
+          unit: p.unit || 'cái',
           images: p.image_url ? [p.image_url] : [],
           merchant_category_id: merchantCategoryId
         });
@@ -534,6 +535,7 @@ router.post('/gas-sync/apply', asyncHandler(async (req, res) => {
           slug: slugify(`${body.merchant.name}-${p.name}`),
           description: p.description || null,
           status: p.status || 'active',
+          unit: p.unit || 'cái',
           sales_model: 'instant',
           images: p.image_url ? [p.image_url] : [],
           merchant_category_id: merchantCategoryId
