@@ -437,39 +437,41 @@ router.post('/gas-sync/apply', asyncHandler(async (req, res) => {
   for (const g of (body.topping_groups || [])) {
     const item = { name: g.name, toppings: [] };
     try {
-      let group;
+      // Tự "chữa lành" nếu ID hệ thống thiếu hoặc lệch — tìm lại theo TÊN trong đúng cửa hàng
+      // thay vì báo lỗi/tạo trùng (xem giải thích đầy đủ ở khối biến thể bên dưới).
+      let groupExistingId = null;
       if (g.id) {
         const owned = await db.queryOne('SELECT id FROM topping_groups WHERE id = $1 AND merchant_id = $2', [g.id, merchant.id]);
-        if (!owned) throw new ApiError('NOT_FOUND', 'Không tìm thấy nhóm topping này ở đúng cửa hàng', 404);
-        group = await db.updateById('topping_groups', g.id, {
-          name: g.name, is_required: !!g.is_required, allow_multiple: !!g.allow_multiple
-        });
-      } else {
+        groupExistingId = owned ? owned.id : null;
+      }
+      if (!groupExistingId) {
         const dup = await db.queryOne(
           'SELECT id FROM topping_groups WHERE merchant_id = $1 AND lower(name) = lower($2)',
           [merchant.id, g.name]
         );
-        group = dup
-          ? await db.updateById('topping_groups', dup.id, { is_required: !!g.is_required, allow_multiple: !!g.allow_multiple })
-          : await db.insertRow('topping_groups', { merchant_id: merchant.id, name: g.name, is_required: !!g.is_required, allow_multiple: !!g.allow_multiple });
+        groupExistingId = dup ? dup.id : null;
       }
+      const group = groupExistingId
+        ? await db.updateById('topping_groups', groupExistingId, { name: g.name, is_required: !!g.is_required, allow_multiple: !!g.allow_multiple })
+        : await db.insertRow('topping_groups', { merchant_id: merchant.id, name: g.name, is_required: !!g.is_required, allow_multiple: !!g.allow_multiple });
       item.id = group.id;
       groupIdByName[g.name.trim().toLowerCase()] = group.id;
 
       for (const t of (g.toppings || [])) {
         const tItem = { name: t.name };
         try {
-          let topping;
+          let toppingExistingId = null;
           if (t.id) {
             const owned = await db.queryOne('SELECT id FROM product_toppings WHERE id = $1 AND group_id = $2', [t.id, group.id]);
-            if (!owned) throw new ApiError('NOT_FOUND', 'Không tìm thấy topping này ở đúng nhóm', 404);
-            topping = await db.updateById('product_toppings', t.id, { name: t.name, price: t.price || 0, is_active: t.is_active !== false });
-          } else {
-            const dupT = await db.queryOne('SELECT id FROM product_toppings WHERE group_id = $1 AND lower(name) = lower($2)', [group.id, t.name]);
-            topping = dupT
-              ? await db.updateById('product_toppings', dupT.id, { price: t.price || 0, is_active: t.is_active !== false })
-              : await db.insertRow('product_toppings', { group_id: group.id, name: t.name, price: t.price || 0, is_active: t.is_active !== false });
+            toppingExistingId = owned ? owned.id : null;
           }
+          if (!toppingExistingId) {
+            const dupT = await db.queryOne('SELECT id FROM product_toppings WHERE group_id = $1 AND lower(name) = lower($2)', [group.id, t.name]);
+            toppingExistingId = dupT ? dupT.id : null;
+          }
+          const topping = toppingExistingId
+            ? await db.updateById('product_toppings', toppingExistingId, { name: t.name, price: t.price || 0, is_active: t.is_active !== false })
+            : await db.insertRow('product_toppings', { group_id: group.id, name: t.name, price: t.price || 0, is_active: t.is_active !== false });
           tItem.id = topping.id;
         } catch (err) {
           tItem.error = err.message;
@@ -526,31 +528,40 @@ router.post('/gas-sync/apply', asyncHandler(async (req, res) => {
     try {
       const merchantCategoryId = await resolveMerchantCategoryId_(merchant.id, p.parent_category_name, p.child_category_name);
 
-      let product;
+      // Tự "chữa lành" nếu ID hệ thống thiếu hoặc lệch — tìm lại theo TÊN trong đúng cửa hàng
+      // thay vì báo lỗi/tạo trùng (cùng pattern đã dùng cho nhóm topping/topping/biến thể).
+      let productExistingId = null;
       if (p.id) {
         const owned = await db.queryOne('SELECT id FROM products WHERE id = $1 AND merchant_id = $2', [p.id, merchant.id]);
-        if (!owned) throw new ApiError('NOT_FOUND', 'Không tìm thấy sản phẩm này ở đúng cửa hàng', 404);
-        product = await db.updateById('products', p.id, {
-          name: p.name,
-          description: p.description || null,
-          status: p.status || 'active',
-          unit: p.unit || 'cái',
-          images: p.image_url ? [p.image_url] : [],
-          merchant_category_id: merchantCategoryId
-        });
-      } else {
-        product = await db.insertRow('products', {
-          merchant_id: merchant.id,
-          name: p.name,
-          slug: slugify(`${body.merchant.name}-${p.name}`),
-          description: p.description || null,
-          status: p.status || 'active',
-          unit: p.unit || 'cái',
-          sales_model: 'instant',
-          images: p.image_url ? [p.image_url] : [],
-          merchant_category_id: merchantCategoryId
-        });
+        productExistingId = owned ? owned.id : null;
       }
+      if (!productExistingId) {
+        const dup = await db.queryOne(
+          'SELECT id FROM products WHERE merchant_id = $1 AND lower(name) = lower($2) AND deleted_at IS NULL',
+          [merchant.id, p.name]
+        );
+        productExistingId = dup ? dup.id : null;
+      }
+      const product = productExistingId
+        ? await db.updateById('products', productExistingId, {
+            name: p.name,
+            description: p.description || null,
+            status: p.status || 'active',
+            unit: p.unit || 'cái',
+            images: p.image_url ? [p.image_url] : [],
+            merchant_category_id: merchantCategoryId
+          })
+        : await db.insertRow('products', {
+            merchant_id: merchant.id,
+            name: p.name,
+            slug: slugify(`${body.merchant.name}-${p.name}`),
+            description: p.description || null,
+            status: p.status || 'active',
+            unit: p.unit || 'cái',
+            sales_model: 'instant',
+            images: p.image_url ? [p.image_url] : [],
+            merchant_category_id: merchantCategoryId
+          });
       item.id = product.id;
 
       const groupIds = (p.topping_group_names || [])
@@ -568,27 +579,39 @@ router.post('/gas-sync/apply', asyncHandler(async (req, res) => {
           if (v.is_default) {
             await db.query('UPDATE product_variants SET is_default = false WHERE product_id = $1', [product.id]);
           }
-          let variant;
+          // Tự "chữa lành" nếu ID hệ thống trong sheet thiếu hoặc lệch (vd bug lệch số dòng ở
+          // GAS khi vừa xoá vừa sửa biến thể cùng lúc) — tìm lại đúng biến thể của SẢN PHẨM NÀY
+          // theo TÊN thay vì báo lỗi/tạo trùng, cùng pattern đã dùng cho nhóm topping/topping
+          // bên dưới. Nhờ vậy mỗi lần đồng bộ tự cập nhật đúng vào đúng chỗ, không cần dò tay ID
+          // sai — tồn kho/lịch sử nhập-xuất của biến thể cũ vẫn giữ nguyên vì không xoá gì cả.
+          let existingId = null;
           if (v.id) {
             const owned = await db.queryOne('SELECT id FROM product_variants WHERE id = $1 AND product_id = $2', [v.id, product.id]);
-            if (!owned) throw new ApiError('NOT_FOUND', 'Không tìm thấy biến thể này ở đúng sản phẩm', 404);
-            variant = await db.updateById('product_variants', v.id, {
-              name: v.name,
-              price: v.price,
-              weight_gram: v.weight_gram || null,
-              is_default: !!v.is_default,
-              is_active: v.is_active !== false
-            });
-          } else {
-            variant = await db.insertRow('product_variants', {
-              product_id: product.id,
-              name: v.name,
-              price: v.price,
-              weight_gram: v.weight_gram || null,
-              is_default: !!v.is_default,
-              is_active: v.is_active !== false
-            });
+            existingId = owned ? owned.id : null;
           }
+          if (!existingId) {
+            const byName = await db.queryOne(
+              'SELECT id FROM product_variants WHERE product_id = $1 AND lower(name) = lower($2)',
+              [product.id, v.name]
+            );
+            existingId = byName ? byName.id : null;
+          }
+          const variant = existingId
+            ? await db.updateById('product_variants', existingId, {
+                name: v.name,
+                price: v.price,
+                weight_gram: v.weight_gram || null,
+                is_default: !!v.is_default,
+                is_active: v.is_active !== false
+              })
+            : await db.insertRow('product_variants', {
+                product_id: product.id,
+                name: v.name,
+                price: v.price,
+                weight_gram: v.weight_gram || null,
+                is_default: !!v.is_default,
+                is_active: v.is_active !== false
+              });
           vItem.id = variant.id;
         } catch (err) {
           vItem.error = err.message;
