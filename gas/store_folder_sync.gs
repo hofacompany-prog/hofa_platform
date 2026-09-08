@@ -2754,9 +2754,9 @@ function buildProductManagerHtml_(idPrefix) {
   </div>
 
   <label>Biến thể (giá bán) *</label>
-  <div id="${idPrefix}variantNote" style="color:#888; font-size:12px;">Lưu sản phẩm trước, rồi thêm biến thể ở đây — sản phẩm cần ít nhất 1 biến thể mới bán được.</div>
+  <div id="${idPrefix}variantNote" style="color:#888; font-size:12px;">Chưa có biến thể — bấm "+ Thêm biến thể" bên dưới, sẽ lưu cùng lúc khi bấm "💾 Lưu sản phẩm".</div>
   <div id="${idPrefix}variantList" style="display:none;"></div>
-  <button id="${idPrefix}btnNewVariantInline" type="button" style="display:none;">+ Thêm biến thể</button>
+  <button id="${idPrefix}btnNewVariantInline" type="button">+ Thêm biến thể</button>
   <div id="${idPrefix}variantEditor" style="display:none; border:1px solid #ccc; border-radius:6px; padding:10px; margin-top:8px; background:#fafafa;">
     <div class="imgRow">
       <input type="text" id="${idPrefix}vName" placeholder="Tên biến thể (Mặc định, Size L...)" style="flex:2; width:auto;">
@@ -2767,9 +2767,10 @@ function buildProductManagerHtml_(idPrefix) {
       <label class="checkLabel"><input type="checkbox" id="${idPrefix}vIsDefault"> Là mặc định</label>
       <label class="checkLabel"><input type="checkbox" id="${idPrefix}vIsActive" checked> Đang bán</label>
     </div>
-    <button id="${idPrefix}btnSaveVariantInline" type="button">💾 Lưu biến thể</button>
+    <button id="${idPrefix}btnSaveVariantInline" type="button">✅ Thêm vào danh sách</button>
     <button id="${idPrefix}btnCancelVariantInline" type="button">Huỷ</button>
   </div>
+  <div style="color:#888; font-size:12px; margin-top:2px;">Có thể bấm "+ Thêm biến thể" nhiều lần liên tiếp để thêm nhiều biến thể cùng lúc — chỉ thật sự ghi vào hệ thống khi bấm "💾 Lưu sản phẩm" ở cuối form.</div>
 
   <label>Đơn vị</label>
   <input type="text" id="${idPrefix}pUnit" placeholder="cái, kg, hộp, phần..." list="${idPrefix}unitList">
@@ -2799,8 +2800,13 @@ function buildProductManagerHtml_(idPrefix) {
   var categoryTree = [];
   var currentParentCategoryName = '';
   var currentChildCategoryName = '';
-  var currentVariants = [];
-  var editingVariantRow = null;
+  // Biến thể quản lý CỤC BỘ trong form — thêm/sửa/xoá chỉ cập nhật mảng này (không gọi server),
+  // CHỈ thật sự ghi lên sheet VARIANT lúc bấm "💾 Lưu sản phẩm" (xem flushPendingVariants_) — cho
+  // phép thêm nhiều biến thể liên tiếp, kể cả với sản phẩm CHƯA lưu lần nào (trước đây bắt buộc
+  // lưu sản phẩm xong mới thêm được biến thể). row=null nghĩa là biến thể mới, chưa có trên sheet.
+  var pendingVariants = [];
+  var nextLocalId = 1;
+  var editingLocalId = null;
   var NAME_IDX = ${PRODUCT_NAME_COLUMN - 1};
   var DESC_IDX = ${PRODUCT_DESCRIPTION_COLUMN - 1};
   var PARENT_CATEGORY_IDX = ${PRODUCT_PARENT_CATEGORY_COLUMN - 1};
@@ -2978,6 +2984,7 @@ function buildProductManagerHtml_(idPrefix) {
     currentRow = null;
     var blank = new Array(${PRODUCT_HEADERS.length}).fill('');
     blank[STATUS_IDX] = 'active';
+    pendingVariants = [];
     fillForm(blank);
   }
 
@@ -3019,66 +3026,119 @@ function buildProductManagerHtml_(idPrefix) {
     values[IMAGE_IDX] = $('pImgUrl').value;
     values[UNIT_IDX] = $('pUnit').value.trim() || 'cái';
     values[TOPPING_GROUPS_IDX] = getSelectedToppingGroups();
+    showMsg('Đang lưu sản phẩm…');
     google.script.run.withSuccessHandler(function (res) {
       currentRow = res.row;
-      showMsg('Đã lưu sản phẩm');
-      loadProducts();
-      loadVariantsInline_();
+      flushPendingVariants_(name, 0, []);
     }).withFailureHandler(showErr).upsertProduct(currentRow, values);
   }
 
-  /** Biến thể (giá bán) quản lý NGAY trong tab Sản phẩm — khớp theo Tên quán + Tên sản phẩm
-   *  (đọc/ghi thẳng sheet VARIANT qua các hàm server listVariantsByProduct/upsertVariant/
-   *  deleteVariant, không có bảng/API riêng nào khác — không còn tab "Biến thể" riêng). Bắt
-   *  buộc sản phẩm đã LƯU (currentRow khác null) mới cho thêm biến thể — tránh lệch tên nếu đổi
-   *  Tên sản phẩm rồi mới lưu, biến thể đã gõ trước đó sẽ mất liên kết. */
+  /** Ghi/xoá THẬT từng biến thể đang staged cục bộ (pendingVariants) lên sheet VARIANT, tuần tự
+   *  từng biến thể một (giống pattern uploadFilesSequentially_ ở form Cửa hàng — tránh vượt giới
+   *  hạn gọi đồng thời của Apps Script) — CHỈ chạy sau khi sản phẩm cha đã lưu xong, dùng đúng
+   *  productName vừa lưu (không lệch tên nếu vừa đổi Tên sản phẩm ở lần lưu này). */
+  function flushPendingVariants_(productName, index, errors) {
+    if (index >= pendingVariants.length) {
+      showMsg(errors.length
+        ? ('Đã lưu sản phẩm — nhưng có ' + errors.length + ' lỗi ở biến thể: ' + errors.join('; '))
+        : 'Đã lưu sản phẩm và toàn bộ biến thể.');
+      loadProducts();
+      loadVariantsInline_();
+      return;
+    }
+    var v = pendingVariants[index];
+    var next = function () { flushPendingVariants_(productName, index + 1, errors); };
+
+    if (v.deleted) {
+      if (!v.row) { next(); return; } // chưa từng lưu lên sheet thì không có gì để xoá thật
+      google.script.run.withSuccessHandler(next).withFailureHandler(function (e) {
+        errors.push((v.name || '') + ': ' + (e && e.message ? e.message : e));
+        next();
+      }).deleteVariant(v.row);
+      return;
+    }
+
+    var values = new Array(${VARIANT_SYSTEM_ID_COLUMN - 1}).fill('');
+    values[${VARIANT_STORE_COLUMN - 1}] = currentStore;
+    values[${VARIANT_PRODUCT_COLUMN - 1}] = productName;
+    values[${VARIANT_NAME_COLUMN - 1}] = v.name;
+    values[${VARIANT_PRICE_COLUMN - 1}] = v.price;
+    values[${VARIANT_WEIGHT_COLUMN - 1}] = (v.weight === '' || v.weight === null || v.weight === undefined) ? '' : v.weight;
+    values[${VARIANT_IS_DEFAULT_COLUMN - 1}] = v.isDefault;
+    values[${VARIANT_IS_ACTIVE_COLUMN - 1}] = v.isActive;
+    google.script.run.withSuccessHandler(next).withFailureHandler(function (e) {
+      errors.push((v.name || '') + ': ' + (e && e.message ? e.message : e));
+      next();
+    }).upsertVariant(v.row, values);
+  }
+
+  /** Biến thể (giá bán) quản lý NGAY trong tab Sản phẩm — thêm/sửa/xoá chỉ cập nhật mảng cục bộ
+   *  pendingVariants (xem renderVariantListUI_/saveVariantInline_/removeVariantInline_), KHÔNG
+   *  gọi server ở bước này — cho phép thêm nhiều biến thể liên tiếp, kể cả với sản phẩm CHƯA lưu
+   *  lần nào. Chỉ hàm này (gọi lúc mở form/đổi sản phẩm) mới ĐỌC từ sheet VARIANT thật, và chỉ
+   *  flushPendingVariants_ (gọi lúc bấm "Lưu sản phẩm") mới GHI thật lên sheet. */
   function loadVariantsInline_() {
-    var listEl = $('variantList');
-    var noteEl = $('variantNote');
-    var newBtn = $('btnNewVariantInline');
-    if (!currentStore || !currentRow) {
-      currentVariants = [];
-      listEl.style.display = 'none';
-      listEl.innerHTML = '';
-      newBtn.style.display = 'none';
-      hideVariantEditor_();
-      noteEl.style.display = 'block';
-      noteEl.textContent = 'Lưu sản phẩm trước, rồi thêm biến thể ở đây — sản phẩm cần ít nhất 1 biến thể mới bán được.';
+    if (!currentStore) {
+      pendingVariants = [];
+      renderVariantListUI_();
+      return;
+    }
+    if (!currentRow) {
+      // Sản phẩm mới chưa từng lưu — chưa có gì trên sheet để tải, chỉ vẽ lại đúng danh sách
+      // đang staged cục bộ (có thể đã thêm sẵn vài biến thể trước khi bấm "Lưu sản phẩm").
+      renderVariantListUI_();
       return;
     }
     var productName = $('pName').value.trim();
     google.script.run.withSuccessHandler(function (list) {
-      currentVariants = list;
-      listEl.innerHTML = '';
-      listEl.style.display = list.length ? 'block' : 'none';
-      newBtn.style.display = 'inline-block';
-      noteEl.style.display = list.length ? 'none' : 'block';
-      noteEl.textContent = 'Chưa có biến thể — sản phẩm này chưa bán được, bấm "+ Thêm biến thể" bên dưới.';
-      list.forEach(function (v) {
-        var row = document.createElement('div');
-        row.className = 'variantRow';
-        var label = document.createElement('span');
-        label.textContent = (v.values[${VARIANT_NAME_COLUMN - 1}] || '(chưa đặt tên)') + ' — ' +
-          (v.values[${VARIANT_PRICE_COLUMN - 1}] || 0) + 'đ' +
-          (v.values[${VARIANT_IS_DEFAULT_COLUMN - 1}] ? ' · Mặc định' : '');
-        row.appendChild(label);
-        var del = document.createElement('span');
-        del.className = 'variantDel';
-        del.textContent = '×';
-        del.title = 'Xoá biến thể';
-        del.onclick = function (e) { e.stopPropagation(); removeVariantInline_(v.row); };
-        row.appendChild(del);
-        row.onclick = function () { editVariantInline_(v); };
-        listEl.appendChild(row);
+      pendingVariants = list.map(function (v) {
+        var isActiveRaw = v.values[${VARIANT_IS_ACTIVE_COLUMN - 1}];
+        return {
+          localId: nextLocalId++,
+          row: v.row,
+          name: v.values[${VARIANT_NAME_COLUMN - 1}] || '',
+          price: v.values[${VARIANT_PRICE_COLUMN - 1}] === '' ? 0 : v.values[${VARIANT_PRICE_COLUMN - 1}],
+          weight: v.values[${VARIANT_WEIGHT_COLUMN - 1}],
+          isDefault: !!v.values[${VARIANT_IS_DEFAULT_COLUMN - 1}],
+          isActive: isActiveRaw === '' || isActiveRaw === undefined ? true : !!isActiveRaw,
+          deleted: false
+        };
       });
+      renderVariantListUI_();
     }).withFailureHandler(showErr).listVariantsByProduct(currentStore, productName);
+  }
+
+  function renderVariantListUI_() {
+    var listEl = $('variantList');
+    var noteEl = $('variantNote');
+    var active = pendingVariants.filter(function (v) { return !v.deleted; });
+    listEl.innerHTML = '';
+    listEl.style.display = active.length ? 'block' : 'none';
+    noteEl.style.display = active.length ? 'none' : 'block';
+    noteEl.textContent = 'Chưa có biến thể — bấm "+ Thêm biến thể" bên dưới, sẽ lưu cùng lúc khi bấm "💾 Lưu sản phẩm".';
+    active.forEach(function (v) {
+      var row = document.createElement('div');
+      row.className = 'variantRow';
+      var label = document.createElement('span');
+      label.textContent = (v.name || '(chưa đặt tên)') + ' — ' + (v.price || 0) + 'đ' +
+        (v.isDefault ? ' · Mặc định' : '') + (v.row ? '' : ' · (chưa lưu)');
+      row.appendChild(label);
+      var del = document.createElement('span');
+      del.className = 'variantDel';
+      del.textContent = '×';
+      del.title = 'Xoá biến thể';
+      del.onclick = function (e) { e.stopPropagation(); removeVariantInline_(v.localId); };
+      row.appendChild(del);
+      row.onclick = function () { editVariantInline_(v.localId); };
+      listEl.appendChild(row);
+    });
   }
 
   function showVariantEditor_() { $('variantEditor').style.display = 'block'; }
 
   function hideVariantEditor_() {
     $('variantEditor').style.display = 'none';
-    editingVariantRow = null;
+    editingLocalId = null;
     $('vName').value = '';
     $('vPrice').value = '';
     $('vWeight').value = '';
@@ -3086,44 +3146,76 @@ function buildProductManagerHtml_(idPrefix) {
     $('vIsActive').checked = true;
   }
 
-  function editVariantInline_(v) {
-    editingVariantRow = v.row;
-    $('vName').value = v.values[${VARIANT_NAME_COLUMN - 1}] || '';
-    $('vPrice').value = v.values[${VARIANT_PRICE_COLUMN - 1}] || '';
-    $('vWeight').value = v.values[${VARIANT_WEIGHT_COLUMN - 1}] || '';
-    $('vIsDefault').checked = !!v.values[${VARIANT_IS_DEFAULT_COLUMN - 1}];
-    var isActiveRaw = v.values[${VARIANT_IS_ACTIVE_COLUMN - 1}];
-    $('vIsActive').checked = isActiveRaw === '' || isActiveRaw === undefined ? true : !!isActiveRaw;
+  function editVariantInline_(localId) {
+    var v = pendingVariants.filter(function (x) { return x.localId === localId; })[0];
+    if (!v) return;
+    editingLocalId = localId;
+    $('vName').value = v.name || '';
+    $('vPrice').value = (v.price === '' || v.price === null || v.price === undefined) ? '' : v.price;
+    $('vWeight').value = (v.weight === '' || v.weight === null || v.weight === undefined) ? '' : v.weight;
+    $('vIsDefault').checked = !!v.isDefault;
+    $('vIsActive').checked = v.isActive !== false;
     showVariantEditor_();
   }
 
+  /** Chỉ THÊM/SỬA trong mảng pendingVariants cục bộ — KHÔNG gọi server (xem flushPendingVariants_
+   *  ở saveProduct để biết lúc nào mới ghi thật). Nhờ vậy bấm "+ Thêm biến thể" nhiều lần liên
+   *  tiếp là thêm được nhiều biến thể ngay, không cần đợi round-trip server sau mỗi lần. */
   function saveVariantInline_() {
-    if (!currentStore || !currentRow) { showErr('Lưu sản phẩm trước'); return; }
-    var productName = $('pName').value.trim();
     var name = $('vName').value.trim();
     if (!name) { showErr('Chưa nhập Tên biến thể'); return; }
     if ($('vPrice').value === '') { showErr('Chưa nhập Giá bán'); return; }
-    var values = new Array(${VARIANT_SYSTEM_ID_COLUMN - 1}).fill('');
-    values[${VARIANT_STORE_COLUMN - 1}] = currentStore;
-    values[${VARIANT_PRODUCT_COLUMN - 1}] = productName;
-    values[${VARIANT_NAME_COLUMN - 1}] = name;
-    values[${VARIANT_PRICE_COLUMN - 1}] = Number($('vPrice').value);
-    values[${VARIANT_WEIGHT_COLUMN - 1}] = $('vWeight').value === '' ? '' : Number($('vWeight').value);
-    values[${VARIANT_IS_DEFAULT_COLUMN - 1}] = $('vIsDefault').checked;
-    values[${VARIANT_IS_ACTIVE_COLUMN - 1}] = $('vIsActive').checked;
-    google.script.run.withSuccessHandler(function () {
-      showMsg('Đã lưu biến thể');
-      hideVariantEditor_();
-      loadVariantsInline_();
-    }).withFailureHandler(showErr).upsertVariant(editingVariantRow, values);
+
+    var existingIdx = -1;
+    if (editingLocalId) {
+      for (var i = 0; i < pendingVariants.length; i++) {
+        if (pendingVariants[i].localId === editingLocalId) { existingIdx = i; break; }
+      }
+    }
+
+    var entry = {
+      localId: editingLocalId || nextLocalId++,
+      row: existingIdx !== -1 ? pendingVariants[existingIdx].row : null,
+      name: name,
+      price: Number($('vPrice').value),
+      weight: $('vWeight').value === '' ? '' : Number($('vWeight').value),
+      isDefault: $('vIsDefault').checked,
+      isActive: $('vIsActive').checked,
+      deleted: false
+    };
+
+    if (existingIdx !== -1) {
+      pendingVariants[existingIdx] = entry;
+    } else {
+      pendingVariants.push(entry);
+    }
+    if (entry.isDefault) {
+      pendingVariants.forEach(function (v) {
+        if (v.localId !== entry.localId) v.isDefault = false;
+      });
+    }
+
+    hideVariantEditor_();
+    renderVariantListUI_();
+    showMsg('Đã thêm vào danh sách biến thể — nhớ bấm "💾 Lưu sản phẩm" để lưu lại thật sự.');
   }
 
-  function removeVariantInline_(row) {
-    if (!confirm('Xoá biến thể này?')) return;
-    google.script.run.withSuccessHandler(function () {
-      showMsg('Đã xoá biến thể');
-      loadVariantsInline_();
-    }).withFailureHandler(showErr).deleteVariant(row);
+  function removeVariantInline_(localId) {
+    var idx = -1;
+    for (var i = 0; i < pendingVariants.length; i++) {
+      if (pendingVariants[i].localId === localId) { idx = i; break; }
+    }
+    if (idx === -1) return;
+    if (!confirm('Xoá biến thể này khỏi danh sách?')) return;
+    if (pendingVariants[idx].row) {
+      // Đã có thật trên sheet — chỉ đánh dấu, xoá thật lúc bấm "Lưu sản phẩm" (flushPendingVariants_).
+      pendingVariants[idx].deleted = true;
+      showMsg('Đã đánh dấu xoá — nhớ bấm "💾 Lưu sản phẩm" để áp dụng.');
+    } else {
+      // Chưa từng lưu — bỏ hẳn khỏi danh sách cục bộ, không cần đụng tới server.
+      pendingVariants.splice(idx, 1);
+    }
+    renderVariantListUI_();
   }
 
   function removeProduct() {
