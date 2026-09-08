@@ -2631,9 +2631,10 @@ function buildProductManagerHtml_(idPrefix) {
   #${idPrefix}root .imgRow { display: flex; gap: 8px; align-items: center; margin-top: 3px; }
   #${idPrefix}pImgPreview { width: 56px; height: 56px; object-fit: cover; border: 1px solid var(--border); border-radius: var(--radius-sm); display: none; }
   #${idPrefix}root .photo-panel { display: none; border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; margin-top: 10px; background: var(--surface-alt); }
-  #${idPrefix}root .grid { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
-  #${idPrefix}root .thumb { width: 88px; height: 88px; }
-  #${idPrefix}root .thumb img { width: 100%; height: 100%; object-fit: cover; border-radius: var(--radius-sm); border: 1px solid var(--border); cursor: pointer; }
+  #${idPrefix}root .grid { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px; margin-top: 8px; }
+  #${idPrefix}root .thumb { width: 88px; }
+  #${idPrefix}root .thumb img { width: 100%; height: 88px; object-fit: cover; border-radius: var(--radius-sm); border: 1px solid var(--border); cursor: pointer; display: block; }
+  #${idPrefix}root .thumb .name { width: 88px; font-size: 10.5px; color: var(--ink-muted); text-align: center; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #${idPrefix}toppingGroupBox { max-height: 130px; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius-sm); margin-top: 4px; padding: 8px; background: var(--surface); }
   #${idPrefix}toppingGroupBox label { display: flex; align-items: center; gap: 6px; font-weight: 400; margin: 4px 0; color: var(--ink); }
   #${idPrefix}toppingGroupBox label input { width: auto; margin: 0; accent-color: var(--brand); }
@@ -3079,6 +3080,13 @@ function buildProductManagerHtml_(idPrefix) {
         im.title = img.name;
         im.onclick = function () { pickImage(idx); };
         thumb.appendChild(im);
+        // Tên file hiện LUÔN bên dưới ảnh (không chỉ khi rê chuột vào title) — dễ phân biệt lúc
+        // thumbnail Drive tải chậm/lỗi (hay gặp, hiện icon "?" thay ảnh thật).
+        var nameEl = document.createElement('div');
+        nameEl.className = 'name';
+        nameEl.textContent = img.name;
+        nameEl.title = img.name;
+        thumb.appendChild(nameEl);
         grid.appendChild(thumb);
       });
     }).withFailureHandler(showErr).listImagesInStoreSubfolder(currentStore, '${SUBFOLDER_MENU_PHOTOS}');
