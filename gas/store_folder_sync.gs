@@ -197,7 +197,15 @@ const VARIANT_PRICE_COLUMN = 4;          // 4 - Giá bán → product_variants.p
 const VARIANT_WEIGHT_COLUMN = 5;         // 5 - Trọng lượng (g) → product_variants.weight_gram
 const VARIANT_IS_DEFAULT_COLUMN = 6;     // 6 - Là mặc định → product_variants.is_default (checkbox)
 const VARIANT_IS_ACTIVE_COLUMN = 7;      // 7 - Đang bán → product_variants.is_active (checkbox, mặc định BẬT)
-const VARIANT_SYSTEM_ID_COLUMN = 8;      // 8 - ID hệ thống (product_variants.id, server tự ghi khi đồng bộ, không gõ tay)
+// Thêm SAU "Đang bán", TRƯỚC ID hệ thống (cùng lý do/cùng cách migrate như
+// PRODUCT_UNIT_COLUMN — xem migrateVariantAddStockColumn_v1) — CHỈ GIEO đúng 1 lần lúc biến thể
+// CHƯA từng có dòng inventory (server tự ON CONFLICT DO NOTHING, xem POST /gas-sync/apply):
+// đồng bộ lại nhiều lần cùng 1 số KHÔNG ghi đè tồn kho thật đang có (đã bán/đã điều chỉnh qua
+// màn "Kho hàng" app Cửa hàng). Để trống = không gieo gì — biến thể đó tự dùng tồn kho MẶC ĐỊNH
+// của cửa hàng (cấu hình ở web admin, merchants.default_stock_quantity) ngay lúc có đơn đầu
+// tiên, xem hofa-db/109_merchant_default_inventory.sql.
+const VARIANT_STOCK_COLUMN = 8;          // 8 - Tồn kho ban đầu → inventory.quantity_on_hand (chỉ gieo 1 lần)
+const VARIANT_SYSTEM_ID_COLUMN = 9;      // 9 - ID hệ thống (product_variants.id, server tự ghi khi đồng bộ, không gõ tay)
 
 const VARIANT_HEADERS = [
   'Tên quán',                  // 1
@@ -207,7 +215,8 @@ const VARIANT_HEADERS = [
   'Trọng lượng (g)',           // 5 — product_variants.weight_gram
   'Là mặc định',               // 6 — product_variants.is_default (checkbox)
   'Đang bán',                  // 7 — product_variants.is_active (checkbox)
-  'ID hệ thống'                // 8 — product_variants.id, server tự ghi khi đồng bộ
+  'Tồn kho ban đầu',           // 8 — inventory.quantity_on_hand, chỉ gieo lúc chưa từng có tồn kho
+  'ID hệ thống'                // 9 — product_variants.id, server tự ghi khi đồng bộ
 ];
 
 // ---- Sheet TOPPING ----
@@ -260,6 +269,7 @@ function onOpen() {
     .addItem('🔧 Chỉ sửa lại dòng tiêu đề MERCHANT (không đụng dữ liệu)', 'fixStoreHeaderRowOnly_v1')
     .addItem('⚠️ Sắp xếp lại cột PRODUCT (chạy 1 lần)', 'migrateProductColumnsToApiLayout_v1')
     .addItem('⚠️ Thêm cột Đơn vị vào PRODUCT (chạy 1 lần)', 'migrateProductAddUnitColumn_v1')
+    .addItem('⚠️ Thêm cột Tồn kho ban đầu vào VARIANT (chạy 1 lần)', 'migrateVariantAddStockColumn_v1')
     .addToUi();
 }
 
@@ -534,6 +544,37 @@ function migrateProductAddUnitColumn_v1() {
   sheet.getRange(1, 1, 1, PRODUCT_HEADERS.length).setValues([PRODUCT_HEADERS]);
 
   ui.alert('Xong! Sheet PRODUCT đã có cột Đơn vị (cột 9) — ID hệ thống đã tự dời sang cột 10.');
+}
+
+/** CHẠY 1 LẦN DUY NHẤT — thêm cột "Tồn kho ban đầu" (số 8, inventory.quantity_on_hand) vào
+ *  sheet VARIANT. Cùng cách làm với migrateProductAddUnitColumn_v1 (insertColumnBefore(), Sheets
+ *  tự dời nguyên vẹn cột ID hệ thống đang có sang phải 1 cột, không rủi ro lệch dòng). Sheet mới
+ *  tạo sau khi VARIANT_HEADERS đã có cột này thì getVariantSheet_() tự tạo đúng layout mới, hàm
+ *  này chỉ nhận ra đã đúng và không làm gì. */
+function migrateVariantAddStockColumn_v1() {
+  const ui = SpreadsheetApp.getUi();
+  const sheet = getVariantSheet_();
+
+  const currentHeaders = sheet.getRange(1, 1, 1, Math.max(sheet.getLastColumn(), VARIANT_HEADERS.length)).getValues()[0];
+  if (currentHeaders[VARIANT_STOCK_COLUMN - 1] === 'Tồn kho ban đầu') {
+    ui.alert('Sheet VARIANT đã có cột Tồn kho ban đầu rồi, không cần chạy lại.');
+    return;
+  }
+
+  const confirm = ui.alert(
+    'Thêm cột Tồn kho ban đầu vào VARIANT?',
+    'Sẽ chèn thêm 1 cột trống "Tồn kho ban đầu" ngay trước cột ID hệ thống — cột ID hệ thống và ' +
+      'mọi dữ liệu đang có ở đó TỰ DỜI sang phải 1 cột, không mất dữ liệu. Cột này để trống cho ' +
+      'các dòng đã có sẵn (biến thể đó sẽ tự dùng tồn kho mặc định của cửa hàng, cấu hình ở web ' +
+      'admin) — điền số cụ thể qua form Sản phẩm nếu muốn đặt riêng. Tiếp tục?',
+    ui.ButtonSet.YES_NO
+  );
+  if (confirm !== ui.Button.YES) return;
+
+  sheet.insertColumnBefore(VARIANT_STOCK_COLUMN);
+  sheet.getRange(1, 1, 1, VARIANT_HEADERS.length).setValues([VARIANT_HEADERS]);
+
+  ui.alert('Xong! Sheet VARIANT đã có cột Tồn kho ban đầu (cột 8) — ID hệ thống đã tự dời sang cột 9.');
 }
 
 /** Menu tuỳ chỉnh + showModalDialog CHỈ chạy được trên trình duyệt (máy tính hoặc trình duyệt
@@ -1338,7 +1379,8 @@ function gasSyncBuildPayloadForStore_(storeName) {
           price: vv[VARIANT_PRICE_COLUMN - 1] === '' ? null : Number(vv[VARIANT_PRICE_COLUMN - 1]),
           weight_gram: vv[VARIANT_WEIGHT_COLUMN - 1] === '' ? null : Number(vv[VARIANT_WEIGHT_COLUMN - 1]),
           is_default: !!vv[VARIANT_IS_DEFAULT_COLUMN - 1],
-          is_active: !!vv[VARIANT_IS_ACTIVE_COLUMN - 1]
+          is_active: !!vv[VARIANT_IS_ACTIVE_COLUMN - 1],
+          stock: vv[VARIANT_STOCK_COLUMN - 1] === '' ? null : Number(vv[VARIANT_STOCK_COLUMN - 1])
         };
       })
     };
@@ -1498,6 +1540,27 @@ function willCreateMerchantCategory_(categoryTree, existingMerchantCategories, p
   return !already;
 }
 
+/** 1 dòng báo trước cho cột "Tồn kho ban đầu" — khớp đúng hành vi ON CONFLICT DO NOTHING thật ở
+ *  server (xem gasSyncApply/POST /gas-sync/apply): [oldStockOnHand] = tồn kho THẬT đang có (từ
+ *  snapshot.merchant.merchant_categories... không, từ chính biến thể — null nếu biến thể CHƯA
+ *  từng có dòng inventory). Đã có tồn kho thật rồi thì số trong sheet KHÔNG được áp dụng (chỉ để
+ *  tham khảo) — báo rõ để tránh hiểu nhầm sửa số trong sheet là sửa được tồn kho đang bán. Chưa
+ *  có tồn kho thật + sheet có số thì báo sẽ gieo. Cả 2 đều trống thì không có gì để báo (trả
+ *  null — biến thể đó sẽ tự dùng tồn kho mặc định của cửa hàng lúc có đơn đầu tiên, không cần
+ *  nhắc ở từng dòng). */
+function stockDiffLine_(oldStockOnHand, sheetStock) {
+  const hasOld = oldStockOnHand !== null && oldStockOnHand !== undefined;
+  const hasNew = sheetStock !== null && sheetStock !== undefined && sheetStock !== '';
+  if (hasOld) {
+    return '   = Tồn kho hiện tại: ' + oldStockOnHand +
+      (hasNew ? ' (đã có tồn kho thật — số "' + sheetStock + '" trong sheet sẽ KHÔNG áp dụng)' : '');
+  }
+  if (hasNew) {
+    return '   🆕 Sẽ gieo tồn kho ban đầu: ' + sheetStock;
+  }
+  return null;
+}
+
 function diffProducts_(lines, snapshot, payload, categoryTree) {
   const oldById = {};
   (snapshot.products || []).forEach(function (p) { oldById[p.id] = p; });
@@ -1516,6 +1579,8 @@ function diffProducts_(lines, snapshot, payload, categoryTree) {
       if (p.unit) lines.push('   Đơn vị: ' + p.unit);
       (p.variants || []).forEach(function (v) {
         lines.push('   + Biến thể mới: "' + v.name + '" — ' + (v.price || 0) + 'đ');
+        var stockLine = stockDiffLine_(null, v.stock);
+        if (stockLine) lines.push(stockLine);
       });
       if ((p.topping_group_names || []).length) {
         lines.push('   Nhóm topping: ' + p.topping_group_names.join(', '));
@@ -1550,7 +1615,12 @@ function diffProducts_(lines, snapshot, payload, categoryTree) {
     (oldP.variants || []).forEach(function (v) { oldVariantsById[v.id] = v; });
     const seenOldVariantIds = {};
     (p.variants || []).forEach(function (v) {
-      if (!v.id) { lines.push('   🆕 Biến thể mới: "' + v.name + '" — ' + (v.price || 0) + 'đ'); return; }
+      if (!v.id) {
+        lines.push('   🆕 Biến thể mới: "' + v.name + '" — ' + (v.price || 0) + 'đ');
+        const stockLineNew = stockDiffLine_(null, v.stock);
+        if (stockLineNew) lines.push(stockLineNew);
+        return;
+      }
       seenOldVariantIds[v.id] = true;
       const oldV = oldVariantsById[v.id];
       if (!oldV) { lines.push('   ⚠️ Biến thể "' + v.name + '" có ID nhưng không tìm thấy trên hệ thống'); return; }
@@ -1560,6 +1630,8 @@ function diffProducts_(lines, snapshot, payload, categoryTree) {
       lines.push('   ' + fieldCompareRow_('Trọng lượng', oldV.weight_gram, v.weight_gram));
       lines.push('   ' + fieldCompareRow_('Là mặc định', oldV.is_default, !!v.is_default));
       lines.push('   ' + fieldCompareRow_('Đang bán', oldV.is_active, v.is_active !== false));
+      const stockLine = stockDiffLine_(oldV.stock_on_hand, v.stock);
+      if (stockLine) lines.push(stockLine);
     });
     (oldP.variants || []).forEach(function (ov) {
       if (!seenOldVariantIds[ov.id]) {
@@ -1652,7 +1724,8 @@ function gasSyncApply(storeName) {
             price: v.price,
             weight_gram: v.weight_gram,
             is_default: v.is_default,
-            is_active: v.is_active
+            is_active: v.is_active,
+            stock: v.stock
           };
         })
       };
@@ -2797,13 +2870,16 @@ function buildProductManagerHtml_(idPrefix) {
       <input type="number" id="${idPrefix}vWeight" placeholder="Trọng lượng (g)" step="1" min="0" style="flex:1; width:auto;">
     </div>
     <div class="imgRow" style="margin-top:8px;">
+      <input type="number" id="${idPrefix}vStock" placeholder="Tồn kho ban đầu (để trống = dùng tồn kho mặc định cửa hàng)" step="1" min="0" style="flex:1; width:auto;">
+    </div>
+    <div class="imgRow" style="margin-top:8px;">
       <label class="checkLabel"><input type="checkbox" id="${idPrefix}vIsDefault"> Là mặc định</label>
       <label class="checkLabel"><input type="checkbox" id="${idPrefix}vIsActive" checked> Đang bán</label>
     </div>
     <button id="${idPrefix}btnSaveVariantInline" type="button">✅ Thêm vào danh sách</button>
     <button id="${idPrefix}btnCancelVariantInline" type="button">Huỷ</button>
   </div>
-  <div style="color:#888; font-size:12px; margin-top:2px;">Có thể bấm "+ Thêm biến thể" nhiều lần liên tiếp để thêm nhiều biến thể cùng lúc — chỉ thật sự ghi vào hệ thống khi bấm "💾 Lưu sản phẩm" ở cuối form.</div>
+  <div style="color:#888; font-size:12px; margin-top:2px;">Có thể bấm "+ Thêm biến thể" nhiều lần liên tiếp để thêm nhiều biến thể cùng lúc — chỉ thật sự ghi vào hệ thống khi bấm "💾 Lưu sản phẩm" ở cuối form. "Tồn kho ban đầu" chỉ áp dụng ĐÚNG 1 LẦN lúc biến thể chưa từng có tồn kho — sửa lại số này ở lần đồng bộ sau KHÔNG cập nhật tồn kho thật đang có, dùng màn "Kho hàng" trong app Cửa hàng để điều chỉnh tồn kho đang bán.</div>
 
   <label>Đơn vị</label>
   <input type="text" id="${idPrefix}pUnit" placeholder="cái, kg, hộp, phần..." list="${idPrefix}unitList">
@@ -3095,6 +3171,7 @@ function buildProductManagerHtml_(idPrefix) {
     values[${VARIANT_WEIGHT_COLUMN - 1}] = (v.weight === '' || v.weight === null || v.weight === undefined) ? '' : v.weight;
     values[${VARIANT_IS_DEFAULT_COLUMN - 1}] = v.isDefault;
     values[${VARIANT_IS_ACTIVE_COLUMN - 1}] = v.isActive;
+    values[${VARIANT_STOCK_COLUMN - 1}] = (v.stock === '' || v.stock === null || v.stock === undefined) ? '' : v.stock;
     google.script.run.withSuccessHandler(next).withFailureHandler(function (e) {
       errors.push((v.name || '') + ': ' + (e && e.message ? e.message : e));
       next();
@@ -3158,6 +3235,7 @@ function buildProductManagerHtml_(idPrefix) {
           weight: v.values[${VARIANT_WEIGHT_COLUMN - 1}],
           isDefault: !!v.values[${VARIANT_IS_DEFAULT_COLUMN - 1}],
           isActive: isActiveRaw === '' || isActiveRaw === undefined ? true : !!isActiveRaw,
+          stock: v.values[${VARIANT_STOCK_COLUMN - 1}],
           deleted: false
         };
       });
@@ -3178,7 +3256,9 @@ function buildProductManagerHtml_(idPrefix) {
       row.className = 'variantRow';
       var label = document.createElement('span');
       label.textContent = (v.name || '(chưa đặt tên)') + ' — ' + (v.price || 0) + 'đ' +
-        (v.isDefault ? ' · Mặc định' : '') + (v.row ? '' : ' · (chưa lưu)');
+        (v.isDefault ? ' · Mặc định' : '') +
+        (v.stock === '' || v.stock === null || v.stock === undefined ? '' : ' · Tồn kho ban đầu: ' + v.stock) +
+        (v.row ? '' : ' · (chưa lưu)');
       row.appendChild(label);
       var del = document.createElement('span');
       del.className = 'variantDel';
@@ -3199,6 +3279,7 @@ function buildProductManagerHtml_(idPrefix) {
     $('vName').value = '';
     $('vPrice').value = '';
     $('vWeight').value = '';
+    $('vStock').value = '';
     $('vIsDefault').checked = false;
     $('vIsActive').checked = true;
   }
@@ -3210,6 +3291,7 @@ function buildProductManagerHtml_(idPrefix) {
     $('vName').value = v.name || '';
     $('vPrice').value = (v.price === '' || v.price === null || v.price === undefined) ? '' : v.price;
     $('vWeight').value = (v.weight === '' || v.weight === null || v.weight === undefined) ? '' : v.weight;
+    $('vStock').value = (v.stock === '' || v.stock === null || v.stock === undefined) ? '' : v.stock;
     $('vIsDefault').checked = !!v.isDefault;
     $('vIsActive').checked = v.isActive !== false;
     showVariantEditor_();
@@ -3236,6 +3318,7 @@ function buildProductManagerHtml_(idPrefix) {
       name: name,
       price: Number($('vPrice').value),
       weight: $('vWeight').value === '' ? '' : Number($('vWeight').value),
+      stock: $('vStock').value === '' ? '' : Number($('vStock').value),
       isDefault: $('vIsDefault').checked,
       isActive: $('vIsActive').checked,
       deleted: false

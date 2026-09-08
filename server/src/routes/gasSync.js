@@ -238,7 +238,23 @@ router.get('/gas-sync/snapshot', asyncHandler(async (req, res) => {
       'SELECT * FROM product_variants WHERE product_id = ANY($1::uuid[]) ORDER BY created_at',
       [products.map((p) => p.id)]
     );
-    variants.forEach((v) => { (variantsByProduct[v.product_id] ||= []).push(v); });
+    // Tồn kho hiện có (nếu đã từng gieo, qua GAS hoặc màn "Kho hàng" app Cửa hàng) của từng
+    // biến thể tại chi nhánh chính — GAS dùng để báo trước "sẽ gieo tồn kho ban đầu" ở màn
+    // Kiểm tra thay đổi (chỉ gieo khi CHƯA có dòng nào, xem ON CONFLICT DO NOTHING lúc apply).
+    const stockByVariantId = {};
+    if (branch && variants.length) {
+      const stockRows = await db.query(
+        'SELECT variant_id, quantity_on_hand FROM inventory WHERE branch_id = $1 AND variant_id = ANY($2::uuid[])',
+        [branch.id, variants.map((v) => v.id)]
+      );
+      stockRows.forEach((r) => { stockByVariantId[r.variant_id] = r.quantity_on_hand; });
+    }
+    variants.forEach((v) => {
+      v.stock_on_hand = Object.prototype.hasOwnProperty.call(stockByVariantId, v.id)
+        ? stockByVariantId[v.id]
+        : null;
+      (variantsByProduct[v.product_id] ||= []).push(v);
+    });
   }
 
   const groups = await db.query('SELECT * FROM topping_groups WHERE merchant_id = $1 ORDER BY created_at', [merchant.id]);
@@ -613,6 +629,22 @@ router.post('/gas-sync/apply', asyncHandler(async (req, res) => {
                 is_active: v.is_active !== false
               });
           vItem.id = variant.id;
+
+          // Tồn kho BAN ĐẦU (tuỳ chọn, cột "Tồn kho ban đầu" ở sheet VARIANT) — chỉ GIEO đúng 1
+          // LẦN lúc biến thể CHƯA từng có dòng inventory (ON CONFLICT DO NOTHING): đồng bộ lại
+          // nhiều lần với cùng 1 con số không ghi đè tồn kho thật đang có (đã bán/đã điều chỉnh
+          // qua màn "Kho hàng" app Cửa hàng) — khớp đúng ý nghĩa "ban đầu", không phải đặt lại
+          // mỗi lần đồng bộ. Bỏ trống ở sheet thì không tạo dòng nào — để dành cho tồn kho MẶC
+          // ĐỊNH của cửa hàng (merchants.default_stock_quantity, xem reserve_inventory() trong
+          // hofa-db/109_merchant_default_inventory.sql) tự gieo lúc có đơn đầu tiên.
+          if (v.stock !== undefined && v.stock !== null && v.stock !== '') {
+            await db.query(
+              `INSERT INTO inventory (branch_id, variant_id, quantity_on_hand)
+               VALUES ($1, $2, $3)
+               ON CONFLICT (branch_id, variant_id) DO NOTHING`,
+              [branchId, variant.id, v.stock]
+            );
+          }
         } catch (err) {
           vItem.error = err.message;
         }

@@ -106,6 +106,9 @@ class Merchant {
   final num commissionRate;
   final int minOrderAmount;
   final int avgPrepMinutes;
+  // Tồn kho mặc định cho biến thể CHƯA từng cài tồn kho riêng — null = coi như 0 (chặn bán nếu
+  // chưa nhập kho, hành vi gốc), xem hofa-db/109_merchant_default_inventory.sql.
+  final int? defaultStockQuantity;
   final int maxDevices;
   final num vatRate;
   final num pitRate;
@@ -148,6 +151,7 @@ class Merchant {
     required this.commissionRate,
     required this.minOrderAmount,
     required this.avgPrepMinutes,
+    this.defaultStockQuantity,
     this.maxDevices = 1,
     this.vatRate = 3.0,
     this.pitRate = 1.5,
@@ -192,6 +196,7 @@ class Merchant {
     commissionRate: num.tryParse('${json['commission_rate']}') ?? 0,
     minOrderAmount: (json['min_order_amount'] as num?)?.toInt() ?? 0,
     avgPrepMinutes: (json['avg_prep_minutes'] as num?)?.toInt() ?? 15,
+    defaultStockQuantity: (json['default_stock_quantity'] as num?)?.toInt(),
     maxDevices: (json['max_devices'] as num?)?.toInt() ?? 1,
     vatRate: num.tryParse('${json['vat_rate']}') ?? 3.0,
     pitRate: num.tryParse('${json['pit_rate']}') ?? 1.5,

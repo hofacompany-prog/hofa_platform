@@ -103,6 +103,9 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
       text: VndInputFormatter.display(m.minOrderAmount),
     );
     final prepCtrl = TextEditingController(text: m.avgPrepMinutes.toString());
+    final defaultStockCtrl = TextEditingController(
+      text: m.defaultStockQuantity?.toString() ?? '',
+    );
     final bankAccNoCtrl = TextEditingController(text: m.bankAccountNo ?? '');
     final bankAccNameCtrl = TextEditingController(
       text: m.bankAccountName ?? '',
@@ -334,6 +337,17 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
                     inputFormatters: [VndInputFormatter()],
                   ),
                   const SizedBox(height: 12),
+                  TextField(
+                    controller: defaultStockCtrl,
+                    decoration: const InputDecoration(
+                      labelText: 'Tồn kho mặc định',
+                      helperText:
+                          'Áp dụng cho biến thể chưa cài tồn kho riêng — để trống = 0 (chặn bán tới khi nhập kho)',
+                      helperMaxLines: 2,
+                    ),
+                    keyboardType: TextInputType.number,
+                  ),
+                  const SizedBox(height: 12),
                   Row(
                     children: [
                       Expanded(
@@ -553,6 +567,9 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
                   m.minOrderAmount,
               'avg_prep_minutes':
                   int.tryParse(prepCtrl.text.trim()) ?? m.avgPrepMinutes,
+              'default_stock_quantity': defaultStockCtrl.text.trim().isEmpty
+                  ? null
+                  : int.tryParse(defaultStockCtrl.text.trim()),
               'bank_name': selectedBank?.name,
               'bank_bin': selectedBank?.bin,
               'bank_account_no': bankAccNoCtrl.text.trim().isEmpty
@@ -1037,6 +1054,12 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
                             _row('Hoa hồng', '${m.commissionRate}%'),
                             _row('Đơn tối thiểu', formatVnd(m.minOrderAmount)),
                             _row('TG chuẩn bị', '${m.avgPrepMinutes} phút'),
+                            _row(
+                              'Tồn kho mặc định',
+                              m.defaultStockQuantity == null
+                                  ? 'Chưa cấu hình (coi như 0)'
+                                  : '${m.defaultStockQuantity}',
+                            ),
                             _row(
                               'Đánh giá',
                               '${m.ratingAvg}★ (${m.ratingCount})',
