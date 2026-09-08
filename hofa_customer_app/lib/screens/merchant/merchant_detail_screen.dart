@@ -517,6 +517,7 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
                 Center(child: Text('Lỗi: ${productsState.error}'))
               else ...[
                 _ProductGrid(
+                  merchantId: merchantId,
                   products: productsState.items,
                   categories: categoriesAsync.maybeWhen(
                     data: (v) => v,
@@ -539,16 +540,21 @@ class _MerchantDetailScreenState extends ConsumerState<MerchantDetailScreen> {
   }
 }
 
-class _ProductGrid extends StatefulWidget {
+class _ProductGrid extends ConsumerStatefulWidget {
+  final String merchantId;
   final List<Product> products;
   final List<MerchantCategory> categories;
-  const _ProductGrid({required this.products, this.categories = const []});
+  const _ProductGrid({
+    required this.merchantId,
+    required this.products,
+    this.categories = const [],
+  });
 
   @override
-  State<_ProductGrid> createState() => _ProductGridState();
+  ConsumerState<_ProductGrid> createState() => _ProductGridState();
 }
 
-class _ProductGridState extends State<_ProductGrid> {
+class _ProductGridState extends ConsumerState<_ProductGrid> {
   String _filter = 'all'; // all | instant | scheduled
   // null = "Tất cả danh mục" — chọn 1 danh mục cụ thể thì bỏ hẳn cách chia theo từng nhóm,
   // chỉ hiện đúng sản phẩm của danh mục đó (khách chủ động lọc rồi, không cần thấy nhóm khác).
@@ -643,19 +649,59 @@ class _ProductGridState extends State<_ProductGrid> {
             ),
           );
 
-    // Cửa hàng chưa tự cài đặt danh mục nào, hoặc khách đã lọc còn đúng 1 danh mục cụ thể —
-    // cả 2 trường hợp đều không cần chia nhóm nữa, hiện phẳng 1 lưới duy nhất.
-    if (widget.categories.isEmpty || _categoryFilter != null) {
-      final filtered = _categoryFilter == null
-          ? visible
-          : visible
-                .where((p) => p.merchantCategoryId == _categoryFilter)
-                .toList();
+    // Đã chọn đúng 1 danh mục cụ thể — tải RIÊNG thẳng từ server theo merchant_category_id
+    // (merchantCategoryProductsProvider) thay vì lọc trên widget.products: danh sách đó chỉ
+    // mới tải ĐẾN ĐÂU trong phân trang (phân trang không nhóm theo danh mục), nên lọc trên nó
+    // dễ bỏ sót sản phẩm của danh mục đang chọn nếu chưa cuộn/tải hết — từng khiến bấm vào 1
+    // danh mục có sản phẩm nằm ở trang chưa tải tới bị tưởng nhầm "không có sản phẩm nào".
+    if (_categoryFilter != null) {
+      final categoryProductsAsync = ref.watch(
+        merchantCategoryProductsProvider((
+          merchantId: widget.merchantId,
+          merchantCategoryId: _categoryFilter!,
+        )),
+      );
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           filterRow,
-          if (filtered.isEmpty)
+          categoryProductsAsync.when(
+            loading: () => const Padding(
+              padding: EdgeInsets.only(top: 24, bottom: 24),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+            error: (e, _) => Padding(
+              padding: const EdgeInsets.only(top: 12, bottom: 12),
+              child: Center(child: Text('Lỗi: $e')),
+            ),
+            data: (categoryProducts) {
+              final filtered = _filter == 'all'
+                  ? categoryProducts
+                  : categoryProducts
+                        .where((p) => p.salesModel == _filter)
+                        .toList();
+              if (filtered.isEmpty) {
+                return const Padding(
+                  padding: EdgeInsets.only(top: 12, bottom: 12),
+                  child: Center(
+                    child: Text('Không có sản phẩm nào trong danh mục này'),
+                  ),
+                );
+              }
+              return _grid(filtered);
+            },
+          ),
+        ],
+      );
+    }
+
+    // Cửa hàng chưa tự cài đặt danh mục nào — không cần chia nhóm, hiện phẳng 1 lưới duy nhất.
+    if (widget.categories.isEmpty) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          filterRow,
+          if (visible.isEmpty)
             const Padding(
               padding: EdgeInsets.only(top: 12, bottom: 12),
               child: Center(
@@ -663,7 +709,7 @@ class _ProductGridState extends State<_ProductGrid> {
               ),
             )
           else
-            _grid(filtered),
+            _grid(visible),
         ],
       );
     }

@@ -31,6 +31,11 @@ class ProductRepository {
     String? q,
     String? salesModel,
     String? categoryId,
+    // Khớp ĐÚNG 1 danh mục CỦA CỬA HÀNG (merchant_categories.id) — khác categoryId ở trên
+    // (danh mục ngành hàng hệ thống, có thể gộp nhiều danh mục cửa hàng). Dùng để tải trọn vẹn
+    // sản phẩm của 1 danh mục cụ thể ngay lập tức, không phụ thuộc trang đã tải dần — xem
+    // merchantCategoryProductsProvider trong app_providers.dart.
+    String? merchantCategoryId,
     bool? isFeatured,
     int limit = 50,
     int offset = 0,
@@ -47,6 +52,8 @@ class ProductRepository {
                 if (q != null && q.isNotEmpty) 'q': q,
                 if (salesModel != null) 'sales_model': salesModel,
                 if (categoryId != null) 'category_id': categoryId,
+                if (merchantCategoryId != null)
+                  'merchant_category_id': merchantCategoryId,
                 if (isFeatured != null) 'is_featured': isFeatured,
                 if (lat != null && lng != null) 'lat': lat,
                 if (lat != null && lng != null) 'lng': lng,

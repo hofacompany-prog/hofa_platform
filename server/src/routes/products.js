@@ -202,6 +202,16 @@ router.get('/products', asyncHandler(async (req, res) => {
       `merchant_category_id IN (SELECT id FROM merchant_categories WHERE category_id IN (SELECT id FROM categories WHERE id = $${params.length} OR parent_id = $${params.length}))`
     );
   }
+  if (req.query.merchant_category_id) {
+    // Khớp ĐÚNG 1 danh mục cửa hàng cụ thể (khác category_id ở trên, vốn khớp theo danh mục
+    // NGÀNH HÀNG hệ thống và có thể gộp nhiều danh mục cửa hàng lại) — dùng ở màn chi tiết cửa
+    // hàng khi khách bấm 1 chip danh mục cụ thể: cần tải TOÀN BỘ sản phẩm của đúng danh mục đó
+    // ngay lập tức, không phụ thuộc danh sách sản phẩm đã tải dần theo trang (phân trang mặc
+    // định không nhóm theo danh mục nên 1 danh mục có thể còn sản phẩm nằm ở trang chưa tải
+    // tới — lọc phía client trên danh sách chưa tải hết sẽ bỏ sót).
+    params.push(req.query.merchant_category_id);
+    clauses.push(`merchant_category_id = $${params.length}`);
+  }
   if (req.query.is_featured !== undefined) {
     params.push(req.query.is_featured === 'true');
     clauses.push(`is_featured = $${params.length}`);

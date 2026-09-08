@@ -263,6 +263,22 @@ final merchantProductsPagedProvider = StateNotifierProvider.autoDispose
       );
     });
 
+/// Sản phẩm của 1 cửa hàng lọc ĐÚNG 1 danh mục cửa hàng cụ thể — tải RIÊNG thẳng từ server
+/// (merchant_category_id, khớp chính xác), KHÔNG lọc trên mảng đã tải dần của
+/// merchantProductsPagedProvider. Sửa lỗi: bấm vào 1 danh mục mà sản phẩm của nó còn nằm ở
+/// trang chưa tải tới thì tưởng nhầm "không có sản phẩm nào" — xem merchant_detail_screen.dart
+/// (_ProductGrid dùng provider này thay vì lọc widget.products khi có _categoryFilter).
+final merchantCategoryProductsProvider = FutureProvider.autoDispose
+    .family<List<Product>, ({String merchantId, String merchantCategoryId})>(
+      (ref, key) => ref
+          .watch(productRepoProvider)
+          .products(
+            merchantId: key.merchantId,
+            merchantCategoryId: key.merchantCategoryId,
+            limit: 100,
+          ),
+    );
+
 /// Danh sách sản phẩm 1 cửa hàng để chọn báo giá sai (report_price_screen.dart) — tải 1 lần,
 /// không phân trang/khoảng cách như merchantProductsPagedProvider (chỉ cần liệt kê để chọn).
 final merchantProductPickerProvider = FutureProvider.autoDispose
