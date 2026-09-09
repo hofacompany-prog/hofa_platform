@@ -51,3 +51,28 @@ Future<DateTime?> pickBreakDuration(BuildContext context) async {
     ),
   );
 }
+
+/// Hộp thoại xác nhận mở cửa lại sớm khi chi nhánh đang Đóng cửa tạm thời — cùng cách
+/// hofa_store_app/lib/widgets/branch_break_dialogs.dart hỏi chủ cửa hàng.
+Future<bool> confirmReopenNow(BuildContext context) async {
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Mở cửa lại ngay?'),
+      content: const Text(
+        'Huỷ trạng thái đóng cửa tạm thời và cho cửa hàng nhận đơn lại ngay bây giờ.',
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Huỷ'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(context, true),
+          child: const Text('Mở cửa'),
+        ),
+      ],
+    ),
+  );
+  return ok ?? false;
+}

@@ -123,6 +123,14 @@ class Merchant {
   final bool featuredHome;
   final int featuredHomeSortOrder;
   final DateTime? createdAt;
+  // Chi nhánh chính — nhúng sẵn ở GET /merchants (list) để bật/tắt cửa hàng nhanh ngay danh
+  // sách, không cần mở chi tiết (xem main_branch LATERAL join trong server/src/routes/
+  // merchants.js). null nếu cửa hàng chưa có chi nhánh nào.
+  final String? mainBranchId;
+  final bool mainBranchIsOpen;
+  final DateTime? mainBranchBreakUntil;
+  // 'open' | 'on_break' | 'closed_hours' — tính live ở server (branch_effective_status()).
+  final String mainBranchStatus;
   // Chỉ có khi gọi GET /merchants/:id với quyền admin/chủ (server nhúng sẵn).
   final MerchantOwner? owner;
   final List<Branch>? branches;
@@ -162,6 +170,10 @@ class Merchant {
     this.featuredHome = false,
     this.featuredHomeSortOrder = 0,
     this.createdAt,
+    this.mainBranchId,
+    this.mainBranchIsOpen = true,
+    this.mainBranchBreakUntil,
+    this.mainBranchStatus = 'open',
     this.owner,
     this.branches,
     this.classifications = const [],
@@ -212,6 +224,12 @@ class Merchant {
     createdAt: json['created_at'] != null
         ? DateTime.tryParse(json['created_at'] as String)
         : null,
+    mainBranchId: json['main_branch_id'] as String?,
+    mainBranchIsOpen: json['main_branch_is_open'] as bool? ?? true,
+    mainBranchBreakUntil: json['main_branch_break_until'] != null
+        ? DateTime.tryParse(json['main_branch_break_until'] as String)
+        : null,
+    mainBranchStatus: json['main_branch_status'] as String? ?? 'open',
     owner: json['owner'] != null
         ? MerchantOwner.fromJson(json['owner'] as Map<String, dynamic>)
         : null,

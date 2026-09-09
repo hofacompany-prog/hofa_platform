@@ -5,8 +5,27 @@ import 'package:go_router/go_router.dart';
 import '../../core/format.dart';
 import '../../models/merchant.dart';
 import '../../providers/admin_providers.dart';
+import '../../widgets/branch_break_dialogs.dart';
 import '../../widgets/stat_card.dart';
 import 'merchant_detail_screen.dart' show merchantTypeLabels;
+
+// Đỏ = đang Đóng cửa tạm thời (chủ cửa hàng/admin chủ động tắt), xám = ngoài giờ hoạt động đã
+// cấu hình (branch_hours) nhưng không phải đóng tay — cùng cách phân biệt hofa_store_app dùng
+// ở home_screen.dart._PreparingCard.
+Color _branchStatusColor(String status, ColorScheme scheme) => switch (status) {
+  'on_break' => scheme.error,
+  'closed_hours' => Colors.grey,
+  _ => scheme.primary,
+};
+
+String _branchStatusText(String status, DateTime? breakUntil) => switch (status) {
+  'on_break' =>
+    breakUntil != null
+        ? 'Đóng cửa đến ${formatBreakUntil(breakUntil)}'
+        : 'Đóng cửa tạm thời',
+  'closed_hours' => 'Ngoài giờ hoạt động',
+  _ => 'Đang mở cửa',
+};
 
 const merchantStatusLabels = {
   'draft': 'Nháp',
@@ -128,6 +147,34 @@ class _MerchantsScreenState extends ConsumerState<MerchantsScreen> {
           .reviewMerchant(m.id, approve: approve, certifyStandard: certify)
           .then((_) {}),
     );
+  }
+
+  /// Công tắc bật/tắt cửa hàng ngay trong danh sách — thao tác lên chi nhánh CHÍNH, cùng
+  /// nút "Tạm nghỉ" ở app Cửa hàng (home_screen.dart._PreparingCard): tắt phải chọn thời
+  /// lượng đóng cửa, bật lại từ trạng thái đóng tạm phải xác nhận. Khác với "Tạm dừng"/"Mở
+  /// lại" đã có sẵn ở dưới (đổi merchants.status — khoá bán hẳn, không liên quan giờ mở cửa).
+  Future<void> _toggleBranchOpen(Merchant m) async {
+    final branchId = m.mainBranchId;
+    if (branchId == null) return;
+    if (m.mainBranchStatus == 'on_break') {
+      final ok = await confirmReopenNow(context);
+      if (!ok) return;
+      await _run(
+        () => ref
+            .read(adminRepoProvider)
+            .toggleBranchOpen(branchId, isOpen: true)
+            .then((_) {}),
+      );
+    } else {
+      final until = await pickBreakDuration(context);
+      if (until == null) return;
+      await _run(
+        () => ref
+            .read(adminRepoProvider)
+            .toggleBranchOpen(branchId, isOpen: false, breakUntil: until)
+            .then((_) {}),
+      );
+    }
   }
 
   @override
@@ -360,6 +407,43 @@ class _MerchantsScreenState extends ConsumerState<MerchantsScreen> {
                                   ),
                                 ],
                               ),
+                              if (m.mainBranchId != null) ...[
+                                const SizedBox(height: 8),
+                                Row(
+                                  children: [
+                                    Icon(
+                                      Icons.storefront,
+                                      size: 16,
+                                      color: _branchStatusColor(
+                                        m.mainBranchStatus,
+                                        theme.colorScheme,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      _branchStatusText(
+                                        m.mainBranchStatus,
+                                        m.mainBranchBreakUntil,
+                                      ),
+                                      style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                        color: _branchStatusColor(
+                                          m.mainBranchStatus,
+                                          theme.colorScheme,
+                                        ),
+                                      ),
+                                    ),
+                                    const Spacer(),
+                                    Switch(
+                                      value: m.mainBranchStatus != 'on_break',
+                                      onChanged: _busy
+                                          ? null
+                                          : (_) => _toggleBranchOpen(m),
+                                    ),
+                                  ],
+                                ),
+                              ],
                               const SizedBox(height: 8),
                               // Luôn giữ đúng 1 hàng (nhãn loại/trạng thái bên trái, nút hành
                               // động bên phải) — hết chỗ thì FittedBox tự thu nhỏ cả cụm thay

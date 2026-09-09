@@ -146,6 +146,10 @@ router.get('/merchants', asyncHandler(async (req, res) => {
                      END
                 FROM branches b WHERE b.merchant_id = m.id AND b.deleted_at IS NULL
             ), 'open') AS display_status,
+            main_branch.id AS main_branch_id,
+            main_branch.is_open AS main_branch_is_open,
+            main_branch.break_until AS main_branch_break_until,
+            main_branch.status AS main_branch_status,
             COALESCE((
               SELECT jsonb_agg(jsonb_build_object('id', mc.id, 'name', mc.name) ORDER BY mc.sort_order, mc.name)
                 FROM merchant_classification_links l
@@ -154,6 +158,13 @@ router.get('/merchants', asyncHandler(async (req, res) => {
             ), '[]'::jsonb) AS classifications,
             ${distanceSelect}
        FROM merchants m
+       LEFT JOIN LATERAL (
+         SELECT b.id, b.is_open, b.break_until, branch_effective_status(b.id) AS status
+           FROM branches b
+          WHERE b.merchant_id = m.id AND b.deleted_at IS NULL
+          ORDER BY b.is_main DESC, b.created_at ASC
+          LIMIT 1
+       ) main_branch ON true
        ${distanceJoin}
       WHERE ${clauses.join(' AND ')}
       ORDER BY ${orderBy}
