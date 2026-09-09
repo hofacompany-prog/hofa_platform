@@ -2862,7 +2862,13 @@ function buildProductManagerHtml_(idPrefix) {
   <label>Biến thể (giá bán) *</label>
   <div id="${idPrefix}variantNote" style="color:#888; font-size:12px;">Chưa có biến thể — bấm "+ Thêm biến thể" bên dưới, sẽ lưu cùng lúc khi bấm "💾 Lưu sản phẩm".</div>
   <div id="${idPrefix}variantList" style="display:none;"></div>
-  <button id="${idPrefix}btnNewVariantInline" type="button">+ Thêm biến thể</button>
+  <div class="imgRow" style="margin-top:8px; flex-wrap: wrap;">
+    <button id="${idPrefix}btnNewVariantInline" type="button" style="margin-top:0;">+ Thêm biến thể</button>
+    <span style="font-size:12px; color:#888;">hoặc copy từ sản phẩm khác:</span>
+    <select id="${idPrefix}copyVariantSelect" style="flex:1; min-width:180px; margin-top:0;">
+      <option value="">-- Chọn sản phẩm đã lưu --</option>
+    </select>
+  </div>
   <div id="${idPrefix}variantEditor" style="display:none; border:1px solid #ccc; border-radius:6px; padding:10px; margin-top:8px; background:#fafafa;">
     <div class="imgRow">
       <input type="text" id="${idPrefix}vName" placeholder="Tên biến thể (Mặc định, Size L...)" style="flex:2; width:auto;">
@@ -2983,6 +2989,13 @@ function buildProductManagerHtml_(idPrefix) {
   $('btnNewVariantInline').addEventListener('click', function () { hideVariantEditor_(); showVariantEditor_(); });
   $('btnCancelVariantInline').addEventListener('click', hideVariantEditor_);
   $('btnSaveVariantInline').addEventListener('click', saveVariantInline_);
+  $('copyVariantSelect').addEventListener('change', function () {
+    var sel = $('copyVariantSelect');
+    var val = sel.value;
+    sel.value = ''; // trả về placeholder ngay — chọn lại đúng sản phẩm đó lần nữa vẫn kích hoạt được onchange
+    if (!val) return;
+    copyVariantsFromProduct_(Number(val));
+  });
   init();
 
   /** Danh mục cha = danh mục gốc (parent_id rỗng); option value = TÊN (không phải id) — khớp
@@ -3080,7 +3093,64 @@ function buildProductManagerHtml_(idPrefix) {
         div.onclick = function () { selectProduct(p.row); };
         el.appendChild(div);
       });
+      renderCopyVariantOptions_();
     }).withFailureHandler(showErr).listProductsByStore(currentStore);
+  }
+
+  /** Danh sách sản phẩm khác (loại đúng sản phẩm đang sửa, nếu đã lưu) để chọn copy biến thể —
+   *  gọi lại mỗi khi đổi sản phẩm (fillForm) hoặc tải lại danh sách sản phẩm (loadProducts), vì
+   *  cả 2 việc đều có thể đổi "sản phẩm nào là chính nó" cần loại ra. */
+  function renderCopyVariantOptions_() {
+    var sel = $('copyVariantSelect');
+    if (!sel) return;
+    sel.innerHTML = '';
+    var opt0 = document.createElement('option');
+    opt0.value = ''; opt0.text = '-- Chọn sản phẩm đã lưu --';
+    sel.appendChild(opt0);
+    products
+      .filter(function (p) { return p.row !== currentRow && p.values[NAME_IDX]; })
+      .forEach(function (p) {
+        var opt = document.createElement('option');
+        opt.value = String(p.row);
+        opt.text = p.values[NAME_IDX];
+        sel.appendChild(opt);
+      });
+  }
+
+  /** Copy TOÀN BỘ biến thể của 1 sản phẩm ĐÃ LƯU khác vào danh sách biến thể đang chỉnh sửa —
+   *  chỉ thêm vào pendingVariants cục bộ (row: null, y hệt bấm "+ Thêm biến thể" tay), KHÔNG
+   *  đụng gì tới sản phẩm nguồn hay ghi lên sheet ngay — vẫn phải bấm "💾 Lưu sản phẩm" mới ghi
+   *  thật. Luôn đặt isDefault=false cho bản copy (dù bản gốc là mặc định) để tránh 2 biến thể
+   *  "Là mặc định" cùng lúc trong sản phẩm đang sửa — tự tick lại tay nếu cần. */
+  function copyVariantsFromProduct_(srcRow) {
+    var srcProduct = products.filter(function (p) { return p.row === srcRow; })[0];
+    if (!srcProduct) return;
+    var srcName = srcProduct.values[NAME_IDX];
+    showMsg('Đang copy biến thể từ "' + srcName + '"…');
+    google.script.run.withSuccessHandler(function (list) {
+      if (!list.length) {
+        showErr('Sản phẩm "' + srcName + '" chưa có biến thể nào để copy');
+        return;
+      }
+      list.forEach(function (v) {
+        var isActiveRaw = v.values[${VARIANT_IS_ACTIVE_COLUMN - 1}];
+        pendingVariants.push({
+          localId: nextLocalId++,
+          row: null,
+          name: v.values[${VARIANT_NAME_COLUMN - 1}] || '',
+          price: v.values[${VARIANT_PRICE_COLUMN - 1}] === '' ? 0 : v.values[${VARIANT_PRICE_COLUMN - 1}],
+          weight: v.values[${VARIANT_WEIGHT_COLUMN - 1}],
+          stock: v.values[${VARIANT_STOCK_COLUMN - 1}],
+          isDefault: false,
+          isActive: isActiveRaw === '' || isActiveRaw === undefined ? true : !!isActiveRaw,
+          deleted: false
+        });
+      });
+      renderVariantListUI_();
+      showMsg(
+        'Đã copy ' + list.length + ' biến thể từ "' + srcName + '" — nhớ bấm "💾 Lưu sản phẩm" để lưu lại thật sự.'
+      );
+    }).withFailureHandler(showErr).listVariantsByProduct(currentStore, srcName);
   }
 
   function selectProduct(row) {
@@ -3114,6 +3184,7 @@ function buildProductManagerHtml_(idPrefix) {
       : 'Chưa đồng bộ lên hệ thống thật — sang tab "Đồng bộ CSDL" để đẩy lên';
     hideVariantEditor_();
     loadVariantsInline_();
+    renderCopyVariantOptions_();
   }
 
   function updateImgPreview(url) {
