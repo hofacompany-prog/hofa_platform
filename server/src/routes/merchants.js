@@ -66,7 +66,7 @@ router.get('/merchants', asyncHandler(async (req, res) => {
   const params = [];
 
   const isPrivileged = req.ctx.authenticated && req.ctx.role === 'admin';
-  if (!isPrivileged) clauses.push(`status = 'active'`);
+  if (!isPrivileged) clauses.push(`m.status = 'active'`);
   if (req.query.merchant_type) { params.push(req.query.merchant_type); clauses.push(`merchant_type = $${params.length}`); }
   if (req.query.q) { params.push(`%${req.query.q}%`); clauses.push(`name ILIKE $${params.length}`); }
   // Danh sách duyệt mặc định của trang chủ app Khách CHỈ hiện cửa hàng admin đã chọn
