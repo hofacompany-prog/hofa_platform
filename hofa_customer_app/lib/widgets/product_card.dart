@@ -46,15 +46,23 @@ class _ProductCardState extends ConsumerState<ProductCard> {
     // Cửa hàng mua hộ: giá hiển thị đã cộng % phí mua hộ (tạm tính theo số lượng=1, giống lúc
     // mới mở màn chi tiết sản phẩm) — cộng THẲNG vào giá thay vì để khách bất ngờ ở bước thanh
     // toán, xem hofa-db/108_buy_on_behalf_price_fold_and_small_order_fee.sql.
-    final merchant = ref
-        .watch(merchantDetailProvider(product.merchantId))
-        .valueOrNull;
+    final merchantAsync = ref.watch(merchantDetailProvider(product.merchantId));
+    final merchant = merchantAsync.valueOrNull;
+    // Chưa biết cửa hàng có phải mua hộ hay chưa (đang tải), hoặc đã biết là mua hộ nhưng còn
+    // đang tải bậc phí — hiện vòng tròn loading thay vì hiện tạm giá gốc rồi "nhảy" sang giá đã
+    // cộng % ngay trước mắt khách.
+    final merchantLoading = merchantAsync.isLoading && !merchantAsync.hasValue;
+    var feeTiersLoading = false;
     final feeTiers = (merchant != null && merchant.isBuyOnBehalf)
-        ? ref
-                  .watch(merchantFeeTiersProvider(product.merchantId))
-                  .valueOrNull ??
-              const <MerchantFeeTier>[]
+        ? () {
+            final feeTiersAsync = ref.watch(
+              merchantFeeTiersProvider(product.merchantId),
+            );
+            feeTiersLoading = feeTiersAsync.isLoading && !feeTiersAsync.hasValue;
+            return feeTiersAsync.valueOrNull ?? const <MerchantFeeTier>[];
+          }()
         : const <MerchantFeeTier>[];
+    final priceLoading = merchantLoading || feeTiersLoading;
     final displayPrice = variant == null
         ? 0
         : (merchant != null && merchant.isBuyOnBehalf)
@@ -165,15 +173,23 @@ class _ProductCardState extends ConsumerState<ProductCard> {
                         Row(
                           children: [
                             Expanded(
-                              child: Text(
-                                formatVnd(displayPrice),
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w700,
-                                  color: theme.colorScheme.primary,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
+                              child: priceLoading
+                                  ? const SizedBox(
+                                      width: 14,
+                                      height: 14,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : Text(
+                                      formatVnd(displayPrice),
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        color: theme.colorScheme.primary,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
                             ),
                             if (variant.comparePrice != null &&
                                 variant.comparePrice! > variant.price)

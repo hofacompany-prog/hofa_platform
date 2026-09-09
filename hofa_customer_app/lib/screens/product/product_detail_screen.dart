@@ -367,20 +367,33 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
         error: (e, _) => Center(child: Text('Lỗi: $e')),
         data: (product) {
           _ensureVariantSelected(product);
-          final merchant = ref
-              .watch(merchantDetailProvider(product.merchantId))
-              .valueOrNull;
+          final merchantAsync = ref.watch(
+            merchantDetailProvider(product.merchantId),
+          );
+          final merchant = merchantAsync.valueOrNull;
           final variant = _selectedVariant ?? product.defaultVariant;
           final tiersAsync = (product.isWholesale && variant != null)
               ? ref.watch(wholesaleTiersProvider(variant.id))
               : null;
           final tiers = tiersAsync?.valueOrNull ?? [];
+          // Chưa biết cửa hàng có phải mua hộ hay chưa (đang tải), hoặc đã biết là mua hộ nhưng
+          // còn đang tải bậc phí — hiện vòng tròn loading ở dòng giá thay vì hiện tạm giá gốc
+          // rồi "nhảy" sang giá đã cộng % ngay trước mắt khách.
+          final merchantLoading =
+              merchantAsync.isLoading && !merchantAsync.hasValue;
+          var feeTiersLoading = false;
           final feeTiers = (merchant != null && merchant.isBuyOnBehalf)
-              ? ref
-                        .watch(merchantFeeTiersProvider(product.merchantId))
-                        .valueOrNull ??
-                    const <MerchantFeeTier>[]
+              ? () {
+                  final feeTiersAsync = ref.watch(
+                    merchantFeeTiersProvider(product.merchantId),
+                  );
+                  feeTiersLoading =
+                      feeTiersAsync.isLoading && !feeTiersAsync.hasValue;
+                  return feeTiersAsync.valueOrNull ??
+                      const <MerchantFeeTier>[];
+                }()
               : const <MerchantFeeTier>[];
+          final priceLoading = merchantLoading || feeTiersLoading;
           // Giá xem trước ở đây chưa gắn với tab Giá sỉ/Đặt trước nào (khách chưa chọn) —
           // dùng unitPrice của MỌI bậc (cả giá sỉ lẫn đặt trước), vì unitPrice luôn là "giá
           // khi chỉ đạt điều kiện số lượng" bất kể loại bậc — số ngày/tuần (chỉ áp dụng cho
@@ -438,17 +451,24 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                     const SizedBox(height: 8),
                     Row(
                       children: [
-                        Flexible(
-                          child: Text(
-                            formatVnd(unitPrice),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: theme.textTheme.titleMedium?.copyWith(
-                              color: theme.colorScheme.primary,
-                              fontWeight: FontWeight.bold,
+                        if (priceLoading)
+                          const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        else
+                          Flexible(
+                            child: Text(
+                              formatVnd(unitPrice),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: theme.textTheme.titleMedium?.copyWith(
+                                color: theme.colorScheme.primary,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
-                        ),
                         Flexible(
                           child: Text(
                             ' / ${product.unit}',
@@ -722,7 +742,10 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                           children: [
                             Expanded(
                               child: OutlinedButton.icon(
-                                onPressed: (variant == null || _adding)
+                                onPressed:
+                                    (variant == null ||
+                                        _adding ||
+                                        priceLoading)
                                     ? null
                                     : () => _addToCart(
                                         product,
@@ -741,7 +764,10 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                                   backgroundColor: theme.colorScheme.secondary,
                                   foregroundColor: Colors.white,
                                 ),
-                                onPressed: (variant == null || _adding)
+                                onPressed:
+                                    (variant == null ||
+                                        _adding ||
+                                        priceLoading)
                                     ? null
                                     : () => _addToCart(
                                         product,
@@ -761,7 +787,9 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
                                       )
                                     : const Icon(Icons.bolt),
                                 label: Text(
-                                  'Mua ngay · ${formatVnd((unitPrice + toppingsTotal) * _quantity)}',
+                                  priceLoading
+                                      ? 'Mua ngay'
+                                      : 'Mua ngay · ${formatVnd((unitPrice + toppingsTotal) * _quantity)}',
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                 ),
