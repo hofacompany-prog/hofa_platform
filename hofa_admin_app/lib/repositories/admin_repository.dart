@@ -40,6 +40,7 @@ import '../models/nav_tab_icon.dart';
 import '../models/icon_library.dart';
 import '../models/driver_finance_settings.dart';
 import '../models/small_order_fee_settings.dart';
+import '../models/wholesale_preorder_settings.dart';
 import '../models/otp_settings.dart';
 import '../models/chat_settings.dart';
 import '../models/driver_wallet_summary.dart';
@@ -1091,6 +1092,22 @@ class AdminRepository {
     SmallOrderFeeSettings settings,
   ) async => SmallOrderFeeSettings.fromJson(
     await _api.patch('/small-order-fee-settings', body: settings.toJson())
+        as Map<String, dynamic>,
+  );
+
+  // ---- Công tắc ẩn/hiện Đặt trước/Bán sỉ ở app Khách ----
+
+  Future<WholesalePreorderSettings> wholesalePreorderSettings() async {
+    final data = await _api.get('/wholesale-preorder-settings');
+    return data == null
+        ? WholesalePreorderSettings.fallback()
+        : WholesalePreorderSettings.fromJson(data as Map<String, dynamic>);
+  }
+
+  Future<WholesalePreorderSettings> updateWholesalePreorderSettings(
+    WholesalePreorderSettings settings,
+  ) async => WholesalePreorderSettings.fromJson(
+    await _api.patch('/wholesale-preorder-settings', body: settings.toJson())
         as Map<String, dynamic>,
   );
 

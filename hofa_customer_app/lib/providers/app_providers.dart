@@ -237,6 +237,13 @@ final pwaReminderIntervalMinutesProvider = FutureProvider<int>(
   (ref) => ref.watch(merchantRepoProvider).pwaReminderIntervalMinutes(),
 );
 
+/// Công tắc toàn sàn ẩn/hiện tab "Đặt trước" (CustomerShell) — admin bật/tắt bất cứ lúc nào,
+/// xem hofa-db/110_wholesale_preorder_toggle.sql. KHÔNG autoDispose — cùng lý do
+/// pwaReminderIntervalMinutesProvider, CustomerShell sống suốt phiên app.
+final wholesalePreorderEnabledProvider = FutureProvider<bool>(
+  (ref) => ref.watch(merchantRepoProvider).wholesalePreorderEnabled(),
+);
+
 // ---- Sản phẩm ----
 
 final categoriesProvider = FutureProvider.autoDispose<List<Category>>(

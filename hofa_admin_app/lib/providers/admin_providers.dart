@@ -39,6 +39,7 @@ import '../models/nav_tab_icon.dart';
 import '../models/icon_library.dart';
 import '../models/driver_finance_settings.dart';
 import '../models/small_order_fee_settings.dart';
+import '../models/wholesale_preorder_settings.dart';
 import '../models/otp_settings.dart';
 import '../models/chat_settings.dart';
 import '../models/driver_wallet_summary.dart';
@@ -286,6 +287,11 @@ final driverFinanceSettingsProvider =
 final smallOrderFeeSettingsProvider =
     FutureProvider.autoDispose<SmallOrderFeeSettings>(
       (ref) => ref.watch(adminRepoProvider).smallOrderFeeSettings(),
+    );
+
+final wholesalePreorderSettingsProvider =
+    FutureProvider.autoDispose<WholesalePreorderSettings>(
+      (ref) => ref.watch(adminRepoProvider).wholesalePreorderSettings(),
     );
 
 final otpSettingsProvider = FutureProvider.autoDispose<OtpSettings>(

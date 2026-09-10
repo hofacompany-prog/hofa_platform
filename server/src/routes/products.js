@@ -176,6 +176,22 @@ router.get('/products', asyncHandler(async (req, res) => {
     ['admin', 'merchant_owner', 'merchant_staff'].includes(req.ctx.role);
   if (!isOwnerViewingOwn) clauses.push(`status = 'active'`);
 
+  // Công tắc toàn sàn ẩn "Đặt trước/Bán sỉ" (sales_model='scheduled') khỏi mọi kết quả khách
+  // duyệt/tìm kiếm — xem hofa-db/110_wholesale_preorder_toggle.sql. Chủ cửa hàng/admin xem
+  // sản phẩm CHÍNH HỌ (isOwnerViewingOwn) không bị ảnh hưởng, vẫn quản lý bình thường. Bọc
+  // try/catch riêng (không để lỗi này làm sập CẢ danh sách sản phẩm) — phòng trường hợp
+  // server deploy trước khi migration 110 kịp chạy trên Supabase, bảng chưa tồn tại.
+  if (!isOwnerViewingOwn) {
+    try {
+      const wholesaleSettings = await db.queryOne(
+        'SELECT enabled FROM wholesale_preorder_settings ORDER BY updated_at DESC LIMIT 1'
+      );
+      if (wholesaleSettings && !wholesaleSettings.enabled) clauses.push(`sales_model = 'instant'`);
+    } catch (err) {
+      console.error('[products] Không đọc được wholesale_preorder_settings:', err.message);
+    }
+  }
+
   if (req.query.merchant_id) { params.push(req.query.merchant_id); clauses.push(`merchant_id = $${params.length}`); }
   if (req.query.q) {
     // Khớp tên sản phẩm HOẶC tên cửa hàng — cùng 1 tham số dùng lại 2 lần trong truy vấn,

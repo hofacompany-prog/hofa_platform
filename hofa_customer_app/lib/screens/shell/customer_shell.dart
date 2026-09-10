@@ -64,14 +64,21 @@ class _CustomerShellState extends ConsumerState<CustomerShell> {
     ),
   ];
 
-  int _indexFor(String location) {
+  /// Tab "Đặt trước" ẩn được qua công tắc toàn sàn (wholesalePreorderEnabledProvider) — mọi
+  /// nơi cần danh sách tab hiển thị THẬT phải lọc qua đây, không dùng thẳng _items.
+  List<({String tabKey, IconData icon, IconData selected, String label, String path})>
+  _visibleItems(bool wholesaleEnabled) => wholesaleEnabled
+      ? _items
+      : _items.where((d) => d.tabKey != 'preorder').toList();
+
+  int _indexFor(String location, bool wholesaleEnabled) {
     if (location == '/') return 0;
     if (location.startsWith('/merchants') || location.startsWith('/products'))
       return 0;
     if (location.startsWith('/checkout')) return 1;
-    final i = _items.indexWhere(
-      (d) => d.path != '/' && location.startsWith(d.path),
-    );
+    final i = _visibleItems(
+      wholesaleEnabled,
+    ).indexWhere((d) => d.path != '/' && location.startsWith(d.path));
     return i < 0 ? 0 : i;
   }
 
@@ -125,7 +132,10 @@ class _CustomerShellState extends ConsumerState<CustomerShell> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final location = GoRouterState.of(context).matchedLocation;
-    final selectedIndex = _indexFor(location);
+    final wholesaleEnabled =
+        ref.watch(wholesalePreorderEnabledProvider).valueOrNull ?? true;
+    final visibleItems = _visibleItems(wholesaleEnabled);
+    final selectedIndex = _indexFor(location, wholesaleEnabled);
     final cart = ref.watch(cartProvider);
     final instantCount = cart.salesModel == 'instant' ? cart.itemCount : 0;
     final preorderCount = cart.salesModel == 'scheduled' ? cart.itemCount : 0;
@@ -155,7 +165,7 @@ class _CustomerShellState extends ConsumerState<CustomerShell> {
           // "Đơn hàng"/"Tài khoản" cần đăng nhập — hỏi bằng popup trước khi chuyển tab, các tab
           // còn lại (Trang chủ/Giỏ hàng/Đặt trước) xem tự do (xem require_login.dart).
           onDestinationSelected: (i) async {
-            final path = _items[i].path;
+            final path = visibleItems[i].path;
             if ((path == '/orders' || path == '/profile') &&
                 !await requireLogin(context)) {
               return;
@@ -163,7 +173,7 @@ class _CustomerShellState extends ConsumerState<CustomerShell> {
             if (context.mounted) context.go(path);
           },
           labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
-          destinations: _items.map((d) {
+          destinations: visibleItems.map((d) {
             final count = d.label == 'Giỏ hàng'
                 ? instantCount
                 : d.label == 'Đặt trước'

@@ -56,6 +56,20 @@ class MerchantRepository {
     }
   }
 
+  /// Công tắc toàn sàn ẩn/hiện "Đặt trước/Bán sỉ" — admin bật/tắt bất cứ lúc nào, xem
+  /// hofa-db/110_wholesale_preorder_toggle.sql. Lỗi mạng thì mặc định TRUE (không ẩn nhầm 1
+  /// tính năng chỉ vì 1 lần gọi API lỗi tạm thời) — server vẫn tự lọc đúng ở GET /products dù
+  /// tab có hiện hay không, nên fail-open ở đây không lộ lại sản phẩm đã bị ẩn.
+  Future<bool> wholesalePreorderEnabled() async {
+    try {
+      final json = await _api.get('/wholesale-preorder-settings') as Map<String, dynamic>?;
+      final v = json?['enabled'];
+      return v is bool ? v : true;
+    } catch (_) {
+      return true;
+    }
+  }
+
   /// Ngưỡng giá trị đơn để bắt buộc xác nhận OTP giao hàng — xem
   /// hofa-db/73_otp_threshold_settings.sql.
   Future<OtpSettings> otpSettings() async {
