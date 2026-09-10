@@ -96,8 +96,17 @@ async function sendToTokens(tokens, { title, body, data = {}, badge = false, bad
   const admin = require('firebase-admin');
   // badge: cộng thêm số vào biểu tượng PWA đã "Thêm vào màn hình chính" (Badging API) — service
   // worker phía client đọc cờ này, xem web/firebase-messaging-sw.js của customer/driver/store.
+  // badge_count: SỐ TUYỆT ĐỐI kèm theo (khi có) để app native tự set badge icon NGAY trong
+  // Dart lúc app đang mở (foreground) — không cần đợi gọi lại API mới biết số mới nhất, xem
+  // hofa_store_app/lib/core/push_service.dart#_onForegroundMessage. iOS/Android lúc app nền/
+  // tắt vẫn tự cập nhật độc lập qua apns.payload.aps.badge/android.notification.notificationCount
+  // bên dưới (OS lo, không qua Dart) nên field này chỉ có tác dụng thêm cho nhánh foreground.
   const stringData = Object.fromEntries(
-    Object.entries({ ...data, badge: String(!!badge) }).map(([k, v]) => [k, String(v)])
+    Object.entries({
+      ...data,
+      badge: String(!!badge),
+      ...(badgeCount != null ? { badge_count: String(badgeCount) } : {})
+    }).map(([k, v]) => [k, String(v)])
   );
   let sent = 0;
   for (let i = 0; i < tokens.length; i += FCM_BATCH_SIZE) {

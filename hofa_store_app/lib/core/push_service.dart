@@ -5,12 +5,15 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'badge_service.dart';
 import 'env.dart';
 import 'format.dart';
 import 'pending_deep_link.dart';
 import '../models/user_device.dart';
+import '../providers/notification_providers.dart';
 import '../repositories/device_repository.dart';
 import '../repositories/notification_repository.dart';
 
@@ -258,7 +261,27 @@ class PushService {
     }
   }
 
+  /// App đang mở sẵn (foreground) khi push tới — trước đây badge icon màn hình chính (và số
+  /// ở icon chuông) chỉ tự cập nhật khi 1 provider khác tình cờ tải lại (mở màn Thông báo,
+  /// đánh dấu đã đọc...), khiến badge "trễ" so với push thật đã nhận được. server/src/push.js
+  /// giờ gửi kèm badge_count (số tuyệt đối, category='order') trong data payload — đọc thẳng
+  /// ở đây để set badge NGAY, không cần đợi gọi lại API. Lúc app nền/tắt hẳn, badge vẫn tự
+  /// đúng độc lập qua apns.payload.aps.badge (iOS) — đây chỉ bù cho nhánh foreground.
+  void _syncBadgeFromData(Map<String, dynamic> data) {
+    final raw = data['badge_count'];
+    if (raw == null) return;
+    final count = int.tryParse('$raw');
+    if (count == null) return;
+    BadgeService.set(count);
+    final context = _navigatorKey?.currentContext;
+    if (context == null || !context.mounted) return;
+    final container = ProviderScope.containerOf(context, listen: false);
+    container.invalidate(unreadOrderCountProvider);
+    container.invalidate(unreadNotificationCountProvider);
+  }
+
   Future<void> _onForegroundMessage(RemoteMessage message) async {
+    _syncBadgeFromData(message.data);
     if (message.data['type'] == 'chat_message') {
       _chatMessageController.add(message.data);
       // Đang mở đúng khung chat này — tin đã tự chèn vào màn qua chatMessageStream ở trên,
@@ -307,6 +330,7 @@ class PushService {
   }
 
   void handleData(Map<String, dynamic> data) {
+    _syncBadgeFromData(data);
     final context = _navigatorKey?.currentContext;
     if (context == null) return;
     // Thông báo admin gửi tay (màn "Thông báo" ở web admin) — screen là route admin tự chọn
